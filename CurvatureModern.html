@@ -7,7 +7,7 @@
 <!-- Keep relative assets anchored when the Modern experiment URL is updated. -->
 <base href="./">
 <title>Curvature App · Scene, Compare &amp; Demos</title>
-<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1">
+<link rel="stylesheet" href="src/ui/modern/ModernApp.css?v=140.12.98&amp;preview-navigation=1&amp;thumbnail-preview=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-transition=1&amp;camera-animation=1&amp;hud-appearance=1&amp;target-indicator=1&amp;library-card-state=2&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;status-messages=2&amp;spline-easing=1&amp;preset-navigation=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;atmosphere-switcher=1&amp;reference-library=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;presentation-cleanup=1&amp;photo-workspace=1">
 <script src="src/ui/modern/ModernRoute.js"></script>
 <!-- Reuse the existing physical math, optical field, composition and painter.
      No ControlPanelX, Legacy demo animations, diagnostic UI or Legacy runtime is loaded. -->
@@ -126,7 +126,7 @@
 <script src="src/ui/modern/ModernDemos.js?v=direct-host-telemetry-repair&amp;status-messages=2"></script>
 <script src="src/calibration/CameraLandmarkProjection.js"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -137,9 +137,10 @@
       <button class="modern-tab is-active" id="ModernSceneTab" type="button" aria-pressed="true">Scene</button>
       <button class="modern-tab" id="ModernCompareTab" type="button" aria-pressed="false">Compare</button>
       <button class="modern-tab" id="ModernAnimationTab" type="button" aria-pressed="false">Animation</button>
+      <button class="modern-tab" id="ModernPhotoCalibrationOpen" type="button" aria-pressed="false" aria-controls="ModernPhotoCalibration" disabled>Photo Calibration</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" aria-pressed="false">Demos</button>
     </nav>
-    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><button type="button" class="modern-ghost-button" id="ModernPhotoCalibrationOpen">Photo calibration</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
+    <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
   <!-- GraphX3DX needs parser-time document.writeln and a positive initial width.
        Move these independent canvases into Animation when its tab opens. -->
@@ -147,13 +148,13 @@
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="A"></script>
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="B"></script>
   </div>
-  <dialog id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle">
-    <header><h2 id="ModernCalibrationTitle">Photo calibration · correspondences</h2><button type="button" id="ModernCalibrationClose">Close</button></header>
+  <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
+    <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · correspondence editor</p></div><button type="button" id="ModernCalibrationClose">Back to Scene</button></header>
     <p id="ModernCalibrationScene"></p>
-    <p>Choose a reference pixel and a known model vertex. The scene is fixed until New session.</p>
+    <p>Choose a reference pixel and a known model vertex. The source is the retained Scene, and its geometry and atmosphere are fixed until New session.</p>
     <div class="modern-calibration-toolbar">
       <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
-      <button type="button" id="ModernCalibrationReset">New session</button>
+      <button type="button" id="ModernCalibrationReset" title="Discard the draft and capture the latest Scene">New session</button>
       <button type="button" id="ModernCalibrationFit">Fit photo</button>
     </div>
     <div class="modern-calibration-toolbar">
@@ -186,8 +187,8 @@
     <p id="ModernCalibrationStatus" role="status"></p>
     <h3 id="ModernCalibrationCount">0 correspondences</h3>
     <table><thead><tr><th>#</th><th>Landmark</th><th>Original pixels</th><th>Weight</th><th>Actions</th></tr></thead><tbody id="ModernCalibrationPairs"></tbody></table>
-    <p>Session-only draft. Camera solving and saving follow in the next stages.</p>
-  </dialog>
+    <p>Session-only draft · retained across workspace switches, not page reload. Full-scene picking, camera solving and saving follow in the next stages.</p>
+  </section>
   <div id="ModernHistoryBackdrop" class="modern-history-backdrop" hidden></div>
   <section id="ModernHistoryPanel" class="modern-library modern-history" role="dialog" aria-modal="true" tabindex="-1" aria-label="Experiment history" hidden>
     <div class="modern-library-top"><strong>Experiment History</strong><button type="button" class="modern-ghost-button" id="ModernHistoryReturnToAnimation" hidden>Return to Animation Studio</button><button type="button" class="modern-ghost-button" id="ModernHistoryClose">Close</button></div>
@@ -1053,7 +1054,7 @@
         <div class="modern-viewport-head"><span>Physical view</span><span id="ModernViewInfo">Camera · Eye level</span></div>
         <div class="modern-graph-host" id="ModernGraphHost">
           <!-- GraphX3DX creates the Canvas at this exact parser location. -->
-          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1&amp;presentation-hud=1&amp;adaptive-layout=1&amp;topology=1&amp;content-layout=1&amp;guide-labels=1&amp;presentation-video=1&amp;export-renderer=1&amp;export-preferences=1"></script>
+          <script src="src/ui/modern/ModernApp.js?v=140.12.98&amp;preview-navigation=1&amp;compatible-sequences=1&amp;compare-layout=1&amp;camera-navigation=1&amp;camera-position=1&amp;camera-transition=1&amp;cameraFirst=140.12.38&amp;objects=140.12.39&amp;cpuQuadrature=140.12.42&amp;conformal=140.12.43&amp;adaptiveConformal=140.12.44&amp;productionConformal=140.12.45&amp;conformalProfile=140.12.46&amp;hud-appearance=1&amp;studio-hud-fix=1&amp;target-indicator=1&amp;video-filename-preview=1&amp;spline-preview=1&amp;spline-export=1&amp;spline-persistence=1&amp;stash-restore=1&amp;status-messages=2&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;adaptive-pacing=1&amp;studio-undo-focus=1&amp;workspace-recovery=1&amp;workspace-switch=1&amp;workspace-persistence=1&amp;library-actions=1&amp;preview-lifecycle=1&amp;studio-editor-state=1&amp;playback-controls=1&amp;bedford-native=1&amp;metric-grid-40=1&amp;bridge-42=1&amp;adaptive-grid-41=1&amp;extended-grid-42=1&amp;causeway-43=1&amp;tensas-44=1&amp;soundly-45=1-captions-47-geometry-summary-50-semantic-49-scene-detail-51&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;presentation-png=1&amp;png-project-fields=1&amp;png-stream=1&amp;projection-fix=1&amp;presentation-hud=1&amp;adaptive-layout=1&amp;topology=1&amp;content-layout=1&amp;guide-labels=1&amp;presentation-video=1&amp;export-renderer=1&amp;export-preferences=1&amp;photo-workspace=1"></script>
           <div class="modern-temperature-column" id="ModernTemperatureScene" role="img" aria-label="Temperature profile with altitude" hidden><strong>T(h) · 2 km</strong><span class="modern-temperature-top"></span><div class="modern-temperature-ramp"></div><span class="modern-temperature-bottom"></span><small>0 m</small></div>
         </div>
         <div class="modern-viewport-foot"><span id="ModernStatus" class="modern-status-message" role="status" aria-live="polite">Preparing physical scene…</span></div>

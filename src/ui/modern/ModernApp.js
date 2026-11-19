@@ -436,7 +436,7 @@
   }
   function shimmerViews(){return state.mode==='compare'?['A','B']:['Scene'];}
   function scheduleShimmerFrame(){
-    if(shimmerFrame!==null||!atmosphericShimmer||!atmosphericPresentation||document.hidden)return;
+    if(photoCalibrationWorkspaceOpen||shimmerFrame!==null||!atmosphericShimmer||!atmosphericPresentation||document.hidden)return;
     if(!shimmerViews().some(shimmerAnimating))return;
     shimmerFrame=requestAnimationFrame(function(timestamp){
       shimmerFrame=null;
@@ -740,7 +740,7 @@
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
-  var animationWorkspaceOpen=false;
+  var animationWorkspaceOpen=false,photoCalibrationWorkspaceOpen=false;
   // Navigation from a particular Picker card is UI-only and never restored
   // from preferences or included in a physical experiment snapshot.
   var historyFocusFromPickerId='';
@@ -769,7 +769,12 @@
   }
   function syncWorkspaceVisibility(){
     var physical=newUiEl('ModernWorkspace'),animation=newUiEl('ModernAnimationWorkspace');
-    if(physical)physical.hidden=animationWorkspaceOpen;
+    if(physical)physical.hidden=animationWorkspaceOpen||photoCalibrationWorkspaceOpen;
+    var photo=newUiEl('ModernPhotoCalibration'),photoTab=newUiEl('ModernPhotoCalibrationOpen'),shell=newUiEl('ModernApp');
+    if(photo)photo.hidden=!photoCalibrationWorkspaceOpen;
+    if(photoTab){photoTab.classList.toggle('is-active',photoCalibrationWorkspaceOpen);
+      photoTab.setAttribute('aria-pressed',String(photoCalibrationWorkspaceOpen));}
+    if(shell)shell.classList.toggle('is-photo-calibration',photoCalibrationWorkspaceOpen);
     if(animation){animation.hidden=!animationWorkspaceOpen;
       animation.classList.toggle('has-snapshot-picker',animationWorkspaceOpen&&studioPickerOpen);}
 
@@ -6128,7 +6133,7 @@
     if(navigationKeyActive())navigationFrame=requestAnimationFrame(navigationTick);
   }
   function keyboardAllowed(event){
-    if(!event||event.altKey||event.metaKey||state.demosActive||animationWorkspaceOpen||activeCameraPointer)return false;
+    if(!event||event.altKey||event.metaKey||state.demosActive||animationWorkspaceOpen||photoCalibrationWorkspaceOpen||activeCameraPointer)return false;
     var target=event.target||document.activeElement;
     if(target){
       var tag=String(target.tagName||'').toLowerCase();
@@ -6366,7 +6371,7 @@
     }
   }
   function requestCameraDirectMotion(owner){
-    if(state.demosActive||animationWorkspaceOpen||activeCameraPointer)return false;
+    if(state.demosActive||animationWorkspaceOpen||photoCalibrationWorkspaceOpen||activeCameraPointer)return false;
     if(cameraDirectMotion&&cameraDirectMotion.owner!==owner)return false;
     if(!cameraDirectMotion){
       var support=cameraDirectMotionViews(),views=support.views;
@@ -6660,7 +6665,7 @@
          event.ctrlKey||event.metaKey||
          delta===0||activeCameraPointer||
          (view==='Scene'&&state.mode!=='scene')||
-         (view!=='Scene'&&state.mode!=='compare')||state.demosActive||animationWorkspaceOpen)return;
+         (view!=='Scene'&&state.mode!=='compare')||state.demosActive||animationWorkspaceOpen||photoCalibrationWorkspaceOpen)return;
       stopCameraTransition(false,'Transition interrupted by wheel navigation',true);
       if(navigationKeyActive())stopCameraKeyboard();
       var next;
@@ -6745,6 +6750,7 @@
       redrawMs:finished-resized};
   }
   function redraw(opticalSampleMode,compareSide){
+    if(photoCalibrationWorkspaceOpen)return; // never render a hidden physical workspace
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
     var liveMotion=opticalSampleMode==='camera-motion';
@@ -6855,14 +6861,39 @@
     state.timer=setTimeout(function(){state.timer=null;redraw();},300);
   }
   function setMode(mode,remember){
+    if(!['scene','compare','animation','demos','calibration'].includes(mode))
+      throw RangeError('Invalid Modern UI mode');
+    if(mode==='calibration'){
+      if(photoCalibrationWorkspaceOpen||!persistence.ready)return;
+      var photoApi=root.CurvatureModernPhotoCalibrationEditor;
+      var photoEditor=photoApi&&photoApi.mount(document);
+      if(!photoEditor)return;
+      // Capture the retained Scene, never a Compare clone or Studio preview.
+      stopCameraTransition(false,'Photo calibration workspace opened',false);
+      stopAutoCameraPreview();stopCameraKeyboard(true);abortCameraDrag();cancelEdits();
+      if(!photoEditor.enter(root.CurvatureModernApp.getPhotoCalibrationScene()))return;
+    }
     if(mode==='animation')animationReturnAfterRestore=false;
     if(mode!=='animation'&&animationWorkspaceOpen){
       if(studioPresentation)studioPresentation.leave();
       cancelStudioInitialPaint();stopStudioPlayback(false);
       if(studioPlayback)saveStudioDraft(false);
     }
-    if(!['scene','compare','animation','demos'].includes(mode))
-      throw RangeError('Invalid Modern UI mode');
+    if(mode==='calibration'){
+      if(persistence.dirty)flushWorkingSession();
+      cancelPending();stopShimmerFrame();
+      if(state.demosActive&&root.CurvatureModernDemos)root.CurvatureModernDemos.deactivate();
+      state.demosActive=false;
+      var photoDemosPanel=newUiEl('ModernDemosPanel');if(photoDemosPanel)photoDemosPanel.hidden=true;
+      ['ModernSceneTab','ModernCompareTab','ModernDemosTab'].forEach(function(id){
+        var tab=newUiEl(id);if(tab){tab.classList.remove('is-active');tab.setAttribute('aria-pressed','false');}
+      });
+      animationWorkspaceOpen=false;photoCalibrationWorkspaceOpen=true;syncWorkspaceVisibility();
+      // Deliberately session-only; do not persist this mode in physical URLs
+      // or restore an empty calibration draft at startup.
+      return;
+    }
+    photoCalibrationWorkspaceOpen=false;
     if(mode==='animation'){
       // A UI-only mode; physical state.mode is retained as Scene/Compare.
       // Never serialize 'animation' in an experiment or start optical redraws.
@@ -7385,6 +7416,9 @@
     el('ModernCompareTab').addEventListener('click',function(){setMode('compare');});
     var animationTab=newUiEl('ModernAnimationTab');
     if(animationTab)animationTab.addEventListener('click',function(){setMode('animation');});
+    var photoTab=newUiEl('ModernPhotoCalibrationOpen'),photoClose=newUiEl('ModernCalibrationClose');
+    if(photoTab)photoTab.addEventListener('click',function(){setMode('calibration');});
+    if(photoClose)photoClose.addEventListener('click',function(){setMode('scene');});
     var returnToStudio=newUiEl('ModernReturnToAnimation');
     if(returnToStudio)returnToStudio.addEventListener('click',function(){
       setMode('animation');
@@ -7438,6 +7472,7 @@
       // Only user edits after complete restore are eligible for autosave.
       // Initial model construction must not overwrite either storage copy.
       persistence.ready=true;
+      if(photoTab)photoTab.disabled=false;
       updateSnapshotSaveAction();
       resetHistoryBaseline();
     }
@@ -7457,7 +7492,7 @@
       Object.keys(copy).forEach(function(k){if(Array.isArray(copy[k]))copy[k]=copy[k].slice();});
       return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
     },getMode:function(){return state.demosActive?'demos':state.mode;},
-    getWorkspaceMode:function(){return animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;},
+    getWorkspaceMode:function(){return photoCalibrationWorkspaceOpen?'calibration':animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;},
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     getPresetSelection:function(){return state.scenePresetSelection;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
@@ -7484,7 +7519,7 @@
         Math.max(1,studioDraftSavedAt||Date.now())):null;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
       studioProjects.validate(studioPrepared):null;},
-    getWorkspaceState:function(){return {mode:animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode,
+    getWorkspaceState:function(){return {mode:photoCalibrationWorkspaceOpen?'calibration':animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode,
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},
     // Atmospheric presentation remains independently inspectable through DevTools.

@@ -1457,18 +1457,26 @@ button{cursor:pointer}
   .modern-animation-playback.is-presenting .modern-animation-playback-panels.has-reference-below.is-compare{width:100%}
 }
 
-/* Photo calibration: standalone modal, does not change Scene layout. */
-.modern-photo-calibration { width:min(1100px,95vw); max-width:95vw; max-height:92vh; overflow:auto; padding:18px; color:#e4edf6; background:#172534; border:1px solid #60758a; border-radius:10px; }
-.modern-photo-calibration::backdrop { background:rgba(0,0,0,.68); }
+/* Photo Calibration is a peer workspace, with no modal or physical sidebar. */
+#ModernPhotoCalibration[hidden]{display:none!important}
+.modern-app.is-photo-calibration .modern-share-actions{visibility:hidden;pointer-events:none}
+.modern-photo-calibration { box-sizing:border-box;width:min(1740px,calc(100% - 32px));margin:20px auto 40px;padding:20px;color:#183550;background:#fff;border:1px solid #c4d5e5;border-radius:12px; }
+.modern-photo-calibration header p{margin:4px 0;color:#637c94}
+.modern-photo-calibration header h1{margin:0;font-size:24px}
+.modern-photo-calibration section{min-width:0}
+.modern-photo-calibration #ModernCalibrationSource{max-width:min(100%,75vw);width: min(680px,65vw)}
+.modern-photo-calibration button{border:1px solid #9bbfdf;border-radius:6px;background:#e6f3ff;color:#1f5f99;padding:6px 10px;cursor:pointer}
+.modern-photo-calibration button:disabled{opacity:.55;cursor:default}
+.modern-photo-calibration input,.modern-photo-calibration select{border:1px solid #bccddd;border-radius:5px;padding:5px;color:#183550;background:#fff}
 .modern-photo-calibration header,.modern-calibration-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
 .modern-photo-calibration header { justify-content:space-between; }
 .modern-photo-calibration h2,.modern-photo-calibration h3 { margin:.35em 0; }
-.modern-calibration-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:16px; margin-top:12px; }
+.modern-calibration-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-top:12px; }
 .modern-photo-calibration label { display:block; margin:4px 0; }
 .modern-photo-calibration input,.modern-photo-calibration select,.modern-photo-calibration button { font:inherit; max-width:100%; }
 .modern-photo-calibration input[type=number] { width:7em; }
 .modern-photo-calibration canvas { display:block; width:100%; height:auto; background:#0b141e; touch-action:none; cursor:crosshair; }
 .modern-photo-calibration table { width:100%; border-collapse:collapse; text-align:left; }
-.modern-photo-calibration th,.modern-photo-calibration td { padding:6px; border-bottom:1px solid #42556b; }
+.modern-photo-calibration th,.modern-photo-calibration td { padding:6px; border-bottom:1px solid #dce5ef; }
 .modern-photo-calibration td button { margin-right:6px; }
-@media(max-width:760px){.modern-calibration-grid{grid-template-columns:1fr;}}
+@media(max-width:760px){.modern-photo-calibration{width:calc(100% - 20px);padding:12px}.modern-calibration-grid{grid-template-columns:1fr}.modern-app.is-photo-calibration .modern-share-actions{display:none}}

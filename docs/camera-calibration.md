@@ -1,3 +1,27 @@
+## 8B.3 — Dedicated Photo Calibration workspace
+
+The former modal is now a peer workspace in the main navigation. It reuses the
+photo picker, original-pixel viewport and correspondence draft. Enter from
+Scene, Compare, Animation or Demos; the retained Scene is the source, never a
+Compare clone or Studio preview. Its snapshot is reused until New session,
+which confirms discarding the draft and captures the latest retained Scene.
+Back to Scene and other workspace tabs leave the draft intact, including zoom,
+selected photo and pairs. Physical navigation, pending draws and shimmer stop
+while hidden; Studio playback is stopped through the normal workspace exit.
+Calibration is UI-only, not a physical mode, URL or persisted startup choice;
+a reload discards this session-only draft. Existing Scene/Compare preferences
+are not overwritten by entering calibration. The larger two-column layout
+uses the existing selected-object preview for now, not a full-scene renderer.
+
+8B.4 remains full-scene model rendering and landmark picking. Associated
+keyframe scene selection, solver, overlay and durable acceptance are not yet
+implemented. The shipped Soundly bundle is version 1 with no linked reference
+originals; its cover is not an observation. Corrected the 8B.2 Chromium test
+to exercise an explicit embedded test original rather than assume one is
+shipped. Previous 8B.2 Node and architecture jobs passed; Chromium failed
+on that incorrect fixture assumption. Workspace navigation/draft tests
+extended. New CI pending.
+
 ## Approved Photo Calibration Workspace design
 
 The existing 8B/8B.2 modal is a prototype, not the final interaction model. Build a dedicated workspace alongside Scene, Compare and Animation Studio. The goal is a usable photo-to-camera authoring workflow, not determining Earth's shape or atmosphere.

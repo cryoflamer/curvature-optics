@@ -561,6 +561,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         dialog = self.page.locator('#ModernPhotoCalibration')
         expect(dialog).to_be_visible()
+        expect(self.page.locator('#ModernWorkspace')).to_be_hidden()
+        expect(self.page.locator('#ModernPhotoCalibrationOpen')).to_have_attribute('aria-pressed','true')
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','false')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getMode()"),'scene')
         encoded = self.page.evaluate("""() => {
             const c=document.createElement('canvas');c.width=100;c.height=80;
             c.getContext('2d').fillRect(0,0,100,80);return c.toDataURL().split(',')[1];
@@ -577,7 +582,23 @@ class ModernBrowserSmoke(unittest.TestCase):
         dialog.locator('#ModernCalibrationX').fill('33')
         dialog.locator('#ModernCalibrationAdd').click()
         expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('33.00, 40.25')
+        original_scene = self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().Pan,CurvatureModernApp.getModel().Nick,CurvatureModernApp.getModel().Roll,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])")
+        self.page.locator('#ModernCompareTab').click()
+        expect(dialog).to_be_hidden()
+        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('33.00, 40.25')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getMode()"),'compare')
+        self.open_animation()
+        expect(dialog).to_be_hidden()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         dialog.locator('#ModernCalibrationClose').click()
+        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'scene')
+        # Switching workspaces does not change physical Scene parameters.
+        self.assertEqual(self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().Pan,CurvatureModernApp.getModel().Nick,CurvatureModernApp.getModel().Roll,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])"),original_scene)
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         dialog.get_by_role('button',name='Delete',exact=True).click()
@@ -594,10 +615,17 @@ class ModernBrowserSmoke(unittest.TestCase):
             const record=await CurvatureModernReferenceImageImport.ingest(
                 new File([blob],'Library photo.png',{type:'image/png'}),'calibration-existing',window);
             await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
-            const demo=CurvatureModernDemoCatalog.load().find(d=>d.id==='soundly');
-            const photo=demo.referenceImages[0];
-            return {key:JSON.stringify(['demo',demo.id,photo.id]),
-                    title:photo.title,width:photo.original.width,height:photo.original.height};
+            const catalog=window.CurvatureModernDemoCatalog;
+            const shipped=catalog.load();
+            const embedded=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Embedded observation.png',{type:'image/png'}),'calibration-existing',window);
+            const demo={id:'test-embedded',project:{name:'Test embedded project',keyframes:[
+                {name:'Test frame',referenceImageIds:[embedded.id]}]},referenceImages:[embedded]};
+            // Production catalog entries need not contain reference originals.
+            // Test the read-only embedded source with an explicit original.
+            window.CurvatureModernDemoCatalog={...catalog,load:()=>[...shipped,demo]};
+            return {key:JSON.stringify(['demo',demo.id,embedded.id]),
+                    title:embedded.title,width:embedded.original.width,height:embedded.original.height};
         }""")
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         dialog=self.page.locator('#ModernPhotoCalibration')

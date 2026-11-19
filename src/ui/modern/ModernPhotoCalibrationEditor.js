@@ -61,10 +61,11 @@
     }
     return choices;
   }
+  let mounted=null;
   function mount(doc){
-    const $=id=>doc.getElementById(id),button=$('ModernPhotoCalibrationOpen'),dialog=$('ModernPhotoCalibration');
-    if(!button||!dialog||button.dataset.bound)return;
-    button.dataset.bound='true';
+    const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
+    if(!workspace)return null;
+    if(mounted)return mounted;
     const photo=$('ModernCalibrationPhoto'),sceneCanvas=$('ModernCalibrationMesh'),
       file=$('ModernCalibrationFile'),bank=$('ModernCalibrationBank'),object=$('ModernCalibrationObject'),
       vertex=$('ModernCalibrationVertex'),list=$('ModernCalibrationPairs'),status=$('ModernCalibrationStatus'),
@@ -248,34 +249,41 @@
       const r=canvas.getBoundingClientRect();
       return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];
     }
-    button.onclick=()=>{
-      const app=env.CurvatureModernApp;
-      if(!app||app.getWorkspaceMode()!=='scene'){env.alert('Open the Scene workspace first.');return;}
+    function prepareScene(snapshot){
+      const m=snapshot.model,globe=m.showModel===1;
+      if(!['vacuum','standard','temperature-lapse'].includes(snapshot.physics.atmosphere))
+        throw Error('Select Vacuum, Standard or Temperature lapse in Scene for calibration.');
+      const banks=[0,1].map(b=>{
+        if(!m.NObjects[b])return [];
+        return env.CurvatureGeometryEngine.createObjectSequenceScene({...m,geometryRadius:m.rEarth},b,globe,
+          {opticsNeutral:true,physicalSurface:true,curvature:globe?1/m.rEarth:0}).primitives;
+      });
+      return {...snapshot,banks};
+    }
+    function showScene(next){
+      scene=next;
+      const m=scene.model,globe=m.showModel===1;
+      $('ModernCalibrationScene').textContent=(m.DemoText||'Current scene')+' · '+(globe?'Globe':'Flat')+' · '+scene.physics.atmosphere;
+      populate(bank,[0,1].filter(b=>scene.banks[b].length).map(b=>[b,'Bank '+(b+1)+' · type '+m.ObjType[b]]));
+      updateObjects();refreshRows();
+      message('Load a reference photo and select matching vertices.');
+    }
+    function enter(snapshot){
       if(!scene){
-        try{
-          const snapshot=app.getPhotoCalibrationScene(),m=snapshot.model,globe=m.showModel===1;
-          if(!['vacuum','standard','temperature-lapse'].includes(snapshot.physics.atmosphere))
-            throw Error('Select Vacuum, Standard or Temperature lapse for calibration.');
-          const banks=[0,1].map(b=>{
-            if(!m.NObjects[b])return [];
-            return env.CurvatureGeometryEngine.createObjectSequenceScene({...m,geometryRadius:m.rEarth},b,globe,
-              {opticsNeutral:true,physicalSurface:true,curvature:globe?1/m.rEarth:0}).primitives;
-          });
-          scene={...snapshot,banks};
-          $('ModernCalibrationScene').textContent=(m.DemoText||'Current scene')+' · '+(globe?'Globe':'Flat')+' · '+scene.physics.atmosphere;
-          populate(bank,[0,1].filter(b=>banks[b].length).map(b=>[b,'Bank '+(b+1)+' · type '+m.ObjType[b]]));
-          updateObjects();refreshRows();
-          message('Load a reference photo and select matching vertices.');
-        }catch(e){scene=null;env.alert(e.message);return;}
+        try{showScene(prepareScene(snapshot));}
+        catch(e){scene=null;env.alert(e.message);return false;}
       }
-      dialog.showModal();
       void refreshSources();
-    };
-    $('ModernCalibrationClose').onclick=()=>dialog.close();
+      return true;
+    }
     $('ModernCalibrationReset').onclick=()=>{
-      if((rows.length||record)&&!env.confirm('Discard this photo and all correspondences?'))return;
-      loadToken++;scene=null;record=null;image=null;view=null;activeSource=null;rows=[];file.value='';photoInfo.replaceChildren();sourcePicker.value='';resetPending();refreshRows();
-      dialog.close();button.click();
+      if((rows.length||record)&&!env.confirm('Discard this photo and all correspondences and capture the latest Scene?'))return;
+      let next;
+      try{next=prepareScene(env.CurvatureModernApp.getPhotoCalibrationScene());}
+      catch(e){message('Cannot start a new session: '+e.message);return;}
+      loadToken++;record=null;image=null;view=null;activeSource=null;rows=[];drag=null;file.value='';
+      photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
+      showScene(next);void refreshSources();
     };
     file.onchange=async()=>{
       const f=file.files[0];if(!f)return;
@@ -330,10 +338,11 @@
       }catch(e){message(e.message);}
     };
     $('ModernCalibrationCancelEdit').onclick=resetPending;
-    return {snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
+    return mounted;
   }
   return Object.freeze({fit,imagePoint,zoomAt,pair,upsert,photoChoices,mount});
 }));
