@@ -470,6 +470,7 @@
       "src/calibration/CameraCalibration.js",
       "src/calibration/CameraCalibrationWorker.js",
       "src/calibration/CameraFocalSweep.js",
+      "src/calibration/CameraMaterialAnchor.js",
       "src/calibration/CameraPerspectiveSeed.js",
       "src/calibration/CameraPhysicalFit.js",
       "src/diagnostics/CurvatureMigrationInventory.js",
@@ -483,7 +484,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 215,
+  "sourceJsCount": 216,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1340,6 +1341,14 @@
         "tests/CameraLandmarkProjection.test.js",
         "tests/CameraPhysicalFit.test.js",
         "tests/CameraPhysicalPose.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/calibration/CameraMaterialAnchor.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/CameraMaterialAnchor.test.js"
       ],
       "commonJsToolCallers": []
     },

@@ -18,6 +18,11 @@ audit's geometric-only viewer describes Free View, not Scene View; the
 latter must preserve the main optical projection. Mode-specific picking
 must be audited in 8F.3.
 
+The canonical material value representation was implemented in 8F.4a;
+see [current contract](landmark-editor.md#8f4a--canonical-material-anchor-representation-implemented).
+The original proposals below are historical; uniform index/weight tuples,
+Globe-only authoring and persistence ahead of UI supersede earlier choices.
+
 ## Source audit and decisions
 
 | Existing source | Finding / consequence |

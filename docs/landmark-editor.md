@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; next 8F.4a. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module implemented; next 8F.4b. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -284,6 +284,68 @@ anchor. Keep selected pair identity even when its marker is hidden; provide
 explicit status. Existing candidate ambiguity controls remain available.
 
 ### 8F.4 — Stable anchors and physical projection
+
+#### 8F.4a — Canonical material anchor representation (implemented)
+
+Pure module `src/calibration/CameraMaterialAnchor.js`; not loaded by the UI,
+projector or worker yet. Existing runtime observations and schemas stay
+unchanged. New logical landmark shape (not yet a portable schema):
+
+```js
+{ id: "pair-7", anchor: {
+  kind: "surface",
+  owner: {kind:"object", bank:0, objectType:8, stationIndex:2,
+          column:0, drawn:2, total:5},
+  primitive: 4,
+  signature: "bank-v1:sha256:<64 lowercase hex digits>",
+  indices: [2,5,8],
+  weights: [0.2,0.3,0.5]
+}}
+```
+
+The outer observation kind agrees with anchor.kind. All kinds have the same
+index/weight representation: one index/weight 1 for Vertex, two for Edge
+(the second weight is t after sorting), three for Surface. Retain original
+authored indices; sort indices together with their weights, validate finite
+weights in [0,1] with absolute sum tolerance 1e-9, normalize and assign the
+floating remainder to the largest term. Boundary weights do not implicitly
+change kind. Canonical descriptor keys are exact, exclude observation IDs,
+and do not claim cross-primitive geometric equivalence. Use an explicit
+physical tolerance for coincidence checks later.
+
+Owner values follow the actual GeometryEngine metadata, including drawn,
+total and column; span owners retain ordered adjacent same-column endpoints,
+role and side, with primitive ordinal 0. The signature is a versioned token
+for a bank-level SHA-256 digest; 8F.4b must define and implement deterministic
+synchronous digest generation from the canonical bank/layout/authoring
+topology contract, without camera or hypothesis curvature. Structural
+validation is not a proof that an index, edge, triangle or digest matches
+the scene. 8F.4b must reject stale, ambiguous, truncated, degenerate and
+non-authored topology and preserve original connectivity when canonical
+index sorting differs from the viewer's winding.
+
+Legacy vertex adapter preserves opaque headless landmark.id and the old
+bank-global primitive/vertex indices; legacyVertexKey provides the portable
+bN:pN:vN rule. No invented signature or automatic upgrade without actual
+physical resolution. A new landmark may retain the legacy ID as an opaque
+pair ID after explicit upgrade; anchor identity is independent. The
+fromPick adapter strips screen/depth/local XYZ and transient enumeration
+and requires an explicitly supplied ID and signature. New strict shape
+validation rejects unknown fields; existing legacy runtime APIs are
+unchanged. Portable v3, draft and worker integration remain 8F.4d.
+
+Source audit: editor pair/upsert and importExperiment currently use vertex
+IDs both as pair keys and mesh lookups; legacy portable versions 1/2
+validate vertex observations, and import verifies bN:pN:vN. Draft v1
+reconstructs vertex rows. CameraPhysicalFit accepts metric/vertex and
+dispatches by outer kind; headless vertex IDs may be opaque. Its result
+points use landmark.id; horizontal scaling currently uses authored vertex
+ranges. CameraLandmarkProjection builds method-specific banks and uses a
+shared fromWorld projection. GeometryEngine already emits owner/ordinal
+metadata and suppresses new owners for truncated sequences. Worker loads
+the existing projection/fit modules. These callers are deliberately
+unchanged in this commit.
+
 
 | Commit | Scope and acceptance gate |
 | --- | --- |

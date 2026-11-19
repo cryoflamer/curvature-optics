@@ -1,3 +1,19 @@
+## 8F.4a — Canonical material anchor representation
+
+Added the dependency-free CameraMaterialAnchor module and focused structural
+regressions. Canonical Vertex/Edge/Surface indices and weights, validated
+object/span owner context, versioned bank signature token, independent
+observation IDs, legacy vertex adapter and viewer-pick conversion. Exact
+descriptor keys exclude observation IDs and transient view state. Current
+editor, worker, projector, fit and portable/draft schemas unchanged.
+Eight focused tests passed with repository JS evaluated headlessly using a
+strict assertion harness; 10,000 deterministic randomized normalization
+round trips passed. Static isolation fixture updated for the new pure
+module and test caller. Full Node/browser CI pending. Signature generation,
+topology validation and actual physical coordinate resolution are not
+implemented yet. See docs/landmark-editor.md for the contract.
+Next: 8F.4b — physical resolution and legacy vertex parity.
+
 ## 8F.4.0 — Material anchor architecture and calibration integration plan
 
 User approved a unified correspondence editor and reported 8F.3d.2 working.
