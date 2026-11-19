@@ -12,7 +12,7 @@ function canvas(width,height){const calls=[],ctx={save(){},restore(){},setTransf
  return {width,height,calls,getContext(){return ctx;},async convertToBlob(){return new Blob([Uint8Array.from([137,80,78,71,13,10,26,10])],{type:'image/png'});}};}
 test('presentation preview samples exact timestamp, uses both physical views and retains complete provenance',async()=>{
  const {project,record}=fixture(),opts={presentation:{referenceLayout:'side'},referenceImages:[record],width:1280,height:720,fps:25,previewTimeMs:0};
- const p=png.plan(project,opts),f=compositor.frameAt(p.presentation,0);assert.deepEqual(p.timesMs,[0]);assert.deepEqual(png.outputSides(p),['presentation']);assert.equal(p.sides.length,2);
+ const p=png.plan(project,opts),f=compositor.frameAt(p.presentation,0);assert.equal(p.presentation.referenceAspects.observe,1);assert.deepEqual(p.timesMs,[0]);assert.deepEqual(png.outputSides(p),['presentation']);assert.equal(p.sides.length,2);
  const output=canvas(1280,720),seen=[];const photo={width:1,height:1};
  const frame=await png.renderTimestamp(p,0,async(sample,side,d)=>{seen.push({sample,side,d});return {canvas:canvas(d.width,d.height),quality:'accurate',cameraModel:{showModel:f.expected[side].showModel},metrics:{opticalQuality:'accurate'}};},null,{canvas:()=>output,observation:async r=>compositor.observation(r,photo)});
  assert.equal(seen.length,2);assert.deepEqual(seen[0].sample,f.sample);assert.equal(seen[0].d.width,f.viewSize.width);assert.equal(seen[0].d.showCaptions,false);assert.equal(output.calls.length,3);assert.equal(output.calls[2][0],photo);

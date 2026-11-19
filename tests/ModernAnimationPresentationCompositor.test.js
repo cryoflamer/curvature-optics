@@ -136,3 +136,29 @@ test('external HUD uses actual camera values, shares exact equal telemetry, and 
   const disabled=compose.frameAt(compose.plan(raw),0),noHud=target(disabled);
   compose.paint(noHud,disabled,sources(disabled),observation());assert.ok(!texts(noHud).some(c=>c[1].startsWith('Camera ·')));
 });
+
+test('adaptive shares use original aspect ratios, preserve physical size and stable Fixed geometry',()=>{
+  const dimensions=[{id:'first',width:501,height:612},{id:'second',width:4000,height:1000},{id:'last',width:1176,height:791}];
+  for(const width of [1280,1920,2560,3840])for(const compare of [true,false])for(const referenceLayout of ['side','below','hidden'])for(const layoutMode of ['fixed','dynamic'])for(const cameraHud of [true,false]){
+    const raw=project(compare),opts={width,referenceLayout,layoutMode,cameraHud,cameraHudAppearance:{size:125,opacity:90,position:'bottom-right'}},
+      legacy=compose.plan(raw,opts),p=compose.plan(raw,{...opts,referenceDimensions:dimensions});
+    const frames=[0,p.times[0].departureMs+1,p.times[1].arrivalMs,p.times[3].arrivalMs,p.durationMs].map(t=>compose.frameAt(p,t));
+    for(const f of frames){
+      const old=compose.frameAt(legacy,f.timeMs);
+      assert.ok(f.viewSize.width>=old.viewSize.width);assert.equal(f.viewSize.width/f.viewSize.height,16/9);
+      const bounds={x:0,y:0,width:f.width,height:f.height};
+      const boxes=f.sides.map(s=>f.panels[s].panel);
+      if(f.photo){boxes.push(f.photo);inside(f.photoBox,f.photo);inside(f.photoText,f.photo);assert.ok(!overlap(f.photoBox,f.photoText));}
+      if(f.narrative)boxes.push(f.narrative);
+      boxes.forEach((b,i)=>{inside(b,bounds);boxes.slice(i+1).forEach(c=>assert.ok(!overlap(b,c)));});
+      for(const side of f.sides){const v=f.panels[side].viewport;inside(v,f.panels[side].panel);
+        for(const meta of [f.sceneCaption,f.cameraHud].filter(Boolean)){inside(meta,bounds);assert.ok(!overlap(v,meta));if(f.photo)assert.ok(!overlap(f.photo,meta));}}
+      if(f.referenceId){const d=dimensions.find(d=>d.id===f.referenceId),photo=compose.contain(f.photoBox,d.width,d.height);inside(photo,f.photoBox);}
+    }
+    if(layoutMode==='fixed')for(const f of frames){assert.deepEqual(f.panels,frames[0].panels);assert.deepEqual(f.photo,frames[0].photo);}
+  }
+  const raw=project(),opts={width:1920,cameraHud:true,layoutMode:'dynamic'},frame=(w,h)=>compose.frameAt(compose.plan(raw,{...opts,referenceDimensions:[{id:'first',width:w,height:h}]}),0);
+  assert.ok(frame(1,4).viewSize.width>frame(4,1).viewSize.width);
+  assert.ok(frame(1,4).photo.width<frame(4,1).photo.width);
+  assert.throws(()=>compose.plan(raw,{referenceDimensions:[{id:'first',width:0,height:1}]}),/dimensions/);
+});

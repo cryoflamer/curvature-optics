@@ -50,7 +50,7 @@
   function plan(project,options){
     options=options||{};
     var owned=projects.validate(project),appearance=resolveHudAppearance(owned,options),presentation=options.presentation===undefined?null:
-      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,cameraHud:options.cameraHud===true,cameraHudAppearance:appearance}));
+      compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:[]}));
     var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
     var durationMs=projects.totalMs(owned);
     var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps,options.streaming===true)-1:0;
@@ -61,6 +61,10 @@
       var ids=new Set(presentation.referenceLayout==='hidden'?[]:presentation.times.flatMap(function(t){return t.referenceImageIds;}));
       if(records.length!==ids.size||records.some(function(r){return !ids.has(r.id);}))throw Error('Presentation reference originals must match linked IDs');
       if(JSON.stringify(records).length>64*1024*1024)throw RangeError('Presentation reference assets exceed limit');
+      presentation=compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height,
+        cameraHud:options.cameraHud===true,cameraHudAppearance:appearance,referenceDimensions:records.map(function(r){
+          return {id:r.id,width:r.original.width,height:r.original.height};
+        })}));
     }else if(options.previewTimeMs!==undefined)throw RangeError('Preview requires full presentation');
     if(options&&options.cameraHud!==undefined&&typeof options.cameraHud!=='boolean')
       throw RangeError('Invalid camera HUD export setting');

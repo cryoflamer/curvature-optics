@@ -1,3 +1,21 @@
+## Modern Demo Catalog — Adaptive Presentation Geometry (7D.2.2.3B.1)
+
+GitHub issue #1 tracks the adaptive layout stages. Full presentation PNG plans
+now derive aspect ratios from validated linked original records before rendering.
+Within the selected Side/Below layout, a deterministic cached candidate search
+scores physical raster pixels and contained observation pixels, penalizing empty
+photo area. It never reduces the previous model raster size, and preserves at
+least 60% of the previous mean displayed photo area for the considered references.
+Fixed considers all linked originals; Dynamic considers the current first original
+or the linked set when reserving a travel placeholder. No crop, no stretching,
+no physics/RK4/FOV change. Missing dimensions retain the old allocation.
+For the user's 1920x1080 Soundly manifest at 28.20 s, Side/Fixed with HUD plans
+672x378 per model instead of 624x351 (geometry only, not browser acceptance).
+
+**Resume:** check actual PNG in Opera, then B.2 (automatic layout/orientation
+and explicit photo fit controls), B.3 (transition and full linked-set acceptance),
+7D.2.2.3C, 7D.2.3 Presentation Video. Issue stays open until user acceptance.
+
 ## Modern Demo Catalog — External Presentation Metadata (7D.2.2.3A)
 
 The user accepted the corrected Soundly Full presentation PNG at 28.20 s.

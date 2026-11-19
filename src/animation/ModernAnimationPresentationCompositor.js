@@ -27,7 +27,13 @@
     var times=Object.freeze(projects.timeline(p).map(function(t){
       return Object.freeze(Object.assign({},t,{referenceImageIds:Object.freeze((t.referenceImageIds||[]).slice())}));
     }));
-    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),
+    var linked=new Set(times.flatMap(function(t){return t.referenceImageIds;})),aspects=Object.create(null);
+    (options.referenceDimensions||[]).forEach(function(r){
+      if(!r||!linked.has(r.id)||!Number.isFinite(r.width)||!Number.isFinite(r.height)||r.width<=0||r.height<=0)
+        throw RangeError('Invalid presentation reference dimensions');
+      aspects[r.id]=r.width/r.height;
+    });
+    return Object.freeze({project:p,width:width,height:height,times:times,durationMs:projects.totalMs(p),referenceAspects:Object.freeze(aspects),
       sides:Object.freeze(p.baseExperiment.display.mode==='compare'?['A','B']:['A']),
       referenceLayout:choice(options.referenceLayout,['side','below','hidden'],'side'),
       layoutMode:choice(options.layoutMode,['fixed','dynamic'],'fixed'),
@@ -45,6 +51,44 @@
     if(box.width/width<=box.height/height){w=box.width;h=height*(w/width);}
     else{h=box.height;w=width*(h/height);}
     return rect(box.x+(box.width-w)/2,box.y+(box.height-h)/2,w,h);
+  }
+  // Score actual contained photo pixels, not the size of an empty photo panel.
+  // Preserve at least the previous physical raster size; prefer usable model
+  // pixels, then observation pixels, and penalize unused photo-box area.
+  // Keep at least 60% of the legacy mean displayed photo area.
+  var shares=new WeakMap();
+  function adaptiveShare(p,body,gap,label,px,metadataHeight,legacy,ratios){
+    if(!ratios.length)return legacy;
+    var cache=shares.get(p),key=ratios.join(',');
+    if(!cache){cache=new Map();shares.set(p,cache);}
+    if(cache.has(key))return cache.get(key);
+    var side=p.referenceLayout==='side',n=p.sides.length;
+    function evaluate(size){
+      var mw=side?body.width-size-gap:body.width,mh=side?body.height:body.height-size-gap;
+      var pw=side?size-2*gap:Math.floor((body.width-gap)*0.55)-gap,
+        ph=side?body.height-label-px(88)-gap:size-label-gap;
+      var units=Math.floor(Math.min(Math.floor((mw-gap*(n-1))/n)/16,(mh-label-metadataHeight)/9,120));
+      if(units<20||pw<=0||ph<=0)return null;
+      var modelArea=n*144*units*units,photoArea=ratios.reduce(function(sum,r){
+        var w=Math.min(pw,ph*r);return sum+w*w/r;
+      },0)/ratios.length;
+      return {units:units,photoArea:photoArea,score:modelArea+0.5*photoArea-0.05*(pw*ph-photoArea)};
+    }
+    var best=legacy,base=evaluate(legacy),score=base?base.score:-Infinity,
+      min=side?px(260):label+gap+5*Math.ceil(px(12)*1.22),
+      max=side?Math.floor(body.width*0.55):body.height-gap-label-metadataHeight-180;
+    for(var size=min;size<=max;size+=Math.max(1,px(8))){
+      var v=evaluate(size);
+      if(v&&(!base||(v.units>=base.units&&v.photoArea>=0.60*base.photoArea))&&v.score>score){best=size;score=v.score;}
+    }
+    cache.set(key,best);return best;
+  }
+  // A Fixed export considers all linked originals, even outside the current
+  // hold. Dynamic uses only the displayed original, or the linked set during
+  // travel with a reserved panel. Missing dimension metadata retains legacy geometry.
+  function referenceRatios(p,r){
+    var ids=p.layoutMode==='dynamic'&&r.ids.length?[r.ids[0]]:Object.keys(p.referenceAspects);
+    return ids.map(function(id){return p.referenceAspects[id];}).filter(function(ratio){return Number.isFinite(ratio)&&ratio>0;});
   }
   function frameAt(p,timeMs){
     if(!Number.isFinite(timeMs)||timeMs<0||timeMs>p.durationMs)throw RangeError('Invalid presentation time');
@@ -64,7 +108,7 @@
     var body=rect(pad,header,p.width-2*pad,p.height-header-footer-narrativeHeight-gap),
       models=body,photo=null,photoBox=null,photoText=null;
     if(reserve&&p.referenceLayout==='side'){
-      var w=Math.floor((body.width-gap)*0.32);
+      var w=adaptiveShare(p,body,gap,label,px,metadataHeight,Math.floor((body.width-gap)*0.32),referenceRatios(p,r));
       photo=rect(body.x,body.y,w,body.height);
       models=rect(body.x+w+gap,body.y,body.width-w-gap,body.height);
       photoText=rect(photo.x+gap,photo.y+photo.height-px(88),photo.width-2*gap,px(82));
@@ -73,6 +117,7 @@
       // Preserve the reference allocation unless the metadata and minimum
       // physical raster cannot coexist. Never cover a physical pixel with text.
       var h=Math.min(Math.floor((body.height-gap)*0.38),body.height-gap-label-metadataHeight-180);
+      h=adaptiveShare(p,body,gap,label,px,metadataHeight,h,referenceRatios(p,r));
       photo=rect(body.x,body.y+body.height-h,body.width,h);
       models=rect(body.x,body.y,body.width,body.height-h-gap);
       var bw=Math.floor((photo.width-gap)*0.55);
