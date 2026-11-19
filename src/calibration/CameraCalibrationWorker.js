@@ -26,9 +26,9 @@ importScripts(
   '../renderers/CurvatureCanvasDirectPreview.js',
   'CameraMaterialAnchor.js',
   'CameraMaterialAnchorResolver.js?projection-bank=1',
-  'CameraLandmarkProjection.js?vertex-scale=1&material-projection=1',
+  'CameraLandmarkProjection.js?vertex-scale=1&material-projection=1&material-fit=1',
   'CameraPhysicalPose.js',
-  'CameraPhysicalFit.js?progress=1&vertex-scale=1'
+  'CameraPhysicalFit.js?progress=1&vertex-scale=1&material-fit=1'
 );
 self.onmessage=event=>{
   try{

@@ -3,10 +3,11 @@
  * Scaled finite differences and damped QR; no identifiability certificate. */
 (function(root,factory){
   var api=factory(root.CurvatureCameraPhysicalPose||require('./CameraPhysicalPose'),
-    root.CurvatureCameraLandmarkProjection||require('./CameraLandmarkProjection'));
+    root.CurvatureCameraLandmarkProjection||require('./CameraLandmarkProjection'),
+    root.CurvatureCameraMaterialAnchor||require('./CameraMaterialAnchor'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureCameraPhysicalFit=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(bridge,projection){
+}(typeof globalThis!=='undefined'?globalThis:this,function(bridge,projection,materialAnchor){
   'use strict';
   const fields=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField'];
   const focal='FocalLengthField',rad=Math.PI/180;
@@ -31,22 +32,34 @@
       if(!o||!o.landmark||typeof o.landmark.id!=='string'||!o.landmark.id.trim()||seen.has(o.landmark.id)||
          !Array.isArray(o.pixel)||o.pixel.length!==2||!o.pixel.every(Number.isFinite))throw TypeError('Invalid or duplicate calibration observation');
       const kind=o.kind??'metric',p=o.landmark;
-      if(kind==='metric'?(![p.east,p.north,p.height].every(Number.isFinite)||p.height<0):
-        kind==='vertex'?(![p.bank,p.objectType,p.primitive,p.vertex].every(Number.isInteger)||![0,1].includes(p.bank)||p.primitive<0||p.vertex<0):true)
-        throw TypeError('Invalid calibration landmark');
-      seen.add(p.id);return {kind,landmark:{...p},pixel:o.pixel.slice(),weight:number(o.weight??1,Number.MIN_VALUE,Infinity,'weight')};
+      let landmark;
+      if(Object.prototype.hasOwnProperty.call(p,'anchor')||kind==='edge'||kind==='surface'){
+        if(!['vertex','edge','surface'].includes(kind))throw TypeError('Invalid calibration landmark kind');
+        landmark=materialAnchor.normalizeLandmark(kind,p);
+      }else{
+        if(kind==='metric'?(![p.east,p.north,p.height].every(Number.isFinite)||p.height<0):
+          kind==='vertex'?(![p.bank,p.objectType,p.primitive,p.vertex].every(Number.isInteger)||![0,1].includes(p.bank)||p.primitive<0||p.vertex<0):true)
+          throw TypeError('Invalid calibration landmark');
+        landmark={...p};
+      }
+      seen.add(p.id);return {kind,landmark,pixel:o.pixel.slice(),weight:number(o.weight??1,Number.MIN_VALUE,Infinity,'weight')};
     });
   }
   function poseOf(p,opts){
     if(!p||fields.some(k=>!Number.isFinite(p[k])))throw TypeError('Complete finite initial pose required');
     return {...Object.fromEntries(fields.map(k=>[k,p[k]])),deviceRatio:opts.width/opts.height,viewcenterHorizon:3};
   }
-  function evaluator(model,obs,opts){
+  const materialObservations=obs=>obs.filter(o=>Object.prototype.hasOwnProperty.call(o.landmark,'anchor'));
+  function materialContext(model,obs){
+    return model?.showModel===1&&materialObservations(obs).length?projection.createMaterialContext(model):null;
+  }
+  function evaluator(model,obs,opts,context){
     if(!model||![1,2].includes(model.showModel)||!(model.rEarth>0)||!Number.isFinite(model.rEarth)||!(model.rFEarth>0)||!Number.isFinite(model.rFEarth))throw RangeError('Invalid physical model');
     const weightSum=obs.reduce((s,o)=>s+o.weight,0);if(!Number.isFinite(weightSum))throw RangeError('Invalid total weight');
+    if(context===undefined)context=materialContext(model,obs);
     return pose=>{
       const m={...model,...pose};let session;
-      try{session=projection.create(m,bridge.photoCamera(m,opts.width,opts.height),opts.width,opts.height,opts);}
+      try{session=projection.create(m,bridge.photoCamera(m,opts.width,opts.height),opts.width,opts.height,{...opts,materialContext:context});}
       catch(e){if(!(e instanceof RangeError))throw e;return {valid:false,reason:e.message,rmsPx:null,weightedRmsPx:null,cost:null,residuals:null,points:[]};}
       let sum=0,cost=0;const residuals=[],points=[];
       for(const o of obs){
@@ -79,10 +92,12 @@
     const free=options.freeParameters??fields.slice(),bounds=options.bounds??{},scales=options.scales??{};
     if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!fields.includes(k)))throw RangeError('Invalid free parameters');
     if(!bounds||typeof bounds!=='object'||Array.isArray(bounds)||!scales||typeof scales!=='object'||Array.isArray(scales)||[...Object.keys(bounds),...Object.keys(scales)].some(k=>!fields.includes(k)))throw RangeError('Invalid bounds or scales');
+    const context=materialContext(model,obs);
     const distances=obs.filter(o=>o.kind==='metric').map(o=>Math.hypot(o.landmark.east-base.CameraEast,o.landmark.north-base.CameraNorth));
     // Explicit horizontal scale overrides are honored; avoid extra mesh construction then.
     if((free.includes('CameraEast')&&scales.CameraEast===undefined)||(free.includes('CameraNorth')&&scales.CameraNorth===undefined)){
-      distances.push(...projection.authoredVertexRanges(model,base,obs.filter(o=>o.kind==='vertex').map(o=>o.landmark)));
+      distances.push(...projection.authoredVertexRanges(model,base,obs.filter(o=>o.kind==='vertex'&&!o.landmark.anchor).map(o=>o.landmark)));
+      distances.push(...projection.authoredMaterialRanges(model,base,materialObservations(obs),context));
     }
     const ranges=distances.filter(Number.isFinite).sort((a,b)=>a-b);
     const range=ranges.length?ranges[Math.floor(ranges.length/2)]:0;
@@ -99,7 +114,7 @@
       if(!Number.isFinite(left)||!Number.isFinite(right))throw RangeError('Unrepresentable scaled bounds for '+k);
       return {k,lo:left,hi:right,decode,scale};
     }).filter(s=>free.includes(s.k));
-    return {opts,obs,base,specs};
+    return {opts,obs,base,specs,context};
   }
   // Use the same bounded, weighted Jacobian in fitting and diagnostics.
   function jacobian(specs,x,current,at,epsilon){
@@ -120,11 +135,11 @@
     return {columns,schemes};
   }
   function fit(model,initial,input,options){
-    options=options||{};const {opts,obs,base,specs}=prepare(model,initial,input,options);
+    options=options||{};const {opts,obs,base,specs,context}=prepare(model,initial,input,options);
     const maxIterations=number(options.maxIterations??80,0,500,'iteration limit'),epsilon=number(options.differenceStep??1e-4,1e-8,.01,'difference step');
     if(!Number.isInteger(maxIterations))throw RangeError('Invalid iteration limit');
     const gradientTolerance=number(options.gradientTolerance??1e-8,0,Infinity,'gradient tolerance'),stepTolerance=number(options.stepTolerance??1e-9,0,Infinity,'step tolerance');
-    const objective=evaluator(model,obs,opts),decode=x=>({...base,...Object.fromEntries(specs.map((s,i)=>[s.k,s.decode(x[i])]))});
+    const objective=evaluator(model,obs,opts,context),decode=x=>({...base,...Object.fromEntries(specs.map((s,i)=>[s.k,s.decode(x[i])]))});
     let evaluations=0,iterations=0,acceptedSteps=0,lambda=1e-3,x=specs.map(()=>0);
     const at=x=>{evaluations++;return objective(decode(x));};
     let current=at(x);const initialRmsPx=current.rmsPx;
@@ -183,10 +198,10 @@
   // uniqueness claim. Compare two finite-difference resolutions before
   // interpreting a small singular value as a constrained mode.
   function diagnose(model,pose,input,options){
-    options=options||{};const {opts,obs,base,specs}=prepare(model,pose,input,options);
+    options=options||{};const {opts,obs,base,specs,context}=prepare(model,pose,input,options);
     const epsilon=number(options.differenceStep??1e-4,1e-8,.01,'difference step');
     const relativeTolerance=number(options.rankTolerance??1e-8,1e-14,.1,'rank tolerance');
-    const objective=evaluator(model,obs,opts),x=specs.map(()=>0);
+    const objective=evaluator(model,obs,opts,context),x=specs.map(()=>0);
     let evaluations=0;
     const at=x=>{evaluations++;return objective({...base,...Object.fromEntries(specs.map((s,i)=>[s.k,s.decode(x[i])]))});};
     const current=at(x),parameters=specs.map(s=>({field:s.k,scale:s.scale,unit:s.k===focal?'log focal ratio':s.k==='Pan'||s.k==='Nick'||s.k==='Roll'?'degrees':'metres',

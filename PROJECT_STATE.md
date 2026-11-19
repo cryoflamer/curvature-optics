@@ -1,3 +1,30 @@
+## 8F.4d.1 — Material anchors in the physical calibration objective
+
+8F.4c CI 44640312556: Node regressions and architecture/Legacy passed;
+Chromium failed only on the previously observed Scene workspace restore
+timeout (all photo-calibration smoke tests passed). Keep this failure
+visible; no unrelated navigation changes here.
+
+Split 8F.4d into 8F.4d.1 (fit/diagnose/worker) and 8F.4d.2
+(draft/portable/editor integration). Mixed metric, legacy vertex and
+canonical Vertex/Edge/Surface observations now enter the same weighted
+point objective, with structural validation, stable result IDs and
+physical horizontal range scaling. Existing UI Fit/Validation filtering
+and residual projector dispatch remain unchanged. The headless API still
+uses every supplied observation; callers select the Fit subset.
+Per-fit opaque material context reuses physical resolver and bank
+signatures across evaluations; one bounded target binding per bank
+reused only for matching method/radius/height. No global cache, no
+optimizer changes. Invalid material anchors invalidate the objective
+rather than being silently removed (invalid ranges cannot set scaling).
+Legacy paths stay unchanged. Worker imports/cache keys updated. Added
+mixed synthetic fit, diagnostics, scale, cache parity, invalid topology
+and held-out residual tests. All five passed in a headless JS harness
+using the actual solver, camera, geometry, projection and ray-shooting
+modules. Seven unused scene/Flat dependencies were guarded by throwing
+stubs (connector call limit); native Node/Chromium CI pending.
+No new portable/draft formats or authoring UI yet. Next: 8F.4d.2.
+
 ## 8F.4c — Globe optical material anchor projection
 
 8F.4b CI run 44639073304 passed. CameraLandmarkProjection accepts canonical

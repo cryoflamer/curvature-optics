@@ -39,6 +39,24 @@
       return {status:pixel[0]>=0&&pixel[0]<width&&pixel[1]>=0&&pixel[1]<height?'visible':'out_of_frame',pixel:pixel};
     };
   }
+  // A per-fit, opaque context. No global geometry cache or user-supplied
+  // mutable bank handles. One target binding per bank; a new effective radius
+  // (or Accurate Height) replaces it, keeping memory bounded.
+  var materialContexts=new WeakMap();
+  function materialKey(m){
+    return JSON.stringify([m.showModel,m.rEarth,materialResolver.LAYOUT.map(function(k){return m[k];})]);
+  }
+  function createMaterialContext(model){
+    var token=Object.freeze({});
+    materialContexts.set(token,{key:materialKey(model),resolver:materialResolver.create(model),bindings:new Map()});
+    return token;
+  }
+  function contextFor(model,token){
+    if(token===undefined||token===null)return materialContexts.get(createMaterialContext(model));
+    var context=materialContexts.get(token);
+    if(!context||context.key!==materialKey(model))throw RangeError('Material context does not match physical model');
+    return context;
+  }
   function create(model,camera,width,height,options){
     options=options||{};
     if(!model||![1,2].includes(model.showModel)||!Number.isFinite(model.rEarth)||!(model.rEarth>0)||
@@ -110,7 +128,10 @@
     }
     // Physical topology authenticates identity; the method-specific bank
     // supplies coordinates with the existing Height convention.
-    var resolver=null,materialBanks=new Map();
+    var context=null,materialBanks=new Map();
+    if(options.materialContext!==undefined&&options.materialContext!==null)
+      context=contextFor(m,options.materialContext);
+    var targetKey=JSON.stringify([method,radius,params?0:eye]);
     function material(kind,p){
       var id=idOf(p);
       if(!globe)return result(id,'invalid_anchor',null,'Material anchors require Globe');
@@ -118,8 +139,15 @@
       try{
         if(!p.anchor)throw TypeError('Material anchor required');
         var b=p.anchor.owner&&p.anchor.owner.bank;
-        if(!resolver)resolver=materialResolver.create(m);
-        if(!materialBanks.has(b))materialBanks.set(b,resolver.bindProjectionBank(b,bank(b)));
+        if(!context)context=contextFor(m);
+        if(!materialBanks.has(b)){
+          var cached=context.bindings.get(b);
+          if(!cached||cached.key!==targetKey){
+            cached={key:targetKey,bank:context.resolver.bindProjectionBank(b,bank(b))};
+            context.bindings.set(b,cached);
+          }
+          materialBanks.set(b,cached.bank);
+        }
         world=materialBanks.get(b).point(kind,p);
       }catch(error){
         if(!(error instanceof TypeError||error instanceof RangeError))throw error;
@@ -162,5 +190,22 @@
       return Math.hypot(local[0],local[1]);
     });
   }
-  return Object.freeze({create:create,authoredVertexRanges:authoredVertexRanges});
+  // Invalid anchors contribute no scale estimate, but remain in the actual
+  // objective where invalid_anchor invalidates the whole evaluation.
+  function authoredMaterialRanges(model,pose,observations,token){
+    if(!observations.length||model.showModel!==1)return [];
+    var basis;
+    try{basis=translation.frame(pose.CameraEast,pose.CameraNorth,pose.Height,1/model.rEarth);}
+    catch(e){if(!(e instanceof RangeError))throw e;return [];}
+    var context=contextFor(model,token);
+    return observations.map(function(o){
+      try{
+        var w=context.resolver.resolveLandmark(o.kind,o.landmark).point;
+        var local=translation.pointAt([w[0],w[1],w[2]-pose.Height],basis);
+        return Math.hypot(local[0],local[1]);
+      }catch(e){if(!(e instanceof RangeError||e instanceof TypeError))throw e;return NaN;}
+    });
+  }
+  return Object.freeze({create:create,authoredVertexRanges:authoredVertexRanges,
+    authoredMaterialRanges:authoredMaterialRanges,createMaterialContext:createMaterialContext});
 }));

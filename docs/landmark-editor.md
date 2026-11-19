@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection implemented; next 8F.4d. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection and 8F.4d.1 numerical integration implemented; next 8F.4d.2. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -396,12 +396,40 @@ New anchor projection is Globe-only. Fit, portable/draft and authoring UI
 are unchanged. In 8F.4d reuse physical resolver caches across camera
 evaluations to avoid repeated full-bank signature generation.
 
+#### 8F.4d.1 — Numerical calibration integration (implemented)
+
+CameraPhysicalFit accepts mixed metric, legacy vertex and canonical material
+observations. Normalize canonical descriptors before evaluation; keep the
+observation ID, weight and original photo pixel unchanged. All supplied rows
+remain in the objective. The UI's existing fitRows boundary continues to
+exclude Validation rows only at the caller; residualRows and the projector's
+kind dispatch work with material rows as well.
+
+A per-fit opaque projection context owns the physical resolver and at most
+one target bank binding per bank, keyed by method, radius and authored
+Height. It is matched to the captured physical hypothesis/layout and
+cannot be reused after a layout/radius change. Reuse physical signatures
+through fit and diagnose; rebuild target bindings when optics or height
+requires it. Material ranges use physical points at the initial observer
+frame and feed the existing median horizontal scale, with overrides
+unchanged. Invalid anchors cannot supply a scale estimate and still
+invalidate the entire objective; do not drop their residuals. No change
+to QR, Jacobian, objective, locks or convergence policy.
+
+Five focused headless regressions passed (mixed known pose, scale,
+cache parity, invalid topology, Fit/Validation residuals). Full Node and
+browser CI pending. Previous CI passed Node and architecture, but the
+known Scene workspace restoration timeout recurred in Chromium.
+8F.4d.2 will enable the editor's read paths and versioned persistence,
+including stale result validation before portable import/draft restore.
+
 | Commit | Scope and acceptance gate |
 | --- | --- |
 | 8F.4a | Audit current vertex IDs, observation/draft/portable and worker contracts; define one canonical material-anchor representation and strict validation with legacy vertex adapters. Test valid and malformed kinds, weights, indices and identity; no new UI or schema rollout yet. |
 | 8F.4b | Resolve anchors against shared authored physical topology; verify identity/topology and reject unresolved geometry. Test independent XYZ for vertices, edges and surfaces, placement including bridge spans, invalid topology, old vertex parity, and independence from viewer/camera. |
 | 8F.4c | Project anchors with supported Globe optics and explicit projection status. Verify physical/effective geometry correspondence and material interpolation rather than assuming transforms commute. Test independent projection and round trips across camera changes, visibility and invalid/out-of-frame cases; preserve vertex numerical parity. |
-| 8F.4d | Integrate resolver/projector with worker fit, original-pixel residuals, horizontal range scaling, Fit/Validation, draft and versioned portable exchange. Test synthetic known poses, old imports, round trips, stale/invalid results, roles and topology rejection. No new authoring UI until these contracts work end-to-end. |
+| 8F.4d.1 | Integrate canonical anchors into the headless fit, diagnose, worker, original-pixel residual dispatch and physical range scales. Reuse one per-fit physical resolver and bounded method-specific target cache. Mixed synthetic known pose, legacy parity, invalid anchor and held-out residual tests. |
+| 8F.4d.2 | Integrate versioned draft/portable observations, marker and pair read paths, result consistency and validation. Test old imports, round trips, stale/invalid results, roles and topology rejection. No new authoring UI until these contracts work end-to-end. |
 
 ### 8F.5 — Calibration integration
 
