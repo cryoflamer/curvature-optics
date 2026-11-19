@@ -2691,7 +2691,7 @@
     if(cancel)cancel.disabled=!studioFrameExportTask;
     var preview=newUiEl('ModernAnimationFrameExportPreview');
     if(preview)preview.disabled=!!studioFrameExportTask||!!studioVideoExportTask||!ready||!studioBackgroundExportApi;
-    ['Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target'].forEach(function(key){
+    ['Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target','Destination'].forEach(function(key){
       var node=newUiEl('ModernAnimationFrameExport'+key);if(node)node.disabled=!!studioFrameExportTask;
     });
     syncStudioVideoExportControls();
@@ -3015,6 +3015,8 @@
     function clearPreview(){if(previewUrl){root.URL.revokeObjectURL(previewUrl);previewUrl=null;
         if(previewImage)previewImage.removeAttribute('src');}
       previewArchive=null;previewFilename=null;if(panel)panel.hidden=true;}
+    var destination=newUiEl('ModernAnimationFrameExportDestination');
+    if(destination&&typeof root.showSaveFilePicker!=='function'){destination.value='memory';if(destination.options&&destination.options[0])destination.options[0].disabled=true;}
     var savePreview=newUiEl('ModernAnimationFrameExportPreviewSave');
     if(savePreview)savePreview.addEventListener('click',function(){
       if(!previewArchive)return;
@@ -3036,9 +3038,10 @@
           root.CurvatureModernStatusMessage.decorate(node,kind||'info');}}
     cancel.addEventListener('click',function(){
       if(!studioFrameExportTask)return;
-      studioFrameExportTask.cancelled=true;studioFrameExportTask.controller.cancel();
+      if(studioFrameExportTask.controller.isBusy&&studioFrameExportTask.controller.isBusy()&&!studioFrameExportTask.controller.cancel())return;
+      studioFrameExportTask.cancelled=true;
       // Terminate every worker, even if an Accurate RK4 calculation is blocked.
-      message('PNG export cancelled. Render and archive workers terminated; no ZIP saved.','warning');
+      message('Cancelling PNG export…','warning');
     });
     async function launch(previewOnly){
       if(studioFrameExportTask||studioVideoExportTask)return;
@@ -3046,14 +3049,14 @@
         message('PNG export modules did not load. Check the browser console.','error');return;
       }
       var controller=studioBackgroundExportApi.create({WorkerCtor:root.Worker,
-        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1',
-        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1',
+        workerUrl:'src/animation/ModernAnimationFrameWorker.js?spline-export=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1',
+        archiveUrl:'src/animation/ModernAnimationArchiveWorker.js?spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1',
         hardwareConcurrency:root.navigator&&root.navigator.hardwareConcurrency});
-      var task={controller:controller,cancelled:false};
+      var task={controller:controller,cancelled:false},sink=null,ownedSink=false;
       clearPreview();
       studioFrameExportTask=task;
       syncStudioFrameExportControls();
-      if(progress){progress.max=100;progress.removeAttribute('value');}
+      if(progress){progress.max=100;progress.value=0;}
       try{
         // Export is independent of Playback's Prepare button: a valid draft
         // can be exported directly, even after an edit invalidated playback.
@@ -3062,7 +3065,8 @@
         var size=newUiEl('ModernAnimationFrameExportSize').value.split('x').map(Number);
         var full=!!(mode&&mode.value==='presentation'),extra={};
         if(previewOnly&&!full)throw Error('Choose Full presentation first');
-        if(!previewOnly)studioFrameExportApi.checkFrameBudget(project,fps);
+        var streaming=!previewOnly&&!!destination&&destination.value==='disk'&&typeof root.showSaveFilePicker==='function';
+        if(!previewOnly)studioFrameExportApi.checkFrameBudget(project,fps,streaming);
         if(full){
           size=[Number(newUiEl('ModernAnimationFrameExportPresentationSize').value)];size.push(size[0]*9/16);
           extra.presentation={referenceLayout:newUiEl('ModernAnimationFrameExportLayout').value,
@@ -3076,7 +3080,14 @@
           selectedTarget=targetIndicatorSelection;
         var workerSelection=newUiEl('ModernAnimationFrameExportWorkers').value;
         var workerCount=workerSelection==='auto'?'auto':Number(workerSelection);
-        var startAt=profileNow();
+        var startAt=profileNow(),handle=null;
+        var filename=semanticNaming.exportNames(project,{kind:'frames',format:'png',fps:fps,width:size[0],height:size[1]}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
+        // Picker must run in the original click gesture, before any asset awaits.
+        if(streaming){
+          try{handle=await root.showSaveFilePicker({suggestedName:filename,types:[{description:'PNG frame ZIP',accept:{'application/zip':['.zip']}}]});}
+          catch(error){if(error.name==='AbortError'){message('PNG export cancelled; no file chosen.','warning');return;}throw error;}
+          if(task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
+        }
         if(full&&extra.presentation.referenceLayout!=='hidden'){
           var demo=studioActiveDemo;
           message('Collecting original reference photographs…');
@@ -3086,29 +3097,33 @@
             return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
           });
         }
-        if(task.cancelled)return;
-        var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1],...extra});
+        if(task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
+        var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1],streaming:streaming,...extra});
+        if(handle){sink=await handle.createWritable();if(task.cancelled){
+          try{await sink.abort();}catch(error){sink=null;throw Error('Disk abort failed: '+error.message);}
+          sink=null;message('PNG export cancelled; no ZIP committed.','warning');return;}}
         message('Starting background worker pool · 0 / '+plan.timesMs.length+
           ' timestamps, '+plan.sides.length+' view(s) · Accurate RK4. Cancel is available.');
-        var result=await controller.start({project:plan.project,fps:plan.fps,
+        var exportPromise=controller.start({project:plan.project,fps:plan.fps,sink:sink,
           width:plan.width,height:plan.height,workerCount:workerCount,
           cameraHud:cameraHud,cameraHudAppearance:cameraHudAppearance,targetIndicator:targetIndicator,targetSelection:selectedTarget,...extra,
           onReady:function(info){
             message(info.workers+' render worker(s) ready · calculating Accurate RK4 · '+
-              info.total+' timestamps. ZIP assembly is also in the background.');
+              info.total+' timestamps. '+(streaming?'Writing ZIP directly to disk.':'ZIP assembly is also in the background.'));
           },
           onProgress:function(info){
             if(progress)progress.value=100*info.completed/info.total;
             var elapsed=info.elapsedMs/1000;
             var remaining=info.completed?Math.max(0,(elapsed/info.completed)*(info.total-info.completed)):0;
             message('Rendered '+info.completed+' / '+info.total+' timestamps · last t='+
-              (info.timeMs/1000).toFixed(2)+' s (out-of-order) · elapsed '+elapsed.toFixed(1)+
+              (info.timeMs/1000).toFixed(2)+(streaming?' s (written in order) · elapsed ':' s (out-of-order) · elapsed ')+elapsed.toFixed(1)+
               ' s · estimated remaining '+Math.ceil(remaining)+' s · '+
-              info.workers+' workers · Accurate RK4');
+              info.workers+' workers · Accurate RK4'+(streaming?' · '+(info.bytesWritten/1048576).toFixed(1)+' MiB written · estimated '+(info.estimatedBytes/1048576).toFixed(1)+' MiB total':''));
           },
-          onPacking:function(){message('All PNGs rendered · assembling ZIP in background…');}
+          onPacking:function(){message(streaming?'Finalizing ZIP on disk…':'All PNGs rendered · assembling ZIP in background…');}
         });
-        if(result.cancelled||task.cancelled)return;
+        ownedSink=!!sink;var result=await exportPromise;
+        if(result.cancelled||task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
         if(previewOnly){
           previewUrl=root.URL.createObjectURL(result.previewBlob);previewImage.src=previewUrl;panel.hidden=false;
           var caption=newUiEl('ModernAnimationFrameExportPreviewCaption'),row=result.manifest.frames[0];
@@ -3116,17 +3131,19 @@
           if(caption)caption.textContent='Preview snapshot · '+plan.project.name+' · '+plan.width+' × '+plan.height+' · '+(row.timeMs/1000).toFixed(2)+' s · Accurate RK4'+(row.warnings.length?' · Shortened text: '+row.warnings.join(', '):'');
           message('Presentation preview ready. Save this frame ZIP to include the PNG and its manifest.','success');return;
         }
-        var url=root.URL.createObjectURL(result.blob);
+        if(!result.streamed){var url=root.URL.createObjectURL(result.blob);
         try{
           var link=document.createElement('a');
           link.href=url;link.download=semanticNaming.exportNames(plan.project,{
             kind:'frames',format:'png',fps:plan.fps,width:plan.width,height:plan.height}).filename.replace(/_frames\.zip$/,full?'_presentation_frames.zip':'_frames.zip');
           document.body.appendChild(link);link.click();link.remove();
-        }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}
+        }finally{setTimeout(function(){root.URL.revokeObjectURL(url);},30000);}}
         message('PNG archive ready: '+result.manifest.frameCount+' timestamps × '+
           result.manifest.sides.length+' view(s), including exact final frame · '+
           result.workers+' worker(s) · total '+((profileNow()-startAt)/1000).toFixed(1)+' s.','success');
-      }catch(error){if(!task.cancelled)message('PNG export failed: '+error.message+' · No partial archive saved.','error');}
+      }catch(error){if(sink&&!ownedSink){try{await sink.abort();}catch(abortError){error=Error(error.message+'; disk abort failed: '+abortError.message);}}
+        if(!task.cancelled||String(error.message).toLowerCase().includes('abort failed'))message('PNG export failed: '+error.message+(streaming?' · Disk export not confirmed.':' · No partial archive saved.'),'error');
+        else message('PNG export cancelled; no ZIP committed.','warning');}
       finally{if(studioFrameExportTask===task)studioFrameExportTask=null;
         syncStudioFrameExportControls();}
     }

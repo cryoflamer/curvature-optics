@@ -43,9 +43,10 @@ that validated project is used. The input is snapshotted at Start.
   Parallel exports also record `renderWorkers` and `renderElapsedMs` (time from
   archive initialization through receipt of the last PNG). Optical timing and
   cache-hit metrics may vary with worker count; pixel outputs must not.
-- The uncompressed ZIP32 store writer is bounded (max **751 timestamps** and
-  **192 MiB PNG data**). Presets: 5/10/25/30 FPS at 640×360, 960×540 or
-  1280×720. There is no MP4/WebM encoding or streaming archive yet.
+- The in-memory ZIP32 store writer is bounded (max **751 timestamps** and
+  **192 MiB PNG data**). Direct-to-disk mode supports up to 30,000 timestamps
+  with ZIP32 limits (<4 GiB total, 65,535 entries). Presets: 5/10/25/30 FPS;
+  simulation and full-presentation output sizes are selected independently.
 
 ## Background work, progress and cancellation
 
@@ -139,3 +140,29 @@ fields or trace operations are added to exports with the option off.
 
 The overlay does not depict target visibility or perform ray tracing. A target
 bearing indicator is a separate planned enhancement.
+
+## Direct-to-disk ZIP (7D.2.2.2)
+
+Destination defaults to **Save directly to disk** when the browser exposes
+`showSaveFilePicker`; otherwise **Download ZIP (in memory)** is selected.
+The user can explicitly choose the latter at any time. Single-frame preview
+always uses memory. The save picker runs before asynchronous reference reads;
+render options and physics are snapshotted before that await. The coordinator
+owns a writable file stream once the export starts. Workers transfer byte
+buffers, archive worker validates each frame and builds its ZIP local entries,
+and the controller awaits every write before admitting another timestamp into
+its window (at most the number of render workers). PNG data do not accumulate
+with duration; the manifest and ZIP central-directory metadata still grow
+linearly with frame count. The archive worker retains those metadata and writes
+the manifest last, then the central directory and end record. ZIP readers do
+not require a specific location for `manifest.json`. No ZIP64 yet.
+
+Progress counts timestamps fully written, with actual bytes and a running
+estimated size (not a guarantee). Cancel terminates all workers and aborts the
+file stream before commit, preserving an existing file on normal abort; the
+picker may leave an empty newly created file. Disk-full/permission errors are
+reported, including failures to abort. Once `close()` is initiated cancellation
+is unavailable; success means the close has resolved. No fallback after a user
+cancels the picker or a write fails, to avoid silently starting a large memory
+export. Test sink backpressure, ordered entries and exact endpoint with the
+production coordinator; native file picker and disk commit need Opera testing.

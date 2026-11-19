@@ -18,7 +18,7 @@
   root.CurvatureModernAnimationFrameExport=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(projects,hud,target,compositor,references){
   'use strict';
-  var MAX_FRAMES=751,MAX_ARCHIVE_BYTES=192*1024*1024;
+  var MAX_FRAMES=751,MAX_STREAM_FRAMES=30000,MAX_ARCHIVE_BYTES=192*1024*1024;
   // Shared sizing/FPS policy for PNG and future video frames. Video has an
   // independent timeline and resource budget, but must accept the same presets.
   function exportSettings(options){
@@ -36,15 +36,16 @@
       hud.validateAppearance(options.cameraHudAppearance):
       (project.cameraHudAppearance||hud.normalizeAppearance());
   }
-  function sequenceCount(durationMs,fps){
+  function sequenceCount(durationMs,fps,streaming){
     var count=Math.ceil(durationMs*fps/1000)+1;
-    if(count>MAX_FRAMES)throw RangeError('Too many frames for in-memory PNG export ('+count+
-      ' requested; maximum '+MAX_FRAMES+'). Reduce FPS or animation length.');
+    var limit=streaming?MAX_STREAM_FRAMES:MAX_FRAMES;
+    if(count>limit)throw RangeError('Too many frames for '+(streaming?'streaming':'in-memory')+' PNG export ('+count+
+      ' requested; maximum '+limit+'). Reduce FPS or animation length.');
     return count;
   }
   // UI preflight before loading possibly very large original photographs.
-  function checkFrameBudget(project,fps){
-    return sequenceCount(projects.totalMs(project),exportSettings({fps:fps}).fps);
+  function checkFrameBudget(project,fps,streaming){
+    return sequenceCount(projects.totalMs(project),exportSettings({fps:fps}).fps,streaming===true);
   }
   function plan(project,options){
     options=options||{};
@@ -52,7 +53,7 @@
       compositor.plan(owned,Object.assign({},options.presentation,{width:options.width,height:options.height}));
     var settings=exportSettings(presentation?{fps:options.fps,width:960,height:540}:options);
     var durationMs=projects.totalMs(owned);
-    var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps)-1:0;
+    var intervals=options.previewTimeMs===undefined?sequenceCount(durationMs,settings.fps,options.streaming===true)-1:0;
     var records=[];
     if(presentation){
       if(!Array.isArray(options.referenceImages||[])||(options.referenceImages||[]).length>100)throw RangeError('Invalid presentation reference assets');
@@ -76,7 +77,7 @@
     // representing [0, 40, ..., 4960, 5000] milliseconds.
     var appearance=resolveHudAppearance(owned,options);
     return Object.freeze({project:owned,fps:fps,width:width,height:height,
-      durationMs:durationMs,cameraHud:!!(options&&options.cameraHud===true),
+      durationMs:durationMs,streaming:options.streaming===true,cameraHud:!!(options&&options.cameraHud===true),
       cameraHudAppearance:appearance,
       targetIndicator:!!(options&&options.targetIndicator===true),
       targetSelection:target?target.selection(options&&options.targetSelection):'scene',
@@ -97,32 +98,52 @@
     for(var k=0;k<bytes.length;k++)crc=crcTable[(crc^bytes[k])&255]^(crc>>>8);
     return (crc^0xffffffff)>>>0;
   }
-  function zip(files){
-    if(!Array.isArray(files)||!files.length)throw RangeError('No export files');
-    var parts=[],central=[],offset=0,seen=new Set(),total=0;
-    files.forEach(function(file){
-      if(!file||!/^[A-Za-z0-9_./-]{1,160}$/.test(file.name)||
+  // STORE ZIP32 entries incrementally. Only central-directory headers and names
+  // are retained; all image bytes belong to the caller until its write completes.
+  function zipWriter(limit){
+    var central=[],offset=0,seen=new Set(),total=0,centralSize=0,closed=false;
+    function add(file){
+      if(closed||!file||!/^[A-Za-z0-9_./-]{1,160}$/.test(file.name)||
         file.name.includes('..')||seen.has(file.name)||!(file.data instanceof Uint8Array))
         throw RangeError('Invalid or duplicate ZIP entry');
-      seen.add(file.name);
-      var name=ascii(file.name),data=file.data,checksum=crc32(data),local=[];
-      total+=data.length;
-      if(total>MAX_ARCHIVE_BYTES)throw RangeError('Export would exceed 192 MiB; reduce resolution or frame count');
+      var name=ascii(file.name),data=file.data,local=[],cd=[];
+      if(total+data.length>limit)throw RangeError('Export would exceed 192 MiB; reduce resolution or frame count or save directly to disk');
+      if(seen.size>=65535||offset+30+name.length+data.length+centralSize+46+name.length+22>=0xffffffff)
+        throw RangeError('ZIP32 limit (4 GiB or 65535 entries) exceeded; reduce resolution, FPS or duration');
+      var checksum=crc32(data);
+      seen.add(file.name);total+=data.length;
       u32(local,0x04034b50);u16(local,20);u16(local,0);u16(local,0);
       u16(local,0);u16(local,0);u32(local,checksum);
       u32(local,data.length);u32(local,data.length);u16(local,name.length);u16(local,0);
-      var header=Uint8Array.from(local);parts.push(header,name,data);
-      var cd=[];u32(cd,0x02014b50);u16(cd,20);u16(cd,20);u16(cd,0);u16(cd,0);
+      var header=Uint8Array.from(local);
+      u32(cd,0x02014b50);u16(cd,20);u16(cd,20);u16(cd,0);u16(cd,0);
       u16(cd,0);u16(cd,0);u32(cd,checksum);u32(cd,data.length);u32(cd,data.length);
       u16(cd,name.length);u16(cd,0);u16(cd,0);u16(cd,0);u16(cd,0);u32(cd,0);u32(cd,offset);
-      central.push(Uint8Array.from(cd),name);
+      // Copy name: the local header/name/data buffers can be transferred away.
+      central.push(Uint8Array.from(cd),name.slice());centralSize+=cd.length+name.length;
       offset+=header.length+name.length+data.length;
-    });
-    var centralSize=central.reduce(function(n,b){return n+b.length;},0),end=[];
-    if(parts.length/3>65535||offset+centralSize>0xffffffff)throw RangeError('ZIP32 limit exceeded');
-    u32(end,0x06054b50);u16(end,0);u16(end,0);
-    u16(end,files.length);u16(end,files.length);u32(end,centralSize);u32(end,offset);u16(end,0);
-    return new Blob(parts.concat(central,[Uint8Array.from(end)]),{type:'application/zip'});
+      return [header,name,data];
+    }
+    function finish(){
+      if(closed||!seen.size)throw RangeError('No export files or ZIP already closed');
+      closed=true;var end=[];
+      u32(end,0x06054b50);u16(end,0);u16(end,0);
+      u16(end,seen.size);u16(end,seen.size);u32(end,centralSize);u32(end,offset);u16(end,0);
+      // Compact the directory into a single message buffer, not a list of tens
+      // of thousands of transferables. No PNG data is stored here.
+      var directory=new Uint8Array(centralSize+22),at=0;
+      central.forEach(function(b){directory.set(b,at);at+=b.length;});
+      directory.set(end,at);central=[];
+      return directory;
+    }
+    return Object.freeze({add:add,finish:finish});
+  }
+  function zip(files){
+    if(!Array.isArray(files)||!files.length)throw RangeError('No export files');
+    var writer=zipWriter(MAX_ARCHIVE_BYTES),parts=[];
+    files.forEach(function(file){parts.push(...writer.add(file));});
+    parts.push(writer.finish());
+    return new Blob(parts,{type:'application/zip'});
   }
   // Live Scene/Animation displays the transparent painter canvas above a
   // white CSS background. PNG has no CSS: bake that same background behind
@@ -239,11 +260,7 @@
   }
   // Assemble in timestamp order, not completion order. Validate all entries
   // before emitting an archive; never produce partial/duplicated frame ZIPs.
-  function assemble(p,completed,exportInfo){
-    if(!p||!Array.isArray(p.timesMs)||!Array.isArray(completed)||
-      completed.length!==p.timesMs.length)throw Error('Incomplete PNG frame sequence');
-    var frames=[],entries=[];
-    completed.forEach(function(frame,index){
+  function validateFrame(p,frame,index){
       if(!frame||!frame.row||frame.row.index!==index||
         frame.row.timeMs!==p.timesMs[index]||
         frame.row.timestampUs!==Math.round(p.timesMs[index]*1000)||
@@ -262,10 +279,11 @@
           !(entry.data instanceof Uint8Array)||entry.data.length<8||
           entry.data[0]!==137||entry.data[1]!==80||entry.data[2]!==78||entry.data[3]!==71)
           throw Error('Invalid PNG frame entry: '+name);
-        entries.push(entry);
       });
-      frames.push(frame.row);
-    });
+    return frame.row;
+  }
+  function manifestFor(p,frames,exportInfo){
+    if(frames.length!==p.timesMs.length)throw Error('Incomplete PNG frame sequence');
     var manifest={schema:'curvature-animation-png-sequence',version:1,
       projectId:p.project.id,projectName:p.project.name,animationMode:p.project.mode,
       cameraInterpolation:p.project.mode==='camera'?(p.project.interpolation||'linear'):null,
@@ -292,9 +310,35 @@
       manifest.renderWorkers=exportInfo.workers;
       manifest.renderElapsedMs=Math.round(exportInfo.renderElapsedMs);
     }
-    entries.unshift({name:'manifest.json',data:ascii(JSON.stringify(manifest,null,2))});
+    return manifest;
+  }
+  function manifestEntry(manifest){return {name:'manifest.json',data:ascii(JSON.stringify(manifest,null,2))};}
+  function assemble(p,completed,exportInfo){
+    if(!p||!Array.isArray(p.timesMs)||!Array.isArray(completed)||completed.length!==p.timesMs.length)
+      throw Error('Incomplete PNG frame sequence');
+    var frames=[],entries=[];
+    completed.forEach(function(frame,index){frames.push(validateFrame(p,frame,index));entries.push(...frame.entries);});
+    var manifest=manifestFor(p,frames,exportInfo);
+    entries.unshift(manifestEntry(manifest));
     return {cancelled:false,blob:zip(entries),manifest:manifest,
       ...(p.previewTimeMs!==undefined?{previewBlob:new Blob([completed[0].entries[0].data],{type:'image/png'})}:{})};
+  }
+  // Each append is strictly ordered. The caller owns a bounded window and
+  // must drain all returned parts before requesting the next timestamp.
+  function streamingArchive(p,workers){
+    if(!p.streaming||p.previewTimeMs!==undefined)throw Error('Streaming sequence plan required');
+    var writer=zipWriter(Infinity),rows=[];
+    return Object.freeze({append:function(index,frame,elapsedMs){
+      if(index!==rows.length||index>=p.timesMs.length)throw Error('Invalid streaming PNG frame order');
+      rows.push(validateFrame(p,frame,index));
+      var parts=[];frame.entries.forEach(function(e){parts.push(...writer.add(e));});
+      var manifest=null;
+      if(rows.length===p.timesMs.length){
+        manifest=manifestFor(p,rows,{workers:workers,renderElapsedMs:elapsedMs});
+        parts.push(...writer.add(manifestEntry(manifest)),writer.finish());
+      }
+      return {parts:parts,manifest:manifest};
+    }});
   }
   // Sequential compatibility runner (also used as a parity reference).
   async function run(settings){
@@ -348,6 +392,6 @@
   return Object.freeze({plan:plan,checkFrameBudget:checkFrameBudget,exportSettings:exportSettings,prepareCanvas:prepareCanvas,
     resolveHudAppearance:resolveHudAppearance,
     run:run,renderTimestamp:renderTimestamp,assemble:assemble,outputSides:outputSides,
-    zip:zip,graphForCanvas:graphForCanvas,
+    zip:zip,streamingArchive:streamingArchive,MAX_STREAM_FRAMES:MAX_STREAM_FRAMES,graphForCanvas:graphForCanvas,
     compositeOpaqueWhite:compositeOpaqueWhite,MAX_FRAMES:MAX_FRAMES});
 }));

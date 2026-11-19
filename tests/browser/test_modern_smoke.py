@@ -293,11 +293,24 @@ class ModernBrowserSmoke(unittest.TestCase):
                         author:done.manifest.presentation.referenceImages[0].author,title:done.manifest.project.keyframes[4].narrativeTitle,
                         optical:Object.keys(done.manifest.frames[0].renderStats),zip:done.blob.type});image.close();
                 }
-                return results;
+                // Short sequence from the actual edited project, with a real
+                // photograph at arrival. Use the disk-writer protocol against an
+                // instrumented sink (no native file-picker permissions in CI).
+                const frames=playable.keyframes.slice(4,6).map((f,i)=>({...f,travelMs:i?200:0,holdMs:0}));
+                const short=projects.validate({...playable,keyframes:frames});
+                const chunks=[],sink={closed:false,aborted:false,async write(part){chunks.push(part.slice());},
+                    async close(){this.closed=true;},async abort(){this.aborted=true;}};
+                const stream=await controller.start({project:short,width:1280,height:720,fps:5,workerCount:2,
+                    presentation:{referenceLayout:'side'},referenceImages:[original],sink});
+                const zip=new Blob(chunks,{type:'application/zip'}),data=await new Promise(resolve=>{
+                    const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(zip);
+                });
+                return {previews:results,stream:{closed:sink.closed,aborted:sink.aborted,bytes:stream.bytesWritten,
+                    streamed:stream.streamed,hasBlob:!!stream.blob,manifest:stream.manifest,zip:data}};
             }finally{workers.forEach(w=>w.terminate());urls.forEach(u=>URL.revokeObjectURL(u));}
         }""", scripts)
-        self.assertEqual([item['version'] for item in result], [2, 1])
-        for item in result:
+        self.assertEqual([item['version'] for item in result['previews']], [2, 1])
+        for item in result['previews']:
             self.assertEqual((item['width'], item['height']), (1280, 720))
             self.assertGreater(item['green'], 100)
             self.assertGreater(item['magenta'], 100)
@@ -308,6 +321,26 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(item['title'], 'Real observation')
             self.assertEqual(item['optical'], ['A', 'B'])
             self.assertEqual(item['zip'], 'application/zip')
+
+        import base64
+        import io
+        import zipfile
+        stream = result['stream']
+        self.assertTrue(stream['closed'] and stream['streamed'])
+        self.assertFalse(stream['aborted'] or stream['hasBlob'])
+        payload = base64.b64decode(stream['zip'].split(',', 1)[1])
+        self.assertEqual(stream['bytes'], len(payload))
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertEqual(archive.namelist(), ['frames/frame_00000_presentation.png',
+                                                'frames/frame_00001_presentation.png', 'manifest.json'])
+            manifest = json.loads(archive.read('manifest.json'))
+            self.assertEqual(manifest, stream['manifest'])
+            self.assertEqual([f['timeMs'] for f in manifest['frames']], [0, 200])
+            self.assertEqual(manifest['frames'][0]['referenceId'], 'photo')
+            self.assertEqual(manifest['frames'][1]['referenceId'], None)
+            for name in archive.namelist()[:2]:
+                self.assertEqual(archive.read(name)[:8], b'\x89PNG\r\n\x1a\n')
 
     def test_reference_image_library_roundtrip(self):
         import base64
@@ -493,6 +526,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationFrameExportMode').select_option('presentation')
         self.page.locator('#ModernAnimationFrameExportPresentationSize').select_option('1280')
         self.page.locator('#ModernAnimationFrameExportFps').select_option('25')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
         self.page.locator('#ModernAnimationFrameExportStart').click()
         status = self.page.locator('#ModernAnimationFrameExportStatus')
         expect(status).to_contain_text('1479 requested; maximum 751')

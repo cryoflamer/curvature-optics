@@ -1,6 +1,6 @@
 # Modern built-in demonstrations — architecture and delivery roadmap
 
-Status: **7D.2.2.1 (PNG Export Regression Fix)**, 2026-11-19.
+Status: **7D.2.2.2 (Streaming PNG Export)**, 2026-11-19.
 The catalog, read-only/copy lifecycle, Compare playback, Storyboard, persistent
 thumbnails, Presentation, keyframe descriptions and atmosphere-aware exports
 are implemented. The user accepted 7B.3 in Opera. Reference Image Foundation
@@ -198,7 +198,9 @@ record the split, and do not mark complete on implementation alone.
 | 7D.1.2 — Presentation Resize Fix | Implemented; acceptance pending | Commit reference layout before physical rendering and publish observations only after a successful frame. Compare resize against rendered CSS widths, including pause after live playback. |
 | 7D.2.1 — Presentation Compositor | Implemented | Standalone offline plan, frame geometry and composition, preserving physics pixels and photo aspect ratio. Unit and isolated Chromium pixel tests; no UI or exporter integration yet. |
 | 7D.2.2 — Presentation PNG | Implemented; acceptance pending | Full presentation vs existing simulation-only PNG, preview/configuration, original decoding, effective project snapshot, provenance/overflow in manifest. |
-| 7D.2.2.1 — PNG Export Regression Fix | Implemented; acceptance pending | Unify validator cache key; verify matching project-field revisions before PNG render; report exact requested frame count. Test edited Soundly copy with both real workers and the production coordinator. |
+| 7D.2.2.1 — PNG Export Regression Fix | Single-frame Opera export confirmed | Unify validator cache key; verify matching project-field revisions before PNG render; report exact requested frame count. Test edited Soundly copy with both real workers and the production coordinator. |
+| 7D.2.2.2 — Streaming PNG Export | Implemented; acceptance pending | Direct-to-disk ZIP32 with bounded dispatch window, ordered chunks, write progress, cancellation and memory fallback. |
+| 7D.2.2.3 — Presentation Export Layout Refinement | Planned | Refine viewport usage, captions and HUD after real PNG inspection. |
 | 7D.2.3 — Presentation Video | Planned | Reuse compositor for deterministic video time samples, fixed output dimensions, resource/cancellation budgets and provenance reporting. |
 | 7E — Demo Infrastructure Finalization | Planned | Integration and browser acceptance, persistence/copy/export, presentation and rendering QA. Finish infrastructure before calibration; do not require final Soundly content. |
 | 8A — Calibration Research | Planned | Audit projection/geometry, parameter conventions and numerical methods; synthetic known-camera experiments and conditioning. |
@@ -622,3 +624,23 @@ A one-frame preview still works at 25 FPS. Verify both the saved V2 copy and the
 playable V1 draft through the production coordinator. Video integration is next
 (7D.2.3) after Opera acceptance; no real Soundly photo or calibrated pose has
 been added.
+
+### Streaming PNG export (7D.2.2.2)
+
+Choose Destination → Save directly to disk (default if supported) to render
+sequences beyond 751 frames. The picker is called from the original click
+before reading references. Up to four outstanding timestamps are admitted;
+workers may finish out of order, but the window advances only after the
+ordered archive chunks have been written. The ZIP32 worker retains directory
+entries and manifest rows, not PNG data. The manifest is written last and
+all bytes are committed by closing the selected file stream. The maximum is
+30,000 timestamps, 65,535 ZIP entries and less than 4 GiB total archive size.
+No ZIP64 or split archives yet. Cancel aborts uncommitted writes; a new empty
+file may remain. ZIP close cannot be cancelled once started. The existing
+in-memory download and preview remain available; no automatic fallback after
+a picker cancellation or disk write failure. Native picker and real file commit
+require browser acceptance; the isolated browser regression uses a test sink.
+
+The user's accepted one-frame Soundly PNG motivates layout refinement before
+video integration: use more available image area, improve HUD legibility and
+avoid repeated scene captions while preserving physical projection.

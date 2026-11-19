@@ -1,6 +1,7 @@
 /* Bounded, off-main-thread ZIP assembly for the parallel animation renderer.
  * Frame workers transfer PNG buffers through the controller. Arrival order is
- * arbitrary; the manifest and ZIP are always serialized in timestamp order.
+ * arbitrary in memory mode; disk mode receives ordered frames and transfers
+ * local ZIP chunks immediately, retaining only row and directory metadata.
  */
 'use strict';
 importScripts(
@@ -17,7 +18,7 @@ importScripts(
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1'
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1'
 );
 var archive=null;
 function reportError(error){
@@ -35,12 +36,20 @@ self.onmessage=function(event){
       var plan=self.CurvatureModernAnimationFrameExport.plan(data.project,data);
       if(!Number.isInteger(data.workers)||data.workers<1||data.workers>4)
         throw RangeError('Invalid render worker count');
-      archive={plan:plan,workers:data.workers,frames:new Array(plan.timesMs.length),
+      archive={plan:plan,workers:data.workers,frames:plan.streaming?null:new Array(plan.timesMs.length),
+        stream:plan.streaming?self.CurvatureModernAnimationFrameExport.streamingArchive(plan,data.workers):null,
         count:0,bytes:0,start:performance.now()};
-      self.postMessage({type:'ready',total:plan.timesMs.length,projectFieldsRevision:revision});
+      self.postMessage({type:'ready',total:plan.timesMs.length,projectFieldsRevision:revision,streaming:plan.streaming});
     }else if(data.type==='frame'){
       if(!archive)throw Error('PNG archive worker was not initialized');
       var index=data.index,frame=data.frame,plan=archive.plan;
+      if(archive.stream){
+        var result=archive.stream.append(index,frame,performance.now()-archive.start);
+        self.postMessage({type:'chunk',index:index,parts:result.parts,manifest:result.manifest},
+          result.parts.map(function(part){return part.buffer;}));
+        if(result.manifest)archive=null;
+        return;
+      }
       if(!Number.isInteger(index)||index<0||index>=plan.timesMs.length||
         archive.frames[index]!==undefined||!frame||!frame.row||
         frame.row.index!==index||frame.row.timeMs!==plan.timesMs[index]||

@@ -1,3 +1,32 @@
+## Modern Demo Catalog — Streaming PNG Export (7D.2.2.2)
+
+The user verified single-frame Full presentation export at 28.20 s on an
+edited Soundly copy in Opera. A complete 25 FPS sequence requests 1479
+frames, exceeding the old memory-only cap. PNG Destination now defaults to
+Save directly to disk when `showSaveFilePicker` is available; the existing
+Download ZIP (in memory) mode and single-frame preview retain their limits.
+The picker runs before asynchronous reference lookup; the file is committed
+only after all entries and the central directory are written and close succeeds.
+A bounded dispatch window of at most the render worker count (1–4) prevents
+fast later frames from accumulating behind slow early frames or slow writes.
+The archive worker validates exact frame metadata, emits STORE ZIP32 parts
+with CRCs in order, retains only directory/manifest metadata, and sends the
+manifest last. The coordinator waits for disk writes before opening the window.
+Progress reports written bytes, timestamp count and a running size estimate.
+Streaming supports up to 30,000 timestamps and the ZIP32 size/entry limit
+(<4 GiB, no ZIP64 yet); memory mode remains 751 / 192 MiB. Cancel terminates
+workers and aborts the writable file (a newly selected file may remain empty);
+once final close starts the operation must settle rather than claim cancellation.
+Unsupported browsers default to memory. Native picker/actual local file commit
+still need Opera acceptance. Tests include a slow sink, synthetic 1479-frame
+sequences, cancellation/write failure, and actual Chromium renderer/archive
+workers with an instrumented sink and independent Python ZIP CRC validation.
+No physics, project schema, compositor geometry or video changes.
+
+**Resume:** verify direct disk export in Opera. Next 7D.2.2.3 Presentation Export
+Layout Refinement (actual PNG showed too much whitespace, small HUD and repeated
+captions), then 7D.2.3 Presentation Video, 7E, 8A–8E and 9A–9C.
+
 ## Modern Demo Catalog — PNG Export Regression Fix (7D.2.2.1)
 
 The user's edited Soundly copy failed with `PNG archive failed: Invalid animation

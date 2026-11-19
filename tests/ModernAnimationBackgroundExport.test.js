@@ -57,9 +57,10 @@ class FakeWorker {
       assert.equal(value.projectFieldsRevision,project.FIELDS_REVISION);
       this.plan=frameExport.plan(structuredClone(value.project),value);
       if(this.isArchive){this.frames=new Array(this.plan.timesMs.length);this.total=0;
-        this.workers=value.workers;}
+        this.workers=value.workers;
+        if(this.plan.streaming)this.stream=frameExport.streamingArchive(this.plan,this.workers);}
       queueMicrotask(()=>this.emit({type:'ready',total:this.plan.timesMs.length,
-        sides:this.plan.sides.length,
+        sides:this.plan.sides.length,streaming:this.plan.streaming,
         projectFieldsRevision:FakeWorker.staleRole===(this.isArchive?'archive':'renderer')?undefined:project.FIELDS_REVISION,
         splineProof:FakeWorker.staleSpline?undefined:project.splineProof(this.plan.project)}));
     }else if(value.type==='render'){
@@ -70,6 +71,8 @@ class FakeWorker {
       },value.index===0?12:0); // Force out-of-order completion.
     }else if(value.type==='frame'){
       const index=value.index;
+      if(this.stream){const result=this.stream.append(index,value.frame,100);
+        queueMicrotask(()=>this.emit({type:'chunk',index,parts:result.parts,manifest:result.manifest}));return;}
       if(this.frames[index])throw Error('Duplicate mock frame');
       this.frames[index]=value.frame;this.total++;
       queueMicrotask(()=>{
@@ -327,4 +330,79 @@ test('page and every export worker use the same versioned project validator',()=
   const input=structuredClone(require('../src/animation/ModernDemoCatalog').load()[0].project);
   input.keyframes[4].badField=true;
   assert.throws(()=>project.validate(input),/Invalid animation project fields.*keyframe 5.*unexpected badField/);
+});
+
+// STORE ZIP entries are emitted in strictly increasing order and no new work
+// enters the window until the previous frame has actually reached the sink.
+function diskSink(){
+  const parts=[];return {parts,closed:false,aborted:false,
+    async write(part){parts.push(Buffer.from(part));},async close(){this.closed=true;},
+    async abort(){this.aborted=true;parts.length=0;}};
+}
+function readLocalEntries(bytes){
+  let at=0;const files=[];
+  while(bytes.readUInt32LE(at)===0x04034b50){
+    const size=bytes.readUInt32LE(at+18),nameSize=bytes.readUInt16LE(at+26),extra=bytes.readUInt16LE(at+28);
+    const name=bytes.toString('utf8',at+30,at+30+nameSize),dataAt=at+30+nameSize+extra;
+    files.push({name,data:bytes.subarray(dataAt,dataAt+size)});at=dataAt+size;
+  }
+  assert.equal(bytes.readUInt32LE(at),0x02014b50);
+  assert.equal(bytes.readUInt32LE(bytes.length-22),0x06054b50);
+  assert.equal(bytes.readUInt32LE(bytes.length-6),at);
+  assert.equal(bytes.readUInt16LE(bytes.length-12),files.length);
+  return files;
+}
+test('disk export streams ordered frames with bounded out-of-order window and waits for real writes',async()=>{
+  FakeWorker.reset();const sink=diskSink(),original=sink.write;
+  let unblock,writing;const firstWrite=new Promise(resolve=>writing=resolve);
+  sink.write=async function(part){if(!this.parts.length){writing();await new Promise(resolve=>unblock=resolve);}await original.call(this,part);};
+  const progress=[],api=background.create({WorkerCtor:FakeWorker});
+  const pending=api.start({project:make(),fps:5,width:640,height:360,workerCount:4,sink,onProgress:p=>progress.push(p)});
+  await firstWrite;
+  assert.equal(FakeWorker.instances.flatMap(w=>w.commands.filter(c=>c.type==='render')).length,4);
+  assert.equal(progress.length,0);assert.equal(sink.closed,false);
+  unblock();const result=await pending;
+  assert.equal(result.streamed,true);assert.equal(result.blob,undefined);assert.equal(sink.closed,true);
+  assert.equal(sink.aborted,false);assert.equal(progress.length,26);
+  const bytes=Buffer.concat(sink.parts);assert.equal(result.bytesWritten,bytes.length);
+  assert.equal(progress.at(-1).estimatedBytes,bytes.length);
+  const entries=readLocalEntries(bytes);
+  assert.deepEqual(entries.slice(0,-1).map(e=>e.name),result.manifest.frames.map(f=>f.images.A));
+  assert.equal(entries.at(-1).name,'manifest.json');
+  assert.deepEqual(JSON.parse(entries.at(-1).data),result.manifest);
+  assert.equal(result.manifest.frames.at(-1).timeMs,5000);
+});
+test('streaming Soundly permits 1479 frames, writes both presentation and simulation plans',async()=>{
+  const source=require('../src/animation/ModernDemoCatalog').load()[0].project;
+  assert.throws(()=>frameExport.checkFrameBudget(source,25),/1479 requested; maximum 751/);
+  assert.equal(frameExport.checkFrameBudget(source,25,true),1479);
+  for(const presentation of [undefined,{referenceLayout:'hidden'}]){
+    FakeWorker.reset();const sink=diskSink(),api=background.create({WorkerCtor:FakeWorker});
+    const output=await api.start({project:source,fps:25,width:1280,height:720,workerCount:4,presentation,sink});
+    assert.equal(output.manifest.frameCount,1479);assert.equal(output.manifest.frames.at(-1).timeMs,59100);
+    assert.equal(sink.closed,true);assert.equal(readLocalEntries(Buffer.concat(sink.parts)).length,1479*output.manifest.sides.length+1);
+  }
+});
+test('disk write failure and cancellation abort without committing, and terminate workers',async()=>{
+  for(const cancel of [false,true]){
+    FakeWorker.reset();const sink=diskSink(),api=background.create({WorkerCtor:FakeWorker});
+    let begin,release;const started=new Promise(resolve=>begin=resolve);
+    sink.write=async()=>{begin();if(!cancel)throw Error('disk full');await new Promise(resolve=>release=resolve);};
+    const pending=api.start({project:make(),fps:5,width:640,height:360,workerCount:2,sink});
+    await started;
+    if(cancel){assert.equal(api.cancel(),true);assert.equal((await pending).cancelled,true);release();}
+    else await assert.rejects(pending,/disk full/);
+    assert.equal(sink.closed,false);assert.equal(sink.aborted,true);assert.equal(api.isBusy(),false);
+    assert.ok(FakeWorker.instances.every(w=>w.terminated));
+  }
+});
+
+test('once the final disk commit begins cancellation cannot report a false success or abort',async()=>{
+  FakeWorker.reset();const sink=diskSink(),api=background.create({WorkerCtor:FakeWorker});
+  let begin,release;const started=new Promise(resolve=>begin=resolve);
+  sink.close=async function(){begin();await new Promise(resolve=>release=resolve);this.closed=true;};
+  const pending=api.start({project:make(),fps:5,width:640,height:360,workerCount:1,sink});
+  await started;assert.equal(api.isBusy(),true);assert.equal(api.cancel(),false);
+  assert.ok(FakeWorker.instances.every(w=>w.terminated));
+  assert.equal(sink.aborted,false);release();assert.equal((await pending).streamed,true);assert.equal(sink.closed,true);
 });

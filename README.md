@@ -65,7 +65,7 @@ with a resizable divider and ordered photo navigation. Photo deletion is
 temporarily disabled to protect references across projects and drafts. JSON
 exports now include all linked originals and metadata once per bundle, including
 compact Storyboard exports. Unlinked observations are not exported. Conflicting
-IDs are safely remapped on import. Presentation titles, chapter navigation and explanation visibility are available (7D.1). The viewer-only interface groups view settings and collapsible Storyboard, hiding author actions (7D.1.1); reference layout precedes physical viewport measurement and resize tracks painted widths (7D.1.2). The standalone full-presentation compositor (7D.2.1) now plans fixed/dynamic layouts and composes exact-size Accurate RK4 views with uncropped original photographs and narrative. Full presentation PNG export (7D.2.2) now supports current-frame Accurate RK4 preview/save and whole-frame PNG ZIPs with original photos, narrative and provenance. PNG export regression fix (7D.2.2.1) aligns project-validator cache keys across page/workers, verifies their field revision before rendering, and preflights sequence frame limits without restricting single-frame preview. Next: confirm in Opera, then 7D.2.3 video integration and 7E generic demo finalization. [Camera calibration](docs/camera-calibration.md) is
+IDs are safely remapped on import. Presentation titles, chapter navigation and explanation visibility are available (7D.1). The viewer-only interface groups view settings and collapsible Storyboard, hiding author actions (7D.1.1); reference layout precedes physical viewport measurement and resize tracks painted widths (7D.1.2). The standalone full-presentation compositor (7D.2.1) now plans fixed/dynamic layouts and composes exact-size Accurate RK4 views with uncropped original photographs and narrative. Full presentation PNG export (7D.2.2) now supports current-frame Accurate RK4 preview/save and whole-frame PNG ZIPs with original photos, narrative and provenance. PNG export regression fix (7D.2.2.1) aligns project-validator cache keys across page/workers, verifies their field revision before rendering, and preflights sequence frame limits without restricting single-frame preview. Single-frame Opera export is confirmed. Streaming PNG export (7D.2.2.2) writes ordered ZIP32 entries to disk with bounded render buffering; memory download remains available. Next: confirm streaming in Opera, refine presentation layout (7D.2.2.3), then 7D.2.3 video integration and 7E generic demo finalization. [Camera calibration](docs/camera-calibration.md) is
 a planned separate research and development stage after infrastructure; final
 Causeway observation frames and other demo migration follow it. See the
 [updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the
@@ -958,9 +958,10 @@ keyframe. The manifest records `renderWorkers` and `renderElapsedMs` to help
 compare a baseline (one worker) with parallel exports. The main thread remains
 responsive and displays completed frames, ETA and the ZIP packing phase.
 **Cancel export** terminates every worker immediately, without a partial ZIP.
-The 751-timestamp / 192-MiB bounded ZIP32 limit, opaque white PNG background,
-and isolation from live Scene/Compare, Playback, History and drafts are retained.
-This is still a PNG sequence; MP4/WebM encoding is not yet supported.
+Choose **Save directly to disk** (where supported) to stream ordered ZIP32
+entries with a bounded window and write progress (30,000 timestamps, less than
+4 GiB); **Download ZIP (in memory)** retains 751 timestamps / 192 MiB.
+Opaque white simulation pixels and isolated export state are retained.
 See [frame export design and limits](docs/modern-animation-frame-export.md).
 
 

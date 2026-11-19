@@ -63,7 +63,7 @@ importScripts(
   'ModernReferenceImage.js',
   'ModernAnimationPresentation.js?reference-presentation=1&presentation-resize=1',
   'ModernAnimationPresentationCompositor.js',
-  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1',
+  'ModernAnimationFrameExport.js?studio-hud-fix=1&target-indicator=1&spline-parity=1&presentation-png=1&png-project-fields=1&png-stream=1',
   'ModernAnimationCompareComposition.js',
   'ModernAnimationVideoPipeline.js?studio-hud-fix=1&compare-layout=1&target-indicator=1&short-endpoint=1'
 );
@@ -107,7 +107,7 @@ function setup(data,video){
       cameraHud:data.cameraHud===true,
       cameraHudAppearance:data.cameraHudAppearance,
       targetIndicator:data.targetIndicator===true,targetSelection:data.targetSelection},
-      video?{compareLayout:data.compareLayout}:{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs}));
+      video?{compareLayout:data.compareLayout}:{presentation:data.presentation,referenceImages:data.referenceImages,previewTimeMs:data.previewTimeMs,streaming:data.streaming}));
   var contexts={};
   plan.sides.forEach(function(side){
     contexts[side]=createGraph(new OffscreenCanvas(plan.presentation?320:plan.width,plan.presentation?180:plan.height));
