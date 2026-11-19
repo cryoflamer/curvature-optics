@@ -113,6 +113,12 @@
   function geometryKey(model,params){return JSON.stringify([params.geometry,params.effectiveRadius,
     model.geometryRadius,model.ObjType,model.NObjects,model.ObjDist,model.ObjDeltaDist,model.ObjSideType,
     model.ObjSidePos,model.ObjSideVar,model.ObjSizeType,model.ObjSize,model.ObjSizeVar]);}
+  function objectIdentityColor(bank,index){
+    var n=index*2+bank+1;
+    if(!Number.isInteger(n)||n<1||n>65535)return '#000000';
+    var r=n&255,g=(n>>>8)&255,b=1+((r*31+g*17)%254);
+    return 'rgb('+r+','+g+','+b+')';
+  }
   function create(){
     var cachedKey=null,cached=null;
     function objects(model,params){
@@ -159,6 +165,7 @@
       // the accurate physical presentation. Haze changes only painted object
       // colors, never the optical geometry, metric grid, masks or labels.
       var haze=visibility.validate(options.visibility);
+      var identityPass=!!(options.canvasDirectOptions&&options.canvasDirectOptions.objectIdentityPass);
       var began=clock(),params=effective.canvasDirectParameters(model,options);
       var geom=geometricModel(model,params),source=objects(model,params),geometryAt=clock();
       var R=params.effectiveRadius,H=model.Height,globe=params.geometry==='globe';
@@ -251,11 +258,11 @@
         projectionMs+=clock()-start;
         if(!fillPixels&&!lines.length)return;
         start=clock();
-        var alpha=style.alpha==null?1:style.alpha;
+        var alpha=identityPass?1:style.alpha==null?1:style.alpha;
         if(fillPixels){
           ctx.globalAlpha=alpha;
           var fillColor=style.fill||'white';
-          ctx.fillStyle=tint?tint(fillColor):fillColor;
+          ctx.fillStyle=identityPass&&role!=='objects'?'#000000':tint?tint(fillColor):fillColor;
           ctx.beginPath();
           ctx.moveTo(fillPixels[0][0],fillPixels[0][1]);
           for(var k=1;k<fillPixels.length;k++){
@@ -267,7 +274,7 @@
         if(lines.length){
           ctx.globalAlpha=alpha;
           var strokeColor=style.stroke||(far?'#666':'black');
-          ctx.strokeStyle=tint?tint(strokeColor):strokeColor;
+          ctx.strokeStyle=identityPass&&role!=='objects'?'#000000':tint?tint(strokeColor):strokeColor;
           var width=viewport.lineWidth(style.lineWidth,camera);
           ctx.lineWidth=thinOutlines?Math.min(width,1):width;
           ctx.beginPath();
@@ -409,12 +416,13 @@
           var beyond=disk&&Math.hypot(x,y)>(globe?disk.rDisk:horizon);
           (beyond?far:near).push(group);
         });
-        return {far:far,near:near};
+        return {index:bank.index,far:far,near:near};
       }
       var layers=source.banks.map(partition),groups=source.banks.reduce(function(s,b){return s+b.groups.length;},0);
-      function paintGroup(group,far){
+      function paintGroup(group,far,bank){
         var tint=null;
-        if(haze.enabled){
+        if(identityPass){var identity=objectIdentityColor(bank,group.index);tint=function(){return identity;};}
+        else if(haze.enabled){
           var relative=translation.pointAt(group.center,observer);
           var distance=Math.hypot(relative[0],relative[1]);
           var colors=new Map();
@@ -431,16 +439,16 @@
       // then near objects. Guides are never occlusion masks.
       var setupEnd=clock();
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle=identityPass?'#000000':'white';ctx.fillRect(0,0,canvas.width,canvas.height);
       // Reset state after other renderers use this Canvas.
       ctx.lineJoin='round';ctx.lineCap='butt';
-      layers.forEach(function(layer){layer.far.forEach(function(group){paintGroup(group,true);});});
+      layers.forEach(function(layer){layer.far.forEach(function(group){paintGroup(group,true,layer.index);});});
       if(disk&&layers.some(function(layer){return layer.far.length;}))mask();
-      var metricGrid=drawMetricGrid();
-      if(globe&&(geom.showTangent||geom.showData)){
+      var metricGrid=identityPass?{rings:0,spokes:0,labels:0,segments:0,extentMeters:0}:drawMetricGrid();
+      if(!identityPass&&globe&&(geom.showTangent||geom.showData)){
         geometry.globeHorizonGuides(geom,{segments:192}).primitives.forEach(function(p){drawPrimitive(p,'visual-aid',false);});
       }
-      layers.forEach(function(layer){layer.near.forEach(function(group){paintGroup(group,false);});});
+      layers.forEach(function(layer){layer.near.forEach(function(group){paintGroup(group,false,layer.index);});});
       var end=clock();
       return {opticalQuality:'canvas-direct',refractionK:params.k,effectiveRadius:params.effectiveRadius,
         sourceObjects:groups,visibleSegments:drawn,primitivesProjected:projected,metricGrid:metricGrid,
@@ -452,6 +460,6 @@
     }
     return Object.freeze({paint:paint,clearCache:function(){cachedKey=null;cached=null;}});
   }
-  return Object.freeze({create:create,geometricModel:geometricModel,
+  return Object.freeze({create:create,objectIdentityColor:objectIdentityColor,geometricModel:geometricModel,
     flatRefractionPoint:flatRefractionPoint});
 }));

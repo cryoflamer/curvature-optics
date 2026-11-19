@@ -77,6 +77,28 @@
       return found;
     }};
   }
+  function objectKey(landmark,banks){
+    const index=banks[landmark.bank]?.[landmark.primitive]?.metadata?.placedObjectIndex;
+    return Number.isInteger(index)&&index>=0?index*2+landmark.bank+1:null;
+  }
+  function identitySpans(data,width,height){
+    const result=new Map();
+    for(let y=0;y<height;y++){
+      let previous=0,start=0;
+      for(let x=0;x<=width;x++){
+        const i=(y*width+x)*4,r=data[i],g=data[i+1],b=data[i+2];
+        const id=x<width&&data[i+3]===255&&b===1+((r*31+g*17)%254)?r+256*g:0;
+        if(id!==previous){
+          if(previous){
+            if(!result.has(previous))result.set(previous,[]);
+            result.get(previous).push([start,y,x-start]);
+          }
+          previous=id;start=x;
+        }
+      }
+    }
+    return result;
+  }
   function nearestMarker(markers,p,radius){
     let best=null,distance=radius;
     for(const m of markers){const d=Math.hypot(m.pixel[0]-p[0],m.pixel[1]-p[1]);
@@ -142,6 +164,8 @@
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
+    const identityRaster=doc.createElement('canvas'),highlightRaster=doc.createElement('canvas');
+    let visibleSpans=new Map(),highlightKey=null;
     const sourcePicker=$('ModernCalibrationSource'),sourceStatus=$('ModernCalibrationSourceStatus'),
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
@@ -404,6 +428,7 @@
     }
     function renderModel(){
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
+      visibleSpans=new Map();highlightKey=null;
       hover=[];clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
       try{
         const size=previewSize(record?.original.width||sceneCanvas.width,record?.original.height||sceneCanvas.height);
@@ -415,6 +440,14 @@
         const camera=env.CurvatureCameraPhysicalPose.photoCamera(m,size.width,size.height);
         m.camViewAngle=camera.fieldOfViewRadians;
         const stats=renderer.paint(modelRaster,camera,m,{...scene.physics,canvasDirectOptions:{thinOutlines:true}});
+        // Same painter order and terrain mask, once per preview, not per hover.
+        try{
+          identityRaster.width=highlightRaster.width=size.width;
+          identityRaster.height=highlightRaster.height=size.height;
+          renderer.paint(identityRaster,camera,m,{...scene.physics,
+            canvasDirectOptions:{thinOutlines:true,objectIdentityPass:true}});
+          visibleSpans=identitySpans(identityRaster.getContext('2d').getImageData(0,0,size.width,size.height).data,size.width,size.height);
+        }catch(error){visibleSpans=new Map();console.warn('Calibration object highlight unavailable:',error);}
         const projection=env.CurvatureCameraLandmarkProjection.create(m,camera,size.width,size.height,
           {...scene.physics,method:'canvas-direct'});
         for(let b=0;b<2;b++){
@@ -437,10 +470,28 @@
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
       }
     }
+    function highlightedObject(){
+      const landmark=modelGhost?hover[hoverIndex]?.landmark:
+        hover[hoverIndex]?.landmark||pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
+      return landmark&&scene?objectKey(landmark,scene.banks):null;
+    }
+    function drawObjectHighlight(){
+      const key=highlightedObject();
+      if(key!==highlightKey){
+        highlightKey=key;
+        const ctx=highlightRaster.getContext('2d');
+        ctx.clearRect(0,0,highlightRaster.width,highlightRaster.height);
+        ctx.fillStyle='rgba(0,168,220,0.72)';
+        for(const [x,y,width] of visibleSpans.get(key)||[])ctx.fillRect(x,y,width,1);
+      }
+      if(visibleSpans.has(key))mesh.drawImage(highlightRaster,modelView.x,modelView.y,
+        modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
+    }
     function meshDraw(){
       mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
       if(!modelView||!previewValid)return;
       mesh.drawImage(modelRaster,modelView.x,modelView.y,modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
+      drawObjectHighlight();
       if(showLandmarks.checked){
         mesh.fillStyle='#0086a4';mesh.globalAlpha=.6;
         for(const item of projected){
@@ -483,7 +534,7 @@
       tip.hidden=!item;
       if(item){
         tip.textContent=(hover.length>1?'Candidate '+(hoverIndex+1)+'/'+hover.length+' · Tab / Shift+Tab · ':'')+
-          (modelGhost?'Release to snap':'Click highlighted vertex');
+          landmarkLabel(item.landmark)+' · '+(modelGhost?'Release to snap':'Click highlighted vertex');
         const r=sceneCanvas.getBoundingClientRect();
         tip.style.left=Math.min(Math.max(0,p[0]*r.width/sceneCanvas.width+12),Math.max(0,r.width-230))+'px';
         tip.style.top=Math.min(Math.max(0,p[1]*r.height/sceneCanvas.height+16),Math.max(0,r.height-42))+'px';
@@ -709,5 +760,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,nearestMarker,pair,upsert,photoChoices,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,identitySpans,nearestMarker,pair,upsert,photoChoices,mount});
 }));

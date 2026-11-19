@@ -73,3 +73,16 @@ test('raster spatial index preserves exact snap results across zoom and pan',()=
   }
   assert.ok(index.query({x:0,y:0,scale:1},500,400,10).length<points.length/10);
 });
+
+test('identity mask groups visible pixels by logical object and bank, not primitive',()=>{
+  const banks=[[{metadata:{placedObjectIndex:4}},{metadata:{placedObjectIndex:4}}],[{metadata:{placedObjectIndex:4}}]];
+  assert.equal(editor.objectKey({bank:0,primitive:0},banks),9);
+  assert.equal(editor.objectKey({bank:0,primitive:1},banks),9);
+  assert.equal(editor.objectKey({bank:1,primitive:0},banks),10);
+  const pixel=id=>[id,0,1+(id*31%254),255];
+  const data=new Uint8ClampedArray([...pixel(9),...pixel(9),0,0,0,255,...pixel(10),...pixel(9),1,2,3,255]);
+  const spans=editor.identitySpans(data,3,2);
+  assert.deepEqual(spans.get(9),[[0,0,2],[1,1,1]]);
+  assert.deepEqual(spans.get(10),[[0,1,1]]);
+  assert.equal(spans.size,2);
+});

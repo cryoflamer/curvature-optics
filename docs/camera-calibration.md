@@ -1,3 +1,16 @@
+## 8B.6 — Logical object highlighting
+
+Hover, Tab candidate cycling, pending model selection and selected pairs tint
+the visible logical object (bank + placedObjectIndex), not a single
+primitive. During marker drag the proposed target takes priority. Vertex
+markers remain above the tint. Canvas Direct paints a separate identity
+raster once per preview with the same object order, clipping and ground mask,
+without guides. Exact identity pixels are grouped in row spans and the overlay
+is cached until the selected object changes. Thin antialiased edge pixels
+may remain untinted; painter visibility is approximate, not a depth test.
+Photo, solver and ordinary rendering are unchanged. Added logical grouping
+and identity span test; CI and manual UX validation pending.
+
 ## 8B.6 — Model marker drag refinement
 
 Model marker preview now follows the pointer continuously, even without a
