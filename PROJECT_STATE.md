@@ -1,3 +1,204 @@
+## Approved revised execution roadmap — 2026-11-20
+
+User-approved reorder: workspace management before additional visualization.
+Baseline b58269b / CI 44817083995 green. #8–#11 complete.
+The original milestone groupings and acceptance criteria remain; execution
+order below supersedes old issue order and priority prefixes. Do not reopen
+completed issues. The existing #12 plan 8F.7e remains reserved, not cancelled.
+#14 uses a distinct 8F.7p (projects) sequence to avoid renumbering #12 or
+confusing older architecture notes. #15A/B are two checkpoints of issue #15,
+not separate GitHub issue numbers.
+
+| Execution | Scope | Dependencies |
+|---|---|---|
+| I.1 | #14 Calibration Projects | #8–#11 |
+| I.2 | #16 Reopen Archived Calibration | #14, immutable archive |
+| I.3 | #15A Photo / Projects / Results navigation | #14, #16; no History integration yet |
+| II.4 | #12 Registered Compare overlay | #10, #11; existing plan 8F.7e retained |
+| II.5 | #13 Provenance and History | #12, origin/archive contracts |
+| II.6 | #15B Reciprocal History navigation and related snapshots | #15A, #13; close #15 only after both |
+| II.7 | #17 Portable Research Bundle | #14, #16, #15B |
+| III.8 | #18 Alternative hypothesis calibration | workspace management and compatible landmarks |
+| III.9 | #20 Quantitative residuals / atmospheric sweeps | #18, validated projection |
+
+No independent Compare cameras, no change to existing physical History
+identity or shared-camera contract. #6/#7 scope reconciliation and existing
+presentation debt remain separate. Milestone 1 scientific/manual acceptance
+is still outstanding; reordered work does not imply it has passed.
+
+## 8F.7p.0 — Calibration Projects current-source audit (#14)
+
+Audited the actual source at b58269b (not a running browser):
+ModernPhotoCalibrationEditor.js (1647 lines), ModernApp.js,
+ModernCalibrationApply.js, ModernCalibrationResult.js,
+ModernCalibrationResultArchive.js, ModernReferenceImageImport.js,
+ModernReferenceImageLibrary.js, animation workspace persistence/switch
+coordinators and their existing editor/Chromium regression entry points.
+
+### Findings and decisions
+
+1. Editor owns one mounted closure and one mutable session. At editor
+   lines 762–858, database() opens curvature-photo-calibration v1, store
+   draft, key active; persist() captures version 2 JSON and queues put.
+   It returns a rejecting promise for actual writes (Apply awaits it);
+   ordinary callers are fire-and-forget, errors only update the status,
+   and restoring/no scene returns undefined. There is no per-project
+   identity, CAS or durable switch acknowledgement. A cached rejected
+   database promise also needs deliberate retry behavior.
+2. The v2 checkpoint contains scene model/physics, complete reference
+   record and source, committed rows, pending pixel/model, editing mode
+   and active pair, photo view, physicalSessionId, bounded undo/redo,
+   selected owner, fit/free fields/status, stage, result camera/views,
+   weight and residual mode. The separate INLINE_KEY (lines 611–646)
+   holds only one initial inline session keyed by physicalSessionId and
+   photo alias. newPhysicalSession removes this key. Multi-project view
+   state must restore correctly across a switch, not use the just-opened
+   project as the destination of a late UI write.
+3. restoreDraft supports versions 1/2, rejects unsupported Flat, decodes
+   image and verifies dimensions, validates observation topology and fit,
+   may discard invalid optional pending/history/view data, catches errors
+   internally and mutates some editor state before restoration completes.
+   Preserve legacy raw unsupported/corrupt data for explicit recovery;
+   do not silently convert it. Split side-effect-free preparation from
+   activation, validate mandatory data before replacing outgoing state.
+   A fit may be interrupted: only valid saved best is restorable, never
+   resume a Worker from serialized state. A no-photo project is valid.
+4. At lines 865–931, 1263–1290, 1387–1448, source catalog aggregates
+   Library and demo originals and animation links; loadToken guards
+   image decode. acceptPhoto, Reset and portable import currently replace
+   the one session; import already validates/decode-checks before
+   replacement but does not await its final persist. Local ingestion uses
+   alias calibration-photo, not identity. Keep explicit Replace Photo /
+   Reset / Import into current project semantics distinct from New and
+   Import as New. Never cross-bind existing correspondences to different
+   pixels. Portable v1/v2/v3 JSON remains self-contained, including bytes.
+5. ReferenceImageLibrary.ensureOriginal/findOriginal already verify
+   SHA-256/dimensions/decoded original, reuse original by content, avoid
+   overwriting metadata, retry concurrent changes and enforce quota.
+   Reuse this path for migration/new loads, NOT Studio importAssets
+   alias/content conflict semantics. Durable project rows store canonical
+   photo identity and a library hint plus source attribution (no duplicate
+   data URL); resolve/verify before activation. Runtime editor and portable
+   export can still hold hydrated record. Keep Library deletion disabled;
+   no cascading deletes and no fake localStorage backup. If asset commit
+   succeeds but project write fails, the deduplicated orphan is harmless;
+   show unsaved/export path and retain original legacy bytes.
+6. Worker callbacks guard fitWorker instance; photo/source loads use
+   loadToken/catalogToken; Apply uses applyRevision + loadToken and
+   ModernApp workspaceNavigationVersion/calibrationSceneRevision.
+   mount stays singleton; enter captures Scene if empty and schedules
+   persist; startup calls restore then enables calibration tab.
+   Add a project generation and immutable captured project ID to every
+   async boundary. Refuse switch/delete during Apply, active worker or
+   pending image/import unless safely cancelled and checkpointed; guard
+   synthetic events too. Do not permit opening an empty default to
+   overwrite unresolved legacy startup recovery. Outgoing durable
+   save must succeed before project activation, including CAS conflicts.
+7. ModernCalibrationResult.create already accepts projectId provenance,
+   but ModernApp passes no options to archiveExperiment after saveDraft.
+   Result digest excludes provenance and archive reuses first attribution
+   for identical scientific payload; projectId is therefore not a reliable
+   many-to-many membership index. Maintain explicit per-project archived
+   result ID links independently, validate IDs and never mutate archive
+   rows. Link after durable archive acknowledgement, before physical
+   commit as a separate retryable step; preserve original Apply ordering,
+   protect exact outgoing History and distinguish committed presentation
+   error. No automatic archival of every autosave or claim that every fit
+   has been applied. #16 handles cloning archive into a new project.
+8. AnimationWorkspacePersistence and Switch provide sequencing, conflict
+   handling and generation patterns, but their collection/localStorage
+   backup model is not appropriate for large original-bearing calibration
+   checkpoints. Use per-row IndexedDB CAS, explicit bounded metadata,
+   stable UUIDs and session-local active selection. On conflicting write
+   preserve both versions via durable fork, never overwrite/delete a newer
+   row; rebind only when matching generation. Stale delete must fail.
+   No second physical journal, no new optical algorithms.
+
+### Storage and activation contract
+
+One durable project: stable ID, title, created/updated times, revision,
+versioned full editable checkpoint, optional verified photo identity +
+alias/source attribution, independent result links and view state. Store
+small list metadata separately or as an index/projection in same transaction;
+list must not decode originals. Exact schema and domain limits established
+by .1 tests. Prefer a version upgrade of the existing calibration DB with
+new stores and atomic migration marker; legacy draft/active remains
+readable and untouched until new checkpoint and marker commit and readback
+verify. Image DB is independent, so asset-first idempotent migration;
+marker/CAS in project DB prevents duplicate adoption on tab races. Keep
+legacy recovery/export available even after success; no silent prune.
+Do not use localStorage as authoritative active project across tabs.
+Project switch: lock -> save outgoing captured generation -> fetch and
+prepare incoming verified state -> recheck generation/revision -> activate
+synchronously or leave outgoing intact -> persist selection. No photo
+decode or crypto inside an open IDB transaction. Explicit unsaved/error
+state, retry, portable export. Default no project if no legacy draft until
+user starts work; preserve current enter/restore compatibility while
+incrementally integrating. Unsupported Flat remains a recovery case;
+#18 is separate scientific support.
+
+### Planned bounded commits — #14 (effort 1/2/3)
+
+- [x] **8F.7p.0 — Audit and revised roadmap (High / 3).** This documentation
+  baseline; current source findings and contracts, no production change.
+- [ ] **8F.7p.1 — Versioned project model and durable store (High / 3).**
+  Pure DTO validation, small list projection, per-ID read/create/CAS
+  update/rename/delete, quotas, atomic revision/fork primitives, DB upgrade
+  with legacy unchanged. Test malformed, empty, no-photo, duplicate IDs,
+  stale updates/deletes and transaction abort. No editor integration.
+- [ ] **8F.7p.2 — Checkpoint extraction and verified asset hydration (High / 3).**
+  Extract complete editor checkpoint capture/prepare/activate contracts;
+  preserve both banks, pending/undo/redo, free parameters, fit and view,
+  including inline state. Reuse verified Library identity, source metadata
+  and in-memory hydration; no-image path; preserve portable JSON and
+  single-draft behavior while introducing pure validation/roundtrip tests.
+- [ ] **8F.7p.3 — Idempotent legacy migration and recovery (High / 3).**
+  Adopt existing v1/v2 draft and matching inline session once, asset-first,
+  atomic project+marker, readback; preserve raw unsupported/corrupt draft
+  and export/retry after failure; competing tabs, interrupted fit and quota
+  tests. No destructive removal of old record.
+- [ ] **8F.7p.4 — Project-bound persistence coordinator (High / 3).**
+  Serialized captured ID/generation/revision writes with explicit durable
+  acknowledgement, conflict fork, unsaved/retry/export state, late
+  completion isolation, per-project view checkpoint. No localStorage
+  photo payloads. Test concurrent same/different project tabs and failures.
+- [ ] **8F.7p.5 — Guarded project activation and startup (High / 3).**
+  Checkpoint-before-switch, validate/decode incoming before mutation,
+  generation guards for worker/image/import/source/Apply, session-local
+  selection, rollback or no mutation on failure. Startup migration gate;
+  existing single-project workflows remain green. Test ABA, stale worker,
+  missing photo, no-photo, reload and failed outgoing/incoming saves.
+- [ ] **8F.7p.6 — Calibration Projects library UI (Medium / 2).**
+  List compact metadata (title, photo identity/thumbnail if available,
+  stage, observation count, fit status and last update); active/unsaved
+  marker, Open and back to list. No fictitious linked History counts.
+  Integrate existing workspace, no new top-level application mode.
+- [ ] **8F.7p.7 — New / Rename / Duplicate / Delete and import UX (High / 3).**
+  Explicit new project from retained Scene, duplicate mutable checkpoint
+  with new ID and shared photo identity, safe CAS rename/delete and
+  confirmation, preserve non-cascading rules; distinguish replacing
+  current versus importing as new. Guard active project and failures.
+- [ ] **8F.7p.8 — Reference photo selection and project Apply/archive binding (High / 3).**
+  Route local/demo/library selection through verified original reuse;
+  persist source attribution; pass captured projectId and durable
+  result links through Apply without changing scientific digest or archive
+  dedup. Preserve Scene/Compare protection and historical draft links;
+  test same result in multiple projects, storage and stale failures.
+  Full reciprocal navigation/reopen remain #15/#16.
+- [ ] **8F.7p.9 — Multi-project browser qualification (High / 3).**
+  Migrate real existing-format draft fixture, two different photos and
+  duplicate same-photo projects, pending/Undo/Redo, independent views and
+  real fit/Apply, reload, concurrent tabs/CAS fork, guarded delete,
+  unavailable image, storage failure, export, exact History recovery;
+  prior 51 browser tests and architecture/Node unchanged in intent.
+  Use actual IDB and worker; report synthetic raster vs real photo limits.
+- [ ] **8F.7p.10 — Acceptance record and closure (Instant / 1).**
+  Record verified green CI/test totals, manual limits, close #14; #16 next.
+
+Every stage must have full green CI before moving on. This audit is
+static source inspection, not proof of future implementation or a migration
+run against the user's browser. No production files modified.
+
 ## 8F.7d.6 — Shared-camera Compare calibration qualification closed (#11)
 
 Verified baseline dc02eef28bb257da9194e57d2d0ed59b7bddc425:
