@@ -209,7 +209,73 @@
       read(tx.objectStore(LEGACY).get('active'),raw=>finish(raw??null));
     });
   }
+
+  const MIGRATION_KEY='legacy-calibration-adoption-v1';
+  function migrationMarker(db){
+    return openTransaction(db,[CONTROL],'readonly',(tx,read,finish)=>{
+      read(tx.objectStore(CONTROL).get(MIGRATION_KEY),raw=>finish(raw===undefined?null:marker(raw)));
+    });
+  }
+  function marker(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+       Object.keys(value).length!==4||
+       !['version','projectId','sourceVersion','createdAt'].every(k=>Object.hasOwn(value,k))||
+       value.version!==1||![1,2].includes(value.sourceVersion)||
+       !Number.isSafeInteger(value.createdAt)||value.createdAt<1)
+      throw RangeError('Invalid legacy calibration migration marker');
+    model.id(value.projectId);
+    return {version:1,projectId:value.projectId,
+      sourceVersion:value.sourceVersion,createdAt:value.createdAt};
+  }
+  // Serialized with other project writes and competing browser tabs. The
+  // source snapshot is compared *inside* this transaction, after the image
+  // was verified outside it. Never delete or overwrite draft/active.
+  function adoptLegacy(db,sourceSnapshot,projectInput){
+    if(!sourceSnapshot||![1,2].includes(sourceSnapshot.version))
+      throw RangeError('Unsupported source for calibration migration');
+    const source=JSON.stringify(sourceSnapshot),project=model.normalize(projectInput);
+    const expected={version:1,projectId:project.id,
+      sourceVersion:sourceSnapshot.version,createdAt:project.createdAt};
+    return openTransaction(db,[LEGACY,PROJECTS,SUMMARIES,CONTROL],'readwrite',
+      (tx,read,finish)=>{
+        const legacyStore=tx.objectStore(LEGACY),records=tx.objectStore(PROJECTS),
+          summaries=tx.objectStore(SUMMARIES),control=tx.objectStore(CONTROL);
+        read(control.get(MIGRATION_KEY),raw=>{
+          if(raw!==undefined){
+            const existing=marker(raw);
+            read(records.get(existing.projectId),saved=>{
+              if(saved===undefined){
+                read(summaries.get(existing.projectId),ghost=>{
+                  if(ghost!==undefined)throw Error('Orphan legacy migration project metadata');
+                  finish({status:'already-removed',marker:existing,project:null});
+                });
+                return;
+              }
+              const current=model.normalize(saved);
+              read(summaries.get(current.id),small=>{
+                match(current,small);
+                finish({status:'already',marker:existing,project:current});
+              });
+            });
+            return;
+          }
+          read(legacyStore.get('active'),actual=>{
+            if(actual===undefined||JSON.stringify(actual)!==source)
+              throw Error('Legacy calibration changed during migration; retry without replacing the draft');
+            read(records.get(project.id),existing=>{
+              if(existing!==undefined)throw Error('Migration project identity already exists');
+              read(summaries.getAll(),rows=>{
+                const small=quota(rows,project);
+                records.add(project);summaries.add(small);
+                control.add(expected,MIGRATION_KEY);
+                finish({status:'migrated',marker:expected,project});
+              });
+            });
+          });
+        });
+      });
+  }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
-    MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,metadata,quota,
-    create,get,list,update,saveOrFork,rename,remove,legacy});
+    MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
+    create,get,list,update,saveOrFork,rename,remove,legacy,migrationMarker,adoptLegacy});
 }));
