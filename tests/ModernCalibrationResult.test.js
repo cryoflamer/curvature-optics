@@ -252,3 +252,18 @@ test('archive bounds reject overflow without eviction; input snapshot survives a
   assert.equal(result.row.record.provenance.attribution.title,'Soundly');
   assert.equal(result.photoId,'soundly');
 });
+
+test('origin is created from archived fit and contains no mutable alias, provenance or observation rows',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['Scene','A','B']){
+    const origin=archive.origin(record,target);
+    assert.equal(origin.target,target);assert.equal(origin.resultId,record.id);
+    assert.equal(origin.resultDigest,record.digest);assert.deepEqual(origin.photo,record.payload.photo);
+    assert.equal(origin.baselineCamera.Height,42.8);assert.equal(origin.baselineCamera.viewcenterHorizon,3);
+    assert.equal(origin.historicalFit.status,'stalled');assert.equal(origin.historicalFit.fitCount,13);
+    assert.equal(origin.historicalFit.validationCount,1);
+    assert.ok(Object.isFrozen(origin.baselineCamera));
+    assert.equal(origin.provenance,undefined);assert.equal(origin.observations,undefined);
+  }
+  assert.throws(()=>archive.origin(record,'C'),/target/);
+});

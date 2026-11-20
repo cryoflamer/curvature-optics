@@ -5,6 +5,7 @@
 (function(root){
   'use strict';
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
+    calibrationOrigin:undefined,
     visibility:{enabled:false,rangeKm:60},
     temperatureProfile:{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5},
     transitionProfile:{source:'standard',weight:0},
@@ -1047,7 +1048,7 @@
       showTemperatureProfile:state.showTemperatureProfile,
       temperaturePlacement:state.temperaturePlacement,
       captionMode:state.captionMode,
-      cameraPositions:cameraPositions,cameraSequence:cameraSequence}); // Keep legacy schema; never re-enable retired WebGPU.
+      cameraPositions:cameraPositions,cameraSequence:cameraSequence,calibrationOrigin:state.calibrationOrigin}); // Keep legacy schema; never re-enable retired WebGPU.
   }
   function localSession(){
     if(!experiments)return null;
@@ -4723,6 +4724,7 @@
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
+    state.calibrationOrigin=data.calibrationOrigin;
     cameraPositions=data.cameraPositions||[];
     cameraSequence=data.cameraSequence?data.cameraSequence.keyframes:[];
     initialCamera=null;
@@ -7213,6 +7215,7 @@
       stopCameraKeyboard(true);abortCameraDrag();cancelPending();
       try{
         adapter.applyPreset(model,id);
+        state.calibrationOrigin=undefined;
         state.preset=id;state.scenePresetSelection=id;
         state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';
         state.occlusionRadius=6371000;state.visibility={enabled:false,rangeKm:60};

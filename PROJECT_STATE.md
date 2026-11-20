@@ -1,3 +1,25 @@
+## 8F.7b.1d — Experiment Origin Contract (#8)
+
+Previous 8F.7b.1c CI 44749515364 passed all three jobs. Optional
+calibrationOrigin v1 within unchanged experiment v1 schema, strict allowlist,
+Scene/A/B historical target, result ID/digest, original photo identity,
+seven fitted camera fields and Eye-Lvl, historical Fit/Validation counts,
+method/status and RMS. No photo bytes, observations, local aliases or titles.
+Result digest identifies archived physical context; association does not
+assert current fit applicability. ModernApp capture/apply preserve origin,
+ordinary edits keep it, unrelated preset/reset clears it after protected
+recovery. Exact signature includes origin, active physical signature and
+thumbnail viewKey unchanged. URL, session and History round trips use the
+same validator. Compact Studio camera/physical timelines only accept common
+origin, because they store one base experiment; experimental collections
+retain complete per-frame snapshots. No Apply UI or applicability yet.
+Added six Node cases and Chromium session/preset recovery regression.
+24 focused headless checks passed on exact production State, Compare,
+Fingerprint, Thumbnail, History portable codec and Studio modules with
+codec polyfills (no browser or real IDB run in this harness).
+Next 8F.7b.1e — Pure Calibration Transfer (high reasoning effort).
+Full CI pending.
+
 ## 8F.7b.1c — Calibration Result Persistence (#8)
 
 Previous 8F.7b.1b CI 44748473687 passed all three jobs. Added

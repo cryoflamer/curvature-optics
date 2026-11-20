@@ -259,3 +259,27 @@ test('Curvature interpolation explicitly rejects intermediate radii outside allo
   assert.equal(animation.sampleAt(p,0).scene.surface.rEarth,1e16);
   assert.equal(animation.sampleAt(p,5000).scene.surface.showModel,2);
 });
+
+function originFixture(target='Scene',digit='a'){
+  const digest=digit.repeat(64);
+  return {version:1,target,resultId:'calibration-result-v1-'+digest,resultDigest:digest,
+    photo:{version:1,sha256:'b'.repeat(64),width:1176,height:791},
+    baselineCamera:{Height:42.8,FocalLengthField:1996,Pan:.61,Nick:-.29,Roll:-.11,
+      CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+    historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+      rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+}
+
+test('compact Studio project retains common calibration origin across derived camera frames and rejects mixed origins',()=>{
+  const a=experiment(),b=clone(a);a.calibrationOrigin=originFixture();b.calibrationOrigin=originFixture();
+  b.scene.camera.Height+=10;
+  const p=project([a,b]);
+  assert.deepEqual(animation.frameExperiment(p,1).calibrationOrigin,codec.validateCalibrationOrigin(a.calibrationOrigin));
+  assert.deepEqual(animation.sampleAt(p,2500).calibrationOrigin,codec.validateCalibrationOrigin(a.calibrationOrigin));
+  assert.deepEqual(animation.validate(clone(p)),p);
+  delete b.calibrationOrigin;
+  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,false);
+  assert.throws(()=>project([a,b]),/Incompatible/);
+  b.calibrationOrigin=originFixture('Scene','c');
+  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,false);
+});

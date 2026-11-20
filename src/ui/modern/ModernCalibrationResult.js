@@ -194,5 +194,16 @@
       fitCount,validationCount:p.observations.length-fitCount,rmsPx:r.evaluation.rmsPx,
       weightedRmsPx:r.evaluation.weightedRmsPx,initialRmsPx:r.initialRmsPx});
   }
-  return Object.freeze({FORMAT,VERSION,create,validate,sameContent,summary,canonicalContent});
+  // Created from the full validated result, never from current live inputs.
+  // Target is the historical application association, not the selected editor.
+  function origin(record,target){
+    if(!['Scene','A','B'].includes(target))fail('Invalid calibration origin target');
+    const validated=validate(record),p=validated.payload,r=p.fit.result;
+    const fitCount=editor.fitRows(p.observations).length;
+    return freeze({version:1,target,resultId:validated.id,resultDigest:validated.digest,photo:p.photo,
+      baselineCamera:{...r.pose,viewcenterHorizon:3},historicalFit:{method:p.fit.method,status:r.status,
+        fitCount,validationCount:p.observations.length-fitCount,rmsPx:r.evaluation.rmsPx,
+        weightedRmsPx:r.evaluation.weightedRmsPx,initialRmsPx:r.initialRmsPx}});
+  }
+  return Object.freeze({FORMAT,VERSION,create,validate,sameContent,summary,origin,canonicalContent});
 }));

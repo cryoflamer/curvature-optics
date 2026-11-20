@@ -243,3 +243,62 @@ test('Canvas caption mode survives URLs and defaults old links to off',()=>{
   titleOnly.display.captionMode='title';
   assert.equal(codec.validate(titleOnly).display.captionMode,'title');
 });
+
+function originFixture(target='Scene',digit='a'){
+  const digest=digit.repeat(64);
+  return {version:1,target,resultId:'calibration-result-v1-'+digest,resultDigest:digest,
+    photo:{version:1,sha256:'b'.repeat(64),width:1176,height:791},
+    baselineCamera:{Height:42.8,FocalLengthField:1996,Pan:.61,Nick:-.29,Roll:-.11,
+      CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+    historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+      rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+}
+
+test('optional origin carries independently versioned historical target through URL and capture; ordinary v1 unchanged',()=>{
+  const ordinary=experiment();
+  assert.equal(JSON.stringify(codec.validate(ordinary)),JSON.stringify(ordinary));
+  for(const target of ['Scene','A','B']){
+    const e=experiment();e.calibrationOrigin=originFixture(target);
+    const canonical=codec.validate(e);
+    assert.deepEqual(codec.decode(codec.encode(e)),canonical);
+    assert.deepEqual(codec.readUrl(new URL(codec.urlWithExperiment('https://example.org/CurvatureModern.html',e)).search),canonical);
+    assert.equal(JSON.stringify(canonical).includes('data:image/'),false);
+    const captured=codec.capture(model(),{atmosphere:'standard',occlusionRadius:6371000,
+      preset:'custom',resetPreset:'pontchartrain'},compare.preset('flat-inverse'),
+      {mode:'compare',eyeLevel:true,horizon:true,selected:'B',calibrationOrigin:e.calibrationOrigin});
+    assert.deepEqual(captured.calibrationOrigin,canonical.calibrationOrigin);
+    e.calibrationOrigin.baselineCamera.Height=99;
+    assert.equal(canonical.calibrationOrigin.baselineCamera.Height,42.8);
+    assert.equal(captured.calibrationOrigin.baselineCamera.Height,42.8);
+  }
+});
+test('origin rejects unsupported fields, local aliases, embedded assets, invalid identity, pose and fit',()=>{
+  for(const mutate of [
+    o=>o.version=2,o=>o.target='C',o=>o.resultId='other',o=>o.resultDigest='Z'.repeat(64),
+    o=>o.photo.sha256='short',o=>o.photo.width=0,o=>{o.photo.width=32768;o.photo.height=32768;},
+    o=>o.photo.dataUrl='data:image/png;base64,AAAA',o=>o.photo.id='local',
+    o=>o.title='mutable',o=>o.observations=[],o=>o.baselineCamera.Height=-1,
+    o=>o.baselineCamera.viewcenterHorizon=0,o=>o.baselineCamera.deviceRatio=1.5,
+    o=>o.historicalFit.method='accurate',o=>o.historicalFit.status='running',
+    o=>o.historicalFit.rmsPx=NaN,o=>o.historicalFit.validationCount=10000,o=>o.historicalFit.fitCount=0
+  ]){
+    const e=experiment();e.calibrationOrigin=originFixture();mutate(e.calibrationOrigin);
+    assert.throws(()=>codec.validate(e));
+  }
+  const e=experiment();e.calibrationOrigin=null;assert.throws(()=>codec.validate(e));
+});
+test('browser bootstrap and ordinary edits preserve historical origin independent of selected Compare editor',()=>{
+  const e=experiment();e.calibrationOrigin=originFixture('A');
+  const h=boot(codec.urlWithExperiment('https://example.org/CurvatureModern.html',e));
+  h.nodes.get('ModernModelTabB').listeners.click();
+  h.nodes.get('ModernModelAtmosphere').value='vacuum';h.nodes.get('ModernModelAtmosphere').listeners.change();
+  h.nodes.get('ModernCopyExperiment').listeners.click();
+  const copied=codec.readUrl(new URL(h.copied[0]).search);
+  assert.deepEqual(copied.calibrationOrigin,codec.validateCalibrationOrigin(e.calibrationOrigin));
+  assert.equal(copied.compare.selected,'B');
+  const saved=JSON.parse(h.storage.get(codec.STORAGE_KEY));
+  assert.deepEqual(saved.calibrationOrigin,copied.calibrationOrigin);
+  const restored=boot('https://example.org/CurvatureModern.html',JSON.stringify(saved));
+  restored.nodes.get('ModernCopyExperiment').listeners.click();
+  assert.deepEqual(codec.readUrl(new URL(restored.copied[0]).search).calibrationOrigin,copied.calibrationOrigin);
+});

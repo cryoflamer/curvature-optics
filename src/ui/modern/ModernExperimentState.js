@@ -32,6 +32,42 @@
     return value;
   }
   function title(value,max){if(typeof value!=='string'||value.length>max)throw RangeError('Invalid experiment text');return value;}
+  // Historical provenance is not current physics or a claim of applicability.
+  // Kept inline in the portable v1 state without requiring image/archive APIs
+  // in isolated render workers. No local aliases or mutable titles in identity.
+  function validateCalibrationOrigin(value){
+    shape(value,['version','target','resultId','resultDigest','photo','baselineCamera','historicalFit']);
+    if(value.version!==1)throw RangeError('Unsupported calibration origin version');
+    var digest=value.resultDigest;
+    if(typeof digest!=='string'||!/^[0-9a-f]{64}$/.test(digest)||
+       value.resultId!=='calibration-result-v1-'+digest)
+      throw RangeError('Invalid calibration origin result identity');
+    var photo=value.photo;
+    shape(photo,['version','sha256','width','height']);
+    if(photo.version!==1||typeof photo.sha256!=='string'||!/^[0-9a-f]{64}$/.test(photo.sha256))
+      throw RangeError('Invalid calibration origin photo identity');
+    var width=num(photo.width,1,32768,true),height=num(photo.height,1,32768,true);
+    if(width*height>100000000)throw RangeError('Invalid calibration origin raster dimensions');
+    var c=value.baselineCamera;
+    shape(c,CAMERA.concat(CAMERA_POSITION,['viewcenterHorizon']));
+    // Retain the actual fitted camera even if a later transfer cannot map it
+    // into the Scene domain. No captured display aspect in this photo baseline.
+    var bounds={Height:[.001,1e9],FocalLengthField:[43.2/(2*Math.tan(80*Math.PI/180)),43.2/(2*Math.tan(.05*Math.PI/180))],
+      Pan:[-180,180],Nick:[-85,45],Roll:[-180,180],CameraEast:[-1e7,1e7],CameraNorth:[-1e7,1e7]};
+    var camera={};
+    CAMERA.concat(CAMERA_POSITION).forEach(function(k){camera[k]=num(c[k],bounds[k][0],bounds[k][1]);});
+    camera.viewcenterHorizon=choice(c.viewcenterHorizon,[3]);
+    var f=value.historicalFit;
+    shape(f,['method','status','fitCount','validationCount','rmsPx','weightedRmsPx','initialRmsPx']);
+    var fitCount=num(f.fitCount,1,10000,true),validationCount=num(f.validationCount,0,10000,true);
+    if(fitCount+validationCount>10000)throw RangeError('Invalid calibration origin observation counts');
+    return {version:1,target:choice(value.target,['Scene','A','B']),resultId:value.resultId,resultDigest:digest,
+      photo:{version:1,sha256:photo.sha256,width:width,height:height},baselineCamera:camera,
+      historicalFit:{method:choice(f.method,['canvas-direct']),
+        status:choice(f.status,['converged','stalled','iteration_limit','fixed','underdetermined','stopped','interrupted','candidate']),
+        fitCount:fitCount,validationCount:validationCount,rmsPx:num(f.rmsPx,0,Number.MAX_VALUE),
+        weightedRmsPx:num(f.weightedRmsPx,0,Number.MAX_VALUE),initialRmsPx:num(f.initialRmsPx,0,Number.MAX_VALUE)}};
+  }
   function capture(model,scene,compare,ui){
     var camera={};CAMERA.forEach(function(k){camera[k]=model[k];});
     CAMERA_POSITION.forEach(function(k){camera[k]=model[k]||0;});
@@ -56,10 +92,11 @@
         captionMode:ui.captionMode||'off'}};
     if(ui.cameraPositions&&ui.cameraPositions.length)snapshot.cameraPositions=ui.cameraPositions;
     if(ui.cameraSequence&&ui.cameraSequence.length)snapshot.cameraSequence={keyframes:ui.cameraSequence};
+    if(ui.calibrationOrigin!==undefined)snapshot.calibrationOrigin=ui.calibrationOrigin;
     return validate(snapshot);
   }
   function validate(value){
-    shape(value,['version','scene','compare','display'],['cameraPositions','cameraSequence']);
+    shape(value,['version','scene','compare','display'],['cameraPositions','cameraSequence','calibrationOrigin']);
     if(value.version!==VERSION)throw RangeError('Unsupported experiment version');
     var s=value.scene;
     shape(s,['camera','objects','surface','atmosphere','occlusionRadius','showGrid','preset','resetPreset','title','description'],['visibility','temperatureProfile','transitionProfile','inverseProfile','gridExtentKm']);
@@ -173,6 +210,7 @@
         captionMode:d.captionMode===undefined?'off':choice(d.captionMode,CAPTION_MODES)}};
     if(value.cameraPositions!==undefined&&cameraPositions.length)result.cameraPositions=cameraPositions;
     if(cameraSequence&&cameraSequence.length)result.cameraSequence={keyframes:cameraSequence};
+    if(value.calibrationOrigin!==undefined)result.calibrationOrigin=validateCalibrationOrigin(value.calibrationOrigin);
     return result;
   }
   function encode(value){
@@ -207,6 +245,6 @@
     return url.href;
   }
   return Object.freeze({VERSION:VERSION,PARAM:PARAM,STORAGE_KEY:STORAGE_KEY,
-    CAMERA:CAMERA,OBJECT:OBJECT,capture:capture,validate:validate,
+    CAMERA:CAMERA,OBJECT:OBJECT,capture:capture,validate:validate,validateCalibrationOrigin:validateCalibrationOrigin,
     encode:encode,decode:decode,readUrl:readUrl,urlWithExperiment:urlWithExperiment});
 }));

@@ -1564,6 +1564,54 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_calibration_origin_session_and_preset_recovery(self):
+        self.open_modern()
+        project = json.loads((ROOT/'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
+        link = self.page.evaluate("""project => {
+            const codec=CurvatureModernExperimentState, e=codec.validate(project.baseExperiment);
+            e.display.mode='scene';e.scene.preset='custom';e.scene.resetPreset='pontchartrain';
+            e.scene.objects.NObjects=[1,0];
+            const digest='a'.repeat(64);
+            e.calibrationOrigin={version:1,target:'B',resultId:'calibration-result-v1-'+digest,
+                resultDigest:digest,photo:{version:1,sha256:'b'.repeat(64),width:1176,height:791},
+                baselineCamera:{Height:42.8,FocalLengthField:1996,Pan:.61,Nick:-.29,Roll:-.11,
+                    CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+                historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+                    rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+            const a=codec.validate(e), ordinary=structuredClone(a);delete ordinary.calibrationOrigin;
+            for(const side of ['Scene','A','B']){
+                if(CurvatureModernExperimentThumbnail.viewKey(a,side)!==CurvatureModernExperimentThumbnail.viewKey(ordinary,side))
+                    throw Error('Origin changed thumbnail view identity');
+            }
+            return codec.urlWithExperiment(location.href,a);
+        }""", project)
+        self.page.goto(link, wait_until='load')
+        preset=self.page.locator('#ModernPreset')
+        expect(preset).to_have_value('custom', timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.display.mode==='compare'&&saved.experiment.calibrationOrigin?.target==='B';
+        }""", timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+        self.page.locator('#ModernSceneTab').click()
+        expect(preset).to_be_enabled(timeout=30000)
+        preset.select_option('chicago')
+        expect(preset).to_have_value('chicago', timeout=30000)
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.scene.preset==='chicago'&&!saved.experiment.calibrationOrigin;
+        }""", timeout=30000)
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('custom', timeout=30000)
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.scene.preset==='custom'&&saved.experiment.calibrationOrigin?.target==='B';
+        }""", timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_chicago_preset_compare_and_history_return(self):
         self.open_modern()
         preset = self.page.locator('#ModernPreset')

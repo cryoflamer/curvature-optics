@@ -26,6 +26,37 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1d — Canonical experiment origin
+
+Optional `calibrationOrigin` version 1 embedded in experiment version 1.
+Old snapshots remain byte-for-byte canonical; absent origin means ordinary
+/unlinked, not an empty fabricated calibration. Strict fields:
+`version,target,resultId,resultDigest,photo,baselineCamera,historicalFit`.
+Historical target is Scene/A/B, independent of the selected editor and live
+mode. Full result digest binds the physical baseline; seven original fitted
+fields and Eye-Lvl are retained for fixed photo registration. Historical
+method/status/fit and validation counts/RMS retain their Canvas Direct
+meaning. No result body, original bytes, editable titles, local aliases,
+or mutable applicability flag. `ModernCalibrationResult.origin(record,target)`
+constructs the origin from a validated immutable result. The state validator
+is independent of the archive and decoder (also used in render workers).
+An unresolved origin can round-trip; availability and actual fit applicability
+are checked later, not asserted by structural validation. On asset resolution,
+verify the full archive against the origin instead of trusting summary values.
+
+Capture/apply, URL, local and IDB working session, exact History signatures,
+protected recovery and portable History preserve the extension. Ordinary
+camera/physics/display edits and Scene/Compare switches keep historical
+association; unrelated preset selection/reset clears it after successful
+protected recovery. Physical fingerprint and thumbnail viewKey ignore origin.
+No automatic retargeting on editor selection; explicit transfer will assign
+the target. Compare continues to use one shared camera. Compact Studio
+camera/physical projects have one base experiment and cannot faithfully
+represent different origins without a schema change; reject mixed provenance
+rather than silently replacing it. Experimental collections can retain full
+independent snapshots. No UI action, archive lookup or fit classification
+introduced here.
+
 ## 8F.7b.1c — Durable immutable result archive
 
 `ModernCalibrationResultArchive` owns IndexedDB

@@ -706,3 +706,36 @@ test('Metadata edits validate user input before IndexedDB writes and do not alte
   await assert.rejects(store.updateMetadata(-1,'Bad',''),/Invalid snapshot id/);
   assert.equal((await store.get(id)).name,'Lake study');
 });
+
+function originFixture(target='Scene',digit='a'){
+  const digest=digit.repeat(64);
+  return {version:1,target,resultId:'calibration-result-v1-'+digest,resultDigest:digest,
+    photo:{version:1,sha256:'b'.repeat(64),width:1176,height:791},
+    baselineCamera:{Height:42.8,FocalLengthField:1996,Pan:.61,Nick:-.29,Roll:-.11,
+      CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+    historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+      rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+}
+
+test('origin changes exact History identity but not active-physics fingerprint; portable history keeps original target',async()=>{
+  const plain=experiment('compare'),linked=structuredClone(plain);
+  linked.calibrationOrigin=originFixture('A');
+  const other=structuredClone(linked);other.calibrationOrigin.target='B';
+  assert.equal(fingerprint.physicalSignature(plain),fingerprint.physicalSignature(linked));
+  assert.equal(fingerprint.physicalSignature(linked),fingerprint.physicalSignature(other));
+  assert.notEqual(fingerprint.exactSignature(plain),fingerprint.exactSignature(linked));
+  assert.notEqual(fingerprint.exactSignature(linked),fingerprint.exactSignature(other));
+  const selected=structuredClone(linked);selected.compare.selected='B';
+  assert.equal(fingerprint.exactSignature(linked),fingerprint.exactSignature(selected));
+  const h=history.create({indexedDB:indexedDB(),now:()=>123});
+  const ordinary=await h.record(plain,'manual'),first=await h.record(linked,'manual'),second=await h.record(other,'manual');
+  assert.equal(first.created,true);assert.equal(second.created,true);
+  assert.notEqual(first.entry.id,ordinary.entry.id);
+  assert.equal((await h.record(selected,'recovery')).entry.id,first.entry.id);
+  const exported=history.exportPortable(await h.list()),incoming=history.parsePortable(exported);
+  const remote=history.create({indexedDB:indexedDB(),now:()=>456});
+  await remote.importEntries(incoming);
+  assert.equal((await remote.list()).length,3);
+  assert.deepEqual((await remote.list()).filter(e=>e.experiment.calibrationOrigin).map(e=>e.experiment.calibrationOrigin.target).sort(),['A','B']);
+  assert.ok(!(await remote.list()).find(e=>!e.experiment.calibrationOrigin).experiment.calibrationOrigin);
+});

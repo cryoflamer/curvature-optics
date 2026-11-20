@@ -49,6 +49,10 @@
         gpuProbe:e.display.gpuProbe,probeTargets:e.display.probeTargets,
         showTemperatureProfile:e.display.showTemperatureProfile,
         temperaturePlacement:e.display.temperaturePlacement}};
+    // Compact camera/physical projects have one base experiment, so mixing
+    // unrelated provenance would silently assign the first origin to all frames.
+    // Experimental collections keep complete independent snapshots instead.
+    if(e.calibrationOrigin)result.calibrationOrigin=e.calibrationOrigin;
     if(e.display.mode==='scene'){
       result.scene=Object.assign(result.scene,physical(f.scene),
         {visibility:activeVisibility(e.scene.visibility)});
