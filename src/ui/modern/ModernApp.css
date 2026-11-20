@@ -1520,3 +1520,12 @@ button{cursor:pointer}
 
 .modern-landmark-viewer [data-viewer-selection-status]{flex:0 0 1.5em;height:1.5em;line-height:1.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:700}
 .modern-landmark-viewer [data-viewer-marker-tooltip]{position:absolute;z-index:2;pointer-events:none;background:#142e45;color:white;padding:5px 8px;border-radius:4px;font-size:12px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+/* Inline viewport has a stable aspect-ratio frame, not floating geometry. */
+.modern-calibration-grid>section{min-width:0}
+.modern-inline-viewer{position:static;inset:auto;z-index:auto;width:auto;height:auto;max-width:none;max-height:none;padding:0;margin:0;box-shadow:none;overflow:visible;display:flex;flex-direction:column;gap:5px}
+.modern-inline-viewer[hidden],#ModernCalibrationInlinePanel[hidden],#ModernCalibrationLegacyModel[hidden]{display:none}
+.modern-inline-viewer header{cursor:default;touch-action:auto;user-select:auto}
+.modern-inline-viewer [data-viewer-frame]{flex:none;aspect-ratio:800 / 540;width:100%;min-height:80px;box-sizing:border-box}
+.modern-inline-viewer [data-viewer-selection-status]{flex:none}
+.modern-calibration-inline-help{font-size:12px}

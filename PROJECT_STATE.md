@@ -1,3 +1,17 @@
+## 8F.5b.3b — Integrated Globe model viewer
+
+The Globe route now defaults to the integrated Model Viewer beside the
+photograph (Initial Camera, read-only Best Camera, physical Free View).
+Legacy model tools and manual controls remain usable during migration.
+Initial viewport state is retained in memory while the fitted source is
+displayed; source updates preserve Best zoom. The current Free View pivot
+uses a visible owner seed near the viewport center, not yet a selected
+anchor pivot. Inline material points are still local drafts, not committed
+observations. Full inline draft migration, fast vertex pairing and owner
+inspection remain 8F.5b.4a. Previous 8F.5b.3a full CI succeeded.
+34 focused viewer tests (including DOM mock) passed; new Chromium
+coverage added, full CI pending.
+
 ## 8F.5b.3a — Host-neutral viewport and optical navigation
 
 Added an opt-in openScene source contract to ModernLandmarkViewer, including
