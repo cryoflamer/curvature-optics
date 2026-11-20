@@ -1,3 +1,20 @@
+## 8F.6e — Automatic picking and hover preview
+
+Integrated physical Free View defaults to Automatic: visible Vertex,
+authored Edge, then Surface. Existing depth/painter validation and work
+bounds remain authoritative. CSS-normalized frame (including edge
+interpolation) makes snapping independent of backing raster density.
+8 CSS px acquisition, 11 px release hysteresis retains the same visible
+feature; Alt bypasses snapping for surface-only picking. A translucent
+hover marker previews the candidate, and click revalidates with the
+same hysteresis state. Geometry and canonical anchor contracts unchanged.
+Automatic local staging and session restore supported; old Navigate-only
+physical sessions switch to Automatic when no staged point exists.
+Manual modes and Confirm point remain transitional until 8F.6f; no
+automatic linking yet. Legacy optical magnifier unchanged.
+Next: 8F.6f implicit pairing wizard and double-click commit.
+Browser/full CI pending.
+
 ## 8F.6d — Unified pointer gestures
 
 User validated Scene-derived initial framing (8F.6c.1). Photograph and

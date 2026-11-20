@@ -463,8 +463,9 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const hostKeys=[];host.addEventListener=(k,fn)=>{if(k==='keydown')hostKeys.push(fn);};
   host.hidden=true;host.querySelector=k=>{if(!nodes.has(k))nodes.set(k,make());return nodes.get(k);};
   host.querySelectorAll=()=>[];
+  let queuedHover=null;
   host.ownerDocument={createElement:make,defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
-    ResizeObserver:class{observe(){}},addEventListener(){},cancelAnimationFrame(){}}};
+    ResizeObserver:class{observe(){}},addEventListener(){},requestAnimationFrame(fn){queuedHover=fn;return 1;},cancelAnimationFrame(){queuedHover=null;}}};
   const canvas=host.querySelector('canvas'),ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})});
   canvas.getContext=()=>ctx;
   const owner={kind:'object',bank:0,objectType:3};
@@ -495,6 +496,7 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.equal(api.snapshot().mode,'free');assert.deepEqual(api.snapshot().pivot,expectedGeometry.frame.origin);
   assert.equal(api.snapshot().view.yaw,0);assert.equal(api.snapshot().view.pitch,0);
   assert.deepEqual(api.snapshot().region,full);
+  assert.equal(api.snapshot().pickMode,'auto');
   const framed=api.sessionSnapshot();
   // On the physical viewport a saved marker captures a drag instead of orbit.
   const physicalPair={id:'physical',label:'1',color:'#123456',bank:0,index:0,anchor:{kind:'vertex',owner,primitive:0,indices:[0],weights:[1]}};
@@ -507,6 +509,20 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   canvas.events.pointerdown({...markerEvent,button:2});canvas.events.pointermove({...markerEvent,button:2,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,button:2,clientX:markerEvent.clientX+25});
   assert.equal(api.snapshot().view.yaw,beforeMarker.yaw);assert.ok(api.snapshot().view.pan[0]>beforeMarker.pan[0]);
   api.setCorrespondences([],null);api.resetScene();
+  const autoVertex=viewer.regionCamera(expectedGeometry,api.snapshot().view,800,600).project(expectedGeometry.items[0].points[0]).pixel;
+  const hoverEvent={...eventForFraming(),clientX:autoVertex[0]+3,clientY:autoVertex[1]-3};
+  canvas.events.pointermove(hoverEvent);assert.ok(queuedHover);queuedHover();queuedHover=null;
+  assert.ok(host.querySelector('[data-viewer-pick-status]').textContent.includes('Hover: vertex'));
+  canvas.events.pointerdown(hoverEvent);canvas.events.pointerup(hoverEvent);
+  assert.equal(api.snapshot().staged.kind,'vertex');assert.deepEqual(api.snapshot().staged.indices,[0]);
+  api.clearLocalPoint();api.resetScene();
+  const autoEvent={...eventForFraming(),altKey:true};
+  canvas.events.pointerdown(autoEvent);canvas.events.pointerup(autoEvent);
+  assert.equal(api.snapshot().staged.kind,'surface');
+  const autoSaved=api.sessionSnapshot();assert.equal(autoSaved.stagedMode,'auto');
+  api.restoreSession(autoSaved);assert.deepEqual(api.snapshot().staged,autoSaved.staged);
+  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,false);
+  api.clearLocalPoint();api.resetScene();
   canvas.events.pointerdown(eventForFraming());canvas.events.pointermove({...eventForFraming(),clientX:440});canvas.events.pointerup({...eventForFraming(),clientX:440});
   function eventForFraming(){return {preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};}
   const rotated=api.sessionSnapshot(),rotatedView=api.snapshot();
@@ -693,4 +709,32 @@ test('scene-framed physical view reproduces former initial projection and retain
   for(const p of g.items.flatMap(x=>x.points))assert.deepEqual(c.project(p),d.project(p));
   assert.ok(Math.abs(c.project(g.items[0].points[0]).pixel[0]-c.project(g.items[0].points[1]).pixel[0])>100);
   assert.deepEqual(viewer.initialPhysicalGeometry(banks,source,observer,new Map(),packages),viewer.physicalGeometry(banks));
+});
+
+
+test('automatic picking prioritizes visible authored features with CSS hysteresis',()=>{
+  const owner={kind:'object',bank:0,index:0};
+  const square={type:'polygon',mode:3,style:{},bank:0,index:0,primitive:0,owner,points:[[-2,-2,0],[2,-2,0],[2,2,0],[-2,2,0]]};
+  const g={eye:[0,0,10],focal:100,near:.001,seed:[50,50],region:{x:0,y:0,width:100,height:100},items:[square]};
+  const paths=viewer.regionPaths(g,{...viewer.reset(),projection:'perspective'},100,100);
+  const frame=viewer.pickFrame(viewer.preparePick(g.items),paths);
+  const pick=(p,opts={})=>viewer.automaticPick(frame,p,opts).candidates[0];
+  const vertex=pick([34,34]);assert.equal(vertex.kind,'vertex');
+  assert.deepEqual(vertex.indices,[3]); // upper-left in screen coordinates
+  assert.equal(pick([39,30]).kind,'edge');
+  assert.equal(pick([39,30],{previous:vertex}).kind,'vertex');
+  assert.equal(pick([42,30],{previous:vertex}).kind,'edge');
+  const edge=pick([50,34]);assert.equal(edge.kind,'edge');
+  assert.equal(pick([50,40],{previous:edge}).kind,'edge');
+  assert.equal(pick([50,42],{previous:edge}).kind,'surface');
+  assert.equal(pick([50,50]).kind,'surface'); // triangulation diagonal is not an edge
+  assert.equal(pick([34,34],{bypass:true,previous:vertex}).kind,'surface');
+  assert.equal(pick([5,5]),undefined);
+  const css=viewer.cssPickFrame(frame,[2,4]);
+  const h=viewer.automaticPick(css,[25,12.5],{bypass:true}).candidates[0];
+  assert.equal(h.kind,'surface');assert.deepEqual(h.point,pick([50,50]).point);
+  const front={...square,index:1,owner:{...owner,index:1},points:square.points.map(p=>[p[0]*2,p[1]*2,2])};
+  const items=[square,front],occluded=viewer.pickFrame(viewer.preparePick(items),viewer.regionPaths({...g,items},{...viewer.reset(),projection:'perspective'},100,100));
+  assert.equal(viewer.automaticPick(occluded,[30,30],{previous:vertex}).candidates[0].index,1);
+  assert.equal(viewer.automaticPick({...frame,entries:Array.from({length:2501},()=>frame.entries[0])},[50,50]).limited,true);
 });

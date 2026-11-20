@@ -488,6 +488,8 @@
     inlineHeader.querySelector('h2').removeAttribute('id');
     inlineHost.querySelector('[data-viewer-close]').remove();inlineHost.querySelector('footer').remove();
     inlineHost.querySelector('canvas').setAttribute('aria-label','Integrated calibration model');
+    const autoOption=doc.createElement('option');autoOption.value='auto';autoOption.textContent='Automatic (Vertex / Edge / Surface)';
+    inlineHost.querySelector('[data-viewer-pick-mode]').append(autoOption);
     const fastOption=doc.createElement('option');fastOption.value='fast-vertex';fastOption.textContent='Fast Vertex';
     inlineHost.querySelector('[data-viewer-pick-mode]').append(fastOption);
     const ownerOption=doc.createElement('option');ownerOption.value='owner';ownerOption.textContent='Owner Inspection';
@@ -839,8 +841,8 @@
       inlineViewer.clearLocalPoint();resetPending();workflow.beginAdd();
       if(globeRoute()&&!legacyShown&&inlineViewer.isOpen()){
         const picker=inlineHost.querySelector('[data-viewer-pick-mode]');
-        if(picker&&['navigate','owner','fast-vertex'].includes(picker.value)){
-          picker.value='vertex';picker.onchange?.();
+        if(picker&&picker.value!=='auto'){
+          picker.value='auto';picker.onchange?.();
         }
       }
       refreshRows();updateHint();photoDraw();meshDraw();persist();return true;
