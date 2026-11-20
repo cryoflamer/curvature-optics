@@ -604,6 +604,68 @@
   }
   // Window geometry is a UI preference, never experiment or camera state.
   const WINDOW_KEY='curvature-landmark-viewer-window-v1';
+  // Optical viewport coordinates never modify the captured camera.
+  function opticalRegion(region,W,H){
+    if(![W,H].every(x=>Number.isInteger(x)&&x>0)||!region||
+      ![region.x,region.y,region.width,region.height].every(Number.isFinite)||
+      region.width<=0||region.height<=0||region.x<0||region.y<0||
+      region.x+region.width>W+1e-8||region.y+region.height>H+1e-8)
+      throw RangeError('Invalid optical region');
+    return {x:region.x,y:region.y,width:region.width,height:region.height};
+  }
+  function opticalViewport(region,width,height){
+    if(![width,height].every(x=>Number.isFinite(x)&&x>0))throw RangeError('Invalid viewport size');
+    const scale=Math.min(width/region.width,height/region.height),w=region.width*scale,h=region.height*scale;
+    const x=(width-w)/2,y=(height-h)/2;
+    return {scale,x,y,width:w,height:h,offsetX:x-region.x*scale,offsetY:y-region.y*scale};
+  }
+  function zoomOptical(region,W,H,width,height,pixel,factor){
+    const r=opticalRegion(region,W,H),t=opticalViewport(r,width,height);
+    if(!Number.isFinite(factor)||factor<=0||!Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite))
+      throw RangeError('Invalid optical zoom');
+    const u=clamp((pixel[0]-t.x)/t.width,0,1),w=clamp((pixel[1]-t.y)/t.height,0,1);
+    const z=clamp(factor,Math.max(r.width/W,r.height/H),Math.max(1,Math.min(r.width,r.height)));
+    const rw=r.width/z,rh=r.height/z;
+    return opticalRegion({x:clamp(r.x+u*(r.width-rw),0,Math.max(0,W-rw)),
+      y:clamp(r.y+w*(r.height-rh),0,Math.max(0,H-rh)),width:Math.min(W,rw),height:Math.min(H,rh)},W,H);
+  }
+  function panOptical(region,W,H,width,height,dx,dy){
+    const r=opticalRegion(region,W,H),t=opticalViewport(r,width,height);
+    if(![dx,dy].every(Number.isFinite))throw RangeError('Invalid optical pan');
+    return opticalRegion({...r,x:clamp(r.x-dx/t.scale,0,Math.max(0,W-r.width)),y:clamp(r.y-dy/t.scale,0,Math.max(0,H-r.height))},W,H);
+  }
+  function rectangleOptical(region,W,H,width,height,a,b){
+    const r=opticalRegion(region,W,H),t=opticalViewport(r,width,height);
+    if(![a,b].every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)))throw RangeError('Invalid optical rectangle');
+    const x=clamp(Math.min(a[0],b[0]),t.x,t.x+t.width),X=clamp(Math.max(a[0],b[0]),t.x,t.x+t.width);
+    const y=clamp(Math.min(a[1],b[1]),t.y,t.y+t.height),Y=clamp(Math.max(a[1],b[1]),t.y,t.y+t.height);
+    if(X-x<4||Y-y<4||(X-x)/t.scale<1||(Y-y)/t.scale<1)return null;
+    return opticalRegion({x:clamp((x-t.offsetX)/t.scale,0,W),y:clamp((y-t.offsetY)/t.scale,0,H),width:(X-x)/t.scale,height:(Y-y)/t.scale},W,H);
+  }
+  // Optical picking needs authored geometry, not an orbit pivot.
+  function opticalGeometry(banks){
+    if(!Array.isArray(banks)||banks.length!==2||!banks.every(Array.isArray))throw Error('Invalid physical banks');
+    let count=0,vertices=0;const items=[];
+    for(const [bank,primitives] of banks.entries())for(const [index,p] of primitives.entries()){
+      count++;vertices+=p.points.length;
+      if(count>100000||vertices>1000000)throw Error('Optical geometry budget exceeded');
+      if(!p.metadata?.landmarkOwner||!p.points.every(finite3))continue;
+      items.push({bank,index,primitive:p.metadata.landmarkPrimitive,primary:true,type:p.type,mode:p.mode,style:{...p.style},
+        owner:JSON.parse(JSON.stringify(p.metadata.landmarkOwner)),points:p.points.map(q=>q.slice())});
+    }
+    return {kind:'optical',items,frame:{origin:[0,0,0],x:[1,0,0],y:[0,1,0],z:[0,0,1]}};
+  }
+  function reframePoint(hit,from,to,mesh){
+    if(!hit)return null;
+    const e=mesh.find(e=>e.item.bank===hit.bank&&e.item.index===hit.index&&e.item.primitive===hit.primitive&&
+      JSON.stringify(e.item.owner)===JSON.stringify(hit.owner));
+    if(!e||!e.valid||!hit.indices.every(i=>Number.isInteger(i)&&i>=0&&i<e.item.points.length))throw Error('Point frame topology mismatch');
+    const same=t=>t.length===hit.indices.length&&t.every(i=>hit.indices.includes(i));
+    if(hit.kind==='edge'&&!e.edges.some(same)||hit.kind==='surface'&&!e.triangles.some(same))throw Error('Point frame topology mismatch');
+    const point=hit.indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],hit.weights[j])),[0,0,0]);
+    if(Math.hypot(...sub(worldPoint(from.frame,hit.point),worldPoint(to.frame,point)))>1e-6)throw Error('Point frame geometry changed');
+    return {...hit,order:e.order,point,pixel:null,depth:0,distance:0};
+  }
   function windowRect(request,width,height){
     const W=Math.max(1,Math.floor(width)),H=Math.max(1,Math.floor(height));
     const margin=Math.min(8,Math.floor(Math.min(W,H)/4));
@@ -682,11 +744,14 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false}={}){
+    let inlineOpen=false;
+    const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
     const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
     let geometry=null,crop=null,free=false,state=reset(),drag=null,windowDrag=null,rect=null;
+    const navigating=()=>!!crop?.source;
     const sceneControls=dialog.querySelector('[data-viewer-scene-controls]'),freeButton=dialog.querySelector('[data-viewer-free]');
     const freeControls=dialog.querySelectorAll('[data-viewer-free-controls]');
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
@@ -699,7 +764,7 @@
     const selectionStatus=dialog.querySelector('[data-viewer-selection-status]');
     const tooltip=dialog.querySelector('[data-viewer-marker-tooltip]');
     const localControls=dialog.querySelectorAll('[data-viewer-local-pick]');
-    function clearMarkerHover(){hoveredCorrespondence=null;tooltip.hidden=true;canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build?'default':'grab';}
+    function clearMarkerHover(){hoveredCorrespondence=null;tooltip.hidden=true;canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build&&!navigating()?'default':'grab';}
     function markerAtCSS(css,active=null){
       const r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
       return correspondenceAt(correspondenceState,[(css[0]-r.left)*scale[0],(css[1]-r.top)*scale[1]],scale,active);
@@ -708,7 +773,7 @@
       const id=crop&&pickMode.value==='navigate'?markerAtCSS(css):null;
       const changed=id!==hoveredCorrespondence;hoveredCorrespondence=id;
       const row=correspondenceState.find(r=>r.id===id);
-      canvas.style.cursor=id!==null?'pointer':crop&&!free&&!crop.build?'default':'grab';
+      canvas.style.cursor=id!==null?'pointer':crop&&!free&&!crop.build&&!navigating()?'default':'grab';
       tooltip.hidden=!row;
       if(row){const r=frame.getBoundingClientRect();setText(tooltip,'Correspondence #'+row.label+' · '+row.kind+' · click to select');
         tooltip.style.left=Math.max(0,Math.min(css[0]-r.left+14,frame.clientWidth-tooltip.offsetWidth-4))+'px';
@@ -718,7 +783,7 @@
     function setCorrespondences(rows,active=null){
       activeCorrespondence=active;
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
-      if(crop&&dialog.open){clearMarkerHover();redrawMarkers();}
+      if(crop&&isOpen()){clearMarkerHover();redrawMarkers();}
     }
     function committedMarkers(project){
       if(correspondenceMesh!==mesh){correspondenceMesh=mesh;correspondenceCache=mesh?correspondenceHits(mesh,correspondenceRows):correspondenceRows.map(r=>({...r,hit:null}));}
@@ -743,7 +808,7 @@
     function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
     function clearPick(){cancelHover();staged=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
     function clearGeometryPick(){confirmed=null;clearPick();mesh=null;paths=null;pickCache=null;opticalCache=null;opticalTransform=null;pickMode.value='navigate';syncPoint();}
-    function pickAvailable(){return !!crop&&(free||!!opticalCache);}
+    function pickAvailable(){return !!crop&&!crop.readOnly&&(free||!!opticalCache);}
     function pickActive(){return pickAvailable()&&pickMode.value!=='navigate';}
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
     function updatePickStatus(message=''){pickStatus.textContent=!pickActive()?'':message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
@@ -801,7 +866,8 @@
     for(const n of snaps)n.onclick=()=>changePoint(staged.weights,n.dataset.viewerPointSnap);
     confirmButton.onclick=()=>{if(staged){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
     cancelButton.onclick=()=>{clearPick();syncPoint();updatePickStatus();redrawMarkers();};
-    function redrawMarkers(){if(crop&&!free){try{crop.paint(canvas,false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
+    function paintOptical(capture){return navigating()?crop.paint(canvas,capture,{...crop.region}):crop.paint(canvas,capture);}
+    function redrawMarkers(){if(crop&&!free){try{paintOptical(false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
     function query(css){
       if(!pickActive())return {candidates:[],reason:''};
       const r=canvas.getBoundingClientRect(),sx=canvas.width/Math.max(1,r.width),sy=canvas.height/Math.max(1,r.height);
@@ -840,15 +906,15 @@
       sceneControls.style.display=crop?'':'none';
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
       spans.closest('label').style.display=crop?'none':'';
-      freeButton.disabled=!crop||free||!crop.build;freeButton.title=crop?.reason||'';
+      freeButton.disabled=!crop||free||!crop.build||!!crop.readOnly;freeButton.title=crop?.reason||'';
       pickControls.style.display=pickAvailable()?'':'none';
       for(const el of localControls)el.style.display=pickActive()?'':'none';
       selectionStatus.style.display=crop?'':'none';
-      canvas.style.cursor=drag?.moved?'grabbing':pickActive()?'crosshair':hoveredCorrespondence!==null?'pointer':crop&&!free&&!crop.build?'default':'grab';
+      canvas.style.cursor=drag?.moved?'grabbing':pickActive()?'crosshair':hoveredCorrespondence!==null?'pointer':crop&&!free&&!crop.build&&!navigating()?'default':'grab';
     }
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
-    function saveRect(){if(rect)try{env.localStorage.setItem(WINDOW_KEY,JSON.stringify(rect));}catch(e){/* Optional UI preference. */}}
+    function saveRect(){if(!inline&&rect)try{env.localStorage.setItem(WINDOW_KEY,JSON.stringify(rect));}catch(e){/* Optional UI preference. */}}
     function applyRect(next){rect=windowRect(next,...viewport());Object.assign(dialog.style,{left:rect.x+'px',top:rect.y+'px',width:rect.width+'px',height:rect.height+'px'});}
     function resizeRaster(){
       const r=frame.getBoundingClientRect();if(!(r.width>0&&r.height>0))return;
@@ -860,15 +926,15 @@
       }
     }
     function render(){
-      if((!geometry&&!crop)||!dialog.open)return;
+      if((!geometry&&!crop)||!isOpen())return;
       clearMarkerHover();resizeRaster();
       if(crop&&!free){
         cancelHover();opticalCache=null;opticalTransform=null;pickCache=null;
         try{
-          if(crop.optical&&crop.build&&!mesh){geometry=crop.build();mesh=preparePick(geometry.items);}
-          const result=crop.paint(canvas,!!(crop.optical&&mesh));
+          if(crop.optical&&crop.build&&!mesh&&!navigating()){geometry=crop.build();mesh=preparePick(geometry.items);}
+          const result=paintOptical(!!(crop.optical&&mesh));
           opticalTransform=result.transform;opticalCache=mesh&&result.stats?.picking?opticalFrame(mesh,result.stats.picking):null;
-          status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||(opticalCache?'Globe optical picking · drag to orbit or choose Free View':'drag to orbit or choose Free View'));
+          status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||(navigating()?'wheel to zoom · drag to pan · Free View to orbit':opticalCache?'Globe optical picking · drag to orbit or choose Free View':'drag to orbit or choose Free View'));
           opticalMarkers();
         }catch(error){status.textContent='Magnifier unavailable: '+error.message;opticalCache=null;committedMarkers(()=>({visibility:'optical geometry unavailable'}));}
         syncMode();syncPoint();updatePickStatus();return;
@@ -886,11 +952,11 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();clearMarkerHover();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(dialog.open)dialog.close();sessionChanged();}
-    dialog.querySelector('[data-viewer-close]').onclick=close;
+    function close(){stopDrags();clearMarkerHover();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(inline){inlineOpen=false;dialog.hidden=true;}else if(isOpen())dialog.close();sessionChanged();}
+    const closeButton=dialog.querySelector('[data-viewer-close]');if(closeButton)closeButton.onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
-        if(!dialog.open||windowDrag||drag||e.button!==0||
+        if(!isOpen()||windowDrag||drag||e.button!==0||
            (kind==='move'&&e.target.closest('button,input,select,a')))return;
         e.preventDefault();
         element.focus({preventScroll:true});
@@ -911,17 +977,40 @@
         saveRect();render();
       });
     }
-    windowPointer(titleBar,'move');windowPointer(grip,'resize');
+    if(!inline){windowPointer(titleBar,'move');windowPointer(grip,'resize');}
     new env.ResizeObserver(()=>{
-      if(!dialog.open||!(frame.clientWidth>0&&frame.clientHeight>0))return;
+      if(!isOpen()||!(frame.clientWidth>0&&frame.clientHeight>0))return;
       const next=rasterSize(frame.clientWidth,frame.clientHeight,env.devicePixelRatio);
       if(canvas.width!==next.width||canvas.height!==next.height)render();
     }).observe(frame);
-    env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
-    function resetScene(){stopDrags();cancelHover();paths=null;pickCache=null;free=false;state=reset();syncMode();render();}
+    env.addEventListener('resize',()=>{if(isOpen()){stopDrags();if(!inline){applyRect(rect);saveRect();}render();}});
+    function switchGeometry(next,nextMesh){
+      const a=reframePoint(staged,geometry,next,nextMesh),b=reframePoint(confirmed,geometry,next,nextMesh);
+      const nextChoices=choices.map(h=>reframePoint(h,geometry,next,nextMesh));
+      geometry=next;mesh=nextMesh;staged=a;confirmed=b;choices=nextChoices;
+    }
+    function resetScene(){
+      stopDrags();cancelHover();
+      if(navigating()){
+        if(free)try{switchGeometry(crop.source.geometry,crop.source.mesh);}catch(error){setText(status,error.message);return false;}
+        crop.region={...crop.source.full};crop.reason='';
+      }
+      paths=null;pickCache=null;free=false;state=reset();syncMode();render();return true;
+    }
+    function changeOpticalRegion(next){
+      if(!navigating()||free||!next)return false;
+      crop.region=opticalRegion(next,crop.source.width,crop.source.height);crop.reason='';render();return true;
+    }
+    function backing(css){
+      const r=canvas.getBoundingClientRect();return [(css[0]-r.left)*canvas.width/Math.max(1,r.width),(css[1]-r.top)*canvas.height/Math.max(1,r.height)];
+    }
     function enterFree(){
       if(!crop||free)return !!geometry;
-      if(!crop.build)return false;
+      if(!crop.build||crop.readOnly)return false;
+      if(navigating()){
+        try{const next=crop.build({...crop.region},activeCorrespondence);if(!next||next.kind!=='region')throw Error('No visible physical pivot');switchGeometry(next,preparePick(next.items));free=true;state={...reset(),projection:'perspective',spans:true};crop.reason='';syncMode();sync();return true;}
+        catch(error){crop.reason='Free View unavailable: '+error.message;syncMode();render();return false;}
+      }
       try{if(!geometry)geometry=crop.build();if(!mesh)mesh=preparePick(geometry.items);free=true;state={...reset(),projection:'perspective',spans:true};syncMode();sync();return true;}
       catch(error){crop.reason='Free View unavailable: '+error.message;crop.build=null;free=false;syncMode();render();return false;}
     }
@@ -932,9 +1021,9 @@
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
     wire.onchange=()=>{cancelHover();state={...state,wireframe:wire.checked};render();};
     spans.onchange=()=>{state={...state,spans:spans.checked,pan:[0,0],zoom:1};render();};
-    dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
+    dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{const factor=Number(n.dataset.viewerZoom);if(navigating()&&!free)changeOpticalRegion(zoomOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,[canvas.width/2,canvas.height/2],factor));else{state=zoom(state,factor);render();}});
     canvas.addEventListener('pointerdown',e=>{
-      if((!geometry&&!crop?.build)||drag||windowDrag||![0,1,2].includes(e.button))return;
+      if((!geometry&&!crop?.build&&!navigating())||drag||windowDrag||![0,1,2].includes(e.button))return;
       e.preventDefault();canvas.focus({preventScroll:true});cancelHover();clearMarkerHover();drag={id:e.pointerId,css:[e.clientX,e.clientY],start:[e.clientX,e.clientY],moved:false,pan:e.button!==0||e.shiftKey,button:e.button};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
@@ -943,6 +1032,7 @@
       if(drag.id!==e.pointerId)return;
       if(!drag.moved&&Math.hypot(...sub(css,drag.start))<3)return;
       drag.moved=true;clearMarkerHover();canvas.style.cursor='grabbing';const delta=sub(css,drag.css);
+      if(navigating()&&!free){const r=canvas.getBoundingClientRect();drag.css=css;changeOpticalRegion(panOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,delta[0]*canvas.width/Math.max(1,r.width),delta[1]*canvas.height/Math.max(1,r.height)));return;}
       if(crop&&!free&&!enterFree())return;
       // Orbit uses CSS pixels only. Pan still maps into backing-store pixels.
       const r=canvas.getBoundingClientRect();
@@ -963,24 +1053,40 @@
     for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
     canvas.addEventListener('pointerleave',()=>{cancelHover();clearMarkerHover();if(!drag){redrawMarkers();updatePickStatus();}});
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
-    canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag&&(!crop||enterFree())){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
+    canvas.addEventListener('wheel',e=>{e.preventDefault();if(drag)return;
+      const factor=Math.exp(clamp(-e.deltaY*.0015,-20,20));
+      if(navigating()&&!free){changeOpticalRegion(zoomOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,backing([e.clientX,e.clientY]),factor));return;}
+      if(!crop||enterFree()){state=zoom(state,factor);render();}
+    },{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
-    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
+    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else if(inline)resetScene();else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
     env.addEventListener('pagehide',()=>sessionChanged());
-    dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
-    function show(){if(!dialog.open){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
+    if(!inline)dialog.addEventListener('close',()=>{if(!isOpen()){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
+    function show(){if(inline){inlineOpen=true;dialog.hidden=false;}else if(!isOpen()){applyRect(readRect());dialog.show();applyRect(rect);saveRect();}}
     return {open(next,title){
       stopDrags();clearGeometryPick();crop=null;free=false;geometry=next;state=initialView();heading.textContent=title;spans.disabled=!next.items.some(p=>!p.primary);
       show();syncMode();sync();
     },openCrop(region,paint,build=null,reason='',optical=false){
       stopDrags();clearGeometryPick();geometry=null;free=false;crop={region:{...region},paint,build,reason,optical};heading.textContent='3D Scene Magnifier';
       show();syncMode();render();sessionChanged();
-    },sessionSnapshot(){
-      if(!dialog.open||!crop)return null;
-      return JSON.parse(JSON.stringify({version:1,region:crop.region,free,view:state,raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+    },openScene({width,height,paint,banks,buildFree=null,readOnly=false,title='Model · Canvas Direct'}){
+      const full=opticalRegion({x:0,y:0,width,height},width,height);
+      if(typeof paint!=='function'||buildFree!==null&&typeof buildFree!=='function')throw Error('Invalid optical source');
+      const next=opticalGeometry(banks),nextMesh=preparePick(next.items);
+      stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=false;state=reset();
+      crop={region:{...full},source:{width,height,full,geometry:next,mesh:nextMesh},paint,build:buildFree,reason:'',optical:true,readOnly:!!readOnly};
+      heading.textContent=title;show();syncMode();render();sessionChanged();
+    },zoomRectangle(a,b){
+      if(!navigating()||free)return false;
+      const r=rectangleOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,a,b);
+      if(!changeOpticalRegion(r))return false;sessionChanged();return true;
+    },resetScene,enterFree,sessionSnapshot(){
+      if(!isOpen()||!crop)return null;
+      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
+      if(navigating())throw Error('Integrated viewport session migration is not connected yet');
       if(!crop||saved?.version!==1||typeof saved.free!=='boolean'||!['navigate','vertex','edge','surface'].includes(saved.pickMode))throw Error('Invalid stored magnifier session');
       restoringSession=true;
       try{
@@ -996,9 +1102,9 @@
         sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
       }finally{restoringSession=false;}
       sessionChanged();
-    },close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen:()=>dialog.open,isCrop:()=>!!crop,
-      snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
-      windowSnapshot:()=>dialog.open?{...rect}:null};
+    },close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
+      snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
+      windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));

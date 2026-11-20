@@ -1,8 +1,27 @@
+## 8F.5b.3a — Host-neutral viewport and optical navigation
+
+Added an opt-in openScene source contract to ModernLandmarkViewer, including
+inline host lifecycle, full-frame source region, cursor-anchored bounded
+optical zoom, pan, rectangle API and full Reset. Scene wheel/drag remains
+optical in this new path; Free View requires explicit entry and a host
+physical-pivot callback. Optical capture/picking uses a pivot-independent
+authored mesh, and local material hits are rebound across physical frames
+with world parity validation. Read-only source disables authoring/free
+entry but not marker selection or navigation. Existing floating openCrop
+and isolated object behavior remain unchanged. No current UI mounting
+change; integrated session restore and its migration remain 8F.5b.4a.
+Previous audit CI failed only the bounded active-doc count; merged audit
+into existing landmark-editor-audit.md instead of relaxing the test.
+All 34 focused viewer tests passed in a headless JS assertion harness,
+including viewport math, material frame parity and inline host lifecycle
+with a DOM mock (not Chromium). Full CI pending.
+Next: 8F.5b.3b inline Globe Initial/Best source routing.
+
 ## 8F.5b.2 — Integrated model viewer architecture audit
 
 User confirmed 8F.5b.1 selection UX works, then proposed eliminating the
 floating Magnifier as a separate normal workflow. Audit baseline 53386a6,
-CI 44646834128 success. See docs/calibration-model-viewer-audit.md for
+CI 44646834128 success. See docs/landmark-editor-audit.md#integrated-calibration-model-viewer--architecture-audit for
 source dependencies, risks, target contract and staged plan.
 Do not start material authoring until the integrated viewport is ready:
 8F.5b.3a host-neutral optical navigation; .3b inline Globe Initial/Best
@@ -524,7 +543,7 @@ added for CI.
 | --- | --- |
 | 8F.5a | Display committed correspondences in both magnifier views using the shared anchor resolver; stable numbering/colors, visibility and crop handling; no editing yet. Test existing vertex and new material marker placement. |
 | 8F.5b | Synchronize active pair selection across table, photo, model and both magnifier views; selection itself must not mutate observations or invalidate fit. Test hidden markers and ambiguous selections. |
-| 8F.5b.2 | Architecture audit: replace separate Main Model and Magnifier with one integrated Globe model viewport. See [integrated viewer audit](calibration-model-viewer-audit.md). |
+| 8F.5b.2 | Architecture audit: replace separate Main Model and Magnifier with one integrated Globe model viewport. See [integrated viewer audit](landmark-editor-audit.md#integrated-calibration-model-viewer--architecture-audit). |
 | 8F.5b.3a | Host-neutral viewport and optical zoom/pan/reset, explicit physical Free View. |
 | 8F.5b.3b | Inline Globe viewport with Initial/Best optical sources and shared selection. |
 | 8F.5b.4a | Fast Vertex, owner inspection, fallback and draft/session migration. |

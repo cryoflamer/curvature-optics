@@ -425,3 +425,75 @@ test('committed marker selection ignores hidden markers and cycles overlapping v
   assert.equal(viewer.correspondenceAt(rows,[200,200],[2,2]),null);
   assert.equal(JSON.stringify(rows),before);
 });
+
+test('optical viewport preserves source pixel under cursor and clamps pan without changing camera',()=>{
+  const r={x:0,y:0,width:1200,height:800},before=JSON.stringify(r),p=[600,300];
+  const t=viewer.opticalViewport(r,1000,600),q=[(p[0]-t.offsetX)/t.scale,(p[1]-t.offsetY)/t.scale];
+  const z=viewer.zoomOptical(r,1200,800,1000,600,p,2),a=viewer.opticalViewport(z,1000,600);
+  assert.ok(Math.hypot(...q.map((x,i)=>x*a.scale+[a.offsetX,a.offsetY][i]-p[i]))<1e-9);
+  assert.deepEqual(viewer.zoomOptical(z,1200,800,1000,600,p,.5),r);
+  assert.equal(viewer.panOptical(z,1200,800,1000,600,1e6,1e6).x,0);
+  assert.equal(viewer.panOptical(z,1200,800,1000,600,-1e6,-1e6).y,400);
+  assert.equal(JSON.stringify(r),before);
+  assert.equal(viewer.rectangleOptical(r,1200,800,1000,600,[0,0],[20,20]),null);
+  const rect=viewer.rectangleOptical(r,1200,800,1000,600,[200,150],[500,450]);
+  assert.deepEqual(rect,{x:200,y:200,width:400,height:400});
+});
+test('pivot-independent optical geometry and frame transitions preserve authored material coordinates',()=>{
+  const scene=geometry.createObjectSequenceScene(model,0,true,{opticsNeutral:true,physicalSurface:true,curvature:1/model.geometryRadius});
+  const g=viewer.opticalGeometry([scene.primitives,[]]),mesh=viewer.preparePick(g.items);
+  const e=mesh.find(e=>e.triangles.length),indices=e.triangles[0],weights=[.2,.3,.5];
+  const point=[0,1,2].map(j=>indices.reduce((s,i,k)=>s+e.item.points[i][j]*weights[k],0));
+  const hit={kind:'surface',bank:e.item.bank,index:e.item.index,primitive:e.item.primitive,owner:e.item.owner,indices,weights,point,order:e.order};
+  const offset=[10,20,30],to={frame:{...g.frame,origin:offset},items:g.items.map(i=>({...i,points:i.points.map(q=>q.map((x,j)=>x-offset[j]))}))};
+  const moved=viewer.reframePoint(hit,g,to,viewer.preparePick(to.items));
+  assert.ok(Math.hypot(...viewer.worldPoint(to.frame,moved.point).map((x,j)=>x-point[j]))<1e-8);
+  const back=viewer.reframePoint(moved,to,g,mesh);
+  assert.deepEqual(back.indices,indices);assert.deepEqual(back.weights,weights);
+  assert.throws(()=>viewer.reframePoint(hit,g,{...to,frame:g.frame},viewer.preparePick(to.items)),/geometry changed/);
+  assert.deepEqual(viewer.opticalGeometry([[],[]]).items,[]);
+});
+
+test('inline source lifecycle navigates optical raster without requiring a dialog or orbit pivot',()=>{
+  const nodes=new Map(),make=()=>({style:{},dataset:{},value:'',textContent:'',hidden:false,
+    clientWidth:800,clientHeight:600,width:800,height:600,events:{},
+    closest(){return this;},replaceChildren(){},focus(){},addEventListener(k,fn){this.events[k]=fn;},
+    setPointerCapture(){},hasPointerCapture(){return false;},getBoundingClientRect(){return {left:0,top:0,width:800,height:600};}});
+  const host=make();
+  host.hidden=true;host.querySelector=k=>{if(!nodes.has(k))nodes.set(k,make());return nodes.get(k);};
+  host.querySelectorAll=()=>[];
+  host.ownerDocument={defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
+    ResizeObserver:class{observe(){}},addEventListener(){},cancelAnimationFrame(){}}};
+  const canvas=host.querySelector('canvas'),ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})});
+  canvas.getContext=()=>ctx;
+  const owner={kind:'object',bank:0,objectType:3};
+  const banks=[[{type:'polygon',mode:3,style:{},points:[[-1,100,-1],[1,100,-1],[1,100,1],[-1,100,1]],
+    metadata:{landmarkOwner:owner,landmarkPrimitive:0}}],[]];
+  let pivots=0,changes=0,failPivot=true;
+  const full={x:0,y:0,width:800,height:600};
+  const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:1,objectZExtend:0,zoom:1,near:.001}};
+  const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true});
+  const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
+    buildFree:region=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
+  api.openScene(sourceContract);
+  assert.equal(api.isOpen(),true);assert.equal(host.hidden,false);assert.equal(api.windowSnapshot(),null);
+  assert.deepEqual(api.snapshot().region,full);
+  const event={preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};
+  canvas.events.wheel({...event,deltaY:-400});
+  assert.equal(api.snapshot().mode,'scene');assert.ok(api.snapshot().region.width<800);
+  const zoomed=api.snapshot().region;
+  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});
+  assert.ok(api.snapshot().region.x<zoomed.x);assert.equal(pivots,0);
+  assert.equal(api.enterFree(),false);assert.equal(api.snapshot().mode,'scene');assert.equal(pivots,1);
+  assert.ok(host.querySelector('[data-viewer-status]').textContent.includes('No visible physical pivot'));
+  api.resetScene();assert.deepEqual(api.snapshot().region,full);
+  assert.equal(api.zoomRectangle([200,150],[600,450]),true);
+  failPivot=false;assert.equal(api.enterFree(),true);assert.equal(api.snapshot().mode,'free');
+  api.resetScene();assert.equal(api.snapshot().mode,'scene');assert.deepEqual(api.snapshot().region,full);
+  api.openScene({...sourceContract,readOnly:true});
+  assert.equal(api.enterFree(),false);assert.equal(host.querySelector('[data-viewer-free]').disabled,true);
+  canvas.events.wheel({...event,deltaY:-120});assert.ok(api.snapshot().region.width<800);
+  assert.equal(api.sessionSnapshot().version,2);assert.ok(changes>0);
+  api.close();assert.equal(host.hidden,true);assert.equal(api.snapshot(),null);
+});
