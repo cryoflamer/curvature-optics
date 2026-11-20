@@ -1,3 +1,51 @@
+## 8F.7c.1 — Fixed Photo Overlay Registration (#10)
+
+CI 44779900383 completed successfully on 6e0eefc (all three jobs;
+Chromium 45/45, both new live Apply/legacy scenarios passed).
+#9 automated acceptance is complete; #10 still requires the real
+reference photograph, not just the synthetic qualification raster.
+
+Approved interpretation: Scene does not acquire custom photo dimensions,
+refit or adjust its camera/optics for the picture. Photo remains a separate
+fixed layer; changing live focal/pose, material geometry, radius or
+atmosphere must reveal differences, not realign the observation.
+
+Added pure ModernPhotoOverlayRegistration (loaded by Modern but not yet
+wired to any drawing). Create from archived baseline intrinsics and exact
+original raster dimensions; copy only scalars. For presentation, consume
+the completed viewport's backing-store pixel transform, screen size and
+selected normal aspect (3:2, 2:3, 16:9, 9:16). Do not use live sceneSize,
+focal/pose/zoom, atmosphere or geometry. The original-pixel ray convention
+is centered square-pixel pinhole; q = focalField/43.2 * hypot(1,aspect) /
+max(1,aspect/1.5). With the same baseline focal on both sides, focal
+cancels from the rectangle scale. Use one uniform vertical scale and
+captured center; preserve the complete photo rectangle, separately report
+its intersection with the canvas (clip, never fit to that intersection).
+GraphX3DX's outer vs inner viewport dimensions introduce small horizontal
+scale mismatch. Bound that by a logical-edge rounding budget, report the
+maximum horizontal discrepancy in backing pixels, reject unsupported
+anisotropy instead of stretching. Resize/DPR only remap presentation.
+
+Six regression scenarios (367 focused assertions passed in an isolated
+JS harness loading the candidate and actual production camera/projection
+modules at this baseline; native Node/full checkout unavailable locally).
+Includes 14 Soundly observation coordinates, wide/portrait rasters,
+all four display aspects, offset, clipping, resized and HiDPI layouts,
+immutable baseline/live edit independence and invalid captures. No
+renderer equivalence or real photograph validation claimed. Full CI pending.
+
+Remaining proposed commit sequence:
+- 8F.7c.2 — Registered Overlay Renderer: verified original, completed
+  viewport capture, independent photo layer, clipping/resize/DPR.
+- 8F.7c.3 — Scene Overlay Controls: Scene only / Photo only / Overlay,
+  opacity and source/unavailable state.
+- 8F.7c.4 — Fixed Registration and Lifecycle: physical edits, recovery,
+  reload/History and pure thumbnails; no tracking live camera.
+- 8F.7c.5 — Soundly Overlay Qualification: full CI + actual original
+  photo acceptance; no renderer parity requirement.
+No visible overlay, storage schema or physical renderer change in .1.
+Next .2 after green CI; Compare integration remains separate (#11/#12).
+
 ## 8F.7b.2c — Browser qualification for live Calibration Apply (#9)
 
 Correction CI 44777773685 passed all three jobs (Chromium 43/43).

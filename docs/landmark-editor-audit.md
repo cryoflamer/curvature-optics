@@ -26,6 +26,52 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7c.1 — Fixed Photo Overlay Registration
+
+Scene is not fitted to the photograph. The four existing display aspects
+remain unchanged. Draw a separate registered photo layer, using original
+raster dimensions and calibrated baseline intrinsics. No automatic
+rescaling based on live camera edits, world geometry, or ray tracing.
+
+The pure registration API consumes a calibration origin (only its
+original width/height and baseline focal field/Eye-Lvl flag) and a
+completed viewport layout. The layout inputs are the display aspect,
+backing width/height, screenSize and captured pixelTransform. It cannot
+read the live camera pose, sceneSize or focal field. The future host must
+verify the result/photo, establish the corresponding reference identity,
+and supply only a current completed-render layout. Geometry alone is not
+authority to claim archival authenticity.
+
+Let B(a) = hypot(1,a)/max(1,a/1.5), from the existing physical camera
+sceneSize convention. For original W,H and baseline focal field f,
+focalPx = H*(f/43.2)*B(W/H). A photo pixel (u,v) specifies a local
+pinhole ray with right/depth=(u-W/2)/focalPx and
+up/depth=(H/2-v)/focalPx. For the same baseline focal field in the
+display aspect a, use one uniform scale
+s = -pixelTransform.scaleY * screenSize * B(a)/(H*B(W/H)).
+The focal field cancels in s because it is identical on both sides.
+The rectangle is centered on the captured offsets and has extent
+W*s by H*s. Preserve the rectangle; its clipped intersection is not
+a rescaled drawing destination.
+
+GraphX3DX.SetWindowToCameraScreen uses outer viewport dimensions but
+SetWindow uses inner dimensions minus a logical edge pixel. Therefore
+captured horizontal/vertical scales are not necessarily exactly equal.
+Choose the vertical reference (existing sceneSize convention), bound
+the skew by contextScale*(1+canvasHeight/canvasWidth) in screen-size
+backing units, and expose maximum horizontal difference at a photo edge.
+Reject larger anisotropy rather than distort the photo. No modification
+to the renderer, no custom aspect, no physical correction. Numerical
+oracles cover all four ratios including actual window edge conventions,
+original Soundly observation coordinates, wide and portrait input,
+resize, DPR, clip and ignored live physical changes. The registration
+is presentation only, not a cross-renderer parity certificate.
+
+The new module is loaded in Modern's reviewed helper inventory but
+does not draw yet. Steps .2 (layer), .3 (controls), .4 (lifecycle) and
+.5 (qualification with original photograph) remain. The automated #9
+qualification passed all three CI jobs in 44779900383 (45 browser tests).
+
 ## 8F.7b.2c — Live Apply browser qualification
 
 The 8F.7b.2b.1-fix CI was green (44777773685; 43 browser tests).
