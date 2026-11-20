@@ -557,6 +557,12 @@
     env.addEventListener('blur',()=>close());env.addEventListener('resize',()=>close());
     return {open,close,get visible(){return !menu.hidden;}};
   }
+  const CALIBRATION_STAGES=Object.freeze(["correspondences","calibration","result"]);
+  function calibrationStageState(stage,hasFit=false,preferredCamera="best"){
+    const current=CALIBRATION_STAGES.includes(stage)?stage:"correspondences";
+    return {stage:current,editing:current==="correspondences",configuring:current==="calibration",results:current==="result",
+      best:current==="result"&&!!hasFit&&preferredCamera!=="initial"};
+  }
   let mounted=null;
   function mount(doc){
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
@@ -568,6 +574,8 @@
       add=$('ModernCalibrationAdd'),weight=$('ModernCalibrationWeight'),px=$('ModernCalibrationX'),py=$('ModernCalibrationY');
     const ctx=photo.getContext('2d'),mesh=sceneCanvas.getContext('2d');
     const workflow=createPairWorkflow();
+    let stage="correspondences",resultCamera="best",resultViews={initial:null,best:null};
+    const editingStage=()=>stage==="correspondences",resultStage=()=>stage==="result";
     let scene=null,record=null,image=null,view=null,loadToken=0,
       groups=[],vertices=[],modelDrag=null;
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
@@ -604,7 +612,7 @@
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,physicalSource=null,physicalFraming=null,renderingModel=false,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
-    const implicitRoute=()=>globeRoute()&&!legacyShown&&!viewBest;
+    const implicitRoute=()=>editingStage()&&globeRoute()&&!legacyShown&&!viewBest;
     const contextMenu=createContextMenu(doc,env,workspace);
     function viewportGesture(a,side){
       if(!record||!implicitRoute())return false;
@@ -694,7 +702,7 @@
       return null;
     }
     function restoreMagnifier(){
-      if(workspace.hidden||!pendingMagnifier||!cropSource||viewBest)return;
+      if(!editingStage()||workspace.hidden||!pendingMagnifier||!cropSource||viewBest)return;
       const saved=pendingMagnifier;pendingMagnifier=null;
       try{
         const r=saved.region;
@@ -720,6 +728,34 @@
       residualList=$('ModernCalibrationResidualRows'),residualNotice=$('ModernCalibrationResidualNotice');
     let initialPoints=null,initialProjectionError='',residualData=[],diagnosticResult=null,diagnosticBestPoints=[];
     const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
+    const stageButtons=Array.from(workspace.querySelectorAll("[data-calibration-stage]"));
+    const stagePanels=Array.from(workspace.querySelectorAll("[data-calibration-stages]"));
+    function syncStageUI(){
+      workspace.dataset.calibrationStage=stage;
+      for(const b of stageButtons){if(b.dataset.calibrationStage===stage)b.setAttribute("aria-current","step");else b.removeAttribute("aria-current");}
+      for(const panel of stagePanels)panel.hidden=!panel.dataset.calibrationStages.split(" ").includes(stage);
+      $("ModernCalibrationStageHint").textContent=editingStage()?"Match and edit photo/model points.":stage==="calibration"?"Choose free parameters and Fit / Validation roles, then run calibration.":fitBest?"Compare initial and fitted optical cameras and inspect residuals.":"Initial optical camera · run calibration to obtain a fitted result.";
+      $("ModernCalibrationResultCamera").textContent=viewBest?"Best camera":"Initial camera";
+      $("ModernCalibrationOpticalTitle").textContent=resultStage()?(viewBest?"Model · Best Camera":"Model · Initial Camera"):"Model · Canvas Direct";
+      residualPanel.hidden=!resultStage()||!fitBest;
+    }
+    function setStage(next,{camera=resultCamera,save=true,render=true}={}){
+      const target=calibrationStageState(next,!!fitBest,camera);
+      if(target.stage!==stage&&render){
+        contextMenu.close();photoGestures.cancel();resultGestures.cancel();inlineViewer.cancelGesture();cancelRegion();cancelModelFrame();
+        const drag=modelDrag;modelDrag=null;photoGhost=null;modelGhost=null;
+        if(drag&&sceneCanvas.hasPointerCapture(drag.id))sceneCanvas.releasePointerCapture(drag.id);
+        if(viewer.isCrop())pendingMagnifier=viewer.sessionSnapshot();
+        viewer.close();captureInline();
+      }
+      stage=target.stage;resultCamera=camera==="initial"?"initial":"best";viewBest=target.best;
+      syncStageUI();if(!render)return;
+      clearAmbiguity();clearHover();
+      if(viewBest&&paintedFit!==fitBest)paintBest();else meshDraw();
+      if(editingStage()){restoreMagnifier();if(inlineViewer.isOpen())inlineViewer.refresh();refreshMagnifierCorrespondences();}
+      syncFitControls();photoDraw();if(save)persist();
+    }
+    for(const b of stageButtons)b.onclick=()=>setStage(b.dataset.calibrationStage);
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
     let restoring=false,writeQueue=Promise.resolve(),dbPromise=null;
@@ -747,7 +783,7 @@
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,redoStack:workflow.redoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
-        fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
+        fitBest,fitStatus:fitStatus.textContent,viewBest,stage,resultCamera,resultViews,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
         await new Promise((resolve,reject)=>{
@@ -789,7 +825,7 @@
         refreshRows();photoDraw();meshDraw();
         if(['best','initial','off'].includes(d.residualMode))residualMode.value=d.residualMode;
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
-          try{restoreFit(validateFitResult(d.fitBest,workflow.rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
+          try{restoreFit(validateFitResult(d.fitBest,workflow.rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
         if(record){
           function checkedHistory(entries){
@@ -811,10 +847,12 @@
         // Initial rendering during draft restoration may have opened a default
         // viewport. Reopen it after the stored source and fit are available.
         inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;
+        for(const key of ["initial","best"]){const v=d.resultViews?.[key];if(v&&[v.scale,v.x,v.y].every(Number.isFinite)&&v.scale>0)resultViews[key]={scale:v.scale,x:v.x,y:v.y};}
+        setStage(CALIBRATION_STAGES.includes(d.stage)?d.stage:(d.viewBest&&fitBest?'result':'correspondences'),{camera:d.resultCamera||(d.viewBest?'best':d.stage==='result'?'initial':'best'),save:false,render:false});
         message('Calibration draft restored.');
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
-      finally{restoring=false;if(scene&&!magnifierSessionId)newMagnifierSession();syncFitControls();restoreMagnifier();meshDraw();}
+      finally{restoring=false;if(scene&&!magnifierSessionId)newMagnifierSession();syncFitControls();restoreMagnifier();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
     }
     async function refreshSources(){
       const token=++catalogToken;
@@ -857,7 +895,7 @@
       if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
         throw Error('Reference image decoded dimensions mismatch');
       contextMenu.close();photoGestures.cancel();newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
-      photoDetails(next,source);
+      setStage("correspondences",{camera:"best",save:false});photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
       persist();return true;
     }
@@ -893,11 +931,11 @@
       ctx.clearRect(0,0,photo.width,photo.height);
       if(!image||!view)return;
       ctx.drawImage(image,view.x,view.y,record.original.width*view.scale,record.original.height*view.scale);
-      if(residualMode.value!=='off'&&fitBest&&!photoGhost){
+      if(resultStage()&&residualMode.value!=='off'&&fitBest&&!photoGhost){
         for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===workflow.activePair);
       }
       workflow.rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===workflow.activePair));
-      if(workflow.pending){const p=screenPoint(view,photoGhost?.kind==='draft'?photoGhost.pixel:workflow.pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
+      if(editingStage()&&workflow.pending){const p=screenPoint(view,photoGhost?.kind==='draft'?photoGhost.pixel:workflow.pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
     }
     function fitPhoto(){
       if(!record)return;
@@ -936,7 +974,7 @@
     }
     function refreshMagnifierCorrespondences(){
       if(!globeRoute())return;
-      const popup=viewer.isCrop(),embedded=inlineViewer.isCrop()&&!inlinePanel.hidden&&!workspace.hidden;
+      const popup=viewer.isCrop(),embedded=editingStage()&&inlineViewer.isCrop()&&!inlinePanel.hidden&&!workspace.hidden;
       if(!popup&&!embedded)return;
       const descriptors=correspondenceDescriptors();
       if(popup)viewer.setCorrespondences(descriptors,workflow.activePair);
@@ -967,7 +1005,7 @@
     }
     function syncPairToolbar(){
       const legacy=!globeRoute()||legacyShown;
-      const state=pairToolbarState(workflow,{ready:!!record,readOnly:viewBest,legacy,legacyModel:legacy&&!!selected(),implicit:implicitRoute()});
+      const state=pairToolbarState(workflow,{ready:!!record,readOnly:!editingStage()||viewBest,legacy,legacyModel:legacy&&!!selected(),implicit:implicitRoute()});
       pairAdd.disabled=state.addDisabled;pairEdit.disabled=state.editDisabled;add.disabled=state.commitDisabled;
       pairCancel.disabled=state.cancelDisabled;pairDelete.disabled=state.deleteDisabled;pairUndo.disabled=state.undoDisabled;pairRedo.disabled=state.redoDisabled;
       add.textContent=state.commitLabel;pairCancel.textContent=workflow.editing?'Cancel edit':'Cancel';
@@ -978,7 +1016,7 @@
       pairPanel.dataset.mode=workflow.mode;
     }
     function beginSharedAdd(){
-      if(!record||viewBest||workflow.mode!=='browse')return false;
+      if(!editingStage()||!record||viewBest||workflow.mode!=='browse')return false;
       inlineViewer.clearLocalPoint();resetPending();workflow.beginAdd();
       if(globeRoute()&&!legacyShown&&inlineViewer.isOpen()){
         const picker=inlineHost.querySelector('[data-viewer-pick-mode]');
@@ -990,7 +1028,7 @@
     }
     function beginPairEdit(id){
       const r=workflow.rows.find(r=>r.landmark.id===id);
-      if(!r||!record||viewBest)return false;
+      if(!editingStage()||!r||!record||viewBest)return false;
       if(workflow.editing===id)return true;
       if(workflow.mode!=='browse'&&!env.confirm('Discard the current draft and edit this pair?'))return false;
       inlineViewer.clearLocalPoint();resetPending();
@@ -1011,12 +1049,13 @@
     function resetPending(){inlineViewer.discardPairDraft();
       const parked=inlineSessions.initial?.session;if(parked?.stagedMode==='fast-vertex'||parked?.stagedMode===undefined&&parked?.pickMode==='fast-vertex'){Object.assign(parked,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});if(parked.confirmed&&parked.pickMode==='fast-vertex')parked.confirmed=null;}
       workflow.clearDraft();weight.value='1';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
-    function cancelPairDraft(){inlineViewer.clearLocalPoint();workflow.cancel();resetPending();refreshRows();photoDraw();meshDraw();persist();}
+    function cancelPairDraft(){if(!editingStage())return;inlineViewer.clearLocalPoint();workflow.cancel();resetPending();refreshRows();photoDraw();meshDraw();persist();}
     function selectPair(id){
       if(!workflow.rows.some(r=>r.landmark.id===id))return;
       if(!workflow.select(id))return;refreshRows();updateHint();photoDraw();meshDraw();persist();
     }
     function deletePair(id){
+      if(!editingStage())return;
       if(!workflow.rows.some(r=>r.landmark.id===id))return;
       const wasEditing=workflow.editing===id;
       workflow.change(workflow.rows.filter(r=>r.landmark.id!==id));
@@ -1024,6 +1063,7 @@
       refreshRows();photoDraw();meshDraw();persist();
     }
     function applyHistory(direction){
+      if(!editingStage())return;
       photoGestures.cancel();inlineViewer.cancelGesture();contextMenu.close();
       if(!workflow[direction]())return;
       // Keep the existing independent draft and its weight/coordinates.
@@ -1053,7 +1093,7 @@
     function photoMarker(p){
       const r=photo.getBoundingClientRect(),scale=[photo.width/Math.max(1,r.width),photo.height/Math.max(1,r.height)];
       const items=workflow.rows.map(r=>({kind:'saved',id:r.landmark.id,pixel:screenPoint(view,r.pixel)}));
-      if(workflow.pending)items.push({kind:'draft',pixel:screenPoint(view,workflow.pending)});
+      if(editingStage()&&workflow.pending)items.push({kind:'draft',pixel:screenPoint(view,workflow.pending)});
       return pointerGestures.markerAt(items,p,scale);
     }
     function committedMarker(r){
@@ -1121,7 +1161,7 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
-      renderingModel=true;physicalSource=null;physicalFraming=null;
+      resultViews={initial:null,best:null};renderingModel=true;physicalSource=null;physicalFraming=null;
       inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;
       if(!restoring){inlineSessions={initial:null,best:null};saveInline();}
       if(viewer.isCrop())viewer.close();cropSource=null;cancelRegion();
@@ -1263,11 +1303,11 @@
     }
     viewerButton.onclick=openViewer;
     // The floating window is fixed-position but owned by this workspace.
-    new env.MutationObserver(()=>{if(workspace.hidden){contextMenu.close();photoGestures.cancel();inlineViewer.cancelGesture();cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    new env.MutationObserver(()=>{if(workspace.hidden){contextMenu.close();photoGestures.cancel();resultGestures.cancel();inlineViewer.cancelGesture();cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
     function syncModelRoute(){
-      const integrated=globeRoute()&&!legacyShown;
-      legacyToggle.hidden=!globeRoute();legacyToggle.setAttribute('aria-pressed',String(!integrated&&globeRoute()));
+      const integrated=editingStage()&&globeRoute()&&!legacyShown;
+      legacyToggle.hidden=!editingStage()||!globeRoute();legacyToggle.setAttribute('aria-pressed',String(!integrated&&globeRoute()));
       legacyToggle.textContent=integrated?'Legacy model tools':'Integrated model viewer';
       inlinePanel.hidden=!integrated;legacyPanel.hidden=integrated;
       return integrated;
@@ -1362,7 +1402,15 @@
         if(isMaterial(marker))try{const q=materialResolver.create(scene.model).resolveLandmark(marker.anchor.kind,marker);marker={bank:q.bank,primitive:q.index,anchor:q.anchor};}catch(error){marker=null;}
         inlineViewer.setPendingVertex(marker);return;
       }
-      if(viewBest&&fitBest&&paintedFit){drawFitPreview();return;}
+      if(resultStage()){
+        if(viewBest&&fitBest&&paintedFit){drawFitPreview();return;}
+        mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
+        if(!previewValid)return;
+        const v=resultModelView();
+        mesh.drawImage(modelRaster,v.x,v.y,modelRaster.width*v.scale,modelRaster.height*v.scale);
+        workflow.rows.forEach((r,i)=>{const p=committedMarker(r);if(p)marker(mesh,screenPoint(v,p.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===workflow.activePair);});
+        return;
+      }
       mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
       if(!modelView||!previewValid)return;
       mesh.drawImage(modelRaster,modelView.x,modelView.y,modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
@@ -1442,7 +1490,7 @@
     function savePair(){
       try{
         const landmark=workflow.pendingModel||materialEdit()||selected();
-        if(viewBest||!record||!workflow.pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
+        if(!editingStage()||viewBest||!record||!workflow.pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
         const wasEditing=workflow.editing,width=record.original.width,height=record.original.height;
         const next=globeRoute()?commitGlobePair(workflow.rows,landmark,workflow.pending,width,height,Number(weight.value),workflow.editing,scene.model):
           upsert(workflow.rows,pair(landmark,workflow.pending,width,height,Number(weight.value),workflow.rows.find(r=>r.landmark.id===workflow.editing)?.included),workflow.editing);
@@ -1473,7 +1521,7 @@
       return false;
     }
     function confirmInlineMaterial(hit){
-      if(!record||!globeRoute()||legacyShown||viewBest){message('Load a photo and return to Free View.');return false;}
+      if(!editingStage()||!record||!globeRoute()||legacyShown||viewBest){message('Load a photo and return to Free View.');return false;}
       try{
         const resolver=materialResolver.create(scene.model);
         const id=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
@@ -1483,7 +1531,7 @@
       }catch(error){message(error.message);return false;}
     }
     function chooseInlineVertex(hit){
-      if(!globeRoute()||legacyShown||viewBest||!scene)return false;
+      if(!editingStage()||!globeRoute()||legacyShown||viewBest||!scene)return false;
       const p=scene.banks[hit.bank]?.[hit.index];
       if(hit.kind!=='vertex'||!Number.isInteger(hit.vertex)||!p?.points[hit.vertex])return false;
       const landmark={id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex};
@@ -1491,6 +1539,7 @@
       return chooseModel({landmark})?(workflow.pendingModel?'pending':'saved'):false;
     }
     function chooseModel(item){
+      if(!editingStage())return false;
       if(!record){message('Load a photograph first.');return false;}
       if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
       if(!selectLandmark(item.landmark))return false;
@@ -1499,7 +1548,7 @@
       refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
-      if(!p)return;
+      if(!editingStage()||!p)return;
       workflow.select(workflow.editing);setPixel(p);refreshRows();
       if(!implicitRoute()&&!workflow.explicitAdd&&!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
@@ -1564,7 +1613,7 @@
       catch(e){message('Cannot start a new session: '+e.message);return;}
       loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();photoGestures.cancel();modelDrag=null;photoGhost=null;modelGhost=null;file.value='';
       photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
-      showScene(next);persist();void refreshSources();
+      showScene(next);setStage("correspondences",{camera:"best"});void refreshSources();
     };
     file.onchange=async()=>{
       const f=file.files[0];if(!f)return;
@@ -1577,12 +1626,14 @@
       finally{if(token===loadToken)file.value='';}
     };
     const photoGestures=pointerGestures.mount(photo,{
-      enabled:()=>!!(record&&view),
+      enabled:()=>!!(record&&view&&(editingStage()||resultStage())),
       target:(_css,event)=>photoMarker(canvasPoint(photo,event)),
-      onHover(_css,event){photo.style.cursor=record&&view&&photoMarker(canvasPoint(photo,event))?'move':'crosshair';},
+      markerDrag:()=>editingStage(),
+      onHover(_css,event){photo.style.cursor=resultStage()?'grab':record&&view&&photoMarker(canvasPoint(photo,event))?'move':'crosshair';},
       onDrag(a,event){
         const p=canvasPoint(photo,event),r=photo.getBoundingClientRect();
         if(a.action==='marker'){
+          if(!editingStage())return;
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
           photoGhost=pixel?{kind:a.target.kind,id:a.target.id,pixel}:null;
           photo.style.cursor=pixel?'move':'not-allowed';
@@ -1595,6 +1646,7 @@
       },
       onAction(a,event){
         photoGhost=null;const p=canvasPoint(photo,event);
+        if(!editingStage()){if(resultStage()&&a.kind==='click'&&a.target.kind==='saved')selectPair(a.target.id);return;}
         if(viewportGesture(a,'photo'))return;
         if(a.kind==='drag'&&a.action==='marker'&&a.target.kind==='draft'){
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
@@ -1627,7 +1679,7 @@
     },{passive:false});
     $('ModernCalibrationFit').onclick=fitPhoto;
     function manualPixel(){
-      if(!record)return;
+      if(!editingStage()||!record)return;
       const p=[Number(px.value),Number(py.value)];
       const valid=px.value!==''&&py.value!==''&&imagePoint({scale:1,x:0,y:0},...p,record.original.width,record.original.height);
       workflow.selectPhoto(valid?p:null);photoDraw();meshDraw();syncPairToolbar();
@@ -1639,7 +1691,7 @@
       modelFrame=null;queuedPointer=null;
     }
     function processModelPointer(p){
-      if(!modelView||viewBest)return;
+      if(!editingStage()||!modelView||viewBest)return;
       if(magnifierMode()&&!modelDrag)return;
       if(!modelDrag){hoverAt(p);return;}
       if(Math.hypot(p[0]-modelDrag.start[0],p[1]-modelDrag.start[1])>4)modelDrag.moved=true;
@@ -1663,7 +1715,7 @@
       });
     }
     sceneCanvas.addEventListener('pointerdown',e=>{
-      if(!modelView||viewBest||e.button!==0)return;
+      if(!editingStage()||!modelView||viewBest||e.button!==0)return;
       if(magnifierMode()){
         if(regionDrag||!cropSource)return;
         e.preventDefault();cancelModelFrame();clearHover();const p=canvasPoint(sceneCanvas,e);
@@ -1674,6 +1726,7 @@
       sceneCanvas.setPointerCapture(e.pointerId);
     });
     sceneCanvas.addEventListener('pointermove',e=>{
+      if(!editingStage())return;
       if(regionDrag){if(regionDrag.id===e.pointerId){regionDrag.last=canvasPoint(sceneCanvas,e);meshDraw();}return;}
       if(magnifierMode())return;
       if(modelDrag&&modelDrag.id!==e.pointerId)return;
@@ -1683,6 +1736,7 @@
       queueModelPointer(p);
     });
     sceneCanvas.addEventListener('pointerup',e=>{
+      if(!editingStage())return;
       if(regionDrag){
         if(regionDrag.id!==e.pointerId)return;
         const p=canvasPoint(sceneCanvas,e),d=regionDrag;cancelRegion();meshDraw();
@@ -1708,11 +1762,23 @@
     sceneCanvas.addEventListener('pointercancel',()=>{cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearHover();});
     sceneCanvas.addEventListener('pointerleave',()=>{if(!modelDrag){cancelModelFrame();clearHover();}});
     sceneCanvas.addEventListener('wheel',e=>{
-      if(!modelView)return;e.preventDefault();if(modelDrag||regionDrag||viewBest)return;cancelModelFrame();
+      if(!editingStage()||!modelView)return;e.preventDefault();if(modelDrag||regionDrag||viewBest)return;cancelModelFrame();
       const p=canvasPoint(sceneCanvas,e),base=fit(modelRaster.width,modelRaster.height,sceneCanvas.width,sceneCanvas.height).scale;
       modelView=zoomAt(modelView,...p,Math.exp(-e.deltaY*.0015),base/4,Math.max(16,base*32));
       clearHover();clearAmbiguity();
     },{passive:false});
+    const resultGestures=pointerGestures.mount(sceneCanvas,{
+      enabled:()=>resultStage()&&!!record&&!!(viewBest&&paintedFit||previewValid),markerDrag:()=>false,
+      onDrag(a){const v=resultModelView(),r=sceneCanvas.getBoundingClientRect();v.x+=a.delta[0]*sceneCanvas.width/Math.max(1,r.width);v.y+=a.delta[1]*sceneCanvas.height/Math.max(1,r.height);meshDraw();},
+      onAction(a){if(a.kind==="double-click"){resultViews[resultViewKey()]=null;meshDraw();}persist();}
+    });
+    sceneCanvas.addEventListener("wheel",e=>{
+      if(!resultStage()||!record||!(viewBest&&paintedFit||previewValid))return;
+      e.preventDefault();if(resultGestures.active)return;resultGestures.clearClicks();
+      const raster=resultRaster(),v=resultModelView(),base=fit(raster.width,raster.height,sceneCanvas.width,sceneCanvas.height).scale;
+      resultViews[resultViewKey()]=zoomAt(v,...canvasPoint(sceneCanvas,e),Math.exp(-e.deltaY*.0015),base/4,Math.max(16,base*32));meshDraw();persist();
+    },{passive:false});
+    env.addEventListener("blur",()=>resultGestures.cancel());
     function freeFields(){return Array.from(fitPanel.querySelectorAll('[data-fit-field]')).filter(n=>n.checked).map(n=>n.dataset.fitField);}
     function applyFreeFields(free){for(const n of fitPanel.querySelectorAll('[data-fit-field]'))n.checked=free.includes(n.dataset.fitField);syncFitControls();}
     function syncFitControls(){
@@ -1720,15 +1786,14 @@
       $('ModernCalibrationRoleCount').textContent=count+' Fit · '+(workflow.rows.length-count)+' Validation'+(count===0||2*count<free.length?' · insufficient Fit points for selected free parameters':'');
       exportButton.disabled=!record||!scene;
       importButton.disabled=restoring;
-      runFit.disabled=!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
+      runFit.disabled=stage!=="calibration"||!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
       for(const field of fitFields){
         const v=scene?.model[field];
         fitPanel.querySelector('[data-fit-value="'+field+'"]').textContent=Number.isFinite(v)?'('+Number(v.toPrecision(6))+')':'';
       }
-      bestView.textContent=viewBest?'Return to Free View / initial camera':'Show best camera';
-      $('ModernCalibrationFitNotice').hidden=!viewBest;
-      residualMode.disabled=!fitBest;refreshObjectSelection();
+      bestView.textContent=viewBest?'Show initial camera':'Show best camera';
+      residualMode.disabled=!fitBest;syncStageUI();refreshObjectSelection();
     }
     function exportExperiment(){
       if(!scene||!record)throw Error('Load a photograph first');
@@ -1737,9 +1802,9 @@
         observations:workflow.rows,fit:{method:'canvas-direct',maxIterations:80,freeParameters:freeFields(),
           result:fitBest,status:fitStatus.textContent,running:!!fitWorker}});
     }
-    function restoreFit(result,status,show){
-      fitBest=result;fitSignature=result?JSON.stringify(workflow.rows):null;viewBest=!!(show&&result);
-      if(result){fitSummary(result);if(viewBest)paintBest();}
+    function restoreFit(result,status){
+      fitBest=result;fitSignature=result?JSON.stringify(workflow.rows):null;viewBest=false;
+      if(result)fitSummary(result);
       if(typeof status==='string'&&status)fitStatus.textContent=status;
       syncFitControls();meshDraw();
     }
@@ -1763,7 +1828,8 @@
       view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=true;
       showScene(next);photoDetails(record,activeSource);fitPhoto();
       applyFreeFields(data.fit.freeParameters);
-      restoreFit(data.fit.result,data.fit.running?'Imported interrupted fit · best saved candidate only':data.fit.status,!!data.fit.result);
+      restoreFit(data.fit.result,data.fit.running?'Imported interrupted fit · best saved candidate only':data.fit.status);
+      setStage(data.fit.result?'result':'correspondences',{camera:'best',save:false});
       message('Calibration experiment imported.');persist();return true;
     }
     exportButton.onclick=()=>{
@@ -1823,7 +1889,7 @@
       diagnosticResult=result;diagnosticBestPoints=points;return points;
     }
     function refreshResidualTable(){
-      residualPanel.hidden=!fitBest;
+      residualPanel.hidden=!resultStage()||!fitBest;
       residualData=fitBest?residualRows(workflow.rows,initialProjection(),bestProjection(fitBest)):[];
       residualList.replaceChildren();
       residualNotice.textContent=initialProjectionError?'Initial projection unavailable: '+initialProjectionError:'';
@@ -1841,7 +1907,7 @@
         button.setAttribute('aria-label','Select correspondence '+r.number);
         button.setAttribute('aria-pressed',String(r.id===workflow.activePair));
         button.onclick=()=>selectPair(r.id);cell.append(button);tr.append(cell);
-        const role=doc.createElement('td');role.append(inclusionControl(workflow.rows[r.number-1],r.number-1));tr.append(role);
+        const role=doc.createElement('td');role.textContent=workflow.rows[r.number-1].included===false?'Validation':'Fit';tr.append(role);
         for(const [key,value] of [['observed',xy(r.observed)],['initial',xy(r.initial.predicted)],['initialError',n(r.initial.error)],
           ['predicted',xy(r.best.predicted)],['dx',n(r.best.residual?.[0])],['dy',n(r.best.residual?.[1])],['error',n(r.best.error)],
           ['status',r.best.status]]){
@@ -1877,11 +1943,14 @@
         renderer.paint(fitRaster,camera,m,options);
         bestCropSource=jsonCopy({camera,model:m,options,width:size.width,height:size.height});
         paintedFit=fitBest;lastFitPaint=Date.now();meshDraw();
-      }catch(error){viewBest=false;paintedFit=null;fitStatus.textContent='Best camera preview unavailable: '+error.message;syncFitControls();meshDraw();}
+      }catch(error){viewBest=false;resultCamera='initial';paintedFit=null;fitStatus.textContent='Best camera preview unavailable: '+error.message;syncFitControls();meshDraw();}
     }
+    function resultRaster(){return viewBest&&paintedFit?fitRaster:modelRaster;}
+    function resultViewKey(){return viewBest&&paintedFit?"best":"initial";}
+    function resultModelView(){const raster=resultRaster(),key=resultViewKey();return resultViews[key]||(resultViews[key]=fit(raster.width,raster.height,sceneCanvas.width,sceneCanvas.height));}
     function drawFitPreview(){
       mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
-      const v=fit(fitRaster.width,fitRaster.height,sceneCanvas.width,sceneCanvas.height);
+      const v=resultStage()?resultModelView():fit(fitRaster.width,fitRaster.height,sceneCanvas.width,sceneCanvas.height);
       mesh.drawImage(fitRaster,v.x,v.y,fitRaster.width*v.scale,fitRaster.height*v.scale);
       const sx=fitRaster.width/record.original.width,sy=fitRaster.height/record.original.height;
       const byId=new Map(bestProjection(paintedFit).map(p=>[p.id,p]));
@@ -1898,7 +1967,7 @@
       if(!r.evaluation?.valid)return;
       if(hasMaterial(workflow.rows))r={...r,materialBinding:fitBinding(workflow.rows,freeFields(),scene.model,scene.physics,record.original.width,record.original.height)};
       if(!fitBest||r.evaluation.cost<=fitBest.evaluation.cost){fitBest=r;fitSummary(r);}
-      syncFitControls();
+      viewBest=calibrationStageState(stage,!!fitBest,resultCamera).best;syncFitControls();
       if(viewBest&&Date.now()-lastFitPaint>=500)paintBest();
     }
     runFit.onclick=()=>{
@@ -1917,7 +1986,8 @@
           }else if(data.type==='complete'){
             receiveFit(data.result);terminateFit();
             fitStatus.textContent=data.result.status+' · '+(data.result.reason||'Complete')+' (local fit; not a uniqueness certificate)';
-            if(fitBest){viewBest=true;paintBest();}syncFitControls();persist();
+            if(fitBest&&stage==='calibration')setStage('result',{camera:'best',save:false});
+            else if(viewBest&&fitBest)paintBest();syncFitControls();persist();
           }else if(data.type==='error'){
             terminateFit();fitStatus.textContent='Fit failed: '+data.message;syncFitControls();
           }
@@ -1928,16 +1998,16 @@
       }catch(error){terminateFit();fitStatus.textContent='Cannot start fit: '+error.message;syncFitControls();}
     };
     stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
-    bestView.onclick=()=>{if(!fitBest)return;contextMenu.close();viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();persist();};
-    fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();});
+    bestView.onclick=()=>{if(resultStage()&&fitBest)setStage('result',{camera:viewBest?'initial':'best'});};
+    fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();persist();});
     add.onclick=savePair;pairRedo.onclick=redo;
     $('ModernCalibrationCancelEdit').onclick=cancelPairDraft;
     $('ModernCalibrationUndo').onclick=undo;
     $('ModernCalibrationDeleteSelected').onclick=()=>{if(workflow.mode==='browse')deletePair(workflow.activePair);};
     doc.addEventListener('keydown',e=>{
-      if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if(workspace.hidden||!editingStage()||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
       if(e.key==='Escape'&&photoGestures.active){e.preventDefault();photoGestures.cancel();return;}
-      if(e.key==='Enter'&&!add.disabled){e.preventDefault();savePair();return;}
+      if(e.key==='Enter'&&e.target?.tagName!=='BUTTON'&&!add.disabled){e.preventDefault();savePair();return;}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();return;}
       if(magnifierMode()&&e.key==='Escape'){e.preventDefault();cancelRegion();meshDraw();return;}
       if(objectMode()){
@@ -1956,11 +2026,11 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

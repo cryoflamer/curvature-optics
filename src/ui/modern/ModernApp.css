@@ -1533,3 +1533,12 @@ button{cursor:pointer}
 /* A context menu has one active item shared by pointer and keyboard. */
 .modern-photo-calibration .modern-calibration-context-menu button[role=menuitem]{background:transparent;border-color:transparent;color:#1f5f99}
 .modern-photo-calibration .modern-calibration-context-menu button[role=menuitem]:focus:not(:disabled){background:#236ab4;border-color:#236ab4;color:#fff;outline:none}
+
+/* Nonlinear calibration stages share the same editor DOM and draft. */
+.modern-photo-calibration [data-calibration-stages][hidden]{display:none!important}
+.modern-calibration-stages{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.modern-photo-calibration .modern-calibration-stages button[aria-current=step]{background:#236ab4;border-color:#236ab4;color:white;font-weight:600}
+.modern-photo-calibration .modern-calibration-stages button:hover:not([aria-current=step]){background:#cce5fa}
+.modern-photo-calibration[data-calibration-stage=calibration] #ModernCalibrationPairList :is(th,td):last-child{display:none}
+.modern-photo-calibration[data-calibration-stage=result] #ModernCalibrationMesh{cursor:grab}
+.modern-photo-calibration[data-calibration-stage=result] #ModernCalibrationPhoto{cursor:grab}

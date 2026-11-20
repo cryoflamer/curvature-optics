@@ -1,3 +1,17 @@
+## 8F.6j — Nonlinear calibration stages
+
+Correspondences, Calibration and Result have independent visible controls
+in one persisted workspace. Reference photo and exchange stay shared.
+Correspondences retains physical Free View / legacy Flat and independent
+drafts; Calibration owns free fields, Fit/Validation and explicit worker
+start/stop; Result owns read-only initial/best optical previews and residuals,
+with independently persisted optical pan/zoom. Stage changes cancel transient
+gestures, not draft/history/view/fit state. Completion opens Result only from
+Calibration. Stage and camera preference persist in the existing draft; older
+best-camera drafts migrate to Result. Imports with fit open Result; otherwise
+Correspondences. Browser smoke updated for navigation; full browser/CI
+execution pending. Next: 8F.6k.
+
 ## 8F.6i — Context menus and independent Undo/Redo
 
 Integrated physical Globe editor has shared right-click menus on photo/model:
@@ -12,8 +26,7 @@ validate on restore, are limited to 50 entries each and clear on replacement;
 new committed change clears Redo. Undo/Redo keeps unrelated draft, weight,
 camera and pivot; an explicit edit whose target disappears is cancelled.
 Ctrl+Z / Ctrl+Shift+Z and toolbar alternatives remain. Legacy Flat keeps
-its existing picking controls. Next: 8F.6j Correspondences / Calibration /
-Result separation. Full CI/browser pending.
+its existing picking controls. Full CI/browser pending.
 
 ## 8F.6h — Independent pivot and background reset
 

@@ -943,6 +943,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationFitModel').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         # Fit a single free angle using the real background worker.
+        stage=lambda name: workspace.locator('[data-calibration-stage="'+name+'"]')
+        workflow=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow()")
+        # Stage travel must preserve an incomplete pair and committed history.
+        workspace.locator('#ModernCalibrationBeginPair').click()
+        workspace.locator('#ModernCalibrationX').fill('120')
+        workspace.locator('#ModernCalibrationY').fill('130')
+        draft=workflow()
+        stage('calibration').click()
+        expect(workspace.locator('#ModernCalibrationPairToolbar')).to_be_hidden()
+        expect(workspace.locator('#ModernCalibrationPhoto')).to_be_hidden()
+        stage('result').click()
+        expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Initial Camera')
+        expect(workspace.locator('#ModernCalibrationPairToolbar')).to_be_hidden()
+        stage('correspondences').click()
+        expect(workspace.locator('#ModernCalibrationPhoto')).to_be_visible()
+        self.assertEqual(workflow(),draft)
+        workspace.locator('#ModernCalibrationCancelEdit').click()
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0].pixel"),result['pixel'])
+        stage('calibration').click()
         self.page.evaluate("""() => {
             for(const n of document.querySelectorAll('#ModernCalibrationFitParameters [data-fit-field]')){
                 n.checked=n.dataset.fitField==='Pan';n.dispatchEvent(new Event('change',{bubbles:true}));
@@ -954,26 +973,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         fit=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()""")
         self.assertTrue(fit['evaluation']['valid'])
         self.assertLessEqual(fit['evaluation']['rmsPx'],fit['initialRmsPx']+1e-8)
-        # The fitted camera uses the same inline host and retains the solver result.
-        toggle.click()
-        expect(inline.locator('h2')).to_have_text('Model · Best Camera')
-        expect(inline.locator('[data-viewer-status]')).to_contain_text('Best Camera')
-        expect(inline.locator('[data-viewer-free]')).to_be_disabled()
-        expect(inline.locator('[data-viewer-pick-controls]')).to_be_hidden()
+        # Result owns read-only optical views and keeps separate camera framing.
+        expect(stage('result')).to_have_attribute('aria-current','step')
+        expect(inline).to_be_hidden()
+        optical=workspace.locator('#ModernCalibrationMesh')
+        expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Best Camera')
         workspace.locator('#ModernCalibrationBestView').click()
-        expect(inline.locator('h2')).to_have_text('Model · Initial Camera')
-        inline.locator('canvas').hover()
+        expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Initial Camera')
+        result_state=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).calibrationStage()")
+        old_scale=result_state()['resultViews']['initial']['scale']
+        optical.hover()
         self.page.mouse.wheel(0,-200)
-        self.page.wait_for_function("w=>CurvatureModernPhotoCalibrationEditor.mount(document).inlineViewerState().region.width<w",arg=initial['region']['width'])
-        initial_zoom=state()['region']
+        self.page.wait_for_function("s=>CurvatureModernPhotoCalibrationEditor.mount(document).calibrationStage().resultViews.initial.scale>s",arg=old_scale)
+        zoomed=result_state()['resultViews']['initial']
         workspace.locator('#ModernCalibrationBestView').click()
-        expect(inline.locator('h2')).to_have_text('Model · Best Camera')
+        expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Best Camera')
         workspace.locator('#ModernCalibrationBestView').click()
-        self.assertEqual(state()['region'],initial_zoom)
+        self.assertEqual(result_state()['resultViews']['initial'],zoomed)
         workspace.locator('#ModernCalibrationBestView').click()
-        expect(inline.locator('h2')).to_have_text('Model · Best Camera')
         self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
-        toggle.click()
         # Residuals are the worker's original-image pixel values, not canvas CSS pixels.
         panel=workspace.locator('#ModernCalibrationResidualPanel')
         expect(panel).to_be_visible()
@@ -997,7 +1015,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
             return JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField]);
         }"""),before['pose'])
-        workspace.locator('#ModernCalibrationBestView').click()
+        stage('correspondences').click()
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         # Navigating objects must not invalidate a completed physical fit.
         mode.select_option('object')
@@ -1026,6 +1044,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(residual).to_have_count(1)
         expect(residual.locator('[data-residual="error"]')).to_have_text(f"{fit['evaluation']['rmsPx']:.2f}")
         # Invalidation must remove stale vectors and results.
+        stage('calibration').click()
         workspace.locator('[data-fit-field="Roll"]').check()
         expect(panel).to_be_hidden()
         expect(select).to_be_disabled()
@@ -1039,8 +1058,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(held['version'],2)
         self.assertFalse(held['observations'][0]['included'])
         self.assertIsNone(held['fit']['result'])
+        stage('correspondences').click()
         workspace.locator('#ModernCalibrationUndo').click()
         expect(role).to_be_checked()
+        stage('calibration').click()
         expect(workspace.locator('#ModernCalibrationRunFit')).to_be_enabled()
 
         # Material v3 uses the same real editor, worker and draft storage.
@@ -1076,6 +1097,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('3 correspondences')
         expect(workspace.locator('#ModernCalibrationRoleCount')).to_contain_text('2 Fit · 1 Validation')
         expect(workspace.locator('#ModernCalibrationPairs')).to_contain_text('surface')
+        stage('calibration').click()
         workspace.locator('#ModernCalibrationRunFit').click()
         expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=30000)
         expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=30000)
@@ -1087,6 +1109,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
         self.page.reload(wait_until='load')
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('3 correspondences')
+        expect(stage('result')).to_have_attribute('aria-current','step')
         expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled()
         restored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
         self.assertEqual(restored['observations'],stored['observations'])

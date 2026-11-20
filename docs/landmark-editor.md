@@ -82,7 +82,7 @@ Buttons and modes are implementation details, not prerequisites.
 | 8F.6g | Drag draft/saved endpoints independently (implemented) |
 | 8F.6h | Automatic pivot and empty-background reset (implemented) |
 | 8F.6i | Context menus and Undo/Redo (implemented) |
-| 8F.6j | Correspondences / Calibration / Result separation |
+| 8F.6j | Correspondences / Calibration / Result separation (implemented) |
 | 8F.6k | Minimal UI, persistence, verification, legacy cleanup |
 
 Acceptance: create, modify and delete 20 pairs without leaving the two
@@ -835,3 +835,17 @@ Resume 8C.5a (existing SVD diagnostics exposed in UI), 8C.5b (Huber loss if
 justified), 8C.5c (automated influence analysis), 8C.6 (multistart/DLT/P3P),
 8D (whole-model photo overlay), 8E (acceptance and persistence).
 Each 8F stage should be a bounded, independently tested commit referencing #7.
+
+### Nonlinear calibration stages
+
+The reference source and experiment exchange remain shared. Correspondences
+keeps the physical Globe Free View and existing Flat fallback. Calibration
+shows parameter and Fit/Validation controls; only Run calibration starts a
+worker. Result uses the captured initial and fitted Canvas Direct optical
+rasters with read-only diagnostics and residual overlays. Its two optical
+camera framings have independent pan/zoom and double-click reset. Navigating
+between stages does not replace observations, staged endpoints, undo/redo or
+fit results. Completion opens Result only when the user remains in Calibration;
+a correspondence or parameter change still invalidates the fit. The local
+draft remembers the stage, preferred result camera and optical framing.
+Imports select Result when a validated result exists, otherwise Correspondences.

@@ -171,3 +171,13 @@ test('context menu clamps, routes activation and dismisses without a workspace a
   menu.open([0,0],items,id=>called.push(id),source);doc.events.pointerdown({target:source});assert.equal(menu.visible,false);
   menu.open([0,0],items,id=>called.push(id),source);key('Escape');assert.equal(menu.visible,false);assert.equal(doc.activeElement,source);
 });
+
+test('nonlinear stage state keeps editing separate from optical results',()=>{
+  const {calibrationStageState}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  for(const hasFit of [false,true])for(const camera of ['initial','best']){
+    assert.deepEqual(calibrationStageState('correspondences',hasFit,camera),{stage:'correspondences',editing:true,configuring:false,results:false,best:false});
+    assert.deepEqual(calibrationStageState('calibration',hasFit,camera),{stage:'calibration',editing:false,configuring:true,results:false,best:false});
+    assert.deepEqual(calibrationStageState('result',hasFit,camera),{stage:'result',editing:false,configuring:false,results:true,best:hasFit&&camera==='best'});
+  }
+  assert.equal(calibrationStageState('corrupt',true).stage,'correspondences');
+});
