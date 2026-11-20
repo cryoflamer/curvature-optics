@@ -396,3 +396,21 @@ test('Globe optical frame uses actual painter order, horizon mask and material w
   const adjusted=viewer.adjustPoint(mesh,h,[.2,.3,.5]);
   assert.equal(viewer.opticalMarker(f,adjusted).visibility,'visible');
 });
+
+test('committed correspondence binding uses stable bank identity and sorted material topology',()=>{
+  const item=pickItem([[0,0,0],[4,0,0],[0,6,0]],3,0),other={...item,index:1};
+  const mesh=viewer.preparePick([other,item]);
+  const row={id:'pair-1',label:'2V',color:'#123456',bank:item.bank,index:item.index,
+    anchor:{kind:'surface',owner:item.owner,primitive:item.primitive,indices:[0,1,2],weights:[.2,.3,.5]}};
+  const before=JSON.stringify(row),[bound]=viewer.correspondenceHits(mesh,[row]);
+  assert.equal(bound.hit.order,1);assert.equal(bound.label,'2V');
+  assert.ok(Math.hypot(...bound.hit.point.map((x,i)=>x-[1.2,3,0][i]))<1e-12);
+  assert.equal(JSON.stringify(row),before);
+  assert.equal(viewer.correspondenceHits(mesh,[{...row,index:99}])[0].hit,null);
+  assert.equal(viewer.correspondenceHits(mesh,[{...row,anchor:{...row.anchor,primitive:999}}])[0].hit,null);
+  const {capture,path}=opticalFixture(item,[[0,0,10],[8,0,20],[0,9,15]]);
+  const frame=viewer.opticalFrame(mesh,{...capture,paths:[path]});
+  assert.equal(viewer.opticalMarker(frame,bound.hit).visibility,'visible');
+  const mask={role:'occlusion',alpha:1,fill:path.fill,edges:[],strokeWidth:0};
+  assert.equal(viewer.opticalMarker(viewer.opticalFrame(mesh,{...capture,paths:[path,mask]}),bound.hit).visibility,'horizon masked');
+});

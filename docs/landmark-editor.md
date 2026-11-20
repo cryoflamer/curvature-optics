@@ -1,6 +1,26 @@
+## 8F.5a — Existing correspondence markers in Magnifier
+
+8F.4d.2 CI: architecture and Node passed, Chromium failed on the recurring
+Scene workspace timeout and a status-text race in the new draft reload test
+(actual status already Draft saved). The reload assertion now checks restored
+row count, fit availability and exact data instead of transient status.
+
+Globe Magnifier receives read-only descriptors from the editor's canonical
+rows. Legacy vertices are resolved/upgraded transiently, never rewritten.
+Bind bank/primitive/owner and original material indices to local mesh.
+Scene markers use actual optical painter coverage and horizon mask; Free
+View uses its existing depth/painter visibility and wireframe semantics.
+Use the same row numbers, Validation suffix and palette as the photo/table.
+List hidden/out-of-crop/unresolved status; no committed marker picking or
+editing yet. Refresh on row changes and rebuild on view/geometry change.
+No extra correspondence persistence. Flat authoring unchanged.
+All 30 viewer headless tests passed, including the new committed marker
+identity and optical mask regression. Full Node/Chromium CI pending.
+Next: 8F.5b synchronized selection.
+
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection and 8F.4d.1 numerical integration and 8F.4d.2 persistence implemented; next 8F.5a. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection and 8F.4d.1 numerical integration and 8F.4d.2 persistence and 8F.5a correspondence markers implemented; next 8F.5b. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 

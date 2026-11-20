@@ -647,6 +647,29 @@
     // are not used for restored marker projection.
     return JSON.parse(JSON.stringify(hit));
   }
+  // Input descriptors are authenticated by the editor's physical resolver.
+  // Bind to the actual local mesh without depending on its enumeration order.
+  function correspondenceHits(mesh,rows){
+    const byIndex=new Map(mesh.map(e=>[e.item.bank+':'+e.item.index,e]));
+    return rows.map(row=>{
+      const a=row.anchor,e=byIndex.get(row.bank+':'+row.index);
+      if(!a||!e||e.item.primitive!==a.primitive||
+        JSON.stringify(e.item.owner)!==JSON.stringify(a.owner)||!e.valid||
+        !a.indices.every(i=>Number.isInteger(i)&&i>=0&&i<e.item.points.length))
+        return {...row,hit:null};
+      const same=t=>t.slice().sort((x,y)=>x-y).every((x,i)=>x===a.indices[i]);
+      if(a.kind==='edge'&&!e.edges.some(same)||a.kind==='surface'&&!e.triangles.some(same))
+        return {...row,hit:null};
+      const point=a.indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],a.weights[j])),[0,0,0]);
+      return {...row,hit:pickDescriptor(e,a.kind,a.indices,a.weights,point,0,null,0)};
+    });
+  }
+  function drawCorrespondence(canvas,p,row){
+    const ctx=canvas.getContext('2d');ctx.save();ctx.font='bold 13px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=2;
+    ctx.fillStyle=row.color;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(...p,10,0,2*Math.PI);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.fillText(row.label,p[0],p[1]);ctx.restore();
+  }
   function mount(dialog,onSessionChange=()=>{}){
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
@@ -657,6 +680,25 @@
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
       pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
     let mesh=null,paths=null,pickCache=null,opticalCache=null,opticalTransform=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
+    let correspondenceRows=[],correspondenceMesh=null,correspondenceCache=[],correspondenceState=[];
+    const correspondenceStatus=dialog.querySelector('[data-viewer-correspondence-status]');
+    function setCorrespondences(rows){
+      correspondenceRows=rows.slice();correspondenceMesh=undefined;
+      if(crop&&dialog.open)redrawMarkers();
+    }
+    function committedMarkers(project){
+      if(correspondenceMesh!==mesh){correspondenceMesh=mesh;correspondenceCache=mesh?correspondenceHits(mesh,correspondenceRows):correspondenceRows.map(r=>({...r,hit:null}));}
+      correspondenceState=correspondenceCache.map(row=>{
+        const q=row.hit?project(row.hit):{visibility:'geometry unavailable'};
+        if(q.pixel&&['visible','wireframe'].includes(q.visibility))drawCorrespondence(canvas,q.pixel,row);
+        return {id:row.id,label:row.label,color:row.color,visibility:q.visibility,pixel:q.pixel||null};
+      });
+      if(correspondenceStatus){
+        const visible=correspondenceState.filter(r=>['visible','wireframe'].includes(r.visibility)).length;
+        correspondenceStatus.textContent=correspondenceState.length?
+          visible+' / '+correspondenceState.length+' correspondences shown · '+correspondenceState.filter(r=>!['visible','wireframe'].includes(r.visibility)).map(r=>r.label+': '+r.visibility).join('; '):'';
+      }
+    }
     function sessionChanged(){if(!restoringSession)onSessionChange();}
     const details=dialog.querySelector('[data-viewer-point-details]'),coords=dialog.querySelector('[data-viewer-point-coords]'),parameters=dialog.querySelector('[data-viewer-point-parameters]'),paramInputs=[...dialog.querySelectorAll('[data-viewer-point-weight]')],confirmButton=dialog.querySelector('[data-viewer-point-confirm]'),cancelButton=dialog.querySelector('[data-viewer-point-cancel]');
     const snaps=[...dialog.querySelectorAll('[data-viewer-point-snap]')];
@@ -689,9 +731,10 @@
       return {pixel:p,visibility:q.visibility};
     }
     function opticalMarkers(){
-      const t=opticalTransform;if(!opticalCache||!t)return;
+      const t=opticalTransform;if(!opticalCache||!t){committedMarkers(()=>({visibility:'optical geometry unavailable'}));return;}
       const ctx=canvas.getContext('2d');ctx.save();ctx.beginPath();ctx.rect(t.x,t.y,t.width,t.height);ctx.clip();
       try{
+        committedMarkers(opticalScreen);
         for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18'],[pickActive()?hover:null,'#008ab1']]){
           if(!h)continue;const q=opticalScreen(h);
           if(q.visibility==='visible')drawPickMarker(canvas,h,{project:()=>q},color);
@@ -700,6 +743,7 @@
     }
     function markers(){
       if(paths&&crop&&free){
+        committedMarkers(h=>{const visibility=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'visibility unresolved';return {visibility,pixel:paths.camera.project(h.point)?.pixel};});
         for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18']]){
           if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
         }
@@ -786,7 +830,7 @@
           opticalTransform=result.transform;opticalCache=mesh&&result.stats?.picking?opticalFrame(mesh,result.stats.picking):null;
           status.textContent='Scene View · '+result.transform.scale.toFixed(2)+'× source raster · same optical camera · '+(crop.reason||(opticalCache?'Globe optical picking · drag to orbit or choose Free View':'drag to orbit or choose Free View'));
           opticalMarkers();
-        }catch(error){status.textContent='Magnifier unavailable: '+error.message;opticalCache=null;}
+        }catch(error){status.textContent='Magnifier unavailable: '+error.message;opticalCache=null;committedMarkers(()=>({visibility:'optical geometry unavailable'}));}
         syncMode();syncPoint();updatePickStatus();return;
       }
       if(crop&&free){cancelHover();opticalCache=null;opticalTransform=null;paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
@@ -802,7 +846,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;if(dialog.open)dialog.close();sessionChanged();}
+    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(dialog.open)dialog.close();sessionChanged();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -899,9 +943,9 @@
         sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
       }finally{restoringSession=false;}
       sessionChanged();
-    },close,isOpen:()=>dialog.open,isCrop:()=>!!crop,
+    },close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen:()=>dialog.open,isCrop:()=>!!crop,
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

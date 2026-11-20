@@ -1,3 +1,23 @@
+## 8F.5a — Existing correspondence markers in Magnifier
+
+8F.4d.2 CI: architecture and Node passed, Chromium failed on the recurring
+Scene workspace timeout and a status-text race in the new draft reload test
+(actual status already Draft saved). The reload assertion now checks restored
+row count, fit availability and exact data instead of transient status.
+
+Globe Magnifier receives read-only descriptors from the editor's canonical
+rows. Legacy vertices are resolved/upgraded transiently, never rewritten.
+Bind bank/primitive/owner and original material indices to local mesh.
+Scene markers use actual optical painter coverage and horizon mask; Free
+View uses its existing depth/painter visibility and wireframe semantics.
+Use the same row numbers, Validation suffix and palette as the photo/table.
+List hidden/out-of-crop/unresolved status; no committed marker picking or
+editing yet. Refresh on row changes and rebuild on view/geometry change.
+No extra correspondence persistence. Flat authoring unchanged.
+All 30 viewer headless tests passed, including the new committed marker
+identity and optical mask regression. Full Node/Chromium CI pending.
+Next: 8F.5b synchronized selection.
+
 ## 8F.4d.2 — Material observation persistence and editor read paths
 
 Portable v3 supports mixed canonical material and legacy vertex observations;

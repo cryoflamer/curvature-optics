@@ -623,6 +623,19 @@
       check.onchange=()=>setIncluded(row.landmark.id,check.checked);
       label.append(check,check.checked?' Fit':' Validation');return label;
     }
+    function refreshMagnifierCorrespondences(){
+      if(!viewer.isCrop()||scene?.model.showModel!==1)return;
+      let resolver;
+      const descriptors=rows.map((row,i)=>{
+        const common={id:row.landmark.id,label:pairLabel(row,i),color:COLORS[i%COLORS.length]};
+        try{
+          if(!resolver)resolver=materialResolver.create(scene.model);
+          const q=resolver.resolveLandmark(row.kind,row.landmark);
+          return {...common,bank:q.bank,index:q.index,anchor:q.anchor};
+        }catch(error){return {...common,anchor:null};}
+      });
+      viewer.setCorrespondences(descriptors);
+    }
     function refreshRows(){
       if(fitSignature!==null&&fitSignature!==JSON.stringify(rows))invalidateFit('Correspondences changed. Run calibration again.');
       syncFitControls();
@@ -649,7 +662,7 @@
       $('ModernCalibrationInlineCount').textContent=rows.length+' correspondences';
       $('ModernCalibrationUndo').disabled=!undoStack.length;
       $('ModernCalibrationDeleteSelected').disabled=!activePair;
-      refreshResidualTable();
+      refreshResidualTable();refreshMagnifierCorrespondences();
     }
     function updateHint(){
       const text=magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
@@ -886,6 +899,7 @@
         {...source.options,canvasDirectOptions:{...source.options.canvasDirectOptions,capturePicking:capture&&source.model.showModel===1}},
         source.width,source.height,region),
         build,build?'':'No visible geometry in this rectangle; Free View unavailable.',source.model.showModel===1);
+      refreshMagnifierCorrespondences();
     }
     pickMode.onchange=()=>{
       cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;clearAmbiguity();clearHover();
@@ -1451,7 +1465,7 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

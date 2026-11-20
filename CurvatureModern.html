@@ -128,8 +128,8 @@
 <script src="src/calibration/CameraMaterialAnchorResolver.js?projection-bank=1"></script>
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1&amp;material-projection=1&amp;material-fit=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
-<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1&amp;indexed-picking=1&amp;free-picking=1&amp;point-adjustment=1&amp;metric-vertex-snap=1&amp;session-persistence=1&amp;optical-inverse=1&amp;globe-optical-picking=1&amp;shared-topology=1"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;magnifier-session=1&amp;globe-optical-picking=1&amp;material-fit=1&amp;material-persistence=1"></script>
+<script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1&amp;indexed-picking=1&amp;free-picking=1&amp;point-adjustment=1&amp;metric-vertex-snap=1&amp;session-persistence=1&amp;optical-inverse=1&amp;globe-optical-picking=1&amp;shared-topology=1&amp;correspondence-markers=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;magnifier-session=1&amp;globe-optical-picking=1&amp;material-fit=1&amp;material-persistence=1&amp;correspondence-markers=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -274,6 +274,7 @@
       </div>
       <div data-viewer-frame><canvas width="800" height="520" tabindex="0" aria-label="Isolated authored object"></canvas></div>
       <p data-viewer-status role="status"></p>
+      <p data-viewer-correspondence-status role="status" style="max-height:3em;overflow:auto"></p>
       <footer><p>Drag title to move · drag corner to resize. <span data-viewer-free-controls>Canvas drag to orbit · Shift/right-drag to pan · wheel to zoom.</span></p><button type="button" data-viewer-resize aria-label="Resize inspector (arrow keys)" title="Drag to resize">◢</button></footer>
     </dialog>
     <p id="ModernCalibrationStatus" role="status"></p><p id="ModernCalibrationStorage" role="status"></p>
