@@ -2,11 +2,12 @@
 (function(root,factory){
   const api=factory(root,
     root.CurvatureCameraMaterialAnchor||require('../../calibration/CameraMaterialAnchor'),
-    root.CurvatureCameraMaterialAnchorResolver||require('../../calibration/CameraMaterialAnchorResolver'));
+    root.CurvatureCameraMaterialAnchorResolver||require('../../calibration/CameraMaterialAnchorResolver'),
+    root.CurvatureCalibrationPointerGestures||require('./CalibrationPointerGestures'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.CurvatureModernPhotoCalibrationEditor=api;
     root.document.addEventListener('DOMContentLoaded',()=>api.mount(root.document));}
-}(typeof globalThis!=='undefined'?globalThis:this,function(env,materialAnchor,materialResolver){
+}(typeof globalThis!=='undefined'?globalThis:this,function(env,materialAnchor,materialResolver,pointerGestures){
   'use strict';
   function fit(width,height,w,h){
     const scale=Math.min(w/width,h/height);
@@ -469,7 +470,7 @@
     const ctx=photo.getContext('2d'),mesh=sceneCanvas.getContext('2d');
     const workflow=createPairWorkflow();
     let scene=null,record=null,image=null,view=null,loadToken=0,
-      groups=[],vertices=[],drag=null,modelDrag=null;
+      groups=[],vertices=[],modelDrag=null;
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
       modelStatus=$('ModernCalibrationModelStatus'),pickStatus=$('ModernCalibrationPickStatus'),
       pickConflict=$('ModernCalibrationPickConflict'),pickOptions=$('ModernCalibrationPickOptions'),
@@ -712,7 +713,7 @@
       if(token!==loadToken)return false;
       if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
         throw Error('Reference image decoded dimensions mismatch');
-      newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
+      photoGestures.cancel();newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
       photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
       persist();return true;
@@ -753,7 +754,7 @@
         for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===workflow.activePair);
       }
       workflow.rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===workflow.activePair));
-      if(workflow.pending){const p=screenPoint(view,workflow.pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
+      if(workflow.pending){const p=screenPoint(view,photoGhost?.kind==='draft'?photoGhost.pixel:workflow.pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
     }
     function fitPhoto(){
       if(!record)return;
@@ -898,7 +899,12 @@
       const ratio=canvas.width/Math.max(1,canvas.getBoundingClientRect().width);
       return nearestMarker(items,p,10*ratio);
     }
-    function photoMarker(p){return markerHit(photo,p,workflow.rows.map(r=>({id:r.landmark.id,pixel:screenPoint(view,r.pixel)})));}
+    function photoMarker(p){
+      const r=photo.getBoundingClientRect(),scale=[photo.width/Math.max(1,r.width),photo.height/Math.max(1,r.height)];
+      const items=workflow.rows.map(r=>({kind:'saved',id:r.landmark.id,pixel:screenPoint(view,r.pixel)}));
+      if(workflow.pending)items.push({kind:'draft',pixel:screenPoint(view,workflow.pending)});
+      return pointerGestures.markerAt(items,p,scale);
+    }
     function committedMarker(r){
       if(!isMaterial(r.landmark))return byLandmark.get(r.landmark.id);
       if(!markerProjection)return null;
@@ -1106,7 +1112,7 @@
     }
     viewerButton.onclick=openViewer;
     // The floating window is fixed-position but owned by this workspace.
-    new env.MutationObserver(()=>{if(workspace.hidden){cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    new env.MutationObserver(()=>{if(workspace.hidden){photoGestures.cancel();inlineViewer.cancelGesture();cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
     function syncModelRoute(){
       const integrated=globeRoute()&&!legacyShown;
@@ -1383,7 +1389,7 @@
       let next;
       try{next=prepareScene(env.CurvatureModernApp.getPhotoCalibrationScene());}
       catch(e){message('Cannot start a new session: '+e.message);return;}
-      loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();drag=null;modelDrag=null;photoGhost=null;modelGhost=null;file.value='';
+      loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();photoGestures.cancel();modelDrag=null;photoGhost=null;modelGhost=null;file.value='';
       photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
       showScene(next);persist();void refreshSources();
     };
@@ -1397,39 +1403,42 @@
       }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
       finally{if(token===loadToken)file.value='';}
     };
-    photo.addEventListener('pointerdown',e=>{
-      if(!record||e.button!==0)return;const p=canvasPoint(photo,e);
-      const hit=photoMarker(p);
-      drag={id:e.pointerId,start:p,last:p,moved:false,marker:hit?.id||null};
-      photo.setPointerCapture(e.pointerId);
-    });
-    photo.addEventListener('pointermove',e=>{
-      if(!drag||drag.id!==e.pointerId)return;const p=canvasPoint(photo,e);
-      if(Math.hypot(p[0]-drag.start[0],p[1]-drag.start[1])>4)drag.moved=true;
-      if(drag.moved){
-        if(drag.marker){
+    const photoGestures=pointerGestures.mount(photo,{
+      enabled:()=>!!(record&&view),
+      target:(_css,event)=>photoMarker(canvasPoint(photo,event)),
+      onHover(_css,event){photo.style.cursor=record&&view&&photoMarker(canvasPoint(photo,event))?'move':'crosshair';},
+      onDrag(a,event){
+        const p=canvasPoint(photo,event),r=photo.getBoundingClientRect();
+        if(a.action==='marker'){
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
-          photoGhost=pixel?{id:drag.marker,pixel}:null;
-        }else{view.x+=p[0]-drag.last[0];view.y+=p[1]-drag.last[1];}
+          photoGhost=pixel?{kind:a.target.kind,id:a.target.id,pixel}:null;
+          photo.style.cursor='move';
+        }else{
+          photo.style.cursor='grabbing';
+          view.x+=a.delta[0]*photo.width/Math.max(1,r.width);
+          view.y+=a.delta[1]*photo.height/Math.max(1,r.height);
+        }
         photoDraw();
-      }
-      drag.last=p;
-    });
-    photo.addEventListener('pointerup',e=>{
-      if(!drag||drag.id!==e.pointerId)return;
-      const action=drag,p=canvasPoint(photo,e);drag=null;photoGhost=null;
-      if(action.marker){
-        if(action.moved){
-          const row=workflow.rows.find(r=>r.landmark.id===action.marker);
+      },
+      onAction(a,event){
+        photoGhost=null;const p=canvasPoint(photo,event);
+        if(a.kind==='drag'&&a.action==='marker'&&a.target.kind==='draft'){
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
-          if(row&&pixel){if(workflow.editing&&globeRoute()){if(workflow.editing===action.marker){setPixel(pixel);meshDraw();persist();}else message('Finish the current edit before moving another pair.');}else replacePair(action.marker,row.landmark,pixel);}
-        }else selectPair(action.marker);
-      }else if(!action.moved)choosePhoto(imagePoint(view,...p,record.original.width,record.original.height));
-      photoDraw();
+          if(pixel&&workflow.pending){setPixel(pixel);meshDraw();persist();}
+        }else if(a.kind==='drag'&&a.action==='marker'&&a.target.kind==='saved'){
+          const row=workflow.rows.find(r=>r.landmark.id===a.target.id);
+          const pixel=imagePoint(view,...p,record.original.width,record.original.height);
+          if(row&&pixel){if(workflow.editing&&globeRoute()){if(workflow.editing===a.target.id){setPixel(pixel);meshDraw();persist();}else message('Finish the current edit before moving another pair.');}else replacePair(a.target.id,row.landmark,pixel);}
+        }else if(a.kind==='click'){
+          if(a.target.kind==='saved')selectPair(a.target.id);
+          else if(a.target.kind==='background')choosePhoto(imagePoint(view,...p,record.original.width,record.original.height));
+        }
+      },
+      onEnd(){photoGhost=null;photo.style.cursor='crosshair';photoDraw();},
+      onLeave(){if(!photoGestures.active)photo.style.cursor='';}
     });
-    photo.addEventListener('pointercancel',()=>{drag=null;photoGhost=null;photoDraw();});
     photo.addEventListener('wheel',e=>{
-      if(!record)return;e.preventDefault();const p=canvasPoint(photo,e);
+      if(!record)return;e.preventDefault();if(photoGestures.active)return;photoGestures.clearClicks();const p=canvasPoint(photo,e);
       const min=fit(record.original.width,record.original.height,photo.width,photo.height).scale/4;
       view=zoomAt(view,...p,Math.exp(-e.deltaY*.0015),min,Math.max(16,min*16));photoDraw();
     },{passive:false});
@@ -1565,7 +1574,7 @@
       if(decoded.naturalWidth!==width||decoded.naturalHeight!==height)throw Error('Embedded photo dimensions mismatch');
       if((record||workflow.rows.length)&&!env.confirm('Replace the current calibration draft with this experiment?'))return false;
       invalidateFit('Importing calibration experiment…');cancelModelFrame();
-      drag=null;modelDrag=null;photoGhost=null;modelGhost=null;
+      photoGestures.cancel();modelDrag=null;photoGhost=null;modelGhost=null;
       record=data.referenceImage;image=decoded;workflow.replaceAll(data.observations);
       activeSource={...(data.referenceSource||{}),key:null,links:data.referenceSource?.links||[],imported:true};
       view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=true;

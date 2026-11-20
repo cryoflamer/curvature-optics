@@ -1,3 +1,19 @@
+## 8F.6d — Unified pointer gestures
+
+User validated Scene-derived initial framing (8F.6c.1). Photograph and
+integrated physical viewer now share CalibrationPointerGestures:
+pointer-down targets, 5 CSS px threshold, click/double-click recognition
+(400 ms / 5 CSS px; second click does not repeat the first action),
+right-click vs right-drag, pointer capture and cancellation. Right drag
+pans either view. A physical model marker drag is reserved for endpoint
+movement, not orbit. Photo draft markers can already be moved on valid
+release (transient ghost, no saved-row edit); saved-marker drag retains
+existing commit semantics until 8F.6g.
+Double-click and context actions are classified but not yet wired to
+link/reset/menu; legacy Flat canvas and magnifier rectangle remain
+unchanged. Next: 8F.6e automatic picking/snapping and hover.
+Browser/full CI verification pending.
+
 ## 8F.6c.1 — Initial Free View framing corrected
 
 Manual feedback: fitting all authored geometry made a long bridge nearly

@@ -496,6 +496,17 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.equal(api.snapshot().view.yaw,0);assert.equal(api.snapshot().view.pitch,0);
   assert.deepEqual(api.snapshot().region,full);
   const framed=api.sessionSnapshot();
+  // On the physical viewport a saved marker captures a drag instead of orbit.
+  const physicalPair={id:'physical',label:'1',color:'#123456',bank:0,index:0,anchor:{kind:'vertex',owner,primitive:0,indices:[0],weights:[1]}};
+  api.setCorrespondences([physicalPair],null);
+  const markerPixel=api.correspondences().find(r=>r.id==='physical').pixel;
+  const markerEvent={...eventForFraming(),clientX:markerPixel[0],clientY:markerPixel[1]};
+  const beforeMarker=api.snapshot().view;
+  canvas.events.pointerdown(markerEvent);canvas.events.pointermove({...markerEvent,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,clientX:markerEvent.clientX+25});
+  assert.deepEqual(api.snapshot().view,beforeMarker);
+  canvas.events.pointerdown({...markerEvent,button:2});canvas.events.pointermove({...markerEvent,button:2,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,button:2,clientX:markerEvent.clientX+25});
+  assert.equal(api.snapshot().view.yaw,beforeMarker.yaw);assert.ok(api.snapshot().view.pan[0]>beforeMarker.pan[0]);
+  api.setCorrespondences([],null);api.resetScene();
   canvas.events.pointerdown(eventForFraming());canvas.events.pointermove({...eventForFraming(),clientX:440});canvas.events.pointerup({...eventForFraming(),clientX:440});
   function eventForFraming(){return {preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};}
   const rotated=api.sessionSnapshot(),rotatedView=api.snapshot();
