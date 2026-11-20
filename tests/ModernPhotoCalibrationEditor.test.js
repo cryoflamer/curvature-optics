@@ -219,3 +219,27 @@ test('magnifier maps reverse drags through a panned and zoomed viewport, clippin
   assert.equal(editor.magnifierRegion(view,[10,10],[100,20],400,300,500,400),null);
   assert.equal(editor.magnifierRegion(view,[40,90],[41,180],400,300,500,400),null);
 });
+
+test('Globe material edits keep observation ID, role, row order and original data until committed',()=>{
+  const m={showModel:1,rEarth:6371000,Height:12,NObjects:[2,0],ObjType:[6,3],ObjDist:[1000,1200],ObjDeltaDist:[100,100],ObjSideType:[0,0],ObjSidePos:[30,40],ObjSideVar:[0,0],ObjSizeType:[0,0],ObjSize:[10,20],ObjSizeVar:[0,0]};
+  const resolver=require('../src/calibration/CameraMaterialAnchorResolver').create(m);
+  const engine=require('../src/geometry/CurvatureGeometryEngine');
+  const ear=require('../src/geometry/CurvatureEarClip');
+  const ps=engine.createObjectSequenceScene({...m,Height:0,geometryRadius:m.rEarth},0,true,{opticsNeutral:true,physicalSurface:true,curvature:1/m.rEarth}).primitives;
+  const i=ps.findIndex(p=>ear.indexedTriangles(p).triangles.length>0),p=ps[i],tri=ear.indexedTriangles(p).triangles[0];
+  const legacy=j=>({id:'b0:p'+i+':v'+j,bank:0,objectType:6,primitive:i,vertex:j});
+  const a=editor.pair(legacy(tri[0]),[20,30],100,80,2,false),b=editor.pair(legacy(tri[1]),[40,50],100,80,1,true);
+  const rows=[a,b],before=JSON.stringify(rows);
+  const hit={kind:'surface',bank:0,index:i,owner:p.metadata.landmarkOwner,primitive:p.metadata.landmarkPrimitive,indices:tri,weights:[.2,.3,.5]};
+  const material=resolver.fromPick(hit,'new-id');
+  const edited=editor.commitGlobePair(rows,material,[21,31],100,80,3,a.landmark.id,m);
+  assert.equal(edited[0].landmark.id,a.landmark.id);assert.equal(edited[0].kind,'surface');
+  assert.equal(edited[0].included,false);assert.equal(edited[0].weight,3);assert.deepEqual(edited[0].pixel,[21,31]);
+  assert.equal(edited[1],b);assert.equal(JSON.stringify(rows),before);
+  assert.throws(()=>editor.commitGlobePair(rows,b.landmark,[21,31],100,80,3,a.landmark.id,m),/already paired/);
+  const back=editor.commitGlobePair(edited,legacy(tri[2]),[22,32],100,80,3,a.landmark.id,m);
+  assert.equal(back[0].landmark.id,a.landmark.id);assert.equal(back[0].kind,'vertex');assert.ok(back[0].landmark.anchor);
+  assert.deepEqual(editor.observationRows(back,100,80,true,m),back);
+  assert.throws(()=>editor.commitGlobePair(rows,material,[100,31],100,80,3,a.landmark.id,m),/Invalid/);
+  assert.throws(()=>editor.commitGlobePair(rows,material,[21,31],100,80,3,'missing',m),/no longer exists/);
+});

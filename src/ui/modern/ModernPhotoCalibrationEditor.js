@@ -53,6 +53,22 @@
     if(replaceId!==null&&!rows.some(r=>r.landmark.id===replaceId))throw Error('Correspondence no longer exists');
     return replaceId===null?[...rows,value]:rows.map(r=>r.landmark.id===replaceId?value:r);
   }
+  // Preserve observation identity when changing the material point.
+  function commitGlobePair(rows,landmark,pixel,width,height,weight,editing,model){
+    const old=editing===null?null:rows.find(r=>r.landmark.id===editing);
+    if(editing!==null&&!old)throw Error('Correspondence no longer exists');
+    const resolver=materialResolver.create(model);
+    let l=landmark;
+    if(old&&l.id!==old.landmark.id){
+      const m=isMaterial(l)?materialAnchor.normalizeLandmark(l.anchor.kind,l):resolver.upgradeLegacy(l);
+      l={id:old.landmark.id,anchor:m.anchor};
+    }
+    const value=pair(l,pixel,width,height,weight,old?.included!==false);
+    const key=materialAnchor.anchorKey(resolver.resolveLandmark(value.kind,value.landmark).anchor);
+    if(rows.some(r=>r.landmark.id!==editing&&materialAnchor.anchorKey(resolver.resolveLandmark(r.kind,r.landmark).anchor)===key))
+      throw Error('This material point is already paired; edit its existing row');
+    return upsert(rows,value,editing);
+  }
   const fitRows=rows=>rows.filter(r=>r.included!==false);
   const pairLabel=(r,i)=>String(i+1)+(r.included===false?'V':'');
   function residualStatistics(rows){
@@ -415,8 +431,10 @@
     inlineHost.querySelector('[data-viewer-selection-status]').after(inlineCancel);
     inlineCancel.onclick=cancelPairDraft;
     const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(pending&&pendingModel&&!viewBest)savePair();};
+    const inlineEdit=doc.createElement('button');inlineEdit.type='button';inlineEdit.textContent='Edit pair';inlineEdit.disabled=true;inlineEdit.onclick=()=>beginPairEdit(activePair);
+    const inlineDraftStatus=doc.createElement('p');inlineDraftStatus.setAttribute('role','status');
     const pairActions=doc.createElement('div');pairActions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
-    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineCancel,inlineDelete);
+    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineEdit,inlineCancel,inlineDelete);pairActions.after(inlineDraftStatus);
     const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
@@ -559,7 +577,7 @@
         if(d.selected)selectLandmark(d.selected);
         editing=rows.some(r=>r.landmark.id===d.editing)?d.editing:null;
         const editRow=rows.find(r=>r.landmark.id===editing);
-        pendingModel=isMaterial(editRow?.landmark)?editRow.landmark:null;
+        pendingModel=editRow&&(globeRoute()||isMaterial(editRow.landmark))?editRow.landmark:null;
         if(record&&d.pendingModel)try{if(isMaterial(d.pendingModel))materialResolver.create(scene.model).resolveLandmark(d.pendingModel.anchor.kind,d.pendingModel);else validateLegacyTopology([{landmark:d.pendingModel}],scene);pendingModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
         activePair=rows.some(r=>r.landmark.id===d.activePair)?d.activePair:null;
         weight.value=d.weight||'1';setPixel(record&&Array.isArray(d.pending)&&d.pending.length===2&&imagePoint({scale:1,x:0,y:0},...d.pending,record.original.width,record.original.height)?d.pending:null);
@@ -663,7 +681,7 @@
       }));
     }
     function materialEdit(){const r=rows.find(r=>r.landmark.id===editing);return isMaterial(r?.landmark)?r.landmark:null;}
-    function selected(){return materialEdit()||vertices[Number(vertex.value)]||null;}
+    function selected(){return pendingModel||materialEdit()||vertices[Number(vertex.value)]||null;}
     function photoDraw(){
       ctx.clearRect(0,0,photo.width,photo.height);
       if(!image||!view)return;
@@ -730,12 +748,7 @@
         const role=doc.createElement('td');role.append(inclusionControl(r,i));tr.append(role);
         const actions=doc.createElement('td');
         const edit=doc.createElement('button');edit.type='button';edit.textContent='Edit';
-        edit.onclick=()=>{
-          resetPending();activePair=r.landmark.id;editing=r.landmark.id;
-          if(isMaterial(r.landmark))pendingModel=r.landmark;else selectLandmark(r.landmark);
-          weight.value=String(r.weight);
-          setPixel(r.pixel.slice());refreshRows();photoDraw();meshDraw();add.textContent='Update pair';
-        };
+        edit.onclick=()=>beginPairEdit(r.landmark.id);
         const del=doc.createElement('button');del.type='button';del.textContent='Delete';
         del.onclick=()=>deletePair(r.landmark.id);
         actions.append(edit,del);tr.append(actions);list.append(tr);
@@ -746,19 +759,32 @@
       $('ModernCalibrationDeleteSelected').disabled=!activePair;
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
+    function beginPairEdit(id){
+      const r=rows.find(r=>r.landmark.id===id);
+      if(!r||!record)return false;
+      if(editing===id)return true;
+      if((pending||pendingModel||editing)&&!env.confirm('Discard the current draft and edit this pair?'))return false;
+      inlineViewer.clearLocalPoint();resetPending();
+      activePair=id;editing=id;
+      if(!isMaterial(r.landmark))selectLandmark(r.landmark);
+      if(globeRoute()||isMaterial(r.landmark))pendingModel=r.landmark;
+      weight.value=String(r.weight);setPixel(r.pixel.slice());
+      add.textContent='Update pair';refreshRows();photoDraw();meshDraw();persist();return true;
+    }
     function updateHint(){
       const text=globeRoute()&&!legacyShown&&!editing?(pending&&pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':pending?'Photo point selected · confirm a model point or use Fast Vertex.':pendingModel?'Model point selected · click the matching photo point.':activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
         'Click either image, then its matching point in the other.';
+      inlineDraftStatus.textContent=editing?'Editing pair #'+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · select a new photo point or confirm a new model point, then Update pair. Original remains saved.':text;
       $('ModernCalibrationActionHint').textContent=text;
       pickStatus.textContent=text;
     }
     function resetPending(){inlineViewer.discardPairDraft();
       const parked=inlineSessions.initial?.session;if(parked?.stagedMode==='fast-vertex'||parked?.stagedMode===undefined&&parked?.pickMode==='fast-vertex'){Object.assign(parked,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});if(parked.confirmed&&parked.pickMode==='fast-vertex')parked.confirmed=null;}
       editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
-    function cancelPairDraft(){inlineViewer.clearLocalPoint();activePair=null;resetPending();refreshRows();photoDraw();meshDraw();persist();}
+    function cancelPairDraft(){inlineViewer.clearLocalPoint();activePair=editing||null;resetPending();refreshRows();photoDraw();meshDraw();persist();}
     function selectPair(id){
       if(!rows.some(r=>r.landmark.id===id))return;
       activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
@@ -1092,6 +1118,8 @@
         modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
     }
     function meshDraw(){
+      inlineEdit.disabled=!activePair||!record||!!editing||viewBest;
+      inlineCancel.textContent=editing?'Cancel edit':'Cancel draft pair';
       inlineCancel.disabled=!(pending||pendingModel||editing);
       inlineCreate.disabled=!(record&&pending&&pendingModel&&!viewBest);
       inlineCreate.textContent=editing?'Update pair':'Create pair';
@@ -1179,24 +1207,22 @@
     }
     function savePair(){
       try{
-        const landmark=materialEdit()||pendingModel||selected();
+        const landmark=pendingModel||materialEdit()||selected();
         if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
-        if(globeRoute()){
-          const resolver=materialResolver.create(scene.model),key=materialAnchor.anchorKey(resolver.resolveLandmark(isMaterial(landmark)?landmark.anchor.kind:'vertex',landmark).anchor);
-          if(rows.some(r=>r.landmark.id!==editing&&materialAnchor.anchorKey(resolver.resolveLandmark(r.kind,r.landmark).anchor)===key))throw Error('This material point is already paired; edit its existing row');
-        }
-        const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
-        rememberUndo();rows=next;activePair=null;
-        inlineViewer.clearLocalPoint();resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();return true;
+        const wasEditing=editing,width=record.original.width,height=record.original.height;
+        const next=globeRoute()?commitGlobePair(rows,landmark,pending,width,height,Number(weight.value),editing,scene.model):
+          upsert(rows,pair(landmark,pending,width,height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
+        rememberUndo();rows=next;activePair=wasEditing?(globeRoute()?wasEditing:landmark.id):null;
+        inlineViewer.clearLocalPoint();resetPending();refreshRows();photoDraw();meshDraw();message(wasEditing?'Correspondence updated.':'Correspondence saved.');persist();return true;
       }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;return false;}
     }
     function confirmInlineMaterial(hit){
-      if(!record||!globeRoute()||legacyShown||viewBest||editing){message('Load a photo and finish any existing edit first.');return false;}
+      if(!record||!globeRoute()||legacyShown||viewBest){message('Load a photo and return to Initial Camera or Free View.');return false;}
       try{
         const resolver=materialResolver.create(scene.model);
         const id=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-        const landmark=resolver.fromPick(hit,'material-'+id);
-        pendingModel=landmark;activePair=null;
+        const landmark=resolver.fromPick(hit,editing||'material-'+id);
+        pendingModel=landmark;activePair=editing||null;
         refreshRows();updateHint();meshDraw();persist();return true;
       }catch(error){message(error.message);return false;}
     }
@@ -1204,20 +1230,22 @@
       if(!globeRoute()||legacyShown||viewBest||!scene)return false;
       const p=scene.banks[hit.bank]?.[hit.index];
       if(hit.kind!=='vertex'||!Number.isInteger(hit.vertex)||!p?.points[hit.vertex])return false;
-      return chooseModel({landmark:{id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex}})?(pendingModel?'pending':'saved'):false;
+      const landmark={id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex};
+      if(editing){try{pendingModel={id:editing,anchor:materialResolver.create(scene.model).upgradeLegacy(landmark).anchor};activePair=editing;refreshRows();updateHint();meshDraw();persist();return 'pending';}catch(error){message(error.message);return false;}}
+      return chooseModel({landmark})?(pendingModel?'pending':'saved'):false;
     }
     function chooseModel(item){
       if(!record){message('Load a photograph first.');return false;}
       if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
       if(!selectLandmark(item.landmark))return false;
       clearAmbiguity();pendingModel=item.landmark;activePair=null;
-      if(pending){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
+      if(pending&&!(editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
       refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
       if(!p)return;
-      activePair=null;setPixel(p);refreshRows();
-      if(pendingModel&&!isMaterial(pendingModel)){if(!savePair()){meshDraw();persist();}}
+      activePair=editing||null;setPixel(p);refreshRows();
+      if(!(editing&&globeRoute())&&pendingModel&&!isMaterial(pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
     }
     function pickAt(p){
@@ -1317,7 +1345,7 @@
         if(action.moved){
           const row=rows.find(r=>r.landmark.id===action.marker);
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
-          if(row&&pixel)replacePair(action.marker,row.landmark,pixel);
+          if(row&&pixel){if(editing&&globeRoute()){if(editing===action.marker){setPixel(pixel);meshDraw();persist();}else message('Finish the current edit before moving another pair.');}else replacePair(action.marker,row.landmark,pixel);}
         }else selectPair(action.marker);
       }else if(!action.moved)choosePhoto(imagePoint(view,...p,record.original.width,record.original.height));
       photoDraw();
@@ -1664,5 +1692,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

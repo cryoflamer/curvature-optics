@@ -1,3 +1,17 @@
+## 8F.5d — Integrated correspondence editing
+
+The integrated pair action row includes Edit pair. Existing observations are
+copied into an explicit editable draft, including their weight and photo
+pixel. Confirming a new Vertex/Edge/Surface or Fast Vertex replaces only
+the draft material point; Update pair commits through the existing Undo and
+fit invalidation path, preserving observation ID, role and row order.
+Changing a legacy vertex's identity upgrades it to a material anchor.
+Photo dragging outside explicit edit retains the existing immediate Undoable
+edit; inside an edit it updates only that draft. Cancel edit leaves the
+committed observation unchanged. Draft restoration uses the existing storage.
+8F.5c was manually validated by the user. Next: Functional Parity before
+legacy Globe cleanup. Browser and full CI verification remain pending.
+
 ## 8F.5b.4a.4 — Draft lifecycle
 
 The editor's pending model vertex is the sole source of truth for a
