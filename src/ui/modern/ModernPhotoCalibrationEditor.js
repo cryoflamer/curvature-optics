@@ -744,6 +744,11 @@
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
       finally{restoring=false;if(scene&&!physicalSessionId)newPhysicalSession();syncFitControls();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
     }
+    function populate(select,options){
+      select.replaceChildren(...options.map(([value,label])=>{
+        const o=doc.createElement('option');o.value=String(value);o.textContent=label;return o;
+      }));
+    }
     async function refreshSources(){
       const token=++catalogToken;
       sourceRefresh.disabled=true;sourceStatus.textContent='Loading available photographs…';

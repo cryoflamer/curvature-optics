@@ -1,3 +1,20 @@
+## 8F.6 closure — Browser-confirmed physical calibration
+
+On 2026-11-20 the user confirmed a fresh calibration run after 8F.6l,
+not merely import of a previously saved result: Soundly Globe/vacuum,
+14/14 Fit projections visible, RMS 6.82 px, largest residual #2 15.35 px.
+No held-out Validation points. Result and residual table were verified
+visually. This confirms the principal workflow, not formal convergence
+or complete acceptance of every editor gesture.
+
+CI on 84f0ce6: 2125 Node passes / 44 failures, two Chromium failures,
+and stale static isolation inventory (protected Legacy preservation passed).
+Closure restores the shared photo-select populate helper accidentally
+removed with legacy controls, corrects browser assertions for draft state,
+reviews the gesture helper inventory, and narrows the Compare readiness guard.
+Full CI must pass before declaring a stable baseline; remaining failures
+are not waived. No physics changes were made.
+
 ## 8F.6l — Physical-only editor and legacy removal
 
 The user explicitly retired both the old modeless Free View / Magnifier and

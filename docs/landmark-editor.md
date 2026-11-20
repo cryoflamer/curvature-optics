@@ -20,8 +20,10 @@ Result image and Scene-derived physical framing. The old optical UI crop
 and window geometry APIs are removed. Pure geometry/projection helpers
 covered by mathematical regressions remain independently testable.
 
-Verification: targeted adapter execution of 69 JS regression checks passed;
-real Chromium and the full Node/CI suite remain pending. The browser smoke
+Verification: targeted adapter execution of 69 JS regression checks passed.
+On 2026-11-20 the user reran the Soundly Globe/vacuum fit in the browser:
+14/14 visible Fit points, RMS 6.82 px, largest residual #2 15.35 px.
+The previous full CI reported failures; closure fixes are not yet CI-qualified. The browser smoke
 suite now exercises direct physical picking, pair lifecycle, standalone
 workspace switching, saved draft restore, the 14-point Soundly fixture,
 Worker fitting and Globe JSON interchange instead of the deleted UI.
