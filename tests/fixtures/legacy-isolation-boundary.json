@@ -508,7 +508,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 228,
+  "sourceJsCount": 229,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -3084,6 +3084,7 @@
       "commonJsSourceCallers": [
         "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationProjectMigration.js",
+        "src/ui/modern/ModernCalibrationProjectPersistence.js",
         "src/ui/modern/ModernCalibrationProjectStore.js"
       ],
       "commonJsTestCallers": [
@@ -3097,7 +3098,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/ui/modern/ModernCalibrationProjectMigration.js"
+        "src/ui/modern/ModernCalibrationProjectMigration.js",
+        "src/ui/modern/ModernCalibrationProjectPersistence.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernCalibrationProjectCheckpoint.test.js"
@@ -3112,12 +3114,21 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernCalibrationProjectPersistence.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationProjects.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernCalibrationProjectStore.js": {
       "directHtmlLoads": [
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/ui/modern/ModernCalibrationProjectMigration.js"
+        "src/ui/modern/ModernCalibrationProjectMigration.js",
+        "src/ui/modern/ModernCalibrationProjectPersistence.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernCalibrationProjects.test.js"

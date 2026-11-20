@@ -497,3 +497,188 @@ test('orphaned project summary after migration is not mistaken for deliberate de
   assert.deepEqual(await store.legacy(db),raw);
   assert.equal((await store.migrationMarker(db)).projectId,adopted.project.id);
 });
+
+const coordinator=require('../src/ui/modern/ModernCalibrationProjectPersistence');
+function persistenceSession(db,adapter=null){
+  const env=migrationEnv(db);
+  const images=adapter||originalCatalog(env);
+  return {session:coordinator.create(env,{adapter:images,decoder:importer,
+    clock:()=>1200}),env,adapter:images};
+}
+
+test('project persistence captures snapshot immediately and acknowledges only after durable commit',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session,adapter}=persistenceSession(db);
+  session.bind(start);
+  const draft=legacyDraft(),inline=inlineState(draft);
+  session.mark(draft,inline,{title:'Captured Soundly'});
+  assert.equal(session.state().unsaved,true);
+  const pending=session.save();
+  assert.equal(session.state().pending,1);
+  assert.throws(()=>session.bind(project(B)),/Unsaved or pending/);
+  draft.view.x=999;inline.sessions.initial.session.zoom=99;
+  assert.equal(session.state().revision,1);
+  const saved=await pending;
+  assert.equal(saved.status,'updated');
+  assert.equal(saved.project.id,A);
+  assert.equal(saved.project.revision,2);
+  assert.equal(session.state().unsaved,false);
+  assert.equal(session.state().pending,0);
+  assert.equal(session.state().lastAck.revision,2);
+  const row=await store.get(db,A);
+  assert.equal(row.title,'Captured Soundly');
+  assert.equal(row.checkpoint.payload.draft.view.x,8);
+  assert.equal(row.checkpoint.payload.inline.sessions.initial.session.zoom,1.2);
+  assert.equal(row.checkpoint.payload.draft.record,null);
+  assert.equal(JSON.stringify(row).includes('data:image'),false);
+  assert.equal(adapter.originals.size,1);
+  assert.equal(session.recovery(),null);
+});
+
+test('project coordinator serializes writes, deduplicates the same save and keeps newest view',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session}=persistenceSession(db);
+  session.bind(start);
+  const first=legacyDraft(),second=legacyDraft();
+  first.view.x=15;first.resultViews.initial.x=25;
+  second.view.x=35;second.resultViews.initial.x=45;
+  session.mark(first);
+  const pending=session.save();
+  assert.strictEqual(session.save(),pending);
+  session.mark(second);
+  const latest=session.save();
+  assert.equal(session.state().pending,2);
+  const [a,b]=await Promise.all([pending,latest]);
+  assert.equal(a.project.revision,2);
+  assert.equal(b.project.revision,3);
+  assert.equal(a.project.id,A);
+  assert.equal(b.project.id,A);
+  assert.equal((await store.get(db,A)).checkpoint.payload.draft.view.x,35);
+  assert.equal((await store.get(db,A)).checkpoint.payload.draft.resultViews.initial.x,45);
+  assert.equal(session.state().revision,3);
+  assert.equal(session.state().unsaved,false);
+});
+
+test('two calibration tabs preserve both complete candidates by atomic conflict fork',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const env=migrationEnv(db),adapter=originalCatalog(env);
+  const first=coordinator.create(env,{adapter,decoder:importer,clock:()=>1300});
+  const second=coordinator.create(env,{adapter,decoder:importer,clock:()=>1301});
+  first.bind(start);second.bind(start);
+  const a=legacyDraft(),b=legacyDraft();
+  a.view.x=17;b.view.x=77;
+  first.mark(a);
+  second.mark(b);
+  const result=await Promise.all([first.save(),second.save()]);
+  assert.deepEqual(result.map(x=>x.status).sort(),['forked','updated']);
+  const main=await store.get(db,A);
+  const fork=result.find(x=>x.status==='forked').project;
+  assert.equal(main.revision,2);
+  assert.equal(fork.revision,1);
+  assert.equal(fork.forkOf,A);
+  assert.notEqual(fork.id,A);
+  assert.notEqual(main.checkpoint.payload.draft.view.x,fork.checkpoint.payload.draft.view.x);
+  assert.equal((await store.list(db)).length,2);
+  assert.equal([first.state().projectId,second.state().projectId].includes(fork.id),true);
+  assert.equal(adapter.originals.size,1);
+});
+
+test('separate projects stay isolated; binding with unsaved work is refused',async()=>{
+  const db=memoryIndexedDB(),a=project(A),b=project(B);
+  await store.create(db,a);await store.create(db,b);
+  const {session}=persistenceSession(db);
+  const epochA=session.bind(a).generation;
+  const source=legacyDraft();source.view.x=14;
+  session.mark(source);
+  assert.throws(()=>session.bind(b),/Unsaved or pending/);
+  await session.save();
+  const epochB=session.bind(b).generation;
+  assert.ok(epochB>epochA);
+  const other=legacyDraft();other.view.x=91;
+  session.mark(other);await session.save();
+  assert.equal(session.state().projectId,B);
+  assert.equal((await store.get(db,A)).checkpoint.payload.draft.view.x,14);
+  assert.equal((await store.get(db,B)).checkpoint.payload.draft.view.x,91);
+  assert.equal((await store.get(db,A)).revision,2);
+  assert.equal((await store.get(db,B)).revision,2);
+});
+
+test('failed project write exposes explicit unsaved recovery and retries exact snapshot',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session,adapter}=persistenceSession(db);
+  session.bind(start);
+  const draft=legacyDraft();draft.view.x=83;
+  session.mark(draft,inlineState(draft));
+  db.failMutation(store.SUMMARIES,'put');
+  await assert.rejects(session.save(),/Injected transaction failure/);
+  assert.equal(session.state().unsaved,true);
+  assert.equal(session.state().pending,0);
+  assert.match(session.state().error,/Injected transaction failure/);
+  const recovered=JSON.parse(session.recovery());
+  assert.equal(recovered.projectId,A);
+  assert.equal(recovered.draft.view.x,83);
+  assert.match(recovered.draft.record.original.dataUrl,/^data:image\/png;base64,/);
+  assert.equal((await store.get(db,A)).revision,1);
+  assert.equal(adapter.originals.size,1);
+  const repaired=await session.retry();
+  assert.equal(repaired.status,'updated');
+  assert.equal(session.state().unsaved,false);
+  assert.equal(session.recovery(),null);
+  assert.equal((await store.get(db,A)).checkpoint.payload.draft.view.x,83);
+});
+
+test('a concurrent delete forks current work, never recreating the deleted project ID',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session}=persistenceSession(db);
+  session.bind(start);
+  const draft=legacyDraft();draft.view.x=26;
+  session.mark(draft);
+  await store.remove(db,A,1);
+  const response=await session.save();
+  assert.equal(response.status,'forked');
+  assert.notEqual(response.project.id,A);
+  assert.equal(response.project.forkOf,A);
+  assert.equal((await store.get(db,A)),null);
+  assert.equal((await store.get(db,response.project.id)).checkpoint.payload.draft.view.x,26);
+  assert.equal(session.state().projectId,response.project.id);
+});
+
+test('no-photo coordinator saves valid full scene without writing legacy draft',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),start=project(A);
+  await store.create(db,start);
+  const {session,adapter}=persistenceSession(db);
+  session.bind(start);
+  const draft=legacyDraft();
+  draft.record=null;draft.activeSource=null;draft.rows=[];
+  draft.pending=null;draft.pendingModel=null;draft.activePair=null;draft.editing=null;
+  draft.selectedOwner=null;
+  session.mark(draft);
+  await session.save();
+  const saved=await store.get(db,A);
+  assert.equal(saved.photo,null);
+  assert.equal(saved.checkpoint.payload.draft.record,null);
+  assert.equal(saved.overview.rowCount,0);
+  assert.equal(adapter.originals.size,0);
+  assert.deepEqual(await store.legacy(db),raw);
+});
+
+test('discard is explicit and never allowed during a pending calibration write',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session}=persistenceSession(db);
+  session.bind(start);
+  session.mark(legacyDraft());
+  assert.equal(session.state().unsaved,true);
+  const pending=session.save();
+  assert.throws(()=>session.discard(),/pending save/);
+  await pending;
+  session.mark(legacyDraft());
+  assert.equal(session.discard().unsaved,false);
+  assert.equal(session.recovery(),null);
+  assert.equal(session.state().revision,2);
+});

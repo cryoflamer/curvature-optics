@@ -1,3 +1,36 @@
+## 8F.7p.4 — Generation-bound Calibration Project persistence coordinator (#14)
+
+Full CI 44832598251 and Fast CI 44832598273 on 2d4fc00 were green.
+Added the headless ModernCalibrationProjectPersistence module, deliberately
+not loaded by the browser entrypoint or changing the legacy single-draft
+editor. A bound, normalized Project is accompanied by a monotonic
+generation and captured immutable working snapshots (complete v2 draft
+including photo view, independent result views, inline initial view,
+pending correspondence, edit history, fit state, title and result links).
+Project saves are serialized; each write stages and verifies the original
+through the existing Reference Image Library before the atomic
+IndexedDB revision-CAS saveOrFork transaction. Only its completed
+transaction produces a durable acknowledgement, and it can rebind to an
+independent conflict fork instead of overwriting another tab's changes.
+A captured project ID and generation prevent accidental write redirection,
+while bind/discard refuse pending or unresolved edits. Failure exposes
+explicit unsaved/error and retry or user-invoked raw recovery export;
+no original bytes or recovery payload are copied to localStorage.
+Testing includes two concurrent tabs, different project IDs, delete
+races, correct per-project views, serialization/deduplication, no-photo
+work and simulated transaction failure/retry. Production optics,
+History, Apply and existing editor autosave are untouched. New source
+module, CommonJS dependencies and test caller are registered in the
+reviewed static Legacy/Modern inventory; the Modern helper load gate
+still forbids premature browser activation.
+
+This is a backend checkpoint, not a new UI. Stage 8F.7p.5 must safely
+connect activation/startup; 8F.7p.6 is the first project-list UI,
+8F.7p.7 adds New/Rename/Duplicate/Delete; full browser qualification
+follows in 8F.7p.9. Targeted and Fast CI are the routine checks;
+full CI remains mandatory at milestone qualification points.
+Direct commit to built-in-demo, no PR. Reasoning recommendation: High / 3.
+
 ## 8F.7p.3d — Retained marker after deletion (#14)
 
 CI 44829091348 (e466358b): architecture green; Node 2258 passed,
