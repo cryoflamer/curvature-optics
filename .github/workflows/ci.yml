@@ -1,69 +1,73 @@
-name: Curvature verification
+name: Curvature fast verification
 
 on:
   push:
-  pull_request:
+    branches: [built-in-demo]
   workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Run fast checks or the full acceptance suite'
+        type: choice
+        required: true
+        default: full
+        options: [fast, full]
 
 permissions:
   contents: read
 
+# New pushes replace only obsolete fast runs; manual full runs are not cancelled.
 concurrency:
-  group: curvature-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: curvature-entry-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
-  node-regression:
-    name: Node regressions
+  fast-node:
+    if: ${{ github.event_name == 'push' || inputs.scope == 'fast' }}
+    name: Fast Node contracts
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Run complete Node regression suite
-        run: node --test --test-concurrency=2 tests/*.test.js
-
-  refactor-closure:
-    name: Architecture and Legacy preservation
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - name: Verify refactor closure
-        run: node tools/check-refactor-closure.js
-      - name: Validate protected Legacy browser references
-        run: python tools/validate-legacy-visual-reference.py
-
-  browser-smoke:
-    name: Chromium UI smoke tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - name: Install Playwright
+      - name: Verify persistence, calibration, History and Modern contracts
         run: |
-          python -m pip install playwright==1.57.0
-          python -m playwright install --with-deps chromium
-      - name: Test real DOM, storage and keyboard interaction
-        run: python -m unittest discover -s tests/browser -p 'test_*.py' -v
-      - name: Upload browser diagnostics on failure
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+          node --test --test-concurrency=2 \
+            tests/ModernCalibrationProjects.test.js \
+            tests/ModernCalibrationProjectCheckpoint.test.js \
+            tests/ModernCalibrationResult.test.js \
+            tests/ModernPhotoCalibrationEditor.test.js \
+            tests/ModernReferenceImage.test.js \
+            tests/ModernReferenceImageLibrary.test.js \
+            tests/ModernExperimentHistory.test.js \
+            tests/ModernHistoryPortability.test.js \
+            tests/ModernSessionAutosave.test.js \
+            tests/ModernAnimationProjectPersistence.test.js \
+            tests/ModernAnimationWorkspacePersistence.test.js \
+            tests/ModernAnimationWorkspaceRecovery.test.js \
+            tests/ModernUiBootstrap.test.js \
+            tests/ModernPrimaryEntry.test.js
+
+  fast-architecture:
+    if: ${{ github.event_name == 'push' || inputs.scope == 'fast' }}
+    name: Architecture and protected Legacy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
         with:
-          name: chromium-smoke-failure-${{ github.run_attempt }}
-          path: browser-artifacts/
-          if-no-files-found: error
-          retention-days: 7
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify boundaries, Legacy, protected PNG and representative regressions
+        run: node tools/check-refactor-closure.js
+
+  full:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scope != 'fast' }}
+    name: Full acceptance
+    uses: ./.github/workflows/full-verification.yml

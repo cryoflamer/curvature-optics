@@ -17,3 +17,9 @@ Zero-clearance horizon regression: `node tools/check-zero-clearance.js`
 (see `tools/ZERO_CLEARANCE.md`). The optical diagnostic now uses exact
 zero ground-clearance allowance by default; override explicitly only for
 controlled diagnostics.
+
+## Development and CI verification
+
+See [CI verification policy](../docs/ci-workflow.md) for targeted commands,
+fast checks on `built-in-demo` pushes, and full milestone verification.
+The expensive numerical and browser suites still run in Full CI.

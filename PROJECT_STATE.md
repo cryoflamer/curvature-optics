@@ -1,3 +1,27 @@
+## CI workflow split — targeted development, fast push and full milestone verification
+
+Previous known-good full run: 44829619433 at c62cc737, Node 2260 passed /
+1 skipped, Chromium 51 passed, Architecture/Legacy passed. Audit found
+the full run takes about 4m42s (Node about 157s, browser tests about 214s
+plus setup); one 22 km Gaussian-noise calibration test alone takes about 107s.
+New workflow: ci.yml pushes to built-in-demo run fast Modern/Calibration/History
+regressions plus the existing closure and protected Legacy verification.
+Full suite (all Node, full closure, all browser cases) lives in reusable
+full-verification.yml, callable by manual scope=full from ci.yml. Browser
+tests are divided deterministically into two isolated shards with timings
+and per-shard failure artifacts; Playwright downloads are cached.
+Edits to the full workflow or shard runner also trigger one full qualification.
+Full verification is still a milestone requirement: fast green never means
+all scientific/visual suites were exercised. New regular development
+commits do not need to wait for full CI. Detailed policy: docs/ci-workflow.md.
+
+Important: main remains GitHub's default branch; the declared nightly schedule
+cannot activate until the full workflow file is also installed on main.
+No main update or PR is authorized by this commit. No physics, editor,
+state or scientific test content was modified.
+Direct push to built-in-demo; reasoning level before commit: High / 3.
+CI results for this workflow change must be verified.
+
 ## 8F.7p.3d — Retained marker after deletion (#14)
 
 CI 44829091348 (e466358b): architecture green; Node 2258 passed,

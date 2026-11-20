@@ -1,0 +1,92 @@
+name: Curvature full verification
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  # GitHub schedules only workflows on the DEFAULT branch (currently main).
+  # This becomes active after this workflow is installed on main too.
+  schedule:
+    - cron: '23 2 * * *'
+  # Qualify changes to the full runner without re-running full tests on every push.
+  push:
+    branches: [built-in-demo]
+    paths:
+      - '.github/workflows/full-verification.yml'
+      - 'tools/run-browser-smoke.py'
+
+permissions:
+  contents: read
+
+# Never cancel a full milestone or scheduled run when development pushes arrive.
+concurrency:
+  group: curvature-full-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  node-regression:
+    name: Full Node regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Run every Node regression, including expensive optical qualifications
+        run: node --test --test-concurrency=2 tests/*.test.js
+
+  refactor-closure:
+    name: Complete Architecture and Legacy preservation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify refactor closure (also checks protected Legacy PNG)
+        run: node tools/check-refactor-closure.js
+
+  browser-smoke:
+    name: Chromium UI smoke (shard ${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Cache Playwright Chromium downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.57.0-ubuntu-24.04
+      - name: Install Playwright and browser dependencies
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Run disjoint Chromium UI tests and report slow cases
+        run: python tools/run-browser-smoke.py --shards 2 --shard ${{ matrix.shard }}
+      - name: Upload per-shard browser diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: chromium-smoke-shard-${{ matrix.shard }}-failure-${{ github.run_attempt }}
+          path: browser-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
