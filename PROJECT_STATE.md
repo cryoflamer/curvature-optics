@@ -1,3 +1,20 @@
+## 8F.7b.1b — Immutable Calibration Result (#8)
+
+Previous 8F.7b.1a.1 CI 44746716072 passed all three jobs. Added pure
+ModernCalibrationResult: create from verified photo and portable
+calibration, validate content-bound versioned digest, immutable owned
+payload and compact historical summary. Existing editor validation reused;
+legacy authored topology and camera domains checked; historical metrics
+checked against residuals. Metadata and project/alias provenance excluded
+from scientific identity. No image bytes in result; no storage/UI change.
+Fit validity and historical method/status are not a convergence or
+renderer-parity claim. Legacy imports have no way to prove that an old fit
+was performed on the supplied original; current photo identity is verified.
+11 focused headless assertions passed with real Soundly topology and
+result SHA-256, injected image digest/decoder. Six Node tests added.
+Next #8 8F.7b.1c — Calibration Result Persistence (high reasoning effort).
+Full CI pending.
+
 ## 8F.7b.1a.1 — CI correction (#8)
 
 CI 44746304141 on 155873c failed architecture inventory and Chromium

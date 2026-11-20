@@ -26,6 +26,35 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1b — Immutable result contract
+
+`CurvatureModernCalibrationResult.create(portable, env, {projectId})` verifies
+the original with the existing importer, reuses the portable calibration
+validator, and returns a deeply frozen owned record. Format
+`curvature-calibration-result` v1, ID `calibration-result-v1-<sha256>`.
+The scientific payload contains photo identity, captured physical model,
+optional captured display aspect and temperature profile, committed
+observations, method/free fields and normalized valid candidate. It retains
+initial and best seven fields, Eye-Lvl, original-pixel predictions, historical
+metrics and explicit candidate/terminal status; no image data or UI state.
+Legacy topology and camera-domain validation are reused. RMS, weighted RMS
+and half-weighted-squared cost are checked against original-pixel residuals.
+A running fit must stop first; a valid stopped/underdetermined/stalled result
+is not a convergence guarantee. Historical source metadata and project/alias
+provenance are frozen outside the scientific digest and must not overwrite an
+existing archived attribution on reuse. A later storage layer checks exact
+payload content for same-ID collisions. No validation-error suppression.
+
+`validate(record)` verifies canonical payload and digest without image bytes;
+asset resolution must independently verify identity before use. The digest
+uses sorted-key JSON (array order retained, non-ASCII UTF-16 units escaped),
+prefixed by the versioned ASCII domain separator, then existing SHA-256.
+`sameContent` compares canonical scientific payload as well as identity;
+`summary` gives historical method, status, counts and original-pixel RMS.
+Legacy results may lack material binding/terminal status; never invent
+convergence or assert that the legacy fit cryptographically bound the
+specific photo. No persistence, Apply, History or overlay yet.
+
 ## 8F.7a.2 — Photo-centric research workflow audit
 
 Baseline 11c416d (8F.7a audit). User-approved refinements: preserve normal

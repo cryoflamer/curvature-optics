@@ -106,16 +106,28 @@
     var result={};keys.forEach(function(key){if(own(value,key))result[key]=fact(value[key],key);});
     return Object.freeze(result);
   }
-  function validate(value){
-    fields(value,['version','id','original','title'],['thumbnail','description','author','sourceUrl','license','cameraMetadata','notes']);
-    if(value.version!==VERSION)throw RangeError('Unsupported reference image version');
-    var result={version:VERSION,id:id(value.id),original:raster(value.original,false),title:text(value.title,200,true)};
-    if(own(value,'thumbnail')&&value.thumbnail!==null)result.thumbnail=raster(value.thumbnail,true);
+  // Metadata-only snapshot for archived calibration provenance. No raster
+  // placeholder or local library lookup is needed when validating an archive.
+  function validateAttribution(value){
+    fields(value,['title'],['description','author','sourceUrl','license','cameraMetadata','notes']);
+    var result={title:text(value.title,200,true)};
     ['description','author','license','notes'].forEach(function(key){
       if(own(value,key))result[key]=text(value[key],key==='author'?300:4000,false);
     });
     if(own(value,'sourceUrl'))result.sourceUrl=sourceUrl(value.sourceUrl);
     if(own(value,'cameraMetadata'))result.cameraMetadata=metadata(value.cameraMetadata);
+    return Object.freeze(result);
+  }
+  function validate(value){
+    fields(value,['version','id','original','title'],['thumbnail','description','author','sourceUrl','license','cameraMetadata','notes']);
+    if(value.version!==VERSION)throw RangeError('Unsupported reference image version');
+    var result={version:VERSION,id:id(value.id),original:raster(value.original,false),title:text(value.title,200,true)};
+    if(own(value,'thumbnail')&&value.thumbnail!==null)result.thumbnail=raster(value.thumbnail,true);
+    var attribution={title:value.title};
+    ['description','author','license','notes','sourceUrl','cameraMetadata'].forEach(function(key){
+      if(own(value,key))attribution[key]=value[key];
+    });
+    Object.assign(result,validateAttribution(attribution));
     return Object.freeze(result);
   }
   // An asset catalog owns one record per ID; never silently resolve collisions.
@@ -149,6 +161,6 @@
     if(digest.length!==32)throw Error('Invalid SHA-256 digest');
     return Array.from(digest,function(b){return b.toString(16).padStart(2,'0');}).join('');
   }
-  return Object.freeze({VERSION:VERSION,validateIdentity:validateIdentity,originalDigest:originalDigest,MAX_ORIGINAL_BYTES:MAX_ORIGINAL_BYTES,
+  return Object.freeze({VERSION:VERSION,validateIdentity:validateIdentity,validateAttribution:validateAttribution,originalDigest:originalDigest,MAX_ORIGINAL_BYTES:MAX_ORIGINAL_BYTES,
     MAX_THUMBNAIL_BYTES:MAX_THUMBNAIL_BYTES,validate:validate,validateCollection:validateCollection,validId:id});
 }));
