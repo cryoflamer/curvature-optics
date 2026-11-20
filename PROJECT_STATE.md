@@ -1,3 +1,23 @@
+## 8F.7p.3c — Photo-free readback comparison corrected (#14)
+
+CI 44828340372 (ed630456): architecture green; Node 2253 passed,
+5 failed, 1 skipped. The remaining five migration cases all passed
+asset verification and atomic persistence, then falsely rejected
+readback: JSON.stringify() compared a legacy original record's raw
+property order with ReferenceImage.validate()'s normalized property order.
+Migration now reconstructs the full photo-free validated checkpoint
+after verified original hydration and compares it structurally with
+the pre-commit captured checkpoint. This checks every stored field,
+ordered arrays and inline view without treating JSON key order or a
+deduplicated Library thumbnail as semantic data loss. Original raster
+integrity remains enforced by existing SHA-256, dimensions and decode
+verification; legacy raw draft remains untouched. Added a no-photo
+migration round-trip regression. No changes to optics, History or
+the IndexedDB transaction model.
+
+Direct commit to built-in-demo, no PR. Reasoning level: High / 3.
+The new full CI run remains pending; do not start 8F.7p.4 until green.
+
 ## 8F.7p.3b — Direct-branch CI qualification correction (#14)
 
 Built-in-demo CI 44827295086 (0d1dcff): Chromium passed; Node 2249

@@ -383,6 +383,20 @@ test('migration adopts a verified V2 original and matching inline exactly once, 
   assert.equal((await store.list(db)).length,1);
 });
 
+test('migration accepts validated no-photo checkpoints without an original or image rows',async()=>{
+  const raw=legacyDraft();
+  raw.record=null;raw.activeSource=null;raw.rows=[];
+  raw.pending=null;raw.pendingModel=null;raw.activePair=null;raw.editing=null;
+  raw.selectedOwner=null;
+  const db=memoryIndexedDB(raw),env=migrationEnv(db);
+  const saved=await migration.migrate(env,{now:350});
+  assert.equal(saved.status,'migrated');
+  assert.equal(saved.project.photo,null);
+  assert.equal(saved.project.overview.rowCount,0);
+  assert.equal(saved.project.checkpoint.payload.draft.record,null);
+  assert.deepEqual(await store.legacy(db),raw);
+});
+
 test('legacy V1 fit-role upgrade is explicit and retains original raw bytes',async()=>{
   const raw=legacyDraft(1),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
   const upgraded=migration.normalizeLegacy(raw);

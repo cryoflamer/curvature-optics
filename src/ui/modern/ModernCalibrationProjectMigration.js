@@ -67,6 +67,18 @@
     checkpoint.validateDraft(draft,saved);
     return clone(saved);
   }
+  // Compare JSON values structurally: IndexedDB/validation can change
+  // object property order, but array order, all fields and bytes must match.
+  function sameJson(a,b){
+    if(a===b)return true;
+    if(Array.isArray(a)||Array.isArray(b))
+      return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
+        a.every((item,i)=>sameJson(item,b[i]));
+    if(!object(a)||!object(b))return false;
+    const keys=Object.keys(a),other=Object.keys(b);
+    return keys.length===other.length&&keys.every(key=>
+      Object.hasOwn(b,key)&&sameJson(a[key],b[key]));
+  }
   async function rawRecovery(db){
     // Raw browser draft (including original bytes). Not a portable project
     // format, and intentionally never deleted by migration or Project remove.
@@ -106,8 +118,13 @@
     if(!durable||marker?.projectId!==project.id)
       throw Error('Calibration migration commit could not be verified; old draft retained');
     const prepared=await checkpoint.prepare(durable,env,adapter,decoder);
-    if(JSON.stringify(prepared.draft)!==JSON.stringify(draft)||
-       JSON.stringify(prepared.inline)!==JSON.stringify(inline))
+    // Compare the complete validated photo-free contract, not the raw
+    // hydrated record's JSON text: ReferenceImage.validate reorders fields,
+    // and a reused Library original can have a different thumbnail.
+    // The original itself was already independently SHA-256/decode verified.
+    const returned=checkpoint.extract(prepared.draft,prepared.inline,
+      durable.photo?durable.photo.identity:null);
+    if(!sameJson(returned,parts))
       throw Error('Calibration migration round-trip changed saved work; old draft retained');
     return {status:'migrated',marker,project:durable};
   }
