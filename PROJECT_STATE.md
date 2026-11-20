@@ -1,3 +1,16 @@
+## 8F.6b — Shared correspondence toolbar
+
+One workspace-level toolbar above both viewports replaces the integrated
+viewer buttons and duplicated legacy save/cancel controls. Explicit Add
+starts a draft, defaults the integrated picker to Vertex when necessary,
+and requires Create pair rather than automatic Fast Vertex pairing.
+Existing implicit point-first and Flat fallback remain compatible.
+Toolbar mode, point readiness, action availability and labels are derived
+from the workflow; weight input is shared. Empty explicit Add persists
+using an optional backward-compatible draft field. Enter commits when
+available from workspace focus; viewer confirmation remains unchanged.
+Next: 8F.6c unified picking with one confirmation. Browser/full CI pending.
+
 ## 8F.6a — Calibration UX redesign: correspondence workflow
 
 Baseline: 770df7dfd3a2d6d8d411ff4c269f573337e5a18f (user-validated Undo).

@@ -394,19 +394,19 @@
     let rows=[],activePair=null,draft=null,undoStack=[];
     const copy=value=>JSON.parse(JSON.stringify(value));
     const exists=id=>rows.some(r=>r.landmark.id===id);
-    const fresh=()=>({mode:'add',id:null,pixel:null,landmark:null});
+    const fresh=(explicit=false)=>({mode:'add',id:null,pixel:null,landmark:null,explicit});
     const clearDraft=()=>{draft=null;};
-    function beginAdd(){draft=fresh();activePair=null;}
+    function beginAdd(explicit=true){draft=fresh(explicit);activePair=null;}
     function beginEdit(id,{model=true}={}){
       const row=rows.find(r=>r.landmark.id===id);if(!row)return false;
       draft={mode:'edit',id,pixel:copy(row.pixel),landmark:model?copy(row.landmark):null};
       activePair=id;return true;
     }
     function point(key,value){
-      if(value!==null&&!draft)beginAdd();
+      if(value!==null&&!draft)beginAdd(false);
       if(!draft)return;
       draft[key]=value===null?null:copy(value);
-      if(draft.mode==='add'&&!draft.pixel&&!draft.landmark)clearDraft();
+      if(draft.mode==='add'&&!draft.explicit&&!draft.pixel&&!draft.landmark)clearDraft();
     }
     function select(id){
       if(draft?.mode==='edit'&&id!==draft.id)return false;
@@ -425,22 +425,37 @@
       rows=old.rows;activePair=exists(old.activePair)?old.activePair:null;clearDraft();return true;
     }
     function replaceAll(next=[]){rows=next;activePair=null;clearDraft();undoStack=[];}
-    function restoreDraft({editing=null,pending=null,pendingModel=null,activePair:selection=null}){
+    function restoreDraft({editing=null,pending=null,pendingModel=null,activePair:selection=null,explicitAdd=false}){
       clearDraft();activePair=exists(selection)?selection:null;
       if(exists(editing)){
         draft={mode:'edit',id:editing,pixel:copy(pending),landmark:copy(pendingModel)};activePair=editing;
-      }else if(pending||pendingModel)draft={...fresh(),pixel:copy(pending),landmark:copy(pendingModel)};
+      }else if(pending||pendingModel||explicitAdd)draft={...fresh(explicitAdd),pixel:copy(pending),landmark:copy(pendingModel)};
     }
     function restoreHistory(entries){undoStack=copy(entries.slice(-50));}
     return Object.freeze({
       get rows(){return rows;},get activePair(){return activePair;},get mode(){return draft?.mode||'browse';},
-      get editing(){return draft?.mode==='edit'?draft.id:null;},
+      get editing(){return draft?.mode==='edit'?draft.id:null;},get explicitAdd(){return draft?.mode==='add'&&draft.explicit===true;},
       get pending(){return draft?.pixel||null;},get pendingModel(){return draft?.landmark||null;},
       get undoStack(){return undoStack;},get canCommit(){return !!(draft?.pixel&&draft.landmark);},
       beginAdd,beginEdit,select,selectPhoto:p=>point('pixel',p),selectModel:l=>point('landmark',l),
       clearDraft,cancel,change,undo,replaceAll,restoreDraft,restoreHistory,
       snapshot(){return copy({mode:draft?.mode||'browse',rows,activePair,draft,undoStack});}
     });
+  }
+  // Presentation is derived from workflow state, not individual viewport controls.
+  function pairToolbarState(workflow,{ready=false,readOnly=false,legacy=false,legacyModel=false}={}){
+    const editing=workflow.mode==='edit',draft=workflow.mode!=='browse';
+    const selected=workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair);
+    const photo=!!workflow.pending,model=!!workflow.pendingModel||(legacy&&legacyModel&&photo);
+    let hint=!ready?'Load a photograph to start.':readOnly?'Best camera is read-only for model picking. Return to Initial Camera to add or edit a pair.':
+      editing?'Editing pair #'+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · choose a replacement point, then Update pair.':
+      draft?photo&&model?'Both points selected · Create pair.':photo?'Photo point selected · choose its matching model point.':model?'Model point selected · choose its matching photo point.':'Choose a point on either the photograph or model.':
+      selected>=0?'Pair #'+(selected+1)+' selected · Edit or Delete pair.':'Add pair, or select a numbered marker.';
+    return {hint,mode:editing?'Edit pair':draft?'New pair':'Browse',photo,model,
+      addDisabled:!ready||readOnly||draft,editDisabled:!ready||readOnly||draft||selected<0,
+      commitDisabled:!ready||readOnly||!draft||!photo||!model,cancelDisabled:!draft,
+      deleteDisabled:selected<0||draft,undoDisabled:!workflow.undoStack.length,
+      commitLabel:editing?'Update pair':'Create pair'};
   }
   let mounted=null;
   function mount(doc){
@@ -479,17 +494,10 @@
     const ownerInfo=doc.createElement('p');ownerInfo.setAttribute('data-viewer-owner-status','');ownerInfo.hidden=true;
     const ownerPrimitives=doc.createElement('select');ownerPrimitives.setAttribute('data-viewer-owner-list','');ownerPrimitives.setAttribute('aria-label','Selected owner primitives');ownerPrimitives.hidden=true;
     inlineHost.querySelector('[data-viewer-selection-status]').after(ownerInfo,ownerPrimitives);
-    const inlineDelete=doc.createElement('button');inlineDelete.type='button';inlineDelete.textContent='Delete pair';inlineDelete.disabled=true;inlineDelete.setAttribute('data-viewer-delete-pair','');
-    inlineHost.querySelector('[data-viewer-selection-status]').after(inlineDelete);
-    const inlineCancel=doc.createElement('button');inlineCancel.type='button';inlineCancel.textContent='Cancel draft pair';inlineCancel.disabled=true;
-    inlineHost.querySelector('[data-viewer-selection-status]').after(inlineCancel);
-    inlineCancel.onclick=cancelPairDraft;
-    const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(workflow.pending&&workflow.pendingModel&&!viewBest)savePair();};
-    const inlineEdit=doc.createElement('button');inlineEdit.type='button';inlineEdit.textContent='Edit pair';inlineEdit.disabled=true;inlineEdit.onclick=()=>beginPairEdit(workflow.activePair);
-    const inlineDraftStatus=doc.createElement('p');inlineDraftStatus.setAttribute('role','status');
-    const inlineUndo=doc.createElement('button');inlineUndo.type='button';inlineUndo.textContent='Undo';inlineUndo.title='Undo last correspondence change (Ctrl+Z)';inlineUndo.disabled=true;inlineUndo.onclick=undo;
-    const pairActions=doc.createElement('div');pairActions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
-    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineEdit,inlineCancel,inlineDelete,inlineUndo);pairActions.after(inlineDraftStatus);
+    const pairAdd=$('ModernCalibrationBeginPair'),pairEdit=$('ModernCalibrationEditPair'),
+      pairCancel=$('ModernCalibrationCancelEdit'),pairDelete=$('ModernCalibrationDeleteSelected'),
+      pairUndo=$('ModernCalibrationUndo'),pairPanel=$('ModernCalibrationPairToolbar');
+    pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
     const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
@@ -596,7 +604,7 @@
       if(restoring||!scene)return;
       saveInline();
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
-        record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,
+        record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
@@ -634,9 +642,9 @@
         let restoredModel=editRow&&(globeRoute()||isMaterial(editRow.landmark))?editRow.landmark:null;
         if(record&&d.pendingModel)try{if(isMaterial(d.pendingModel))materialResolver.create(scene.model).resolveLandmark(d.pendingModel.anchor.kind,d.pendingModel);else validateLegacyTopology([{landmark:d.pendingModel}],scene);restoredModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
         const restoredPixel=record&&Array.isArray(d.pending)&&d.pending.length===2&&imagePoint({scale:1,x:0,y:0},...d.pending,record.original.width,record.original.height)?d.pending:null;
-        workflow.restoreDraft({editing:d.editing,pending:restoredPixel,pendingModel:restoredModel,activePair:d.activePair});
+        workflow.restoreDraft({editing:d.editing,pending:restoredPixel,pendingModel:restoredModel,activePair:d.activePair,explicitAdd:d.explicitAdd===true});
         weight.value=d.weight||'1';setPixel(restoredPixel);
-        add.textContent=workflow.editing?'Update pair':'Add pair';
+        syncPairToolbar();
         refreshRows();photoDraw();meshDraw();
         if(['best','initial','off'].includes(d.residualMode))residualMode.value=d.residualMode;
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
@@ -753,7 +761,7 @@
     }
     function setPixel(p){
       workflow.selectPhoto(p);px.value=p?String(+p[0].toFixed(3)):'';py.value=p?String(+p[1].toFixed(3)):'';
-      photoDraw();add.disabled=!workflow.pending||!selected();
+      photoDraw();syncPairToolbar();
       updateHint();
     }
     function setIncluded(id,included){
@@ -810,20 +818,42 @@
       });
       $('ModernCalibrationCount').textContent=workflow.rows.length+' correspondences';
       $('ModernCalibrationInlineCount').textContent=workflow.rows.length+' correspondences';
-      $('ModernCalibrationUndo').disabled=inlineUndo.disabled=!workflow.undoStack.length;
-      $('ModernCalibrationDeleteSelected').disabled=!workflow.activePair;
+      syncPairToolbar();
       refreshResidualTable();refreshMagnifierCorrespondences();
+    }
+    function syncPairToolbar(){
+      const legacy=!globeRoute()||legacyShown;
+      const state=pairToolbarState(workflow,{ready:!!record,readOnly:viewBest,legacy,legacyModel:legacy&&!!selected()});
+      pairAdd.disabled=state.addDisabled;pairEdit.disabled=state.editDisabled;add.disabled=state.commitDisabled;
+      pairCancel.disabled=state.cancelDisabled;pairDelete.disabled=state.deleteDisabled;pairUndo.disabled=state.undoDisabled;
+      add.textContent=state.commitLabel;pairCancel.textContent=workflow.editing?'Cancel edit':'Cancel';
+      $('ModernCalibrationPairMode').textContent=state.mode;
+      $('ModernCalibrationPairPhoto').textContent='Photo: '+(state.photo?'selected':'not selected');
+      $('ModernCalibrationPairModel').textContent='Model: '+(state.model?'selected':'not selected');
+      $('ModernCalibrationActionHint').textContent=state.hint;
+      pairPanel.dataset.mode=workflow.mode;
+    }
+    function beginSharedAdd(){
+      if(!record||viewBest||workflow.mode!=='browse')return false;
+      inlineViewer.clearLocalPoint();resetPending();workflow.beginAdd();
+      if(globeRoute()&&!legacyShown&&inlineViewer.isOpen()){
+        const picker=inlineHost.querySelector('[data-viewer-pick-mode]');
+        if(picker&&['navigate','owner','fast-vertex'].includes(picker.value)){
+          picker.value='vertex';picker.onchange?.();
+        }
+      }
+      refreshRows();updateHint();photoDraw();meshDraw();persist();return true;
     }
     function beginPairEdit(id){
       const r=workflow.rows.find(r=>r.landmark.id===id);
-      if(!r||!record)return false;
+      if(!r||!record||viewBest)return false;
       if(workflow.editing===id)return true;
-      if((workflow.pending||workflow.pendingModel||workflow.editing)&&!env.confirm('Discard the current draft and edit this pair?'))return false;
+      if(workflow.mode!=='browse'&&!env.confirm('Discard the current draft and edit this pair?'))return false;
       inlineViewer.clearLocalPoint();resetPending();
       workflow.beginEdit(id,{model:globeRoute()||isMaterial(r.landmark)});
       if(!isMaterial(r.landmark))selectLandmark(r.landmark);
       weight.value=String(r.weight);setPixel(r.pixel.slice());
-      add.textContent='Update pair';refreshRows();photoDraw();meshDraw();persist();return true;
+      syncPairToolbar();refreshRows();photoDraw();meshDraw();persist();return true;
     }
     function updateHint(){
       const text=globeRoute()&&!legacyShown&&!workflow.editing?(workflow.pending&&workflow.pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':workflow.pending?'Photo point selected · confirm a model point or use Fast Vertex.':workflow.pendingModel?'Model point selected · click the matching photo point.':workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':workflow.editing?'Editing pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · drag a marker or use manual controls.':
@@ -831,13 +861,12 @@
         workflow.pendingModel?'Model vertex selected. Click a photo point.':
         workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · drag either marker or click a new point.':
         'Click either image, then its matching point in the other.';
-      inlineDraftStatus.textContent=workflow.editing?'Editing pair #'+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · select a new photo point or confirm a new model point, then Update pair. Original remains saved.':text;
-      $('ModernCalibrationActionHint').textContent=text;
+      syncPairToolbar();
       pickStatus.textContent=text;
     }
     function resetPending(){inlineViewer.discardPairDraft();
       const parked=inlineSessions.initial?.session;if(parked?.stagedMode==='fast-vertex'||parked?.stagedMode===undefined&&parked?.pickMode==='fast-vertex'){Object.assign(parked,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});if(parked.confirmed&&parked.pickMode==='fast-vertex')parked.confirmed=null;}
-      workflow.clearDraft();weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
+      workflow.clearDraft();weight.value='1';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
     function cancelPairDraft(){inlineViewer.clearLocalPoint();workflow.cancel();resetPending();refreshRows();photoDraw();meshDraw();persist();}
     function selectPair(id){
       if(!workflow.rows.some(r=>r.landmark.id===id))return;
@@ -911,7 +940,7 @@
         p.points.forEach((point,j)=>vertices.push({id:'b'+b+':p'+index+':v'+j,bank:b,
           objectType:scene.model.ObjType[b],primitive:index,vertex:j}));
       populate(vertex,vertices.map((v,i)=>[i,'Primitive '+v.primitive+' · vertex '+v.vertex]));
-      meshDraw();add.disabled=!workflow.pending||!selected();
+      meshDraw();syncPairToolbar();
     }
     function landmarkLabel(v){
       if(isMaterial(v)){const a=v.anchor,o=a.owner;return 'Bank '+(o.bank+1)+' · '+(o.kind==='span'?o.role+' '+(o.from.stationIndex+1)+'–'+(o.to.stationIndex+1):'Station '+(o.stationIndex+1))+' · '+a.kind+' · P'+a.primitive+' / '+a.indices.join(',');}
@@ -927,7 +956,7 @@
       object.value=String(g);updateVertices();
       const index=vertices.findIndex(p=>p.id===v.id);
       if(index<0)return false;
-      vertex.value=String(index);meshDraw();add.disabled=!workflow.pending||!selected();return true;
+      vertex.value=String(index);meshDraw();syncPairToolbar();return true;
     }
     function fitModel(){
       if(!previewValid)return;
@@ -1172,11 +1201,7 @@
         modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
     }
     function meshDraw(){
-      inlineEdit.disabled=!workflow.activePair||!record||!!workflow.editing||viewBest;
-      inlineCancel.textContent=workflow.editing?'Cancel edit':'Cancel draft pair';
-      inlineCancel.disabled=!(workflow.pending||workflow.pendingModel||workflow.editing);
-      inlineCreate.disabled=!(record&&workflow.canCommit&&!viewBest);
-      inlineCreate.textContent=workflow.editing?'Update pair':'Create pair';
+      syncPairToolbar();
       if(syncInline()){
         let marker=workflow.pendingModel;
         if(isMaterial(marker))try{const q=materialResolver.create(scene.model).resolveLandmark(marker.anchor.kind,marker);marker={bank:q.bank,primitive:q.index,anchor:q.anchor};}catch(error){marker=null;}
@@ -1262,7 +1287,7 @@
     function savePair(){
       try{
         const landmark=workflow.pendingModel||materialEdit()||selected();
-        if(!record||!workflow.pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
+        if(viewBest||!record||!workflow.pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
         const wasEditing=workflow.editing,width=record.original.width,height=record.original.height;
         const next=globeRoute()?commitGlobePair(workflow.rows,landmark,workflow.pending,width,height,Number(weight.value),workflow.editing,scene.model):
           upsert(workflow.rows,pair(landmark,workflow.pending,width,height,Number(weight.value),workflow.rows.find(r=>r.landmark.id===workflow.editing)?.included),workflow.editing);
@@ -1293,13 +1318,13 @@
       if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
       if(!selectLandmark(item.landmark))return false;
       clearAmbiguity();workflow.selectModel(item.landmark);workflow.select(workflow.editing);
-      if(workflow.pending&&!(workflow.editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
+      if(workflow.pending&&!workflow.explicitAdd&&!(workflow.editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
       refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
       if(!p)return;
       workflow.select(workflow.editing);setPixel(p);refreshRows();
-      if(!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
+      if(!workflow.explicitAdd&&!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
     }
     function pickAt(p){
@@ -1415,10 +1440,10 @@
       if(!record)return;
       const p=[Number(px.value),Number(py.value)];
       const valid=px.value!==''&&py.value!==''&&imagePoint({scale:1,x:0,y:0},...p,record.original.width,record.original.height);
-      workflow.selectPhoto(valid?p:null);photoDraw();meshDraw();add.disabled=!workflow.pending||!selected();
+      workflow.selectPhoto(valid?p:null);photoDraw();meshDraw();syncPairToolbar();
     }
     px.oninput=py.oninput=manualPixel;
-    bank.onchange=()=>{workflow.selectModel(null);updateObjects();};object.onchange=()=>{workflow.selectModel(null);updateVertices();};vertex.onchange=()=>{workflow.selectModel(null);meshDraw();add.disabled=!workflow.pending||!selected();};
+    bank.onchange=()=>{workflow.selectModel(null);updateObjects();};object.onchange=()=>{workflow.selectModel(null);updateVertices();};vertex.onchange=()=>{workflow.selectModel(null);meshDraw();syncPairToolbar();};
     function cancelModelFrame(){
       if(modelFrame!==null)env.cancelAnimationFrame(modelFrame);
       modelFrame=null;queuedPointer=null;
@@ -1718,9 +1743,10 @@
     add.onclick=savePair;
     $('ModernCalibrationCancelEdit').onclick=cancelPairDraft;
     $('ModernCalibrationUndo').onclick=undo;
-    $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(workflow.activePair);
+    $('ModernCalibrationDeleteSelected').onclick=()=>{if(workflow.mode==='browse')deletePair(workflow.activePair);};
     doc.addEventListener('keydown',e=>{
       if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if(e.key==='Enter'&&!add.disabled){e.preventDefault();savePair();return;}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();undo();return;}
       if(magnifierMode()&&e.key==='Escape'){e.preventDefault();cancelRegion();meshDraw();return;}
       if(objectMode()){
@@ -1738,12 +1764,12 @@
       }
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
-    syncFitControls();
+    syncFitControls();syncPairToolbar();
     mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({createPairWorkflow,commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({createPairWorkflow,pairToolbarState,commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

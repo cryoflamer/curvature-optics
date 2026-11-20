@@ -129,7 +129,7 @@
 <script src="src/calibration/CameraLandmarkProjection.js?vertex-scale=1&amp;material-projection=1&amp;material-fit=1"></script>
 <script src="src/calibration/CameraPhysicalPose.js"></script>
 <script src="src/ui/modern/ModernLandmarkViewer.js?precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;orbit-sensitivity=1&amp;indexed-picking=1&amp;free-picking=1&amp;point-adjustment=1&amp;metric-vertex-snap=1&amp;session-persistence=1&amp;optical-inverse=1&amp;globe-optical-picking=1&amp;shared-topology=1&amp;correspondence-markers=1&amp;stable-viewer-raster=1&amp;cross-view-selection=1&amp;selection-ux=1&amp;inline-model-viewer=1&amp;selected-orbit-pivot=1&amp;fast-vertex=1&amp;pair-marker-ux=1&amp;inline-session=1&amp;owner-inspection=1&amp;draft-lifecycle=1&amp;material-pair=1&amp;edit-pair=1&amp;undo-consistency=1"></script>
-<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;magnifier-session=1&amp;globe-optical-picking=1&amp;material-fit=1&amp;material-persistence=1&amp;correspondence-markers=1&amp;cross-view-selection=1&amp;selection-ux=1&amp;inline-model-viewer=1&amp;selected-orbit-pivot=1&amp;fast-vertex=1&amp;pair-marker-ux=1&amp;inline-session=1&amp;owner-inspection=1&amp;draft-lifecycle=1&amp;material-pair=1&amp;edit-pair=1&amp;undo-consistency=1&amp;pair-workflow=1"></script>
+<script src="src/ui/modern/ModernPhotoCalibrationEditor.js?workspace=1&amp;scene-picking=1&amp;pair-ux=1&amp;model-drag=1&amp;object-highlight=1&amp;object-first=1&amp;camera-fit=1&amp;experiment-exchange=1&amp;vertex-scale=1&amp;residuals=1&amp;validation-roles=1&amp;object-selection=1&amp;isolated-viewer=1&amp;precise-selection=1&amp;modeless-viewer=1&amp;scene-magnifier=1&amp;free-view=1&amp;magnifier-session=1&amp;globe-optical-picking=1&amp;material-fit=1&amp;material-persistence=1&amp;correspondence-markers=1&amp;cross-view-selection=1&amp;selection-ux=1&amp;inline-model-viewer=1&amp;selected-orbit-pivot=1&amp;fast-vertex=1&amp;pair-marker-ux=1&amp;inline-session=1&amp;owner-inspection=1&amp;draft-lifecycle=1&amp;material-pair=1&amp;edit-pair=1&amp;undo-consistency=1&amp;pair-workflow=1&amp;pair-toolbar=1"></script>
 </head>
 <body>
 <div class="modern-app" id="ModernApp">
@@ -154,7 +154,7 @@
   <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
     <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · correspondence editor</p></div><button type="button" id="ModernCalibrationClose">Back to Scene</button></header>
     <p id="ModernCalibrationScene"></p>
-    <p>Click matching points in either order. Drag markers to edit; drag empty areas to pan. Scene geometry and atmosphere are fixed until New session.</p>
+    <p>Match points between the photograph and model. Scene geometry and atmosphere are fixed until New session.</p>
     <div class="modern-calibration-toolbar">
       <label>Reference photo <input type="file" id="ModernCalibrationFile" accept="image/png,image/jpeg,image/webp"></label>
       <button type="button" id="ModernCalibrationExportExperiment" disabled>Export experiment (JSON)</button>
@@ -171,12 +171,7 @@
     <p id="ModernCalibrationExchangeStatus" role="status"></p>
     <p id="ModernCalibrationSourceStatus" role="status"></p>
     <p id="ModernCalibrationPhotoInfo"></p>
-    <div class="modern-calibration-toolbar modern-calibration-actions">
-      <strong id="ModernCalibrationInlineCount">0 correspondences</strong>
-      <span id="ModernCalibrationActionHint" role="status">Click either image, then its matching point in the other.</span>
-      <button type="button" id="ModernCalibrationUndo" disabled>Undo</button>
-      <button type="button" id="ModernCalibrationDeleteSelected" disabled>Delete selected</button>
-    </div>
+
     <section aria-label="Camera fit" style="margin:12px 0;padding:10px;border:1px solid #c4d6e4;border-radius:6px">
       <h3>Camera fit · Canvas Direct</h3>
       <p>Checked parameters are free; unchecked parameters stay at the captured camera values.</p>
@@ -198,6 +193,21 @@
       <p id="ModernCalibrationFitResult"></p>
       <p id="ModernCalibrationFitNotice" hidden>Best camera preview is read-only. Return to the initial camera to edit model landmarks. This preview does not change Scene.</p>
     </section>
+    <section id="ModernCalibrationPairToolbar" aria-label="Correspondence controls" data-mode="browse" style="margin:12px 0;padding:10px;border:1px solid #c4d6e4;border-radius:6px">
+      <div class="modern-calibration-toolbar modern-calibration-actions">
+        <strong id="ModernCalibrationPairMode">Browse</strong>
+        <span id="ModernCalibrationInlineCount">0 correspondences</span>
+        <button type="button" id="ModernCalibrationBeginPair" disabled>Add pair</button>
+        <button type="button" id="ModernCalibrationEditPair" disabled>Edit pair</button>
+        <button type="button" id="ModernCalibrationAdd" disabled>Create pair</button>
+        <button type="button" id="ModernCalibrationCancelEdit" disabled>Cancel</button>
+        <button type="button" id="ModernCalibrationDeleteSelected" disabled>Delete pair</button>
+        <button type="button" id="ModernCalibrationUndo" title="Undo last correspondence change (Ctrl+Z)" disabled>Undo</button>
+        <label>Weight <input id="ModernCalibrationWeight" type="number" min="0.001" step="any" value="1"></label>
+      </div>
+      <div class="modern-calibration-toolbar"><span id="ModernCalibrationPairPhoto">Photo: not selected</span><span id="ModernCalibrationPairModel">Model: not selected</span></div>
+      <p id="ModernCalibrationActionHint" role="status">Load a photograph to start.</p>
+    </section>
     <div class="modern-calibration-grid">
       <section><h3>Original photograph</h3><p>Click to pair · drag marker to edit · drag empty area to pan · wheel to zoom.</p>
         <canvas id="ModernCalibrationPhoto" width="800" height="540" aria-label="Reference photo"></canvas>
@@ -213,7 +223,7 @@
         </div>
       </section>
       <section><div class="modern-calibration-toolbar"><button type="button" id="ModernCalibrationLegacyToggle" hidden aria-pressed="false">Legacy model tools</button></div>
-        <div id="ModernCalibrationInlinePanel" hidden><div id="ModernCalibrationInlineViewer" class="modern-landmark-viewer modern-inline-viewer" hidden></div><p class="modern-calibration-inline-help">Click numbered markers to select a pair; Delete pair or Delete removes it, Ctrl+Z restores it. Fast Vertex creates a pair with a matching photo pixel. Owner Inspection selects an object or span without creating a pair. Vertex/Edge/Surface: confirm a model point, select a photo point and Create pair. Cancel draft pair cancels pairing; Clear point clears local inspection. Free View orbits around the yellow crosshair.</p></div>
+        <div id="ModernCalibrationInlinePanel" hidden><div id="ModernCalibrationInlineViewer" class="modern-landmark-viewer modern-inline-viewer" hidden></div><p class="modern-calibration-inline-help">Use the shared correspondence controls above. Vertex/Edge/Surface still require Confirm point; Fast Vertex retains point-first automatic pairing outside explicit Add. Owner Inspection is independent of pairing. Free View orbits around the yellow crosshair.</p></div>
         <div id="ModernCalibrationLegacyModel"><h3>Model · Canvas Direct</h3><p>Hover over an object · choose its marked vertex · Tab cycles candidates · drag marker to reselect.</p>
         <div class="modern-calibration-model-wrap"><canvas id="ModernCalibrationMesh" width="800" height="540" aria-label="Full model scene"></canvas><div id="ModernCalibrationHoverTip" hidden></div></div>
         <div class="modern-calibration-toolbar">
@@ -239,11 +249,7 @@
           <label>Object <select id="ModernCalibrationObject"></select></label>
           <label>Vertex <select id="ModernCalibrationVertex"></select></label>
         </details>
-        <div class="modern-calibration-toolbar">
-          <label>Weight <input id="ModernCalibrationWeight" type="number" min="0.001" step="any" value="1"></label>
-          <button type="button" id="ModernCalibrationAdd" disabled>Add pair</button>
-          <button type="button" id="ModernCalibrationCancelEdit">Clear selection</button>
-        </div>
+
       </section>
     </div>
     <dialog id="ModernCalibrationViewer" class="modern-reference-dialog modern-landmark-viewer" aria-labelledby="ModernCalibrationViewerTitle">

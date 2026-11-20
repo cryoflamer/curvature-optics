@@ -40,3 +40,20 @@ test('Legacy Flat edit may use selector instead of draft material point',()=>{
   assert.equal(w.editing,'a');assert.equal(w.pendingModel,null);assert.deepEqual(w.pending,a.pixel);
   w.change([{...a,pixel:[4,5]}],'a',{finish:true});assert.equal(w.mode,'browse');
 });
+
+test('Shared toolbar reflects explicit add, edit, read-only and legacy readiness',()=>{
+  const {pairToolbarState}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  const w=createPairWorkflow(),a=row('a'),ready={ready:true};
+  assert.equal(pairToolbarState(w).addDisabled,true);
+  assert.equal(pairToolbarState(w,ready).addDisabled,false);
+  w.beginAdd();w.selectModel(null);assert.equal(w.mode,'add');assert.equal(w.explicitAdd,true);
+  let t=pairToolbarState(w,ready);assert.equal(t.cancelDisabled,false);assert.equal(t.commitDisabled,true);
+  w.selectPhoto([2,3]);assert.equal(pairToolbarState(w,ready).commitDisabled,true);
+  assert.equal(pairToolbarState(w,{...ready,legacy:true,legacyModel:true}).commitDisabled,false);
+  w.selectModel(a.landmark);assert.equal(pairToolbarState(w,ready).commitDisabled,false);
+  assert.equal(pairToolbarState(w,{...ready,readOnly:true}).commitDisabled,true);
+  w.cancel();w.replaceAll([a]);w.select('a');assert.equal(pairToolbarState(w,ready).editDisabled,false);
+  w.beginEdit('a');t=pairToolbarState(w,ready);assert.equal(t.commitLabel,'Update pair');assert.equal(t.deleteDisabled,true);
+  w.restoreDraft({explicitAdd:true});assert.equal(w.mode,'add');assert.equal(w.explicitAdd,true);
+  w.cancel();w.selectPhoto([1,2]);assert.equal(w.explicitAdd,false);w.selectPhoto(null);assert.equal(w.mode,'browse');
+});
