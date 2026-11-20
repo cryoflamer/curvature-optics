@@ -664,13 +664,25 @@
       return {...row,hit:pickDescriptor(e,a.kind,a.indices,a.weights,point,0,null,0)};
     });
   }
+  // Distances are CSS pixels, independent of backing raster density. Only
+  // actually displayed markers participate. Coincident markers cycle in row order.
+  function correspondenceAt(rows,p,scale=[1,1],active=null){
+    const candidates=rows.filter(r=>r.pixel&&['visible','wireframe'].includes(r.visibility))
+      .map(r=>({id:r.id,d:Math.hypot((r.pixel[0]-p[0])/scale[0],(r.pixel[1]-p[1])/scale[1])}))
+      .filter(r=>r.d<=12).sort((a,b)=>a.d-b.d);
+    if(!candidates.length)return null;
+    const tied=candidates.filter(r=>r.d<=candidates[0].d+2);
+    return tied[(tied.findIndex(r=>r.id===active)+1)%tied.length].id;
+  }
   function drawCorrespondence(canvas,p,row){
     const ctx=canvas.getContext('2d');ctx.save();ctx.font='bold 13px sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=2;
     ctx.fillStyle=row.color;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(...p,10,0,2*Math.PI);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#fff';ctx.fillText(row.label,p[0],p[1]);ctx.restore();
+    ctx.fillStyle='#fff';ctx.fillText(row.label,p[0],p[1]);
+    if(row.selected){ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.arc(...p,14,0,2*Math.PI);ctx.stroke();}
+    ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{}){
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
     const projection=dialog.querySelector('[data-viewer-projection]'),wire=dialog.querySelector('[data-viewer-wire]'),spans=dialog.querySelector('[data-viewer-spans]');
     const env=dialog.ownerDocument.defaultView,frame=dialog.querySelector('[data-viewer-frame]'),titleBar=dialog.querySelector('[data-viewer-titlebar]'),grip=dialog.querySelector('[data-viewer-resize]');
@@ -683,7 +695,9 @@
     let correspondenceRows=[],correspondenceMesh=null,correspondenceCache=[],correspondenceState=[];
     const correspondenceStatus=dialog.querySelector('[data-viewer-correspondence-status]');
     function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
-    function setCorrespondences(rows){
+    let activeCorrespondence=null;
+    function setCorrespondences(rows,active=null){
+      activeCorrespondence=active;
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
       if(crop&&dialog.open)redrawMarkers();
     }
@@ -691,13 +705,15 @@
       if(correspondenceMesh!==mesh){correspondenceMesh=mesh;correspondenceCache=mesh?correspondenceHits(mesh,correspondenceRows):correspondenceRows.map(r=>({...r,hit:null}));}
       correspondenceState=correspondenceCache.map(row=>{
         const q=row.hit?project(row.hit):{visibility:'geometry unavailable'};
-        if(q.pixel&&['visible','wireframe'].includes(q.visibility))drawCorrespondence(canvas,q.pixel,row);
-        return {id:row.id,label:row.label,color:row.color,visibility:q.visibility,pixel:q.pixel||null};
+        const selected=row.id===activeCorrespondence;
+        return {id:row.id,label:row.label,color:row.color,selected,visibility:q.visibility,pixel:q.pixel||null};
       });
+      for(const row of correspondenceState.filter(r=>!r.selected).concat(correspondenceState.filter(r=>r.selected)))
+        if(row.pixel&&['visible','wireframe'].includes(row.visibility))drawCorrespondence(canvas,row.pixel,row);
       if(correspondenceStatus){
         const visible=correspondenceState.filter(r=>['visible','wireframe'].includes(r.visibility)).length;
         setText(correspondenceStatus,correspondenceState.length?
-          visible+' / '+correspondenceState.length+' correspondences shown · '+correspondenceState.filter(r=>!['visible','wireframe'].includes(r.visibility)).map(r=>r.label+': '+r.visibility).join('; '):'');
+          visible+' / '+correspondenceState.length+' correspondences shown · '+(activeCorrespondence?'Selected '+(correspondenceState.find(r=>r.selected)?.label||'—')+' · ':'')+correspondenceState.filter(r=>!['visible','wireframe'].includes(r.visibility)).map(r=>r.label+': '+r.visibility).join('; '):'');
       }
     }
     function sessionChanged(){if(!restoringSession)onSessionChange();}
@@ -910,7 +926,15 @@
       state=drag.pan?pan(state,delta[0]*canvas.width/Math.max(1,r.width),delta[1]*canvas.height/Math.max(1,r.height)):orbit(state,...delta,sensitivity);
       drag.css=css;render();
     });
-    canvas.addEventListener('pointerup',e=>{if(drag?.id!==e.pointerId)return;const d=drag;drag=null;if(!d.moved&&Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])<3&&!d.pan&&d.button===0&&pickActive())stageAt([e.clientX,e.clientY]);});
+    canvas.addEventListener('pointerup',e=>{
+      if(drag?.id!==e.pointerId)return;const d=drag;drag=null;
+      if(d.moved||Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])>=3||d.pan||d.button!==0)return;
+      if(crop&&pickMode.value==='navigate'){
+        const r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
+        const id=correspondenceAt(correspondenceState,[(e.clientX-r.left)*scale[0],(e.clientY-r.top)*scale[1]],scale,activeCorrespondence);
+        if(id!==null)onSelectCorrespondence(id);
+      }else if(pickActive())stageAt([e.clientX,e.clientY]);
+    });
     const end=e=>{if(drag?.id===e.pointerId)drag=null;};
     for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
     canvas.addEventListener('pointerleave',()=>{cancelHover();if(pickActive()&&!drag){redrawMarkers();updatePickStatus();}});
@@ -952,5 +976,5 @@
       snapshot:()=>dialog.open?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>dialog.open?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -392,7 +392,7 @@
       objectPicker=$('ModernCalibrationObjectPicker'),objectControls=$('ModernCalibrationObjectControls'),
       objectSelectionStatus=$('ModernCalibrationObjectSelection'),clearObject=$('ModernCalibrationClearObject');
     let packages=new Map(),selectedObjectKey=null;
-    const viewerButton=$('ModernCalibrationOpenViewer'),viewer=env.CurvatureModernLandmarkViewer.mount($('ModernCalibrationViewer'),saveMagnifier);
+    const viewerButton=$('ModernCalibrationOpenViewer'),viewer=env.CurvatureModernLandmarkViewer.mount($('ModernCalibrationViewer'),saveMagnifier,selectPair);
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
     const MAGNIFIER_KEY='curvature-calibration-magnifier-v1';
@@ -634,7 +634,7 @@
           return {...common,bank:q.bank,index:q.index,anchor:q.anchor};
         }catch(error){return {...common,anchor:null};}
       });
-      viewer.setCorrespondences(descriptors);
+      viewer.setCorrespondences(descriptors,activePair);
     }
     function refreshRows(){
       if(fitSignature!==null&&fitSignature!==JSON.stringify(rows))invalidateFit('Correspondences changed. Run calibration again.');
@@ -642,6 +642,7 @@
       list.replaceChildren();
       rows.forEach((r,i)=>{
         const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.landmark.id===activePair);
+        tr.onclick=e=>{if(!e.target.closest('button,input,label'))selectPair(r.landmark.id);};
         for(const [column,t] of [String(i+1),landmarkLabel(r.landmark),r.pixel.map(x=>x.toFixed(2)).join(', '),String(r.weight)].entries()){
           const td=doc.createElement('td');td.textContent=t;if(column===0){td.style.color=COLORS[i%COLORS.length];td.style.fontWeight='bold';}if(column===1)td.title=r.landmark.id;tr.append(td);
         }
@@ -652,7 +653,7 @@
           resetPending();activePair=r.landmark.id;editing=r.landmark.id;
           if(isMaterial(r.landmark))pendingModel=r.landmark;else selectLandmark(r.landmark);
           weight.value=String(r.weight);
-          setPixel(r.pixel.slice());meshDraw();add.textContent='Update pair';
+          setPixel(r.pixel.slice());refreshRows();photoDraw();meshDraw();add.textContent='Update pair';
         };
         const del=doc.createElement('button');del.type='button';del.textContent='Delete';
         del.onclick=()=>deletePair(r.landmark.id);
@@ -675,7 +676,8 @@
     }
     function resetPending(){editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
     function selectPair(id){
-      resetPending();activePair=id;refreshRows();updateHint();photoDraw();meshDraw();
+      if(!rows.some(r=>r.landmark.id===id))return;
+      activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
     }
     function rememberUndo(){
       undoStack.push({rows,activePair});if(undoStack.length>50)undoStack.shift();
@@ -1465,7 +1467,7 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),activeCorrespondence:()=>activePair,viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

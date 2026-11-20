@@ -1,3 +1,15 @@
+## 8F.5b — Cross-view correspondence selection
+
+The editor owns activePair; both Magnifier views receive it with read-only
+committed descriptors and render a selected ring, including selected status
+when hidden. In Navigate mode a short left click on a displayed marker
+selects the same ID in the editor, photograph, model and pair/residual
+tables. Overlapping markers cycle deterministically on repeated clicks;
+hidden markers are excluded. Pick modes retain their local staging behavior.
+Selection preserves pending edits, committed rows, fit and Undo. Pair table
+row clicks select without starting an edit. No new authoring controls.
+Next: 8F.5c explicit Use in calibration. Browser CI pending.
+
 ## 8F.5a.1 — Magnifier raster stability
 
 User reported oscillation at particular wheel zoom increments after 8F.5a.

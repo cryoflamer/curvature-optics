@@ -414,3 +414,14 @@ test('committed correspondence binding uses stable bank identity and sorted mate
   const mask={role:'occlusion',alpha:1,fill:path.fill,edges:[],strokeWidth:0};
   assert.equal(viewer.opticalMarker(viewer.opticalFrame(mesh,{...capture,paths:[path,mask]}),bound.hit).visibility,'horizon masked');
 });
+
+test('committed marker selection ignores hidden markers and cycles overlapping visible IDs in CSS pixels',()=>{
+  const rows=[{id:'a',pixel:[100,100],visibility:'visible'},{id:'b',pixel:[102,100],visibility:'wireframe'},
+    {id:'hidden',pixel:[100,100],visibility:'occluded'},{id:'outside',pixel:[100,100],visibility:'out of crop'}];
+  const before=JSON.stringify(rows);
+  assert.equal(viewer.correspondenceAt(rows,[100,100],[2,2]),'a');
+  assert.equal(viewer.correspondenceAt(rows,[100,100],[2,2],'a'),'b');
+  assert.equal(viewer.correspondenceAt(rows,[100,100],[2,2],'b'),'a');
+  assert.equal(viewer.correspondenceAt(rows,[200,200],[2,2]),null);
+  assert.equal(JSON.stringify(rows),before);
+});
