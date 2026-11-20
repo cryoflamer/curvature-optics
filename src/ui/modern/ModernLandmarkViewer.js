@@ -238,17 +238,23 @@
       const direction=perspective?add(add(mul(right,u),mul(up,v)),mul(toward,-1)):mul(toward,-1);
       return {origin:start,direction,near};
     }
-    const origin=screen([-eye[0],-eye[1],eye[2]]);
+    const origin=eye[2]>=near?screen([-eye[0],-eye[1],eye[2]]):null;
     return {coordinates,screen,ray,near,origin,right,up,toward,perspective,
       project(q){const v=coordinates(q);return v[2]>=near?{pixel:screen(v),depth:v[2]}:null;}};
   }
-  function rebaseRegionPivot(geometry,state,point,width,height){
+  function rebaseRegionPivot(geometry,state,point,width,height,{allowBehind=false}={}){
     if(!finite3(point))return state;
     const c=regionCamera(geometry,state,width,height),q=c.coordinates(point);
-    if(!finite3(q)||q[2]<c.near)return state;
+    if(!finite3(q)||!allowBehind&&q[2]<c.near)return state;
     // Express the unchanged eye in the current basis relative to the new
     // physical point. Future orbit rotates this offset about that point.
     return {...state,orbitPivot:{point:point.slice(),eye:[-q[0],-q[1],q[2]]}};
+  }
+  // Reset the physical centre, not the camera. An orbit can put the original
+  // centre behind the eye; the signed local eye offset is still valid.
+  function resetPhysicalPivot(geometry,state,width,height){
+    if(!state.orbitPivot||state.orbitPivot.point.every(n=>n===0))return state;
+    return rebaseRegionPivot(geometry,state,[0,0,0],width,height,{allowBehind:true});
   }
   // Picking uses the canonical physical authored geometry, not rendered
   // pixels, synthetic thickness, clipped vertices, or EarClip ordinals.
@@ -491,6 +497,14 @@
       }
     }
     return {candidates:[],reason,blocked:!!reason};
+  }
+  // Conservative empty-space classification: painted but unpickable
+  // geometry and unresolved or nearby snap candidates are not background.
+  function frameBackgroundEmpty(frame,p,wireframe=false){
+    if(!frame)return false;
+    if(frame.entries.some(e=>inBounds(e.bounds,p,1)&&opticalCoverage({...e.path,strokeWidth:2},p)))return false;
+    const result=automaticPick(frame,p,{wireframe,acquire:11,release:11});
+    return !result.candidates.length&&!result.blocked&&!result.limited;
   }
   // A local selection is a material point, independent of the current camera.
   function adjustPoint(mesh,hit,weights, snap='none'){
@@ -918,6 +932,18 @@
       if(next===state)return false;
       state=next;render();return true;
     }
+    function focusCorrespondence(id){
+      if(!crop?.physical||!free||!mesh)return false;
+      const hit=correspondenceHits(mesh,correspondenceRows.filter(r=>r.id===id))[0]?.hit;
+      if(!hit||!pickCache||!['visible','wireframe'].includes(markerVisibility(pickCache,hit,canvas.width,canvas.height,state.wireframe)))return false;
+      return selectOrbitPoint(hit);
+    }
+    function resetPivot(){
+      if(!crop?.physical||!free)return false;
+      const next=resetPhysicalPivot(geometry,state,canvas.width,canvas.height);
+      if(next!==state){state=next;render();sessionChanged();}
+      return true;
+    }
     function setCorrespondences(rows,active=null){
       const changed=active!==activeCorrespondence;
       activeCorrespondence=active;
@@ -925,7 +951,9 @@
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
       if(crop&&isOpen()&&(!inline||frame.clientWidth>0&&frame.clientHeight>0)){
         clearMarkerHover();
-        if(!(changed&&selectOrbitPoint(selectedCorrespondenceHit())))redrawMarkers();
+        // Physical view selection is data, not an instruction to move the pivot.
+        // Legacy optical inspection retains its historical selection behaviour.
+        if(!(!crop.physical&&changed&&selectOrbitPoint(selectedCorrespondenceHit())))redrawMarkers();
       }
     }
     function committedMarkers(project){
@@ -1047,6 +1075,11 @@
     cancelButton.onclick=()=>{if(inline&&!draftEditable())return;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     function paintOptical(capture){return navigating()?crop.paint(canvas,capture,{...crop.region}):crop.paint(canvas,capture);}
     function redrawMarkers(){if(crop&&!free){try{paintOptical(false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
+    function cssFrame(sx,sy){
+      if(cssCache?.frame!==pickCache||cssCache.sx!==sx||cssCache.sy!==sy)
+        cssCache={frame:pickCache,sx,sy,value:cssPickFrame(pickCache,[sx,sy])};
+      return cssCache.value;
+    }
     function query(css,bypass=false,previous=hover,dragging=false){
       if(!dragging&&!pickActive())return {candidates:[],reason:''};
       const r=canvas.getBoundingClientRect(),sx=canvas.width/Math.max(1,r.width),sy=canvas.height/Math.max(1,r.height);
@@ -1054,9 +1087,7 @@
       if(free){
         if(!pickCache)return {candidates:[],reason:''};
         if(automaticMode()||dragging){
-          if(cssCache?.frame!==pickCache||cssCache.sx!==sx||cssCache.sy!==sy)
-            cssCache={frame:pickCache,sx,sy,value:cssPickFrame(pickCache,[sx,sy])};
-          const result=automaticPick(cssCache.value,[p[0]/sx,p[1]/sy],{previous,bypass,wireframe:state.wireframe});
+          const result=automaticPick(cssFrame(sx,sy),[p[0]/sx,p[1]/sy],{previous,bypass,wireframe:state.wireframe});
           return {...result,candidates:result.candidates.map(h=>({...h,pixel:[h.pixel[0]*sx,h.pixel[1]*sy]}))};
         }
         return framePick(pickCache,p,pickKind(),{radius,wireframe:state.wireframe});
@@ -1252,6 +1283,20 @@
       const id=markerAtCSS(css,activeCorrespondence);
       return id!==null?{kind:'saved',id}:{kind:'background'};
     }
+    function emptyPhysicalBackground(css){
+      if(!crop?.physical||!free||!pickCache||ownerMode()||gestureTarget(css).kind!=='background')return false;
+      const r=canvas.getBoundingClientRect(),p=[css[0]-r.left,css[1]-r.top];
+      if(p[0]<0||p[1]<0||p[0]>=r.width||p[1]>=r.height)return false;
+      // A locally staged advanced-mode point is also a marker, even when
+      // it has not been passed to the shared draft yet.
+      const sx=canvas.width/Math.max(1,r.width),sy=canvas.height/Math.max(1,r.height);
+      if(localMarkers().some(([h])=>h&&['visible','wireframe'].includes(markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe))&&pointerGestures.markerAt([{kind:'draft',pixel:paths.camera.project(h.point)?.pixel}],backing(css),[sx,sy])))return false;
+      return frameBackgroundEmpty(cssFrame(sx,sy),p,state.wireframe);
+    }
+    function gestureStartTarget(css){
+      const target=gestureTarget(css);
+      return crop?.physical&&target.kind==='background'?{...target,empty:emptyPhysicalBackground(css)}:target;
+    }
     // All endpoint edits are transient until pointer-up. Use the same
     // visible automatic picker even when the advanced manual mode is active.
     function updateEndpointDrag(a,event){
@@ -1277,7 +1322,7 @@
     }
     gestures=pointerGestures.mount(canvas,{
       enabled:()=>isOpen()&&(!!geometry||!!crop?.build||navigating())&&!windowDrag,
-      target:gestureTarget,backgroundDrag:()=>navigating()&&!free?'pan':'orbit',
+      target:gestureStartTarget,backgroundDrag:()=>navigating()&&!free?'pan':'orbit',
       markerDrag:()=>!!(inline&&crop?.physical&&!crop.readOnly),
       onStart(a){canvas.focus({preventScroll:true});lastHoverCSS=a.start;pressedHover=hover;cancelHover();clearMarkerHover();redrawMarkers();},
       onHover(css,event){
@@ -1307,10 +1352,24 @@
           redrawMarkers();return;
         }
         if(onGesture?.(a)===true)return;
-        if(a.kind!=='click')return; // other double-click/context actions follow in later stages
         const css=a.point;
-        if(a.target.kind==='saved'){onSelectCorrespondence(a.target.id);hoverMarker(css);return;}
-        if(a.target.kind==='draft')return;
+        if(a.kind==='double-click'&&a.target.kind==='background'&&a.target.empty===true){
+          if(emptyPhysicalBackground(css))resetPivot();
+          return;
+        }
+        if(a.kind!=='click')return;
+        if(a.target.kind==='saved'){
+          onSelectCorrespondence(a.target.id);
+          if(focusCorrespondence(a.target.id))sessionChanged();
+          hoverMarker(css);return;
+        }
+        if(a.target.kind==='draft'){
+          if(crop?.physical&&selectOrbitPoint(pendingHit()))sessionChanged();
+          return;
+        }
+        // Do not turn the first click of a background double-click into a
+        // draft selection, even when snapping would reach a nearby object.
+        if(a.target.empty===true)return;
         if(ownerMode()&&pickAvailable()){onInspectOwner(inspectOwnerAt(css));redrawMarkers();return;}
         if(pickActive())stageAt(css,!!event.ctrlKey,pressedHover);else hoverMarker(css);
       },
@@ -1386,7 +1445,7 @@
       if(!navigating()||free)return false;
       const r=rectangleOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,a,b);
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
-    },resetScene,enterFree,sessionSnapshot(){
+    },resetScene,resetPivot,focusCorrespondence,enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
       return JSON.parse(JSON.stringify({version:crop.physical?4:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed,...(crop.physical?{frame:geometry.frame,eye:geometry.eye,focal:geometry.focal}: {})}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
@@ -1419,7 +1478,7 @@
           }
           const p=saved.view.orbitPivot;
           if(p!==undefined){
-            if(!finite3(p?.point)||!finite3(p.eye)||p.eye[2]<=g.near||[...p.point,...p.eye].some(x=>Math.abs(x)>1e9))
+            if(!finite3(p?.point)||!finite3(p.eye)||(!(crop.physical&&p.point.every(n=>n===0))&&p.eye[2]<=g.near)||[...p.point,...p.eye].some(x=>Math.abs(x)>1e9))
               throw Error('Invalid stored orbit pivot');
             next={...next,orbitPivot:{point:p.point.slice(),eye:p.eye.slice()}};
           }
@@ -1473,5 +1532,5 @@
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({automaticPick,cssPickFrame,physicalGeometry,initialPhysicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({automaticPick,cssPickFrame,frameBackgroundEmpty,resetPhysicalPivot,physicalGeometry,initialPhysicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));

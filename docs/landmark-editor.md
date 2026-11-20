@@ -39,7 +39,7 @@ Buttons and modes are implementation details, not prerequisites.
   mode. Clear/recompute fit only for actual saved observation changes.
 - Independent state: durable rows, draft endpoints, selected pair, current
   drag transaction, hover candidate, and camera/pivot. Selecting a model
-  point repivots without changing projection; finish drag before repivoting.
+  point repivots without changing projection; selecting rows on the photo/table only changes selection; finish drag before repivoting.
   Commit/cancel/delete must not reset camera or unexpectedly move geometry.
   Double-click truly empty model background restores the stable default
   physical centre without changing orientation, zoom, pan, or draft.
@@ -80,7 +80,7 @@ Buttons and modes are implementation details, not prerequisites.
 | 8F.6e | Automatic picking/snapping and hover preview |
 | 8F.6f | Implicit pairing wizard and double-click commit |
 | 8F.6g | Drag draft/saved endpoints independently (implemented) |
-| 8F.6h | Automatic pivot and empty-background reset |
+| 8F.6h | Automatic pivot and empty-background reset (implemented) |
 | 8F.6i | Context menus and Undo/Redo |
 | 8F.6j | Correspondences / Calibration / Result separation |
 | 8F.6k | Minimal UI, persistence, verification, legacy cleanup |

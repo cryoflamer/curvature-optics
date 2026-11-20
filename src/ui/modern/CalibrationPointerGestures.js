@@ -18,11 +18,11 @@
   }
   function create({threshold=5,doubleMs=400,doubleRadius=5}={}){
     let active=null,previous=null;
-    const same=(a,b)=>a.kind===b.kind&&a.id===b.id||a.kind==='background'&&b.kind==='draft';
+    const same=(a,b)=>a.kind===b.kind&&a.id===b.id&&(a.kind!=='background'||a.empty===b.empty)||a.kind==='background'&&a.empty!==true&&b.kind==='draft';
     function begin(e,target=background(),backgroundDrag='pan',markerDrag=true){
       if(active||![0,1,2].includes(e.button))return null;
       const p=point(e),action=e.button!==0||e.shiftKey?'pan':markerDrag&&target.kind!=='background'?'marker':backgroundDrag;
-      active={id:e.pointerId,button:e.button,target:{kind:target.kind,id:target.id},action,start:p,last:p,moved:false,modified:!!e.shiftKey};
+      active={id:e.pointerId,button:e.button,target:{kind:target.kind,id:target.id,...(target.empty===undefined?{}:{empty:!!target.empty})},action,start:p,last:p,moved:false,modified:!!e.shiftKey};
       return active;
     }
     function move(e){

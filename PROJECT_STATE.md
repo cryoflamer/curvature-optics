@@ -1,3 +1,19 @@
+## 8F.6h — Independent pivot and background reset
+
+Physical Free View now separates row selection/synchronization from
+the orbit centre. Explicit model marker clicks (including already
+selected rows and draft markers), new accepted picks and successful model
+drags repivot without moving the current projection. Photo/table selection,
+link, cancel, delete and passive row refresh leave the pivot unchanged.
+Double-click truly empty model background resets only the orbit centre to
+the captured Scene-frame origin (or stable fallback centre), preserving
+camera pose, zoom, pan, projection and draft. Both clicks must be classified
+as empty; painted, ambiguous or near-snap geometry is not empty.
+Signed eye depth is supported when rebasing to the original centre behind
+the camera, including persistence in the existing physical v4 session.
+Legacy optical behaviour and full Reset View remain unchanged.
+Next: 8F.6i context menus and Undo/Redo. Browser/full CI pending.
+
 ## 8F.6g — Independent endpoint drag transactions
 
 Integrated Globe saved and draft markers are draggable on either viewport.

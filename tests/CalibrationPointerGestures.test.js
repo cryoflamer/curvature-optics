@@ -45,3 +45,15 @@ test('mounted adapter suppresses browser menu, captures once and cancels outside
   events.pointerdown(event(10,10));events.lostpointercapture({pointerId:1});assert.equal(m.active,null);assert.equal(log.at(-1),'end:cancel');
   let prevented=false;events.contextmenu({preventDefault(){prevented=true;}});assert.equal(prevented,true);
 });
+
+test('empty background double-click is distinct from a pick and cannot link a draft',()=>{
+  const g=gestures.create(),empty={kind:'background',empty:true},object={kind:'background',empty:false};
+  const click=(t,target)=>{g.begin(event(10,10,0,t),target,'orbit');return g.finish(event(10,10,0,t));};
+  assert.equal(click(10,empty).kind,'click');
+  assert.equal(click(110,object).kind,'click');
+  assert.equal(click(210,draft).kind,'double-click');
+  assert.equal(click(310,empty).kind,'click');assert.equal(click(410,draft).kind,'click');
+  assert.equal(click(510,empty).kind,'click');const reset=click(610,empty);
+  assert.equal(reset.kind,'double-click');assert.equal(reset.target.empty,true);
+  g.begin(event(10,10),empty,'orbit');assert.equal(g.active.action,'orbit');
+});

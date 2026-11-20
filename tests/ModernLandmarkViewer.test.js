@@ -503,6 +503,10 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   api.setCorrespondences([physicalPair],null);
   const markerPixel=api.correspondences().find(r=>r.id==='physical').pixel;
   const markerEvent={...eventForFraming(),clientX:markerPixel[0],clientY:markerPixel[1]};
+  const basePivot=api.snapshot().pivot;
+  api.setCorrespondences([physicalPair],'physical');assert.deepEqual(api.snapshot().pivot,basePivot);
+  canvas.events.pointerdown(markerEvent);canvas.events.pointerup(markerEvent);
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
   const beforeMarker=api.snapshot().view;
   canvas.events.pointerdown(markerEvent);canvas.events.pointermove({...markerEvent,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,clientX:markerEvent.clientX+25});
   assert.deepEqual(api.snapshot().view,beforeMarker);
@@ -541,6 +545,29 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   canvas.events.pointerdown(vertexClick);canvas.events.pointermove({...vertexClick,clientX:400,clientY:300});
   canvas.events.lostpointercapture({pointerId:1});
   assert.equal(moves.length,1);assert.deepEqual(api.sessionSnapshot(),afterDrag);
+  // Draft still exists; explicit click repivots even though it is not a saved pair.
+  canvas.events.pointerdown({...vertexClick,timeStamp:300});canvas.events.pointerup({...vertexClick,timeStamp:300});
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
+  // Rotate and pan while retaining the pivot. Empty background double-click
+  // must preserve all projected coordinates, camera parameters and draft.
+  canvas.events.pointerdown({...eventForFraming(),clientX:20,clientY:20});
+  canvas.events.pointermove({...eventForFraming(),clientX:50,clientY:35});
+  canvas.events.pointerup({...eventForFraming(),clientX:50,clientY:35});
+  canvas.events.wheel({...eventForFraming(),deltaY:-120});
+  const beforeReset=api.snapshot(),beforeCamera=viewer.regionCamera(expectedGeometry,beforeReset.view,800,600);
+  const bg={...eventForFraming(),clientX:5,clientY:5,timeStamp:1000};
+  canvas.events.pointerdown(bg);canvas.events.pointerup(bg);
+  assert.deepEqual(api.snapshot().pivot,beforeReset.pivot);
+  canvas.events.pointerdown({...bg,timeStamp:1100});canvas.events.pointerup({...bg,timeStamp:1100});
+  const resetPivotState=api.snapshot(),afterCamera=viewer.regionCamera(expectedGeometry,resetPivotState.view,800,600);
+  assert.deepEqual(resetPivotState.pivot,expectedGeometry.frame.origin);
+  for(const k of ['yaw','pitch','zoom','pan','projection'])assert.deepEqual(resetPivotState.view[k],beforeReset.view[k]);
+  for(const p of expectedGeometry.items[0].points)assert.ok(Math.hypot(...beforeCamera.coordinates(p).map((n,i)=>n-afterCamera.coordinates(p)[i]))<1e-8);
+  assert.equal(materialHits.length,1);
+  // Passive selection/row replacement must not replace the restored pivot.
+  api.setCorrespondences([physicalPair],'physical');assert.deepEqual(api.snapshot().pivot,resetPivotState.pivot);
+  api.setCorrespondences([],null);assert.deepEqual(api.snapshot().pivot,resetPivotState.pivot);
+  const restoredPivot=api.sessionSnapshot();api.restoreSession(restoredPivot);assert.deepEqual(api.snapshot().pivot,resetPivotState.pivot);
   acceptMove=false;
   api.setPendingVertex(null);api.clearLocalPoint();api.resetScene();
   // Ctrl changes the stationary hover and click selection; no Alt dependency.
@@ -770,4 +797,32 @@ test('automatic picking prioritizes visible authored features with CSS hysteresi
   const items=[square,front],occluded=viewer.pickFrame(viewer.preparePick(items),viewer.regionPaths({...g,items},{...viewer.reset(),projection:'perspective'},100,100));
   assert.equal(viewer.automaticPick(occluded,[30,30],{previous:vertex}).candidates[0].index,1);
   assert.equal(viewer.automaticPick({...frame,entries:Array.from({length:2501},()=>frame.entries[0])},[50,50]).limited,true);
+});
+
+test('stable default pivot can be restored behind the eye without changing projection',()=>{
+  const g={eye:[0,0,10],focal:100,near:.001,region:{x:0,y:0,width:100,height:100},seed:[50,50]};
+  for(const projection of ['perspective','orthographic']){
+    const state={...viewer.reset(),yaw:Math.PI,pitch:0,projection,zoom:2,pan:[7,-3],orbitPivot:{point:[0,0,-50],eye:[0,0,10]}};
+    // Camera now looks toward positive Z; default pivot is in front.
+    const inFront=viewer.resetPhysicalPivot(g,state,100,100);
+    assert.deepEqual(inFront.orbitPivot.point,[0,0,0]);
+    // Orbit around a +Z point and default origin is behind the camera.
+    const behind={...state,orbitPivot:{point:[0,0,50],eye:[0,0,10]}};
+    const before=viewer.regionCamera(g,behind,100,100),next=viewer.resetPhysicalPivot(g,behind,100,100),after=viewer.regionCamera(g,next,100,100);
+    assert.deepEqual(next.orbitPivot.point,[0,0,0]);assert.ok(next.orbitPivot.eye[2]<0);
+    for(const p of [[1,2,50],[0,0,55],[0,0,0]])assert.ok(Math.hypot(...before.coordinates(p).map((v,i)=>v-after.coordinates(p)[i]))<1e-8);
+    for(const k of ['yaw','pitch','zoom','pan','projection'])assert.deepEqual(next[k],behind[k]);
+  }
+});
+test('empty background excludes painted, near-snap and unresolved geometry',()=>{
+  const square={type:'polygon',mode:3,style:{},bank:0,index:0,primitive:0,owner:{kind:'object',bank:0,index:0},points:[[-2,-2,0],[2,-2,0],[2,2,0],[-2,2,0]]};
+  const g={eye:[0,0,10],focal:100,near:.001,seed:[50,50],region:{x:0,y:0,width:100,height:100},items:[square]};
+  const frame=viewer.pickFrame(viewer.preparePick(g.items),viewer.regionPaths(g,{...viewer.reset(),projection:'perspective'},100,100));
+  assert.equal(viewer.frameBackgroundEmpty(frame,[5,5]),true);
+  assert.equal(viewer.frameBackgroundEmpty(frame,[50,50]),false);
+  assert.equal(viewer.frameBackgroundEmpty(frame,[24,30]),false);
+  assert.equal(viewer.frameBackgroundEmpty({...frame,entries:Array.from({length:2501},()=>frame.entries[0])},[24,30]),false);
+  const invalid={...square,points:[[-2,-2,0],[2,-2,0],[2,2,1],[-2,2,0]]};
+  const bad=viewer.pickFrame(viewer.preparePick([invalid]),viewer.regionPaths({...g,items:[invalid]},{...viewer.reset(),projection:'perspective'},100,100));
+  assert.equal(viewer.frameBackgroundEmpty(bad,[50,50]),false);
 });
