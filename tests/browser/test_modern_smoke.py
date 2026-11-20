@@ -1081,11 +1081,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             }""")
         def configure_flat(side):
             self.page.locator('#ModernModelTab'+side).click()
+            self.page.locator('#ModernSettingsSurface').click()
+            expect(self.page.locator('#ModernComparePanelSurface')).to_be_visible()
             self.page.locator('#ModernModelFlat').click()
-            self.page.evaluate("""() => {
-                const n=document.getElementById('ModernModelAtmosphere');
-                n.value='standard';n.dispatchEvent(new Event('change',{bubbles:true}));
-            }""")
+            self.page.locator('#ModernSettingsAtmosphere').click()
+            expect(self.page.locator('#ModernComparePanelAtmosphere')).to_be_visible()
+            self.page.locator('#ModernModelAtmosphere').select_option('standard')
+            # Wait for the intended durable state, not a previous saved
+            # status that can remain visible during the autosave debounce.
+            self.page.wait_for_function("""async side => {
+                const row=await CurvatureModernSessionAutosave.read(indexedDB);
+                const e=row?.experiment;
+                return e?.display.mode==='compare'&&e.compare.selected===side&&
+                    e.compare[side].surface==='flat'&&e.compare[side].atmosphere==='standard';
+            }""",arg=side,timeout=30000)
             e=checkpoint()
             self.assertEqual(e['compare'][side]['surface'],'flat')
             self.assertEqual(e['compare'][side]['atmosphere'],'standard')

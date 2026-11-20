@@ -1,3 +1,18 @@
+## 8F.7d.5a — Compare qualification settings navigation (#11)
+
+CI 44810282627 on 1be3947: Node 2233 passed, one skipped;
+architecture 136/136; Chromium 50/51. The new qualification stopped
+before fitting at configure_flat('B'), line 1084: ModernModelFlat
+existed but was hidden behind the default Camera settings tab.
+The fixture now opens the real Surface and Atmosphere settings tabs,
+asserts the Compare panels are visible, and uses the native select
+rather than a hidden-element synthetic event. Waits for the intended
+selected-side physics in the durable IndexedDB checkpoint before
+reading local/remote equality, avoiding the autosave debounce race.
+No production changes, no removed coverage. Embedded JS syntax checked;
+the remainder of this new live scenario has not yet run to completion.
+Full native CI must pass before closing #11.
+
 ## 8F.7d.5 — Compare Apply and persistence qualification (#11)
 
 Predecessor 154b5ff CI 44806614932 passed.
