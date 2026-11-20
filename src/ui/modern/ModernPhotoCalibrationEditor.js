@@ -500,7 +500,7 @@
     pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
     const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
-    let legacyShown=false,inlineSource=null,physicalSource=null,initialParked=false,bestCropSource=null;
+    let legacyShown=false,inlineSource=null,physicalSource=null,physicalFraming=null,renderingModel=false,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
@@ -964,6 +964,7 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
+      renderingModel=true;physicalSource=null;physicalFraming=null;
       inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;
       if(!restoring){inlineSessions={initial:null,best:null};saveInline();}
       if(viewer.isCrop())viewer.close();cropSource=null;cancelRegion();
@@ -1036,7 +1037,14 @@
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
         // Physical editor remains available even if the optical preview fails.
       }
-      refreshObjectSelection();meshDraw();
+      if(globeRoute()){
+        if(cropSource)try{
+          const m=cropSource.model,observer=env.CurvatureCameraTranslation.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,1/m.rEarth);
+          physicalFraming={source:cropSource,observer,spans:ownerSpans,packages};
+        }catch(error){/* Independent physical fallback remains available. */}
+        physicalSource={kind:'physical-v2',model:scene.model,physics:scene.physics,source:physicalFraming?cropSource:null};
+      }
+      renderingModel=false;refreshObjectSelection();meshDraw();
     }
     function packageLabel(pkg){
       if(pkg.owner.kind==='span'){
@@ -1114,6 +1122,7 @@
     }
     function syncInline(){
       if(!syncModelRoute()||workspace.hidden)return false;
+      if(renderingModel)return true;
       const best=!!(viewBest&&fitBest&&paintedFit&&bestCropSource),source=best?bestCropSource:physicalSource;
       if(!source)return true;
       if(inlineSource===source&&inlineViewer.isOpen())return true;
@@ -1130,7 +1139,7 @@
         }
         if(best)inlineViewer.openScene({width:source.width,height:source.height,banks:scene.banks,paint:inlinePaint(source),
           readOnly:true,title:'Model · Best Camera'});
-        else inlineViewer.openPhysical(scene.banks);
+        else inlineViewer.openPhysical(scene.banks,physicalFraming);
         inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();
         if(!restoring)restoreInlineRole(role,source);
         syncInlineOwner();return true;
@@ -1348,7 +1357,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;physicalSource={kind:'physical-v1',model:next.model};selectedObjectKey=null;pickMode.value='vertex';
+      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;physicalSource=null;physicalFraming=null;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);

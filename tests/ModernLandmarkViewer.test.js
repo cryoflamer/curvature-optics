@@ -481,12 +481,27 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   api.openPhysical(banks);
   assert.equal(api.snapshot().mode,'free');assert.deepEqual(api.snapshot().pivot,[0,100,0]);
   assert.equal(host.querySelector('[data-viewer-scene-controls]').style.display,'none');
-  assert.equal(api.sessionSnapshot().version,3);
+  assert.equal(api.sessionSnapshot().version,4);
   const physicalSaved=api.sessionSnapshot(),physicalBefore=api.snapshot();
   api.openPhysical(banks);api.restoreSession(physicalSaved);assert.deepEqual(api.snapshot(),physicalBefore);
   assert.equal(api.resetScene(),true);assert.equal(api.snapshot().mode,'free');
   assert.equal(api.parkScene(),true);api.openScene({...sourceContract,readOnly:true});assert.equal(api.resumeScene(),true);
   assert.equal(api.snapshot().mode,'free');api.close();
+  // Open directly in exactly the previous Scene-derived physical frame.
+  const framing={source,observer,spans:new Map([[1,[[400,300,1]]]]),
+    packages:new Map([[1,{owner,primaryIndices:[0]}]])};
+  const expectedGeometry=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400.5,300.5],region:full},source,observer);
+  api.openPhysical(banks,framing);
+  assert.equal(api.snapshot().mode,'free');assert.deepEqual(api.snapshot().pivot,expectedGeometry.frame.origin);
+  assert.equal(api.snapshot().view.yaw,0);assert.equal(api.snapshot().view.pitch,0);
+  assert.deepEqual(api.snapshot().region,full);
+  const framed=api.sessionSnapshot();
+  canvas.events.pointerdown(eventForFraming());canvas.events.pointermove({...eventForFraming(),clientX:440});canvas.events.pointerup({...eventForFraming(),clientX:440});
+  function eventForFraming(){return {preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};}
+  const rotated=api.sessionSnapshot(),rotatedView=api.snapshot();
+  api.close();api.openPhysical(banks,framing);api.restoreSession(rotated);assert.deepEqual(api.snapshot(),rotatedView);
+  assert.equal(api.resetScene(),true);assert.deepEqual(api.snapshot().view,framed.view);
+  api.close();
   api.openScene(sourceContract);
   assert.equal(api.isOpen(),true);assert.equal(host.hidden,false);assert.equal(api.windowSnapshot(),null);
   assert.deepEqual(api.snapshot().region,full);
@@ -648,4 +663,23 @@ test('independent physical frame includes both banks and fits a stable world cen
   for(const item of g.items)for(const p of item.points)assert.ok(Math.hypot(...c.project(p).pixel.map((x,i)=>x-d.project(p).pixel[i]))<1e-8);
   assert.deepEqual(viewer.physicalGeometry(banks),g);
   assert.throws(()=>viewer.physicalGeometry([[],[]]),/No visible geometry/);
+});
+
+
+test('scene-framed physical view reproduces former initial projection and retains all banks',()=>{
+  const owner={kind:'object',bank:0,objectType:3},other={...owner,bank:1};
+  const make=(o,points)=>({type:'polygon',mode:3,style:{},points,metadata:{landmarkOwner:o,landmarkPrimitive:0}});
+  const banks=[[make(owner,[[-1,100,-1],[1,100,-1],[1,100,1],[-1,100,1]])],
+    [make(other,[[20,10000,-1],[21,10000,-1],[21,10000,1]])]];
+  const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
+  const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]},region={x:0,y:0,width:800,height:600};
+  const spans=new Map([[1,[[400,300,1]]]]),packages=new Map([[1,{owner,primaryIndices:[0]}]]);
+  const g=viewer.initialPhysicalGeometry(banks,source,observer,spans,packages);
+  const old=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400.5,300.5],region},source,observer);
+  assert.equal(g.sceneFramed,true);assert.deepEqual(g.frame,old.frame);assert.deepEqual(g.items,old.items);
+  assert.equal(g.items.length,2);
+  const c=viewer.regionCamera(g,viewer.physicalView(g),800,600),d=viewer.regionCamera(old,{...viewer.physicalView(g)},800,600);
+  for(const p of g.items.flatMap(x=>x.points))assert.deepEqual(c.project(p),d.project(p));
+  assert.ok(Math.abs(c.project(g.items[0].points[0]).pixel[0]-c.project(g.items[0].points[1]).pixel[0])>100);
+  assert.deepEqual(viewer.initialPhysicalGeometry(banks,source,observer,new Map(),packages),viewer.physicalGeometry(banks));
 });

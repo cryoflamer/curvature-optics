@@ -201,7 +201,21 @@
       eye:[0,0,distance],focal:extent*.40*distance/b.radius,near:Math.max(.000001,distance*1e-7),
       region:{x:0,y:0,width:extent,height:extent},seed:[extent/2,extent/2],pivotError:0,owner:null};
   }
-  const physicalView=()=>({...reset(),yaw:-Math.PI/5,pitch:Math.PI/12,projection:'perspective',spans:true});
+  // Reuse the original full optical region's visible-owner seed and camera
+  // framing. The resulting viewport is physical from the first frame.
+  // No optical pixels or owner visibility are required for subsequent orbit.
+  function initialPhysicalGeometry(banks,source=null,observer=null,spans=null,packages=null){
+    if(source&&observer&&spans&&packages)try{
+      const region={x:0,y:0,width:source.width,height:source.height};
+      const seed=regionSeed(spans,region),owner=seed&&packages.get(seed.key);
+      if(owner){
+        const g=regionGeometry(banks,{owner:owner.owner,primaryIndices:owner.primaryIndices,pixel:seed.pixel,region},source,observer);
+        return {...g,physical:true,sceneFramed:true};
+      }
+    }catch(error){/* A missing or invalid optical seed must not prevent editing. */}
+    return physicalGeometry(banks);
+  }
+  const physicalView=geometry=>({...reset(),yaw:geometry?.sceneFramed?0:-Math.PI/5,pitch:geometry?.sceneFramed?0:Math.PI/12,projection:'perspective',spans:true});
   function regionCamera(geometry,state,width,height){
     const a=state.yaw,p=state.pitch,ca=Math.cos(a),sa=Math.sin(a),cp=Math.cos(p),sp=Math.sin(p);
     const right=[ca,0,-sa],up=[-sa*sp,cp,-ca*sp],toward=[sa*cp,sp,ca*cp];
@@ -1134,7 +1148,7 @@
     }
     function resetScene(){
       stopDrags();cancelHover();
-      if(crop?.physical){state=physicalView();paths=null;pickCache=null;syncMode();sync();return true;}
+      if(crop?.physical){state=physicalView(geometry);paths=null;pickCache=null;syncMode();sync();return true;}
       if(navigating()){
         if(free)try{switchGeometry(crop.source.geometry,crop.source.mesh);}catch(error){setText(status,error.message);return false;}
         crop.region={...crop.source.full};crop.reason='';
@@ -1233,9 +1247,9 @@
       stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=false;state=reset();
       crop={region:{...full},source:{width,height,full,geometry:next,mesh:nextMesh},paint,build:buildFree,reason:'',optical:true,readOnly:!!readOnly,title};
       heading.textContent=title;show();syncMode();render();sessionChanged();
-    },openPhysical(banks){
-      const next=physicalGeometry(banks),nextMesh=preparePick(next.items),full={...next.region};
-      stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=true;state=physicalView();
+    },openPhysical(banks,framing=null){
+      const next=initialPhysicalGeometry(banks,framing?.source,framing?.observer,framing?.spans,framing?.packages),nextMesh=preparePick(next.items),full={...next.region};
+      stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=true;state=physicalView(next);
       crop={physical:true,region:{...full},source:{width:full.width,height:full.height,full,geometry:next,mesh:nextMesh},
         build:null,reason:'',readOnly:false,title:'Model · Free View'};
       heading.textContent=crop.title;show();syncMode();sync();sessionChanged();
@@ -1266,13 +1280,13 @@
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
     },resetScene,enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
-      return JSON.parse(JSON.stringify({version:crop.physical?3:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+      return JSON.parse(JSON.stringify({version:crop.physical?4:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed,...(crop.physical?{frame:geometry.frame,eye:geometry.eye,focal:geometry.focal}: {})}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
       if(navigating()){
         // Rebuild the original physical frame, not the currently selected pivot.
         // The local camera/pivot coordinates are meaningful only in that frame.
         const r=saved?.region,b=saved?.base;
-        if(saved?.version!==(crop.physical?3:2)||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||(crop.physical&&!saved.free)||
+        if(saved?.version!==(crop.physical?4:2)||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||(crop.physical&&!saved.free)||
           !['navigate','vertex','edge','surface','fast-vertex','owner'].includes(saved.pickMode)||
           (crop.readOnly&&(saved.free||saved.pickMode!=='navigate'))||
           !r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||
@@ -1283,7 +1297,8 @@
         if(saved.free){
           if(crop.physical){
             if(!finite3(b?.worldPoint)||Math.hypot(...sub(g.frame.origin,b.worldPoint))>1e-6||
-              JSON.stringify(r)!==JSON.stringify(g.region)||JSON.stringify(b.pixel)!==JSON.stringify(g.seed)||b.owner!==null)
+              JSON.stringify(r)!==JSON.stringify(g.region)||JSON.stringify(b.pixel)!==JSON.stringify(g.seed)||JSON.stringify(b.owner)!==JSON.stringify(g.owner)||JSON.stringify(b.frame)!==JSON.stringify(g.frame)||
+              JSON.stringify(b.eye)!==JSON.stringify(g.eye)||b.focal!==g.focal)
               throw Error('Stored physical frame changed');
           }else{
           if(!crop.build||!finite3(b?.worldPoint)||!b.owner||!Array.isArray(b.pixel)||b.pixel.length!==2||!b.pixel.every(Number.isFinite))
@@ -1350,5 +1365,5 @@
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({physicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({physicalGeometry,initialPhysicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -1,3 +1,19 @@
+## 8F.6c.1 — Initial Free View framing corrected
+
+Manual feedback: fitting all authored geometry made a long bridge nearly
+unusable. Restore the original Scene-camera framing: the full optical
+region's nearest visible-owner seed, physical pivot, camera axes and focal
+scale are reused directly in Free View, without opening Initial Camera.
+All physical primitives remain available. That initial pivot is the
+default centre for the future empty-background double-click gesture.
+If no valid optical owner seed exists, use the independent full-scene
+frame as fallback. No selection or correspondence-based framing heuristic.
+The physical viewport is opened only after the initial seed pass finishes.
+Physical view session v4 validates the scene-derived base frame; v3
+overview snapshots are intentionally invalidated once. Saved pairs and
+drafts are unchanged. Best Camera/legacy routes unchanged.
+Next: 8F.6d unified gestures. Browser/full CI pending.
+
 ## 8F.6c — Independent physical Free View
 
 The agreed mouse-first implicit wizard roadmap is recorded in

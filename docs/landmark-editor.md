@@ -54,8 +54,10 @@ Buttons and modes are implementation details, not prerequisites.
   context; a new committed edit invalidates Redo. Persist durable state and
   validated draft/view, never a transient gesture or hover.
 - Correspondence editor uses a physical Free View only; optical initial
-  and best cameras belong to Result, not picking. Default centre is stable
-  for the captured physical scene. Full-scene geometry from both banks,
+  and best cameras belong to Result, not picking. Default centre is the original Scene-framing physical pivot, stable
+  for the captured scene; use the old camera/visible-owner seed and focal
+  scale as initial framing only. If unavailable, fall back to full-scene
+  bounds. No correspondence-dependent initial framing. Full-scene geometry from both banks,
   independent of optical visibility/refraction. Preserve legacy Flat and
   optical inspection until parity is established.
 - Overall nonlinear wizard: Reference photograph -> Correspondences ->
@@ -73,7 +75,7 @@ Buttons and modes are implementation details, not prerequisites.
 | --- | --- |
 | 8F.6a | Central pair workflow (implemented) |
 | 8F.6b | Shared controls (implemented, transitional) |
-| 8F.6c | Independent physical Free View and stable default centre |
+| 8F.6c | Independent physical Free View and Scene-derived default centre (8F.6c.1) |
 | 8F.6d | Unified gesture recognition and marker hit testing |
 | 8F.6e | Automatic picking/snapping and hover preview |
 | 8F.6f | Implicit pairing wizard and double-click commit |
