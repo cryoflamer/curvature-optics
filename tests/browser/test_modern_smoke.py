@@ -754,6 +754,296 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),outgoing)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_soundly_calibration_live_apply_qualification(self):
+        # One genuine seven-field UI fit, reused across deterministic
+        # failure injections and a successful, durable Apply. The historical
+        # observations are real; the PNG is a synthetic storage fixture.
+        self.open_modern()
+        ready=self.page.locator('#ModernPhotoCalibrationOpen')
+        expect(ready).to_be_enabled(timeout=30000)
+        self.page.locator('#ModernRender').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        outgoing=self.page.evaluate("""async () =>
+            (await CurvatureModernSessionAutosave.read(indexedDB)).experiment""")
+        self.assertEqual(outgoing['display']['mode'],'scene')
+
+        scene_read="""() => {
+            const {model,physics}=CurvatureModernApp.getPhotoCalibrationScene();
+            const keys=[...CurvatureModernExperimentState.CAMERA,'CameraEast','CameraNorth',
+                'viewcenterHorizon','showModel','rEarth',...CurvatureModernExperimentState.OBJECT];
+            return {model:Object.fromEntries(keys.map(k=>[k,model[k]])),physics};
+        }"""
+        read_scene=lambda: self.page.evaluate(scene_read)
+        original_scene=read_scene()
+        ready.click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        self.page.evaluate("CurvatureModernApp.getHistoryStore().list()")
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        read=lambda: self.page.evaluate(
+            "CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        fields=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField']
+        self.assertEqual(read()['fit']['freeParameters'],fields)
+        for field in fields:
+            expect(workspace.locator('[data-fit-field="'+field+'"]')).to_be_checked()
+        run=workspace.locator('#ModernCalibrationRunFit')
+        expect(run).to_be_enabled()
+        run.click()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        expect(button).to_be_visible(timeout=120000)
+        expect(button).to_be_enabled(timeout=120000)
+        fitted=read()
+        result=fitted['fit']['result']
+        self.assertFalse(fitted['fit']['running'])
+        self.assertEqual(result['freeParameters'],fields)
+        self.assertTrue(result['evaluation']['valid'])
+        self.assertEqual(len(result['evaluation']['points']),14)
+        self.assertAlmostEqual(result['initialRmsPx'],314.7555157775399,places=5)
+        self.assertGreater(result['acceptedSteps'],0)
+        self.assertLess(result['evaluation']['rmsPx'],15)
+        self.assertEqual(fitted['observations'],data['observations'])
+        self.assertEqual([p['id'] for p in result['evaluation']['points']],
+                         [r['landmark']['id'] for r in fitted['observations']])
+        self.assertEqual([p['observed'] for p in result['evaluation']['points']],
+                         [r['pixel'] for r in fitted['observations']])
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text(
+            'Draft saved in this browser.',timeout=30000)
+
+        status=workspace.locator('#ModernCalibrationApplyStatus')
+        def apply():
+            self.page.once('dialog',lambda prompt:prompt.accept())
+            button.click()
+        def unchanged():
+            expect(workspace).to_be_visible()
+            expect(button).to_be_enabled(timeout=30000)
+            self.assertEqual(read_scene(),original_scene)
+            self.assertEqual(read()['fit']['result'],result)
+            self.assertEqual(read()['observations'],fitted['observations'])
+            self.assertEqual(read()['referenceImage'],fitted['referenceImage'])
+        def stored():
+            return self.page.evaluate("""async () => ({
+                results:await CurvatureModernCalibrationResultArchive.list(indexedDB),
+                history:await CurvatureModernApp.getHistoryStore().list()
+            })""")
+        def recovery_rows():
+            return [row for row in stored()['history'] if row['pinned']]
+
+        # Fail actual IndexedDB writes in only the designated database.
+        # All other storage, editor, archive, History and Apply code is real.
+        for target,count in [('archive',0),('history',1)]:
+            with self.subTest(failure=target):
+                self.page.evaluate("""target => {
+                    const proto=IDBDatabase.prototype,original=proto.transaction;
+                    const name=target==='archive'?CurvatureModernCalibrationResultArchive.DATABASE:
+                        CurvatureModernExperimentHistory.DATABASE;
+                    window.__qualificationRestoreTransaction=()=>{proto.transaction=original;};
+                    proto.transaction=function(stores,mode,...args){
+                        if(this.name===name&&mode==='readwrite')
+                            throw Error('Qualification '+target+' write rejected');
+                        return original.call(this,stores,mode,...args);
+                    };
+                }""",target)
+                try:
+                    apply()
+                    expect(status).to_contain_text(
+                        'Apply failed: Qualification '+target+' write rejected',timeout=30000)
+                    unchanged()
+                finally:
+                    self.page.evaluate("window.__qualificationRestoreTransaction()")
+                self.assertEqual(len(stored()['results']),count)
+                self.assertEqual(recovery_rows(),[])
+
+        # Hold the real archival acknowledgement at an await boundary.
+        # Navigate away and back to the same draft: matching numerical
+        # values alone must not authorize the old Apply generation.
+        self.page.evaluate("""() => {
+            const api=window.CurvatureModernCalibrationResultArchive;
+            const gate={ready:false,release:null,restore:()=>{
+                window.CurvatureModernCalibrationResultArchive=api;
+            }};
+            window.__qualificationArchiveGate=gate;
+            window.CurvatureModernCalibrationResultArchive={...api,
+                async archiveExperiment(...args){
+                    const saved=await api.archiveExperiment(...args);
+                    await new Promise(resolve=>{gate.release=resolve;gate.ready=true;});
+                    return saved;
+                }};
+        }""")
+        try:
+            apply()
+            self.page.wait_for_function("window.__qualificationArchiveGate.ready",timeout=30000)
+            expect(button).to_be_disabled()
+            workspace.locator('#ModernCalibrationClose').click()
+            expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
+            self.assertEqual(read_scene(),original_scene)
+            ready.click()
+            expect(workspace).to_be_visible()
+            self.page.evaluate("window.__qualificationArchiveGate.release()")
+            expect(status).to_contain_text('changed; apply again',timeout=30000)
+            unchanged()
+        finally:
+            self.page.evaluate("""() => {
+                const gate=window.__qualificationArchiveGate;
+                if(gate.release)gate.release();
+                gate.restore();
+            }""")
+        self.assertEqual(len(stored()['results']),1)
+        self.assertEqual(recovery_rows(),[])
+
+        # Retry, using the same genuine fit and already durable original.
+        apply()
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
+            'Save Snapshot to keep this Scene',timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getOpticalQuality()"),'accurate')
+        actual=read_scene()
+        expect(status).to_contain_text('Applied to Scene. Calibration draft retained.',timeout=30000)
+        for field in fields:
+            self.assertAlmostEqual(actual['model'][field],result['pose'][field],places=7)
+        self.assertEqual(actual['model']['viewcenterHorizon'],3)
+        for key in self.page.evaluate("CurvatureModernExperimentState.OBJECT"):
+            self.assertEqual(actual['model'][key],fitted['scene']['model'][key])
+        for key in ['showModel','rEarth']:
+            self.assertEqual(actual['model'][key],fitted['scene']['model'][key])
+        self.assertEqual(actual['physics'],fitted['scene']['physics'])
+        durable=stored()
+        self.assertEqual(len(durable['results']),1)
+        rid=durable['results'][0]['id']
+        recovery=recovery_rows()
+        self.assertEqual(len(recovery),1)
+        self.assertEqual(recovery[0]['source'],'recovery')
+        self.assertEqual(recovery[0]['experiment'],outgoing)
+        self.assertFalse(any((row['experiment'].get('calibrationOrigin') or {}).get('resultId')==rid
+                             for row in durable['history']))
+        verified=self.page.evaluate("""async id => {
+            const archive=CurvatureModernCalibrationResultArchive,
+                lib=CurvatureModernReferenceImageLibrary,imp=CurvatureModernReferenceImageImport;
+            const record=(await archive.get(indexedDB,id)).record;
+            const original=await lib.findOriginal(indexedDB,record.payload.photo,crypto,
+                r=>imp.verifyOriginal(r,window));
+            if(!original)throw Error('Archived original not found');
+            return {record,original:original.record.original};
+        }""",rid)
+        self.assertEqual(verified['original'],fitted['referenceImage']['original'])
+        self.assertEqual(verified['record']['payload']['fit']['result']['pose'],
+                         {field:result['pose'][field] for field in fields})
+        self.assertEqual(verified['record']['payload']['fit']['result']['evaluation']['rmsPx'],
+                         result['evaluation']['rmsPx'])
+
+        # Saving a calibrated Scene remains a separate explicit user action.
+        save=self.page.locator('#ModernSnapshotSave')
+        expect(save).to_be_visible(timeout=30000)
+        save.click()
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text(
+            'Already in History · protected',timeout=30000)
+        manual=[row for row in stored()['history'] if row['source']=='manual']
+        self.assertEqual(len(manual),1)
+        self.assertTrue(manual[0]['pinned'])
+        self.assertEqual(manual[0]['experiment']['calibrationOrigin']['resultId'],rid)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        checkpoint=self.page.evaluate("""async () =>
+            (await CurvatureModernSessionAutosave.read(indexedDB)).experiment""")
+        self.assertEqual(checkpoint,manual[0]['experiment'])
+        self.assertEqual(self.page.evaluate("""({checkpoint,record}) =>
+            CurvatureModernCalibrationTransfer.applicability(checkpoint,record).views.Scene.status""",
+            {'checkpoint':checkpoint,'record':verified['record']}),'calibrated')
+
+        self.page.reload(wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        expect(self.page.locator('#ModernPreset')).to_have_value('custom')
+        self.assertEqual(read_scene(),actual)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getOpticalQuality()"),'accurate')
+        self.assertEqual(len(recovery_rows()),2)
+        ready.click()
+        expect(button).to_be_enabled(timeout=30000)
+        self.assertEqual(read()['fit']['result'],result)
+        self.assertEqual(read()['observations'],fitted['observations'])
+        self.assertEqual(read()['referenceImage'],fitted['referenceImage'])
+        workspace.locator('#ModernCalibrationClose').click()
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
+        self.assertEqual(read_scene(),actual)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_calibration_legacy_json_import_apply_and_reload(self):
+        workspace=self.open_physical_calibration()
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        # Pre-material formats allowed authored vertices only. Use the genuine
+        # legacy subset, never relabel material anchors as legacy vertices.
+        rows=[{k:v for k,v in row.items() if k!='included'}
+              for row in fixture['observations']
+              if row['kind']=='vertex' and 'anchor' not in row['landmark']]
+        self.assertGreaterEqual(len(rows),2)
+        data=self.soundly_calibration_experiment(rows)
+        data['version']=1
+        data['fit']['freeParameters']=['Height']
+        read=lambda: self.page.evaluate(
+            "CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        def import_file(value,title,replace=False):
+            value['referenceImage']['title']=title
+            if replace:
+                self.page.once('dialog',lambda prompt:prompt.accept())
+            workspace.locator('#ModernCalibrationExperimentFile').set_input_files({
+                'name':'legacy-calibration.json','mimeType':'application/json',
+                'buffer':json.dumps(value).encode('utf-8')})
+            self.page.wait_for_function("""title => {
+                try{return CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .exportExperiment().referenceImage.title===title;}
+                catch(e){return false;}
+            }""",arg=title,timeout=30000)
+            expect(workspace.locator('#ModernCalibrationExchangeStatus')).to_have_text(
+                'Experiment imported.',timeout=30000)
+        import_file(data,'Legacy v1 draft')
+        current=read()
+        self.assertEqual(current['version'],2)
+        self.assertEqual(current['observations'],[{**r,'included':True} for r in rows])
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        workspace.locator('#ModernCalibrationRunFit').click()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        expect(button).to_be_visible(timeout=90000)
+        expect(button).to_be_enabled(timeout=90000)
+        fitted=read()
+        self.assertTrue(fitted['fit']['result']['evaluation']['valid'])
+        self.assertEqual(len(fitted['fit']['result']['evaluation']['points']),len(rows))
+        # A stored legacy fit lacks the v3 material binding and role field.
+        fitted['version']=1
+        fitted['observations']=rows
+        self.assertNotIn('materialBinding',fitted['fit']['result'])
+        import_file(fitted,'Legacy v1 fitted result',replace=True)
+        expect(button).to_be_enabled()
+        self.assertEqual(read()['fit']['result'],fitted['fit']['result'])
+        self.page.once('dialog',lambda prompt:prompt.accept())
+        button.click()
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
+            'Save Snapshot to keep this Scene',timeout=30000)
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),
+                               fitted['fit']['result']['pose']['Height'],places=7)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(button).to_be_enabled()
+        # v2 introduced validation roles. Import that older draft with a
+        # deliberately held-out vertex and check it survives a true reload.
+        data['version']=2
+        data['observations']=[{**row,'included':i!=0} for i,row in enumerate(rows)]
+        import_file(data,'Legacy v2 validation draft',replace=True)
+        self.assertEqual(read()['observations'],data['observations'])
+        self.assertIsNone(read()['fit']['result'])
+        expect(button).to_be_disabled()
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text(
+            'Draft saved in this browser.',timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(workspace).to_be_visible(timeout=30000)
+        self.assertEqual(read()['version'],2)
+        self.assertEqual(read()['observations'],data['observations'])
+        self.assertIsNone(read()['fit']['result'])
+        expect(button).to_be_disabled()
+        workspace.locator('#ModernCalibrationClose').click()
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),
+                               fitted['fit']['result']['pose']['Height'],places=7)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_photo_calibration_correspondence_editor(self):
         workspace=self.open_physical_calibration()
         scene_before=self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])")

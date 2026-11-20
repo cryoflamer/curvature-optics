@@ -26,6 +26,32 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.2c — Live Apply browser qualification
+
+The 8F.7b.2b.1-fix CI was green (44777773685; 43 browser tests).
+Two additional browser scenarios exercise the actual UI and worker,
+not fabricated seven-parameter fit results. The Soundly mixed fixture
+supplies 14 historical observation coordinates, but not the original
+photograph; a synthetic PNG qualifies decode, identity and persistence,
+not historical image authenticity or the scientific hypothesis. Assert
+an improved original-pixel Canvas Direct fit (RMS < 15 px), not a unique
+solution or equality with Accurate optics.
+
+Check actual database write rejection for the immutable calibration
+result and the outgoing History checkpoint independently. No live
+mutation before both durable acknowledgements; a saved original/result
+may survive a later failure. Hold successful archival acknowledgement
+while navigating out and back, so identical inputs cannot authorize an
+older Apply generation. Retry, verify the seven transferred fields,
+Eye-Lvl, physical surface/layout, atmosphere, Accurate Scene,
+archive/verified original, exact recovery and explicit manual snapshot.
+Qualify durable reload and retained draft/Back to Scene. The old
+vertex-only v1/v2 JSON format is accepted through the real file input;
+test fitted v1 Apply and validation-role v2 reload. Keep existing Node
+commit rollback and committed-presentation-failure tests. Full CI is
+required before acceptance; no production change, overlay or Compare
+Apply in this qualification step.
+
 ## 8F.7b.2b.1 — Calibration atmosphere as an explicit fixed hypothesis
 
 The editor now exposes Vacuum, Standard and Temperature gradient with

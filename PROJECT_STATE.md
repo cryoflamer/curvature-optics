@@ -1,3 +1,35 @@
+## 8F.7b.2c — Browser qualification for live Calibration Apply (#9)
+
+Correction CI 44777773685 passed all three jobs (Chromium 43/43).
+Added two live browser scenarios, retaining the previous imported-result,
+editable hypothesis, numerical qualification and protected-transaction tests:
+- Full seven-field Soundly fit through actual editor Run Calibration and
+  worker using all 14 mixed observations; numerical regression bound
+  RMS < 15 px, improved from the known initial RMS, not a convergence or
+  renderer parity claim. Use the existing synthetic PNG fixture because
+  the historical observation file contains no original photo.
+- Archive and outgoing History failure injection targets actual IndexedDB
+  readwrite transactions by database name. After failures, check the same
+  live camera/physics, retained result, observations and photo, no protected
+  outgoing checkpoint, and durable archive only when its own write succeeded.
+  Delay a real archive acknowledgement, navigate Back to Scene and reopen
+  the same draft; assert stale Apply rejected. Retry the genuine candidate.
+- Successful Apply checks all seven fields, Eye-Lvl, captured radius/layout
+  and atmosphere, Accurate quality, verified original bytes and immutable
+  result, exact pinned outgoing checkpoint, then separate explicit manual
+  Save Snapshot, working-session checkpoint/application status and reload.
+  Reopen fitted draft and exercise Back to Scene without mutation.
+- Old v1 vertex-only JSON import via the actual file control, real legacy
+  Height-only fit, reimport fitted v1 without material binding/role fields,
+  Apply to Scene. v2 import with held-out validation role survives reload;
+  no stale fit is applicable. The existing controller tests cover commit
+  rollback and post-commit presentation error classification.
+No production code or earlier assertions removed. Full checkout/local
+browser execution unavailable (network/DNS and browser navigation restrictions
+in the execution environment); new scenarios require full CI. Issue #9
+remains open until verified. Next #10 / 8F.7c Scene overlay after green CI
+and acceptance review.
+
 ## 8F.7b.2b.1-fix — Chromium regression correction (#9)
 
 CI 44775147087 passed Node and architecture, Chromium 41/43. The new
