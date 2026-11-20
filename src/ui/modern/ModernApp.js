@@ -1098,7 +1098,7 @@
         savedAt:Number.isSafeInteger(savedAt)&&savedAt>0?savedAt:null};
     }catch(error){return null;}
   }
-  function storeExperiment(){
+  function storeExperiment(publishUrl){
     if(!persistence.ready||!persistence.dirty||!experiments||!root.location)return;
     var current;
     try{current=experimentSnapshot();}
@@ -1145,7 +1145,7 @@
         root.history.replaceState(sharedState,'',root.location.href);
       }catch(error){errors.push('shared-link workspace: '+error.message);}
     }
-    if(!persistence.explicitUrl&&root.history&&root.location.href){
+    if(publishUrl!==false&&!persistence.explicitUrl&&root.history&&root.location.href){
       try{
         var url=new URL(root.location.href);
         if(!url.searchParams.has('state')){
@@ -1155,8 +1155,12 @@
           // Automatic addresses and explicit share links have distinct
           // intent. The exact locally issued address survives loss of
           // history.state, without relying on browser navigation timing.
-          var generatedUrl=experiments.urlWithWorkingExperiment(url.href,current,preferencesStorage());
+          var generatedUrl=experiments.urlWithWorkingExperiment(url.href,current);
           root.history.replaceState(historyState,'',generatedUrl);
+          // Do not invalidate the previously issued address on a rejected or
+          // ignored replaceState. The synchronous checkpoint is already safe.
+          if(root.location.href!==generatedUrl)throw Error('Working URL was not published');
+          experiments.rememberWorkingExperimentUrl(generatedUrl,preferencesStorage());
         }
       }catch(error){errors.push('URL: '+error.message);}
     }
@@ -1172,19 +1176,23 @@
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
   }
-  function flushWorkingSession(){
+  function flushWorkingSession(publishUrl){
     if(!persistence.ready||!persistence.dirty)return;
     if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
-    storeExperiment();
+    storeExperiment(publishUrl);
   }
   function bindWorkingSessionLifecycle(){
+    // Navigation may already have selected its destination address. Preserve
+    // the published working URL and its matching local identity while saving
+    // the latest checkpoint synchronously. Never issue a new URL on unload.
+    function checkpointOnly(){flushWorkingSession(false);}
     if(root.addEventListener){
-      root.addEventListener('pagehide',flushWorkingSession);
+      root.addEventListener('pagehide',checkpointOnly);
       // On mobile pagehide can be skipped when the browser is suspended.
-      root.addEventListener('beforeunload',flushWorkingSession);
+      root.addEventListener('beforeunload',checkpointOnly);
     }
     if(document.addEventListener)document.addEventListener('visibilitychange',function(){
-      if(document.hidden)flushWorkingSession();
+      if(document.hidden)checkpointOnly();
     });
   }
   // History lives in IndexedDB, not in the URL/legacy history or localStorage.

@@ -125,7 +125,7 @@ test('134: malformed explicit URL must not fall back to unrelated saved experime
   assert.equal(h.app.getModel().Height,15);
   assert.match(h.nodes.get('ModernPersistenceStatus').textContent,/not restored/);
 });
-function boot(href,saved,workingUrl){
+function boot(href,saved,workingUrl,options={}){
   const names=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill',
     'ModernOcclusionWrap','ModernSceneTab','ModernCompareTab','ModernCompareMessage',
     'ModernGraphHost','ModernCompareViews','ModernBackToScene','ModernHeight','ModernFocal',
@@ -146,8 +146,15 @@ function boot(href,saved,workingUrl){
   const storage=new Map(saved?[[codec.STORAGE_KEY,saved]]:[]);
   if(workingUrl)storage.set(codec.WORKING_URL_KEY,workingUrl);
   const copied=[],assigned=[],location={href,search:new URL(href).search,assign(url){assigned.push(url);}};
-  const history={state:null,replaceState(_,__,url){location.href=url;location.search=new URL(url).search;}};
-  const callbacks=[];
+  const history={state:null,failPublish:false,ignorePublish:false,replaceState(state,__,url){
+    if(this.failPublish)throw Error('replaceState refused');
+    if(this.ignorePublish)return;
+    if(options.deferAutosave)this.state=state;
+    location.href=url;location.search=new URL(url).search;
+  }};
+  const callbacks=[],lifecycle=new Map(),timers=new Map();
+  let timerId=0;
+  const listen=(type,fn)=>{if(!lifecycle.has(type))lifecycle.set(type,[]);lifecycle.get(type).push(fn);};
   function Model(){Object.assign(this,model());}
   const root={CurveAppClass:Model,CurvatureModernSceneState:null,
     CurvatureModernCompareModel:pairAdapter,CurvatureModernCompareState:compare,
@@ -160,9 +167,14 @@ function boot(href,saved,workingUrl){
     location,history,navigator:{clipboard:{writeText(text){copied.push(text);return Promise.resolve();}}},
     localStorage:{getItem(k){return storage.get(k)||null;},setItem(k,v){storage.set(k,v);},removeItem(k){storage.delete(k);}}};
   root.window=root;
-  const ctx={window:root,document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
+  const doc={getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}};
+  if(options.deferAutosave){root.addEventListener=listen;doc.addEventListener=listen;doc.hidden=false;}
+  const ctx={window:root,document:doc,
     URL,URLSearchParams,requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
-    setTimeout(fn){fn();return 1;},clearTimeout(){},console};
+    setTimeout(fn,delay){
+      if(options.deferAutosave&&delay===550){const id=++timerId;timers.set(id,fn);return id;}
+      fn();return options.deferAutosave?-1:1;
+    },clearTimeout(id){timers.delete(id);},console};
   root.CurvatureModernAnimationPlaybackControls=
     require('../src/animation/ModernAnimationPlaybackControls');
   vm.runInNewContext(source('src/ui/modern/ModernApp.js'),ctx);
@@ -171,7 +183,10 @@ function boot(href,saved,workingUrl){
     Redraw(){app.drawCompare(side,{id:side,Canvas:{width:800,height:500,
       getContext(){return {save(){},restore(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}};}}});}});
   callbacks[0]();
-  return {nodes,storage,location,assigned,copied,app};
+  return {nodes,storage,location,assigned,copied,app,history,timers,
+    fire(type){if(type==='visibilitychange')doc.hidden=true;
+      for(const fn of lifecycle.get(type)||[])fn({type});},
+    autosave(){for(const [id,fn] of [...timers]){timers.delete(id);fn();}}};
 }
 test('140.12.9: GPU Compare mode and target count survive share URL and old links remain valid',()=>{
   const e=experiment();
@@ -313,7 +328,9 @@ test('browser bootstrap and ordinary edits preserve historical origin independen
 test('working URL identity survives lost history independently of timing and distinguishes the public copy',()=>{
   const data=new Map(),store={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};
   const embedded=experiment();
-  const working=codec.urlWithWorkingExperiment('https://example.org/CurvatureModern.html',embedded,store);
+  const working=codec.urlWithWorkingExperiment('https://example.org/CurvatureModern.html',embedded);
+  assert.equal(codec.isWorkingExperimentUrl(working,store),false,'building a URL must not issue it');
+  codec.rememberWorkingExperimentUrl(working,store);
   const clean=codec.urlWithExperiment(working,embedded);
   assert.notEqual(working,clean);
   assert.equal(codec.isWorkingExperimentUrl(working,store),true);
@@ -342,4 +359,53 @@ test('working URL identity survives lost history independently of timing and dis
   assert.equal(foreign.nodes.get('ModernPersistenceStatus').textContent,'Restored shared URL');
   codec.clearWorkingExperimentUrl(store);
   assert.equal(codec.isWorkingExperimentUrl(working,store),false);
+});
+
+test('lifecycle checkpoint preserves the already published working address and restores newer Scene',()=>{
+  for(const event of ['beforeunload','pagehide','visibilitychange']){
+    const h=boot('https://example.org/CurvatureModern.html',null,null,{deferAutosave:true});
+    h.nodes.get('ModernCompareTab').listeners.click();h.autosave();
+    const published=h.location.href;
+    assert.equal(codec.readUrl(new URL(published).search).display.mode,'compare');
+    assert.equal(h.storage.get(codec.WORKING_URL_KEY),published);
+    h.nodes.get('ModernSceneTab').listeners.click();
+    assert.equal(h.location.href,published);
+    assert.equal(JSON.parse(h.storage.get(codec.STORAGE_KEY)).display.mode,'compare');
+    assert.ok(h.timers.size>0,'Scene save is pending');
+    h.history.state=null;
+    h.fire(event);
+    assert.equal(h.timers.size,0,'lifecycle cancels the delayed autosave');
+    assert.equal(h.location.href,published,event+' must not issue a new working address');
+    assert.equal(h.storage.get(codec.WORKING_URL_KEY),published);
+    assert.equal(h.history.state,null,'no replaceState during local checkpoint');
+    const latest=h.storage.get(codec.STORAGE_KEY);
+    assert.equal(JSON.parse(latest).display.mode,'scene');
+    const restored=boot(published,latest,h.storage.get(codec.WORKING_URL_KEY));
+    assert.equal(restored.app.getMode(),'scene');
+    assert.match(restored.nodes.get('ModernPersistenceStatus').textContent,/Restored working-session storage/);
+    const shared=boot(codec.urlWithExperiment(published,codec.readUrl(new URL(published).search)),latest,published);
+    assert.equal(shared.app.getMode(),'compare','public snapshot still wins');
+  }
+});
+
+test('rejected or ignored URL publication preserves the previous local identity',()=>{
+  for(const failure of ['failPublish','ignorePublish']){
+    const h=boot('https://example.org/CurvatureModern.html',null,null,{deferAutosave:true});
+    h.nodes.get('ModernCompareTab').listeners.click();h.autosave();
+    const published=h.location.href;
+    h.history[failure]=true;
+    h.nodes.get('ModernSceneTab').listeners.click();h.autosave();
+    assert.equal(h.location.href,published);
+    assert.equal(h.storage.get(codec.WORKING_URL_KEY),published);
+    assert.match(h.nodes.get('ModernPersistenceStatus').textContent,/Partial save: URL:/);
+    const latest=h.storage.get(codec.STORAGE_KEY);
+    assert.equal(JSON.parse(latest).display.mode,'scene');
+    assert.equal(boot(published,latest,published).app.getMode(),'scene');
+    h.history[failure]=false;
+    h.nodes.get('ModernCompareTab').listeners.click();h.autosave();
+    h.nodes.get('ModernSceneTab').listeners.click();h.autosave();
+    assert.notEqual(h.location.href,published);
+    assert.equal(h.storage.get(codec.WORKING_URL_KEY),h.location.href);
+    assert.equal(codec.readUrl(new URL(h.location.href).search).display.mode,'scene');
+  }
 });

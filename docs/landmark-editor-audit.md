@@ -1,3 +1,21 @@
+## 8F.7c.5c — Working Session Lifecycle Fix
+
+CI 44797546379 on 505a438: Node 2223 passed / one skipped, architecture
+passed, Chromium 46/47. Only immediate local Scene reload without
+history.state failed; the attached job log confirms the assertion.
+The likely race is a lifecycle flush publishing a new URL after reload
+has already selected the old URL, invalidating its exact local identity.
+
+Lifecycle flushes (beforeunload, pagehide, hidden document) now save the
+latest checkpoint without issuing a new automatic address. Ordinary
+autosave and explicit in-page flush can still publish a new address,
+but URL identity is recorded only after successful, observable
+replaceState; rejection or a silently ignored change retains the prior
+identity. Explicit shared-link behavior and the existing browser
+assertions are unchanged. Added deterministic delayed-autosave and
+failed/ignored-publication regressions. Full native Node and Chromium
+CI pending; #10 remains open. No physics or photo registration changes.
+
 ## 8F.7c.5b — Working URL Identity Fix
 
 The universal raster matrix passed CI 44795528786; only workspace

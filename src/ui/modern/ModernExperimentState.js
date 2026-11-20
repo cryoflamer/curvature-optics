@@ -247,15 +247,16 @@
     url.pathname=url.pathname.replace(/CurvatureApp\.html$/,'CurvatureModern.html');
     return url.href;
   }
-  function urlWithWorkingExperiment(href,value,storage){
+  function urlWithWorkingExperiment(href,value){
     var url=new URL(urlWithExperiment(href,value));
     url.searchParams.set(WORKING_URL_PARAM,'1');
-    // Record the exact generated address, not just an untrusted flag.
-    // A marked URL opened in a different browser without this record
-    // still imports its embedded experiment as an ordinary shared link.
-    try{if(storage)storage.setItem(WORKING_URL_KEY,url.href);}
-    catch(ignore){/* history.state remains the compatibility fallback. */}
     return url.href;
+  }
+  function rememberWorkingExperimentUrl(href,storage){
+    // Only register an address after the caller has actually published it.
+    // A marked URL opened in another browser still imports its payload.
+    try{if(storage)storage.setItem(WORKING_URL_KEY,new URL(href).href);}
+    catch(ignore){/* history.state remains the compatibility fallback. */}
   }
   function isWorkingExperimentUrl(href,storage){
     try{
@@ -271,7 +272,8 @@
   }
   return Object.freeze({VERSION:VERSION,PARAM:PARAM,STORAGE_KEY:STORAGE_KEY,
     WORKING_URL_PARAM:WORKING_URL_PARAM,WORKING_URL_KEY:WORKING_URL_KEY,
-    urlWithWorkingExperiment:urlWithWorkingExperiment,isWorkingExperimentUrl:isWorkingExperimentUrl,
+    urlWithWorkingExperiment:urlWithWorkingExperiment,rememberWorkingExperimentUrl:rememberWorkingExperimentUrl,
+    isWorkingExperimentUrl:isWorkingExperimentUrl,
     clearWorkingExperimentUrl:clearWorkingExperimentUrl,
     CAMERA:CAMERA,OBJECT:OBJECT,capture:capture,validate:validate,validateCalibrationOrigin:validateCalibrationOrigin,
     encode:encode,decode:decode,readUrl:readUrl,urlWithExperiment:urlWithExperiment});
