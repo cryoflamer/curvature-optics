@@ -1,3 +1,21 @@
+## 8F.6a — Calibration UX redesign: correspondence workflow
+
+Baseline: 770df7dfd3a2d6d8d411ff4c269f573337e5a18f (user-validated Undo).
+A pair workflow owns committed observations, selection, Browse/Add/Edit
+draft and Undo history. Existing point-first and explicit edit controls
+adapt to it; geometry, navigation, picking, fit and storage formats are
+unchanged. Weight input remains a UI adapter until shared controls.
+Selecting another marker during edit no longer changes the edit target.
+Legacy Flat, Fast Vertex and explicit Confirm behavior are retained.
+Add transition is available for the next toolbar.
+
+Agreed roadmap: 8F.6b shared toolbar; 8F.6c unified Vertex/Edge/Surface
+selection with one pair confirmation; 8F.6d independent photo/model move;
+8F.6e navigation and double-click pivot; 8F.6f Inspector and UI cleanup;
+8F.6g persistence and UX validation. Functional Parity and legacy Globe
+removal are deferred. Baseline tag must be created locally (connector
+does not expose tag creation).
+
 ## 8F.5d.1 — Undo consistency
 
 User confirmed model-side editing works but reported Undo failure. Added inline Undo, moved workspace Ctrl+Z before legacy mode guards, made history snapshots independent, cleared current and parked local overlays and material marker cache on undo. Existing correspondence cache is already rebuilt on setCorrespondences; no change to geometry rendering. Browser reproduction and full CI remain pending.

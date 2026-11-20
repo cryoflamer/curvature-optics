@@ -389,6 +389,59 @@
         result,status:typeof input.fit.status==='string'?input.fit.status.slice(0,1000):'Imported fit',
         running:input.fit.running===true}};
   }
+  // Correspondence lifecycle independent of DOM, camera, picking and storage.
+  function createPairWorkflow(){
+    let rows=[],activePair=null,draft=null,undoStack=[];
+    const copy=value=>JSON.parse(JSON.stringify(value));
+    const exists=id=>rows.some(r=>r.landmark.id===id);
+    const fresh=()=>({mode:'add',id:null,pixel:null,landmark:null});
+    const clearDraft=()=>{draft=null;};
+    function beginAdd(){draft=fresh();activePair=null;}
+    function beginEdit(id,{model=true}={}){
+      const row=rows.find(r=>r.landmark.id===id);if(!row)return false;
+      draft={mode:'edit',id,pixel:copy(row.pixel),landmark:model?copy(row.landmark):null};
+      activePair=id;return true;
+    }
+    function point(key,value){
+      if(value!==null&&!draft)beginAdd();
+      if(!draft)return;
+      draft[key]=value===null?null:copy(value);
+      if(draft.mode==='add'&&!draft.pixel&&!draft.landmark)clearDraft();
+    }
+    function select(id){
+      if(draft?.mode==='edit'&&id!==draft.id)return false;
+      if(id!==null&&!exists(id))return false;
+      activePair=id;return true;
+    }
+    function change(next,selection=activePair,{finish=false}={}){
+      undoStack.push({rows:copy(rows),activePair});if(undoStack.length>50)undoStack.shift();
+      rows=next;
+      if(finish||draft?.mode==='edit'&&!exists(draft.id))clearDraft();
+      activePair=exists(selection)?selection:null;
+    }
+    function cancel(){activePair=draft?.mode==='edit'?draft.id:null;clearDraft();}
+    function undo(){
+      const old=undoStack.pop();if(!old)return false;
+      rows=old.rows;activePair=exists(old.activePair)?old.activePair:null;clearDraft();return true;
+    }
+    function replaceAll(next=[]){rows=next;activePair=null;clearDraft();undoStack=[];}
+    function restoreDraft({editing=null,pending=null,pendingModel=null,activePair:selection=null}){
+      clearDraft();activePair=exists(selection)?selection:null;
+      if(exists(editing)){
+        draft={mode:'edit',id:editing,pixel:copy(pending),landmark:copy(pendingModel)};activePair=editing;
+      }else if(pending||pendingModel)draft={...fresh(),pixel:copy(pending),landmark:copy(pendingModel)};
+    }
+    function restoreHistory(entries){undoStack=copy(entries.slice(-50));}
+    return Object.freeze({
+      get rows(){return rows;},get activePair(){return activePair;},get mode(){return draft?.mode||'browse';},
+      get editing(){return draft?.mode==='edit'?draft.id:null;},
+      get pending(){return draft?.pixel||null;},get pendingModel(){return draft?.landmark||null;},
+      get undoStack(){return undoStack;},get canCommit(){return !!(draft?.pixel&&draft.landmark);},
+      beginAdd,beginEdit,select,selectPhoto:p=>point('pixel',p),selectModel:l=>point('landmark',l),
+      clearDraft,cancel,change,undo,replaceAll,restoreDraft,restoreHistory,
+      snapshot(){return copy({mode:draft?.mode||'browse',rows,activePair,draft,undoStack});}
+    });
+  }
   let mounted=null;
   function mount(doc){
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
@@ -399,7 +452,8 @@
       vertex=$('ModernCalibrationVertex'),list=$('ModernCalibrationPairs'),status=$('ModernCalibrationStatus'),
       add=$('ModernCalibrationAdd'),weight=$('ModernCalibrationWeight'),px=$('ModernCalibrationX'),py=$('ModernCalibrationY');
     const ctx=photo.getContext('2d'),mesh=sceneCanvas.getContext('2d');
-    let scene=null,record=null,image=null,view=null,rows=[],pending=null,editing=null,loadToken=0,
+    const workflow=createPairWorkflow();
+    let scene=null,record=null,image=null,view=null,loadToken=0,
       groups=[],vertices=[],drag=null,modelDrag=null;
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
       modelStatus=$('ModernCalibrationModelStatus'),pickStatus=$('ModernCalibrationPickStatus'),
@@ -430,8 +484,8 @@
     const inlineCancel=doc.createElement('button');inlineCancel.type='button';inlineCancel.textContent='Cancel draft pair';inlineCancel.disabled=true;
     inlineHost.querySelector('[data-viewer-selection-status]').after(inlineCancel);
     inlineCancel.onclick=cancelPairDraft;
-    const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(pending&&pendingModel&&!viewBest)savePair();};
-    const inlineEdit=doc.createElement('button');inlineEdit.type='button';inlineEdit.textContent='Edit pair';inlineEdit.disabled=true;inlineEdit.onclick=()=>beginPairEdit(activePair);
+    const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(workflow.pending&&workflow.pendingModel&&!viewBest)savePair();};
+    const inlineEdit=doc.createElement('button');inlineEdit.type='button';inlineEdit.textContent='Edit pair';inlineEdit.disabled=true;inlineEdit.onclick=()=>beginPairEdit(workflow.activePair);
     const inlineDraftStatus=doc.createElement('p');inlineDraftStatus.setAttribute('role','status');
     const inlineUndo=doc.createElement('button');inlineUndo.type='button';inlineUndo.textContent='Undo';inlineUndo.title='Undo last correspondence change (Ctrl+Z)';inlineUndo.disabled=true;inlineUndo.onclick=undo;
     const pairActions=doc.createElement('div');pairActions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
@@ -502,7 +556,7 @@
     const cropRenderer=env.CurvatureCanvasDirectPreview.create();
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
     let markerProjection=null,markerResolver=null,materialMarkers=new Map();
-    let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
+    let hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
     const identityRaster=doc.createElement('canvas'),highlightRaster=doc.createElement('canvas');
     let visibleSpans=new Map(),ownerSpans=new Map(),highlightKey=null,ownership=null,exactOwnership=null,hoverObject=null,visibleByObject=new Map();
@@ -542,7 +596,7 @@
       if(restoring||!scene)return;
       saveInline();
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
-        record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack,
+        record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
@@ -566,7 +620,7 @@
           const decoded=new env.Image();decoded.src=d.record.original.dataUrl;await decoded.decode();
           if(decoded.naturalWidth!==d.record.original.width||decoded.naturalHeight!==d.record.original.height)throw Error('Stored image dimensions mismatch');
           const checked=observationRows(d.rows,d.record.original.width,d.record.original.height,d.version===2,next.model);
-          validateLegacyTopology(checked,next);rows=checked;
+          validateLegacyTopology(checked,next);workflow.replaceAll(checked);
           record=d.record;image=decoded;activeSource=d.activeSource;
         }
         showScene(next);legacyShown=d.legacyShown===true;syncModelRoute();
@@ -576,28 +630,28 @@
         if(d.modelView&&previewValid)modelView=d.modelView;
         showLandmarks.checked=!!d.showLandmarks;
         if(d.selected)selectLandmark(d.selected);
-        editing=rows.some(r=>r.landmark.id===d.editing)?d.editing:null;
-        const editRow=rows.find(r=>r.landmark.id===editing);
-        pendingModel=editRow&&(globeRoute()||isMaterial(editRow.landmark))?editRow.landmark:null;
-        if(record&&d.pendingModel)try{if(isMaterial(d.pendingModel))materialResolver.create(scene.model).resolveLandmark(d.pendingModel.anchor.kind,d.pendingModel);else validateLegacyTopology([{landmark:d.pendingModel}],scene);pendingModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
-        activePair=rows.some(r=>r.landmark.id===d.activePair)?d.activePair:null;
-        weight.value=d.weight||'1';setPixel(record&&Array.isArray(d.pending)&&d.pending.length===2&&imagePoint({scale:1,x:0,y:0},...d.pending,record.original.width,record.original.height)?d.pending:null);
-        add.textContent=editing?'Update pair':'Add pair';
+        const editRow=workflow.rows.find(r=>r.landmark.id===d.editing);
+        let restoredModel=editRow&&(globeRoute()||isMaterial(editRow.landmark))?editRow.landmark:null;
+        if(record&&d.pendingModel)try{if(isMaterial(d.pendingModel))materialResolver.create(scene.model).resolveLandmark(d.pendingModel.anchor.kind,d.pendingModel);else validateLegacyTopology([{landmark:d.pendingModel}],scene);restoredModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
+        const restoredPixel=record&&Array.isArray(d.pending)&&d.pending.length===2&&imagePoint({scale:1,x:0,y:0},...d.pending,record.original.width,record.original.height)?d.pending:null;
+        workflow.restoreDraft({editing:d.editing,pending:restoredPixel,pendingModel:restoredModel,activePair:d.activePair});
+        weight.value=d.weight||'1';setPixel(restoredPixel);
+        add.textContent=workflow.editing?'Update pair':'Add pair';
         refreshRows();photoDraw();meshDraw();
         if(['best','initial','off'].includes(d.residualMode))residualMode.value=d.residualMode;
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
-          try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
+          try{restoreFit(validateFitResult(d.fitBest,workflow.rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
         if(record&&Array.isArray(d.undoStack)){
-          undoStack=[];
+          const history=[];
           for(const entry of d.undoStack.slice(-50)){
             try{
               const prior=observationRows(entry.rows,record.original.width,record.original.height,true,scene.model);
               validateLegacyTopology(prior,scene);
-              undoStack.push({rows:prior,activePair:prior.some(r=>r.landmark.id===entry.activePair)?entry.activePair:null});
+              history.push({rows:prior,activePair:prior.some(r=>r.landmark.id===entry.activePair)?entry.activePair:null});
             }catch(error){/* Discard only invalid history entries. */}
           }
-          refreshRows();
+          workflow.restoreHistory(history);refreshRows();
         }
         if(d.selectedOwner){const found=[...packages.values()].find(p=>JSON.stringify(p.owner)===JSON.stringify(d.selectedOwner));selectedObjectKey=found?.key??null;refreshObjectSelection();}
         pendingMagnifier=readMagnifier();
@@ -644,13 +698,13 @@
         photoInfo.append(' · ',a);
       }
     }
-    function confirmReplacement(){return !rows.length||env.confirm('Replacing the photo discards all correspondences. Continue?');}
+    function confirmReplacement(){return !workflow.rows.length||env.confirm('Replacing the photo discards all correspondences. Continue?');}
     async function acceptPhoto(next,source,token){
       const decoded=new env.Image();decoded.src=next.original.dataUrl;await decoded.decode();
       if(token!==loadToken)return false;
       if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
         throw Error('Reference image decoded dimensions mismatch');
-      newMagnifierSession();record=next;image=decoded;activeSource=source;rows=[];activePair=null;undoStack=[];resetPending();refreshRows();fitPhoto();renderModel();
+      newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
       photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
       persist();return true;
@@ -681,31 +735,31 @@
         const o=doc.createElement('option');o.value=String(value);o.textContent=label;return o;
       }));
     }
-    function materialEdit(){const r=rows.find(r=>r.landmark.id===editing);return isMaterial(r?.landmark)?r.landmark:null;}
-    function selected(){return pendingModel||materialEdit()||vertices[Number(vertex.value)]||null;}
+    function materialEdit(){const r=workflow.rows.find(r=>r.landmark.id===workflow.editing);return isMaterial(r?.landmark)?r.landmark:null;}
+    function selected(){return workflow.pendingModel||materialEdit()||vertices[Number(vertex.value)]||null;}
     function photoDraw(){
       ctx.clearRect(0,0,photo.width,photo.height);
       if(!image||!view)return;
       ctx.drawImage(image,view.x,view.y,record.original.width*view.scale,record.original.height*view.scale);
       if(residualMode.value!=='off'&&fitBest&&!photoGhost){
-        for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===activePair);
+        for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===workflow.activePair);
       }
-      rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===activePair));
-      if(pending){const p=screenPoint(view,pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
+      workflow.rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===workflow.activePair));
+      if(workflow.pending){const p=screenPoint(view,workflow.pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
     }
     function fitPhoto(){
       if(!record)return;
       view=fit(record.original.width,record.original.height,photo.width,photo.height);photoDraw();
     }
     function setPixel(p){
-      pending=p;px.value=p?String(+p[0].toFixed(3)):'';py.value=p?String(+p[1].toFixed(3)):'';
-      photoDraw();add.disabled=!pending||!selected();
+      workflow.selectPhoto(p);px.value=p?String(+p[0].toFixed(3)):'';py.value=p?String(+p[1].toFixed(3)):'';
+      photoDraw();add.disabled=!workflow.pending||!selected();
       updateHint();
     }
     function setIncluded(id,included){
-      const row=rows.find(r=>r.landmark.id===id);
+      const row=workflow.rows.find(r=>r.landmark.id===id);
       if(!row||row.included===included)return;
-      rememberUndo();rows=rows.map(r=>r===row?{...r,included}:r);
+      workflow.change(workflow.rows.map(r=>r===row?{...r,included}:r));
       refreshRows();photoDraw();meshDraw();persist();
     }
     function inclusionControl(row,i){
@@ -718,7 +772,7 @@
     function correspondenceDescriptors(){
       if(!globeRoute())return [];
       let resolver;
-      const descriptors=rows.map((row,i)=>{
+      const descriptors=workflow.rows.map((row,i)=>{
         const common={id:row.landmark.id,label:pairLabel(row,i),color:COLORS[i%COLORS.length],kind:row.kind};
         try{
           if(!resolver)resolver=materialResolver.create(scene.model);
@@ -733,15 +787,15 @@
       const popup=viewer.isCrop(),embedded=inlineViewer.isCrop()&&!inlinePanel.hidden&&!workspace.hidden;
       if(!popup&&!embedded)return;
       const descriptors=correspondenceDescriptors();
-      if(popup)viewer.setCorrespondences(descriptors,activePair);
-      if(embedded)inlineViewer.setCorrespondences(descriptors,activePair);
+      if(popup)viewer.setCorrespondences(descriptors,workflow.activePair);
+      if(embedded)inlineViewer.setCorrespondences(descriptors,workflow.activePair);
     }
     function refreshRows(){
-      if(fitSignature!==null&&fitSignature!==JSON.stringify(rows))invalidateFit('Correspondences changed. Run calibration again.');
+      if(fitSignature!==null&&fitSignature!==JSON.stringify(workflow.rows))invalidateFit('Correspondences changed. Run calibration again.');
       syncFitControls();
       list.replaceChildren();
-      rows.forEach((r,i)=>{
-        const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.landmark.id===activePair);
+      workflow.rows.forEach((r,i)=>{
+        const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.landmark.id===workflow.activePair);
         tr.onclick=e=>{if(!e.target.closest('button,input,label'))selectPair(r.landmark.id);};
         for(const [column,t] of [String(i+1),landmarkLabel(r.landmark),r.pixel.map(x=>x.toFixed(2)).join(', '),String(r.weight)].entries()){
           const td=doc.createElement('td');td.textContent=t;if(column===0){td.style.color=COLORS[i%COLORS.length];td.style.fontWeight='bold';}if(column===1)td.title=r.landmark.id;tr.append(td);
@@ -754,65 +808,60 @@
         del.onclick=()=>deletePair(r.landmark.id);
         actions.append(edit,del);tr.append(actions);list.append(tr);
       });
-      $('ModernCalibrationCount').textContent=rows.length+' correspondences';
-      $('ModernCalibrationInlineCount').textContent=rows.length+' correspondences';
-      $('ModernCalibrationUndo').disabled=inlineUndo.disabled=!undoStack.length;
-      $('ModernCalibrationDeleteSelected').disabled=!activePair;
+      $('ModernCalibrationCount').textContent=workflow.rows.length+' correspondences';
+      $('ModernCalibrationInlineCount').textContent=workflow.rows.length+' correspondences';
+      $('ModernCalibrationUndo').disabled=inlineUndo.disabled=!workflow.undoStack.length;
+      $('ModernCalibrationDeleteSelected').disabled=!workflow.activePair;
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
     function beginPairEdit(id){
-      const r=rows.find(r=>r.landmark.id===id);
+      const r=workflow.rows.find(r=>r.landmark.id===id);
       if(!r||!record)return false;
-      if(editing===id)return true;
-      if((pending||pendingModel||editing)&&!env.confirm('Discard the current draft and edit this pair?'))return false;
+      if(workflow.editing===id)return true;
+      if((workflow.pending||workflow.pendingModel||workflow.editing)&&!env.confirm('Discard the current draft and edit this pair?'))return false;
       inlineViewer.clearLocalPoint();resetPending();
-      activePair=id;editing=id;
+      workflow.beginEdit(id,{model:globeRoute()||isMaterial(r.landmark)});
       if(!isMaterial(r.landmark))selectLandmark(r.landmark);
-      if(globeRoute()||isMaterial(r.landmark))pendingModel=r.landmark;
       weight.value=String(r.weight);setPixel(r.pixel.slice());
       add.textContent='Update pair';refreshRows();photoDraw();meshDraw();persist();return true;
     }
     function updateHint(){
-      const text=globeRoute()&&!legacyShown&&!editing?(pending&&pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':pending?'Photo point selected · confirm a model point or use Fast Vertex.':pendingModel?'Model point selected · click the matching photo point.':activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
-        pending?'Photo point selected. Click a model vertex.':
-        pendingModel?'Model vertex selected. Click a photo point.':
-        activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
+      const text=globeRoute()&&!legacyShown&&!workflow.editing?(workflow.pending&&workflow.pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':workflow.pending?'Photo point selected · confirm a model point or use Fast Vertex.':workflow.pendingModel?'Model point selected · click the matching photo point.':workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':workflow.editing?'Editing pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · drag a marker or use manual controls.':
+        workflow.pending?'Photo point selected. Click a model vertex.':
+        workflow.pendingModel?'Model vertex selected. Click a photo point.':
+        workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · drag either marker or click a new point.':
         'Click either image, then its matching point in the other.';
-      inlineDraftStatus.textContent=editing?'Editing pair #'+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · select a new photo point or confirm a new model point, then Update pair. Original remains saved.':text;
+      inlineDraftStatus.textContent=workflow.editing?'Editing pair #'+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · select a new photo point or confirm a new model point, then Update pair. Original remains saved.':text;
       $('ModernCalibrationActionHint').textContent=text;
       pickStatus.textContent=text;
     }
     function resetPending(){inlineViewer.discardPairDraft();
       const parked=inlineSessions.initial?.session;if(parked?.stagedMode==='fast-vertex'||parked?.stagedMode===undefined&&parked?.pickMode==='fast-vertex'){Object.assign(parked,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});if(parked.confirmed&&parked.pickMode==='fast-vertex')parked.confirmed=null;}
-      editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
-    function cancelPairDraft(){inlineViewer.clearLocalPoint();activePair=editing||null;resetPending();refreshRows();photoDraw();meshDraw();persist();}
+      workflow.clearDraft();weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
+    function cancelPairDraft(){inlineViewer.clearLocalPoint();workflow.cancel();resetPending();refreshRows();photoDraw();meshDraw();persist();}
     function selectPair(id){
-      if(!rows.some(r=>r.landmark.id===id))return;
-      activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
-    }
-    function rememberUndo(){
-      undoStack.push({rows:jsonCopy(rows),activePair});if(undoStack.length>50)undoStack.shift();
+      if(!workflow.rows.some(r=>r.landmark.id===id))return;
+      if(!workflow.select(id))return;refreshRows();updateHint();photoDraw();meshDraw();persist();
     }
     function deletePair(id){
-      if(!rows.some(r=>r.landmark.id===id))return;
-      rememberUndo();rows=rows.filter(r=>r.landmark.id!==id);
-      if(activePair===id)activePair=null;
-      if(editing===id)resetPending();else updateHint();
+      if(!workflow.rows.some(r=>r.landmark.id===id))return;
+      const wasEditing=workflow.editing===id;
+      workflow.change(workflow.rows.filter(r=>r.landmark.id!==id));
+      if(wasEditing)resetPending();else updateHint();
       refreshRows();photoDraw();meshDraw();persist();
     }
     function undo(){
-      const old=undoStack.pop();if(!old)return;
-      rows=old.rows;activePair=old.activePair;
+      if(!workflow.undo())return;
       inlineViewer.clearLocalPoint();viewer.clearLocalPoint();
       const saved=inlineSessions.initial?.session;if(saved)Object.assign(saved,{staged:null,stagedMode:null,confirmed:null,choices:[],choice:'',inputs:[]});
       materialMarkers.clear();resetPending();refreshRows();photoDraw();meshDraw();
       message('Last correspondence change undone.');persist();
     }
     function replacePair(id,landmark,pixel){
-      const old=rows.find(r=>r.landmark.id===id);if(!old)return;
+      const old=workflow.rows.find(r=>r.landmark.id===id);if(!old)return;
       try{
-        const next=upsert(rows,pair(landmark,pixel,record.original.width,record.original.height,old.weight,old.included),id);
-        rememberUndo();rows=next;activePair=landmark.id;resetPending();refreshRows();photoDraw();meshDraw();
+        const next=upsert(workflow.rows,pair(landmark,pixel,record.original.width,record.original.height,old.weight,old.included),id);
+        workflow.change(next,landmark.id,{finish:true});resetPending();refreshRows();photoDraw();meshDraw();
         message('Correspondence updated.');persist();
       }catch(e){message(e.message);}
     }
@@ -820,7 +869,7 @@
       const ratio=canvas.width/Math.max(1,canvas.getBoundingClientRect().width);
       return nearestMarker(items,p,10*ratio);
     }
-    function photoMarker(p){return markerHit(photo,p,rows.map(r=>({id:r.landmark.id,pixel:screenPoint(view,r.pixel)})));}
+    function photoMarker(p){return markerHit(photo,p,workflow.rows.map(r=>({id:r.landmark.id,pixel:screenPoint(view,r.pixel)})));}
     function committedMarker(r){
       if(!isMaterial(r.landmark))return byLandmark.get(r.landmark.id);
       if(!markerProjection)return null;
@@ -839,7 +888,7 @@
       }
       return materialMarkers.get(key);
     }
-    function modelMarker(p){return markerHit(sceneCanvas,p,rows.flatMap(r=>{
+    function modelMarker(p){return markerHit(sceneCanvas,p,workflow.rows.flatMap(r=>{
       const item=committedMarker(r);return item?[{id:r.landmark.id,pixel:screenPoint(modelView,item.pixel)}]:[];
     }));}
     function updateObjects(){
@@ -862,7 +911,7 @@
         p.points.forEach((point,j)=>vertices.push({id:'b'+b+':p'+index+':v'+j,bank:b,
           objectType:scene.model.ObjType[b],primitive:index,vertex:j}));
       populate(vertex,vertices.map((v,i)=>[i,'Primitive '+v.primitive+' · vertex '+v.vertex]));
-      meshDraw();add.disabled=!pending||!selected();
+      meshDraw();add.disabled=!workflow.pending||!selected();
     }
     function landmarkLabel(v){
       if(isMaterial(v)){const a=v.anchor,o=a.owner;return 'Bank '+(o.bank+1)+' · '+(o.kind==='span'?o.role+' '+(o.from.stationIndex+1)+'–'+(o.to.stationIndex+1):'Station '+(o.stationIndex+1))+' · '+a.kind+' · P'+a.primitive+' / '+a.indices.join(',');}
@@ -878,7 +927,7 @@
       object.value=String(g);updateVertices();
       const index=vertices.findIndex(p=>p.id===v.id);
       if(index<0)return false;
-      vertex.value=String(index);meshDraw();add.disabled=!pending||!selected();return true;
+      vertex.value=String(index);meshDraw();add.disabled=!workflow.pending||!selected();return true;
     }
     function fitModel(){
       if(!previewValid)return;
@@ -1105,7 +1154,7 @@
       if(magnifierMode())return null;
       if(objectMode())return hoverObject??selectedObjectKey;
       if(hoverObject!==null||modelGhost)return hoverObject;
-      const landmark=pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
+      const landmark=workflow.pendingModel||workflow.rows.find(r=>r.landmark.id===workflow.activePair)?.landmark;
       if(isMaterial(landmark))return committedMarker({kind:landmark.anchor.kind,landmark})?.objectKey??null;
       return landmark&&scene?objectKey(landmark,scene.banks):null;
     }
@@ -1123,13 +1172,13 @@
         modelRaster.width*modelView.scale,modelRaster.height*modelView.scale);
     }
     function meshDraw(){
-      inlineEdit.disabled=!activePair||!record||!!editing||viewBest;
-      inlineCancel.textContent=editing?'Cancel edit':'Cancel draft pair';
-      inlineCancel.disabled=!(pending||pendingModel||editing);
-      inlineCreate.disabled=!(record&&pending&&pendingModel&&!viewBest);
-      inlineCreate.textContent=editing?'Update pair':'Create pair';
+      inlineEdit.disabled=!workflow.activePair||!record||!!workflow.editing||viewBest;
+      inlineCancel.textContent=workflow.editing?'Cancel edit':'Cancel draft pair';
+      inlineCancel.disabled=!(workflow.pending||workflow.pendingModel||workflow.editing);
+      inlineCreate.disabled=!(record&&workflow.canCommit&&!viewBest);
+      inlineCreate.textContent=workflow.editing?'Update pair':'Create pair';
       if(syncInline()){
-        let marker=pendingModel;
+        let marker=workflow.pendingModel;
         if(isMaterial(marker))try{const q=materialResolver.create(scene.model).resolveLandmark(marker.anchor.kind,marker);marker={bank:q.bank,primitive:q.index,anchor:q.anchor};}catch(error){marker=null;}
         inlineViewer.setPendingVertex(marker);return;
       }
@@ -1149,13 +1198,13 @@
         }
         mesh.globalAlpha=1;
       }
-      rows.forEach((r,i)=>{
+      workflow.rows.forEach((r,i)=>{
         const ghost=modelGhost?.id===r.landmark.id?modelGhost:null;
         const item=committedMarker(r);
         const pixel=ghost?ghost.pixel:item?screenPoint(modelView,item.pixel):null;
-        if(pixel)marker(mesh,pixel,pairLabel(r,i),COLORS[i%COLORS.length],!!ghost||r.landmark.id===activePair);
+        if(pixel)marker(mesh,pixel,pairLabel(r,i),COLORS[i%COLORS.length],!!ghost||r.landmark.id===workflow.activePair);
       });
-      const pendingLandmark=pendingModel||(editing?selected():null);
+      const pendingLandmark=workflow.pendingModel||(workflow.editing?selected():null);
       const item=pendingLandmark?committedMarker({kind:pendingLandmark.anchor?.kind||'vertex',landmark:pendingLandmark}):null;
       if(item)marker(mesh,screenPoint(modelView,item.pixel),'+','#009ab3');
       if(regionDrag){
@@ -1212,12 +1261,12 @@
     }
     function savePair(){
       try{
-        const landmark=pendingModel||materialEdit()||selected();
-        if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
-        const wasEditing=editing,width=record.original.width,height=record.original.height;
-        const next=globeRoute()?commitGlobePair(rows,landmark,pending,width,height,Number(weight.value),editing,scene.model):
-          upsert(rows,pair(landmark,pending,width,height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
-        rememberUndo();rows=next;activePair=wasEditing?(globeRoute()?wasEditing:landmark.id):null;
+        const landmark=workflow.pendingModel||materialEdit()||selected();
+        if(!record||!workflow.pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
+        const wasEditing=workflow.editing,width=record.original.width,height=record.original.height;
+        const next=globeRoute()?commitGlobePair(workflow.rows,landmark,workflow.pending,width,height,Number(weight.value),workflow.editing,scene.model):
+          upsert(workflow.rows,pair(landmark,workflow.pending,width,height,Number(weight.value),workflow.rows.find(r=>r.landmark.id===workflow.editing)?.included),workflow.editing);
+        workflow.change(next,wasEditing?(globeRoute()?wasEditing:landmark.id):null,{finish:true});
         inlineViewer.clearLocalPoint();resetPending();refreshRows();photoDraw();meshDraw();message(wasEditing?'Correspondence updated.':'Correspondence saved.');persist();return true;
       }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;return false;}
     }
@@ -1226,8 +1275,8 @@
       try{
         const resolver=materialResolver.create(scene.model);
         const id=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-        const landmark=resolver.fromPick(hit,editing||'material-'+id);
-        pendingModel=landmark;activePair=editing||null;
+        const landmark=resolver.fromPick(hit,workflow.editing||'material-'+id);
+        workflow.selectModel(landmark);workflow.select(workflow.editing);
         refreshRows();updateHint();meshDraw();persist();return true;
       }catch(error){message(error.message);return false;}
     }
@@ -1236,21 +1285,21 @@
       const p=scene.banks[hit.bank]?.[hit.index];
       if(hit.kind!=='vertex'||!Number.isInteger(hit.vertex)||!p?.points[hit.vertex])return false;
       const landmark={id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex};
-      if(editing){try{pendingModel={id:editing,anchor:materialResolver.create(scene.model).upgradeLegacy(landmark).anchor};activePair=editing;refreshRows();updateHint();meshDraw();persist();return 'pending';}catch(error){message(error.message);return false;}}
-      return chooseModel({landmark})?(pendingModel?'pending':'saved'):false;
+      if(workflow.editing){try{workflow.selectModel({id:workflow.editing,anchor:materialResolver.create(scene.model).upgradeLegacy(landmark).anchor});workflow.select(workflow.editing);refreshRows();updateHint();meshDraw();persist();return 'pending';}catch(error){message(error.message);return false;}}
+      return chooseModel({landmark})?(workflow.pendingModel?'pending':'saved'):false;
     }
     function chooseModel(item){
       if(!record){message('Load a photograph first.');return false;}
       if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
       if(!selectLandmark(item.landmark))return false;
-      clearAmbiguity();pendingModel=item.landmark;activePair=null;
-      if(pending&&!(editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
+      clearAmbiguity();workflow.selectModel(item.landmark);workflow.select(workflow.editing);
+      if(workflow.pending&&!(workflow.editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
       refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
       if(!p)return;
-      activePair=editing||null;setPixel(p);refreshRows();
-      if(!(editing&&globeRoute())&&pendingModel&&!isMaterial(pendingModel)){if(!savePair()){meshDraw();persist();}}
+      workflow.select(workflow.editing);setPixel(p);refreshRows();
+      if(!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
     }
     function pickAt(p){
@@ -1307,11 +1356,11 @@
       return true;
     }
     $('ModernCalibrationReset').onclick=()=>{
-      if((rows.length||record)&&!env.confirm('Discard this photo and all correspondences and capture the latest Scene?'))return;
+      if((workflow.rows.length||record)&&!env.confirm('Discard this photo and all correspondences and capture the latest Scene?'))return;
       let next;
       try{next=prepareScene(env.CurvatureModernApp.getPhotoCalibrationScene());}
       catch(e){message('Cannot start a new session: '+e.message);return;}
-      loadToken++;record=null;image=null;view=null;activeSource=null;rows=[];activePair=null;undoStack=[];drag=null;modelDrag=null;photoGhost=null;modelGhost=null;file.value='';
+      loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();drag=null;modelDrag=null;photoGhost=null;modelGhost=null;file.value='';
       photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
       showScene(next);persist();void refreshSources();
     };
@@ -1348,9 +1397,9 @@
       const action=drag,p=canvasPoint(photo,e);drag=null;photoGhost=null;
       if(action.marker){
         if(action.moved){
-          const row=rows.find(r=>r.landmark.id===action.marker);
+          const row=workflow.rows.find(r=>r.landmark.id===action.marker);
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
-          if(row&&pixel){if(editing&&globeRoute()){if(editing===action.marker){setPixel(pixel);meshDraw();persist();}else message('Finish the current edit before moving another pair.');}else replacePair(action.marker,row.landmark,pixel);}
+          if(row&&pixel){if(workflow.editing&&globeRoute()){if(workflow.editing===action.marker){setPixel(pixel);meshDraw();persist();}else message('Finish the current edit before moving another pair.');}else replacePair(action.marker,row.landmark,pixel);}
         }else selectPair(action.marker);
       }else if(!action.moved)choosePhoto(imagePoint(view,...p,record.original.width,record.original.height));
       photoDraw();
@@ -1366,10 +1415,10 @@
       if(!record)return;
       const p=[Number(px.value),Number(py.value)];
       const valid=px.value!==''&&py.value!==''&&imagePoint({scale:1,x:0,y:0},...p,record.original.width,record.original.height);
-      pending=valid?p:null;photoDraw();meshDraw();add.disabled=!pending||!selected();
+      workflow.selectPhoto(valid?p:null);photoDraw();meshDraw();add.disabled=!workflow.pending||!selected();
     }
     px.oninput=py.oninput=manualPixel;
-    bank.onchange=()=>{pendingModel=null;updateObjects();};object.onchange=()=>{pendingModel=null;updateVertices();};vertex.onchange=()=>{pendingModel=null;meshDraw();add.disabled=!pending||!selected();};
+    bank.onchange=()=>{workflow.selectModel(null);updateObjects();};object.onchange=()=>{workflow.selectModel(null);updateVertices();};vertex.onchange=()=>{workflow.selectModel(null);meshDraw();add.disabled=!workflow.pending||!selected();};
     function cancelModelFrame(){
       if(modelFrame!==null)env.cancelAnimationFrame(modelFrame);
       modelFrame=null;queuedPointer=null;
@@ -1432,7 +1481,7 @@
       const action=modelDrag;modelDrag=null;modelGhost=null;
       if(action.marker){
         if(action.moved){
-          hoverAt(p,false);const item=hover[hoverIndex],row=rows.find(r=>r.landmark.id===action.marker);
+          hoverAt(p,false);const item=hover[hoverIndex],row=workflow.rows.find(r=>r.landmark.id===action.marker);
           if(isMaterial(row?.landmark))message('Material model editing will use Magnifier; correspondence unchanged.');
           else if(row&&item)replacePair(action.marker,item.landmark,row.pixel);
           else message('No eligible vertex at drop; correspondence unchanged.');
@@ -1452,8 +1501,8 @@
     function freeFields(){return Array.from(fitPanel.querySelectorAll('[data-fit-field]')).filter(n=>n.checked).map(n=>n.dataset.fitField);}
     function applyFreeFields(free){for(const n of fitPanel.querySelectorAll('[data-fit-field]'))n.checked=free.includes(n.dataset.fitField);syncFitControls();}
     function syncFitControls(){
-      const free=freeFields(),count=fitRows(rows).length;
-      $('ModernCalibrationRoleCount').textContent=count+' Fit · '+(rows.length-count)+' Validation'+(count===0||2*count<free.length?' · insufficient Fit points for selected free parameters':'');
+      const free=freeFields(),count=fitRows(workflow.rows).length;
+      $('ModernCalibrationRoleCount').textContent=count+' Fit · '+(workflow.rows.length-count)+' Validation'+(count===0||2*count<free.length?' · insufficient Fit points for selected free parameters':'');
       exportButton.disabled=!record||!scene;
       importButton.disabled=restoring;
       runFit.disabled=!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
@@ -1468,13 +1517,13 @@
     }
     function exportExperiment(){
       if(!scene||!record)throw Error('Load a photograph first');
-      return jsonCopy({format:EXPERIMENT_FORMAT,version:experimentVersion(rows),
+      return jsonCopy({format:EXPERIMENT_FORMAT,version:experimentVersion(workflow.rows),
         scene:{model:scene.model,physics:scene.physics},referenceImage:record,referenceSource:activeSource,
-        observations:rows,fit:{method:'canvas-direct',maxIterations:80,freeParameters:freeFields(),
+        observations:workflow.rows,fit:{method:'canvas-direct',maxIterations:80,freeParameters:freeFields(),
           result:fitBest,status:fitStatus.textContent,running:!!fitWorker}});
     }
     function restoreFit(result,status,show){
-      fitBest=result;fitSignature=result?JSON.stringify(rows):null;viewBest=!!(show&&result);
+      fitBest=result;fitSignature=result?JSON.stringify(workflow.rows):null;viewBest=!!(show&&result);
       if(result){fitSummary(result);if(viewBest)paintBest();}
       if(typeof status==='string'&&status)fitStatus.textContent=status;
       syncFitControls();meshDraw();
@@ -1491,10 +1540,10 @@
       decoded.src=data.referenceImage.original.dataUrl;await decoded.decode();
       if(token!==loadToken)throw Error('Import superseded');
       if(decoded.naturalWidth!==width||decoded.naturalHeight!==height)throw Error('Embedded photo dimensions mismatch');
-      if((record||rows.length)&&!env.confirm('Replace the current calibration draft with this experiment?'))return false;
+      if((record||workflow.rows.length)&&!env.confirm('Replace the current calibration draft with this experiment?'))return false;
       invalidateFit('Importing calibration experiment…');cancelModelFrame();
-      drag=null;modelDrag=null;photoGhost=null;modelGhost=null;activePair=null;undoStack=[];
-      record=data.referenceImage;image=decoded;rows=data.observations;
+      drag=null;modelDrag=null;photoGhost=null;modelGhost=null;
+      record=data.referenceImage;image=decoded;workflow.replaceAll(data.observations);
       activeSource={...(data.referenceSource||{}),key:null,links:data.referenceSource?.links||[],imported:true};
       view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=true;
       showScene(next);photoDetails(record,activeSource);fitPhoto();
@@ -1534,7 +1583,7 @@
           m={...scene.model,deviceRatio:width/height,viewcenterHorizon:3},
           camera=env.CurvatureCameraPhysicalPose.photoCamera(m,width,height),
           session=env.CurvatureCameraLandmarkProjection.create(m,camera,width,height,{...scene.physics,method:'canvas-direct'});
-        initialPoints=rows.map(r=>{
+        initialPoints=workflow.rows.map(r=>{
           const q=session[r.kind](r.landmark);
           return {id:r.landmark.id,status:q.status,predicted:q.pixel};
         });
@@ -1543,7 +1592,7 @@
     }
     function bestProjection(result){
       if(diagnosticResult===result)return diagnosticBestPoints;
-      const points=result.evaluation.points.slice(),held=rows.filter(r=>r.included===false);
+      const points=result.evaluation.points.slice(),held=workflow.rows.filter(r=>r.included===false);
       if(held.length){
         try{
           const width=record.original.width,height=record.original.height,
@@ -1560,7 +1609,7 @@
     }
     function refreshResidualTable(){
       residualPanel.hidden=!fitBest;
-      residualData=fitBest?residualRows(rows,initialProjection(),bestProjection(fitBest)):[];
+      residualData=fitBest?residualRows(workflow.rows,initialProjection(),bestProjection(fitBest)):[];
       residualList.replaceChildren();
       residualNotice.textContent=initialProjectionError?'Initial projection unavailable: '+initialProjectionError:'';
       const n=v=>Number.isFinite(v)?v.toFixed(2):'—',xy=p=>p?p.map(n).join(', '):'—';
@@ -1569,15 +1618,15 @@
         ({fit:'Fit',validation:'Validation',all:'All points'}[key])+' RMS '+n(s.rms)+' px ('+s.available+'/'+s.count+' projected)').join(' · '):'';
       const max=residualData.reduce((v,r)=>Math.max(v,r.best.error??0),0);
       for(const r of residualData){
-        const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.id===activePair);
+        const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.id===workflow.activePair);
         tr.dataset.landmarkId=r.id;
         const cell=doc.createElement('td'),button=doc.createElement('button');
         button.type='button';button.textContent=String(r.number);button.title=r.id;
         button.style.color=COLORS[(r.number-1)%COLORS.length];button.style.fontWeight='bold';
         button.setAttribute('aria-label','Select correspondence '+r.number);
-        button.setAttribute('aria-pressed',String(r.id===activePair));
+        button.setAttribute('aria-pressed',String(r.id===workflow.activePair));
         button.onclick=()=>selectPair(r.id);cell.append(button);tr.append(cell);
-        const role=doc.createElement('td');role.append(inclusionControl(rows[r.number-1],r.number-1));tr.append(role);
+        const role=doc.createElement('td');role.append(inclusionControl(workflow.rows[r.number-1],r.number-1));tr.append(role);
         for(const [key,value] of [['observed',xy(r.observed)],['initial',xy(r.initial.predicted)],['initialError',n(r.initial.error)],
           ['predicted',xy(r.best.predicted)],['dx',n(r.best.residual?.[0])],['dy',n(r.best.residual?.[1])],['error',n(r.best.error)],
           ['status',r.best.status]]){
@@ -1621,18 +1670,18 @@
       mesh.drawImage(fitRaster,v.x,v.y,fitRaster.width*v.scale,fitRaster.height*v.scale);
       const sx=fitRaster.width/record.original.width,sy=fitRaster.height/record.original.height;
       const byId=new Map(bestProjection(paintedFit).map(p=>[p.id,p]));
-      rows.forEach((r,i)=>{
+      workflow.rows.forEach((r,i)=>{
         const p=byId.get(r.landmark.id);if(!p||!['visible','out_of_frame'].includes(p.status))return;
         if(p.predicted&&p.predicted.every(Number.isFinite)){
           const xy=screenPoint(v,[p.predicted[0]*sx,p.predicted[1]*sy]);
           if(xy[0]>=0&&xy[0]<sceneCanvas.width&&xy[1]>=0&&xy[1]<sceneCanvas.height)
-            marker(mesh,xy,pairLabel(r,i),COLORS[i%COLORS.length],p.id===activePair);
+            marker(mesh,xy,pairLabel(r,i),COLORS[i%COLORS.length],p.id===workflow.activePair);
         }
       });
     }
     function receiveFit(r){
       if(!r.evaluation?.valid)return;
-      if(hasMaterial(rows))r={...r,materialBinding:fitBinding(rows,freeFields(),scene.model,scene.physics,record.original.width,record.original.height)};
+      if(hasMaterial(workflow.rows))r={...r,materialBinding:fitBinding(workflow.rows,freeFields(),scene.model,scene.physics,record.original.width,record.original.height)};
       if(!fitBest||r.evaluation.cost<=fitBest.evaluation.cost){fitBest=r;fitSummary(r);}
       syncFitControls();
       if(viewBest&&Date.now()-lastFitPaint>=500)paintBest();
@@ -1641,8 +1690,8 @@
       if(runFit.disabled)return;
       invalidateFit('Starting Canvas Direct fit…');meshDraw();
       const free=freeFields(),model=JSON.parse(JSON.stringify(scene.model));
-      const input=JSON.parse(JSON.stringify(fitRows(rows))),physics=JSON.parse(JSON.stringify(scene.physics));
-      fitSignature=JSON.stringify(rows);
+      const input=JSON.parse(JSON.stringify(fitRows(workflow.rows))),physics=JSON.parse(JSON.stringify(scene.physics));
+      fitSignature=JSON.stringify(workflow.rows);
       try{
         const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1&vertex-scale=1&material-fit=1');fitWorker=worker;
         worker.onmessage=event=>{
@@ -1669,7 +1718,7 @@
     add.onclick=savePair;
     $('ModernCalibrationCancelEdit').onclick=cancelPairDraft;
     $('ModernCalibrationUndo').onclick=undo;
-    $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(activePair);
+    $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(workflow.activePair);
     doc.addEventListener('keydown',e=>{
       if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();undo();return;}
@@ -1684,17 +1733,17 @@
         pickStatus.textContent=landmarkLabel(hover[hoverIndex].landmark);meshDraw();
       }else if(e.key==='Escape'){
         e.preventDefault();cancelPairDraft();clearHover();
-      }else if(e.key==='Delete'&&activePair){
-        e.preventDefault();deletePair(activePair);
+      }else if(e.key==='Delete'&&workflow.activePair){
+        e.preventDefault();deletePair(workflow.activePair);
       }
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();
-    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>activePair,viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
-      observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
+      observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({createPairWorkflow,commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));
