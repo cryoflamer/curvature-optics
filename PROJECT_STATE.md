@@ -1,3 +1,7 @@
+## 8F.6 closure — CI regression correction
+
+CI on c7284d8 (2026-11-20): all 37 Chromium tests passed; Node 2144 passed / 25 failed. Two Node failures and the architecture gate concerned the stale isolation inventory; 23 concerned Compare rendering. Reviewed the inventory against the current source tree and literal require references, including CalibrationPointerGestures and Soundly fixture tests. Corrected Compare readiness so actual DOM canvases require a valid layout and legacy transform while renderer adapters retain their original contract. Extended the existing Compare integration test to cover unready and ready DOM callbacks. No physics or calibration changes. Full CI rerun remains required before tagging.
+
 ## 8F.6 closure — Browser-confirmed physical calibration
 
 On 2026-11-20 the user confirmed a fresh calibration run after 8F.6l,

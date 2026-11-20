@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 125,
-      "uniqueScripts": 123,
+      "scriptTags": 126,
+      "uniqueScripts": 124,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -240,6 +240,7 @@
         "src/calibration/CameraMaterialAnchorResolver.js",
         "src/calibration/CameraLandmarkProjection.js",
         "src/calibration/CameraPhysicalPose.js",
+        "src/ui/modern/CalibrationPointerGestures.js",
         "src/ui/modern/ModernLandmarkViewer.js",
         "src/ui/modern/ModernPhotoCalibrationEditor.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
@@ -418,6 +419,7 @@
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureCanvasDirectPreview.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
+      "src/ui/modern/CalibrationPointerGestures.js",
       "src/ui/modern/ModernAnimationPreviewGraph.js",
       "src/ui/modern/ModernAnimationProjectWizardUI.js",
       "src/ui/modern/ModernAnimationStudioUI.js",
@@ -487,7 +489,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 217,
+  "sourceJsCount": 218,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1372,10 +1374,12 @@
         "src/ui/modern/ModernPhotoCalibrationEditor.js"
       ],
       "commonJsTestCallers": [
+        "tests/CalibrationPairWorkflow.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
         "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/CameraMaterialAnchorProjection.test.js",
-        "tests/CameraMaterialAnchorResolver.test.js"
+        "tests/CameraMaterialAnchorResolver.test.js",
+        "tests/ModernPhotoCalibrationEditor.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1399,7 +1403,8 @@
       "commonJsTestCallers": [
         "tests/CameraCalibration.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
-        "tests/CameraPhysicalFit.test.js"
+        "tests/CameraPhysicalFit.test.js",
+        "tests/CameraPhysicalFitSoundly.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1762,7 +1767,8 @@
         "tests/CurvatureEarClip.test.js",
         "tests/CurvatureModeSemantics.test.js",
         "tests/CurvatureRenderingFixes.test.js",
-        "tests/CurvatureTopologyStages.test.js"
+        "tests/CurvatureTopologyStages.test.js",
+        "tests/ModernPhotoCalibrationEditor.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -1782,6 +1788,7 @@
         "src/scene/CurvatureIndependentComposition.js"
       ],
       "commonJsTestCallers": [
+        "tests/CalibrationPairWorkflow.test.js",
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
@@ -2924,6 +2931,19 @@
       "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/CalibrationPointerGestures.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernLandmarkViewer.js",
+        "src/ui/modern/ModernPhotoCalibrationEditor.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/CalibrationPointerGestures.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernAnimationPreviewGraph.js": {
       "directHtmlLoads": [
         "modern"
@@ -3455,6 +3475,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/CalibrationPairWorkflow.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
         "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/ModernLandmarkViewer.test.js",

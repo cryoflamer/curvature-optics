@@ -123,7 +123,17 @@ test('132: each Compare viewport invokes Physical renderer separately with share
   assert.equal(app.getModel().showModel,1,'Compare must not modify Scene');
   assert.match(nodes.get('ModernCompareStatusA').textContent,/28 contours/);
   assert.match(nodes.get('ModernCompareStatusB').textContent,/28 contours/);
+  // A queued callback from an unready real DOM canvas must not render,
+  // while a ready DOM graph and non-DOM graph adapters remain supported.
+  const canvas={nodeType:1,width:800,height:540,clientWidth:800,clientHeight:540};
+  const win={ScaleX:1,ScaleY:1,OffsetX:0,OffsetY:0};
+  app.drawCompare('A',{Canvas:canvas,ContextScale:1});
+  app.drawCompare('A',{Canvas:{...canvas,clientWidth:0},ContextScale:1,WinTrans:win});
+  app.drawCompare('A',{Canvas:canvas,ContextScale:0,WinTrans:win});
+  assert.equal(renders.length,3,'unready DOM graphs must skip physical rendering');
+  app.drawCompare('A',{Canvas:canvas,ContextScale:1,WinTrans:win});
+  assert.equal(renders.length,4,'ready DOM graph still renders');
   nodes.get('ModernBackToScene').listeners.click();
   assert.equal(app.getMode(),'scene');
-  assert.equal(renders.length,4);
+  assert.equal(renders.length,5);
 });

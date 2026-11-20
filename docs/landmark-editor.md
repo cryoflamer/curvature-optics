@@ -23,7 +23,7 @@ covered by mathematical regressions remain independently testable.
 Verification: targeted adapter execution of 69 JS regression checks passed.
 On 2026-11-20 the user reran the Soundly Globe/vacuum fit in the browser:
 14/14 visible Fit points, RMS 6.82 px, largest residual #2 15.35 px.
-The previous full CI reported failures; closure fixes are not yet CI-qualified. The browser smoke
+CI on c7284d8 passed all 37 Chromium tests, including the physical picking, Worker fit and import/export workflows. Node and architecture checks still failed; the follow-up corrects the Compare readiness contract and reviews the static isolation fixture. Full CI qualification remains pending. The browser smoke
 suite now exercises direct physical picking, pair lifecycle, standalone
 workspace switching, saved draft restore, the 14-point Soundly fixture,
 Worker fitting and Globe JSON interchange instead of the deleted UI.

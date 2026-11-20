@@ -4958,11 +4958,12 @@
     // In that case there is no valid window transform to capture.
     if(state.mode!=='compare'||!state.comparePair||photoCalibrationWorkspaceOpen||animationWorkspaceOpen||state.demosActive)return;
     var canvas=g&&g.Canvas;
-    if(!canvas||!(canvas.width>0&&canvas.height>0))return;
-    if(typeof canvas.getBoundingClientRect==='function'&&
-       ((typeof canvas.clientWidth==='number'&&canvas.clientWidth<=0)||
-        (typeof canvas.clientHeight==='number'&&canvas.clientHeight<=0)))return;
-    if(g.ContextScale!==undefined&&!(g.ContextScale>0))return;
+    // Layout and legacy projection readiness belong to the actual DOM canvas.
+    // Renderer adapters may intentionally expose only the graph contract.
+    if(canvas&&canvas.nodeType===1){
+      if(!(canvas.width>0&&canvas.height>0&&canvas.clientWidth>0&&canvas.clientHeight>0)||
+         !g.WinTrans||!(g.ContextScale>0))return;
+    }
     var m=state.comparePair[side];
     if(!m)return;
     try{
