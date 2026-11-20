@@ -188,3 +188,11 @@ test('failed worker projection diagnostics retain original row numbers and exclu
   const result=fitProjectionFailures(rows,{reason:'Unavailable camera',points:[{id:'a',status:'out_of_frame',residual:[1,2]},{id:'c',status:'invalid_anchor',reason:'Topology mismatch',residual:null}]});
   assert.deepEqual(result,[{id:'c',number:3,status:'invalid_anchor',reason:'Topology mismatch'},{id:'d',number:4,status:'unavailable',reason:'Unavailable camera'}]);
 });
+
+test('calibration disclosures default to mouse-first physical editor, not manual controls',()=>{
+  const {calibrationDisclosures}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  assert.deepEqual(calibrationDisclosures('correspondences',true),{route:'physical',manual:false,pairs:false});
+  assert.deepEqual(calibrationDisclosures('correspondences',false),{route:'manual',manual:true,pairs:true});
+  assert.deepEqual(calibrationDisclosures('calibration',true),{route:'calibration',manual:false,pairs:true});
+  assert.deepEqual(calibrationDisclosures('result',true),{route:'result',manual:false,pairs:false});
+});

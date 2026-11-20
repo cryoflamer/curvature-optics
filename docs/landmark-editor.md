@@ -83,7 +83,7 @@ Buttons and modes are implementation details, not prerequisites.
 | 8F.6h | Automatic pivot and empty-background reset (implemented) |
 | 8F.6i | Context menus and Undo/Redo (implemented) |
 | 8F.6j | Correspondences / Calibration / Result separation (implemented) |
-| 8F.6k | Minimal UI, persistence, verification, legacy cleanup |
+| 8F.6k | Viewports-first UI and unreachable inline optical-route cleanup (implemented; acceptance testing pending) |
 
 Acceptance: create, modify and delete 20 pairs without leaving the two
 viewports; preserve a partially complete draft while correcting another
@@ -849,3 +849,24 @@ fit results. Completion opens Result only when the user remains in Calibration;
 a correspondence or parameter change still invalidates the fit. The local
 draft remembers the stage, preferred result camera and optical framing.
 Imports select Result when a validated result exists, otherwise Correspondences.
+
+### Viewports-first workspace (8F.6k)
+
+With a photograph loaded, its source/session controls collapse; JSON exchange
+remains visible. The physical Globe editor starts with automatic picking,
+matching viewport headings, a single correspondence count and contextual
+hint. Manual pair controls, model view/picking settings, the correspondence
+table and landmark menu are available as disclosures. The manual optical
+compatibility route and Flat keep manual controls open. Calibration opens
+the Fit/Validation table; failed fit diagnostics open it even in the
+physical editor. Result shows summary statistics and an optional per-point
+residual table. The unreachable old integrated optical Best Camera route was
+removed; Result now exclusively owns optical previews. Existing physical
+viewer sessions, manual picking, popup inspection and Flat compatibility
+remain supported. No solver or material binding changes were made.
+
+User browser verification on 8F.6j-fix: Soundly Causeway, Globe/vacuum,
+14 Fit points, all seven free parameters; initial RMS 314.76 px, final
+6.82 px in 120 objective evaluations. Stopped by step tolerance without
+projected-gradient convergence, not a uniqueness certificate. Full browser
+acceptance (including the 20-pair scenario above) and CI remain to be run.

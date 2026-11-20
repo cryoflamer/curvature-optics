@@ -1,3 +1,23 @@
+## 8F.6k — Viewports-first UI and compatibility cleanup
+
+The user confirmed a working real-browser Soundly fit after 8F.6j-fix:
+Globe/vacuum, 14 Fit points, seven free parameters, RMS 314.76 → 6.82 px,
+120 objective evaluations, status stalled (step tolerance, not gradient
+convergence). Camera East -50.7536 m, North -9.425493 m, Height 42.83384 m,
+Pan 0.6143418°, Nick -0.2929151°, Roll -0.1109909°, Focal field 1996.718 mm.
+The original invalid_initial cause was not proven; no physics changed.
+
+8F.6k implementation: reference/session, manual pair controls, view/pick
+settings and pair/residual tables are disclosures. Physical Globe starts
+with the minimal mouse-first UI; manual optical and Flat retain open
+manual controls. Calibration shows the Fit/Validation table and Worker
+failures open diagnostics automatically. Result keeps summary diagnostics
+visible. Removed the unreachable inline best-optical-camera route; retained
+compatibility routes and original physical-view storage format. Updated
+browser smoke assertions for physical-first startup and disclosures.
+Full CI and browser acceptance, including the documented 20-pair workflow,
+remain pending; do not declare 8F.6 fully qualified until they pass.
+
 ## 8F.6j fix — Fit failure diagnostics and hidden Compare draws
 
 The reported Soundly experiment (14 mixed legacy/material anchors, vacuum)
@@ -9,7 +29,7 @@ silently discarding invalid results. No observations are automatically excluded.
 Worker entry and dependencies use a fresh cache key; failed results log the
 actual Worker revision. Compare skips callbacks for hidden workspaces and
 zero-sized/unready canvases. Browser/CI verification remains pending.
-Next: verify the reported experiment in-browser before 8F.6k.
+The user subsequently verified the fit in-browser; see 8F.6k above.
 
 ## 8F.6j — Nonlinear calibration stages
 

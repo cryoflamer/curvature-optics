@@ -1545,3 +1545,26 @@ button{cursor:pointer}
 
 .modern-photo-calibration tr.is-fit-failure td{background:#fff0ed;color:#9b2525}
 .modern-photo-calibration tr.is-fit-failure td button{margin-left:4px}
+
+/* Photo calibration: keep the normal working surface viewports-first. */
+.modern-photo-calibration .modern-calibration-disclosure{margin:6px 0;padding:6px 10px;border:1px solid #c4d6e4;border-radius:6px}
+.modern-photo-calibration .modern-calibration-disclosure>summary{cursor:pointer;color:#355b82;font-weight:600}
+.modern-photo-calibration .modern-calibration-disclosure>summary:focus-visible{outline:2px solid #236ab4;outline-offset:2px}
+.modern-photo-calibration .modern-calibration-session{gap:8px}
+.modern-calibration-session #ModernCalibrationPhotoInfo{flex:1 1 250px;margin:0}
+.modern-calibration-counts{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px;margin:8px 0}
+.modern-calibration-counts h3,.modern-calibration-counts p{margin:0}
+.modern-photo-calibration #ModernCalibrationPairToolbar{margin:8px 0}
+.modern-photo-calibration #ModernCalibrationActionHint{margin:4px 0}
+.modern-photo-calibration #ModernCalibrationStageHint[hidden]{display:none!important}
+.modern-photo-calibration #ModernCalibrationExchangeStatus:empty,.modern-photo-calibration #ModernCalibrationStatus:empty,.modern-photo-calibration #ModernCalibrationStorage:empty,.modern-photo-calibration #ModernCalibrationPhotoInfo:empty{display:none}
+.modern-photo-calibration #ModernCalibrationStorage{font-size:12px;color:#637c94}
+.modern-calibration-table-scroll{overflow-x:auto}
+.modern-photo-calibration .modern-inline-viewer header{display:block}
+.modern-photo-calibration .modern-inline-viewer header h2,.modern-photo-calibration .modern-calibration-grid>section h3{font-size:16px;line-height:1.35;margin:0 0 6px}
+.modern-photo-calibration .modern-inline-viewer{gap:0}
+.modern-photo-calibration .modern-inline-viewer>p{margin:5px 0;font-size:12px}
+.modern-photo-calibration .modern-inline-viewer>p:empty{display:none}
+.modern-photo-calibration .modern-inline-viewer [data-viewer-frame]{aspect-ratio:800 / 540}
+.modern-photo-calibration .modern-calibration-grid{align-items:start}
+.modern-photo-calibration #ModernCalibrationPairList:not(:has(.is-fit-failure)) :is(th,td):nth-child(6){display:none}
