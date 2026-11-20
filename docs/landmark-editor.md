@@ -26,7 +26,7 @@ Buttons and modes are implementation details, not prerequisites.
 - Model hover previews the actual candidate. Automatic snapping priority
   Vertex > authored Edge > Surface; visible geometry only, CSS-pixel
   tolerance (initially ~8 px), hysteresis against boundary flicker.
-  Internal triangulation diagonals are not authored edges. Alt may bypass
+  Internal triangulation diagonals are not authored edges. Ctrl may bypass
   snapping for precise surface picks. Physical point/anchor identity and
   resolver validation remain authoritative. Preserve geometry and solver.
 - Dragging draft markers changes only the draft. Dragging saved markers

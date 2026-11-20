@@ -444,14 +444,21 @@
     });
   }
   // Presentation is derived from workflow state, not individual viewport controls.
-  function pairToolbarState(workflow,{ready=false,readOnly=false,legacy=false,legacyModel=false}={}){
+  // Consume only double-clicks on the current draft. The commit callback
+  // is invoked once, only when both validated endpoints are present.
+  function linkDraftGesture(workflow,gesture,commit,enabled=true){
+    if(!enabled||gesture.kind!=='double-click'||gesture.target.kind!=='draft')return false;
+    if(workflow.canCommit)commit();
+    return true;
+  }
+  function pairToolbarState(workflow,{ready=false,readOnly=false,legacy=false,legacyModel=false,implicit=false}={}){
     const editing=workflow.mode==='edit',draft=workflow.mode!=='browse';
     const selected=workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair);
     const photo=!!workflow.pending,model=!!workflow.pendingModel||(legacy&&legacyModel&&photo);
     let hint=!ready?'Load a photograph to start.':readOnly?'Best camera is read-only for model picking. Return to Free View to add or edit a pair.':
       editing?'Editing pair #'+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · choose a replacement point, then Update pair.':
-      draft?photo&&model?'Both points selected · Create pair.':photo?'Photo point selected · choose its matching model point.':model?'Model point selected · choose its matching photo point.':'Choose a point on either the photograph or model.':
-      selected>=0?'Pair #'+(selected+1)+' selected · Edit or Delete pair.':'Add pair, or select a numbered marker.';
+      draft?photo&&model?(implicit?'Double-click either draft point to link the pair.':'Both points selected · Create pair.'):photo?'Photo point selected · choose its matching model point.':model?'Model point selected · choose its matching photo point.':'Choose a point on either the photograph or model.':
+      selected>=0?'Pair #'+(selected+1)+' selected · '+(implicit?'click either view to start a new pair.':'Edit or Delete pair.'):(implicit?'Click a point on either view.':'Add pair, or select a numbered marker.');
     return {hint,mode:editing?'Edit pair':draft?'New pair':'Browse',photo,model,
       addDisabled:!ready||readOnly||draft,editDisabled:!ready||readOnly||draft||selected<0,
       commitDisabled:!ready||readOnly||!draft||!photo||!model,cancelDisabled:!draft,
@@ -501,10 +508,12 @@
       pairCancel=$('ModernCalibrationCancelEdit'),pairDelete=$('ModernCalibrationDeleteSelected'),
       pairUndo=$('ModernCalibrationUndo'),pairPanel=$('ModernCalibrationPairToolbar');
     pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial,onGesture:linkGesture});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,physicalSource=null,physicalFraming=null,renderingModel=false,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
+    const implicitRoute=()=>globeRoute()&&!legacyShown&&!viewBest;
+    function linkGesture(a){return linkDraftGesture(workflow,a,savePair,!!(record&&implicitRoute()));}
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
     const MAGNIFIER_KEY='curvature-calibration-magnifier-v1',INLINE_KEY='curvature-calibration-inline-v2';
@@ -826,7 +835,7 @@
     }
     function syncPairToolbar(){
       const legacy=!globeRoute()||legacyShown;
-      const state=pairToolbarState(workflow,{ready:!!record,readOnly:viewBest,legacy,legacyModel:legacy&&!!selected()});
+      const state=pairToolbarState(workflow,{ready:!!record,readOnly:viewBest,legacy,legacyModel:legacy&&!!selected(),implicit:implicitRoute()});
       pairAdd.disabled=state.addDisabled;pairEdit.disabled=state.editDisabled;add.disabled=state.commitDisabled;
       pairCancel.disabled=state.cancelDisabled;pairDelete.disabled=state.deleteDisabled;pairUndo.disabled=state.undoDisabled;
       add.textContent=state.commitLabel;pairCancel.textContent=workflow.editing?'Cancel edit':'Cancel';
@@ -859,7 +868,7 @@
       syncPairToolbar();refreshRows();photoDraw();meshDraw();persist();return true;
     }
     function updateHint(){
-      const text=globeRoute()&&!legacyShown&&!workflow.editing?(workflow.pending&&workflow.pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':workflow.pending?'Photo point selected · confirm a model point or use Fast Vertex.':workflow.pendingModel?'Model point selected · click the matching photo point.':workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':workflow.editing?'Editing pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · drag a marker or use manual controls.':
+      const text=globeRoute()&&!legacyShown&&!workflow.editing?(workflow.pending&&workflow.pendingModel?'Both draft points selected · double-click either point to link.':workflow.pending?'Photo point selected · click the matching model point.':workflow.pendingModel?'Model point selected · click the matching photo point.':workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Click either view to start a pair. Wheel to zoom; drag to pan or orbit.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':workflow.editing?'Editing pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · drag a marker or use manual controls.':
         workflow.pending?'Photo point selected. Click a model vertex.':
         workflow.pendingModel?'Model vertex selected. Click a photo point.':
         workflow.activePair?'Pair '+(workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair)+1)+' selected · drag either marker or click a new point.':
@@ -893,7 +902,7 @@
       const old=workflow.rows.find(r=>r.landmark.id===id);if(!old)return;
       try{
         const next=upsert(workflow.rows,pair(landmark,pixel,record.original.width,record.original.height,old.weight,old.included),id);
-        workflow.change(next,landmark.id,{finish:true});resetPending();refreshRows();photoDraw();meshDraw();
+        workflow.change(next,landmark.id,{finish:!implicitRoute()});if(!implicitRoute())resetPending();refreshRows();photoDraw();meshDraw();
         message('Correspondence updated.');persist();
       }catch(e){message(e.message);}
     }
@@ -1324,13 +1333,13 @@
       if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
       if(!selectLandmark(item.landmark))return false;
       clearAmbiguity();workflow.selectModel(item.landmark);workflow.select(workflow.editing);
-      if(workflow.pending&&!workflow.explicitAdd&&!(workflow.editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
+      if(!implicitRoute()&&workflow.pending&&!workflow.explicitAdd&&!(workflow.editing&&globeRoute())){const saved=savePair();if(!saved){meshDraw();persist();}return saved;}
       refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
       if(!p)return;
       workflow.select(workflow.editing);setPixel(p);refreshRows();
-      if(!workflow.explicitAdd&&!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
+      if(!implicitRoute()&&!workflow.explicitAdd&&!(workflow.editing&&globeRoute())&&workflow.pendingModel&&!isMaterial(workflow.pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
     }
     function pickAt(p){
@@ -1424,6 +1433,7 @@
       },
       onAction(a,event){
         photoGhost=null;const p=canvasPoint(photo,event);
+        if(linkGesture(a))return;
         if(a.kind==='drag'&&a.action==='marker'&&a.target.kind==='draft'){
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
           if(pixel&&workflow.pending){setPixel(pixel);meshDraw();persist();}
@@ -1780,5 +1790,5 @@
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({createPairWorkflow,pairToolbarState,commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({createPairWorkflow,pairToolbarState,linkDraftGesture,commitGlobePair,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

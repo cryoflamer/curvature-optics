@@ -57,3 +57,29 @@ test('Shared toolbar reflects explicit add, edit, read-only and legacy readiness
   w.restoreDraft({explicitAdd:true});assert.equal(w.mode,'add');assert.equal(w.explicitAdd,true);
   w.cancel();w.selectPhoto([1,2]);assert.equal(w.explicitAdd,false);w.selectPhoto(null);assert.equal(w.mode,'browse');
 });
+
+
+test('implicit pairing links only a complete draft on its marker, in either order',()=>{
+  const {linkDraftGesture,pairToolbarState}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  for(const modelFirst of [false,true]){
+    const w=createPairWorkflow(),a=row('a'),existing=row('b',3);
+    w.replaceAll([existing]);let calls=0;
+    const commit=()=>{calls++;w.change([existing,a],null,{finish:true});};
+    const dbl=target=>({kind:'double-click',target:{kind:target}});
+    if(modelFirst)w.selectModel(a.landmark);else w.selectPhoto(a.pixel);
+    assert.equal(linkDraftGesture(w,dbl('draft'),commit),true);assert.equal(calls,0);
+    w.select('b');assert.equal(w.mode,'add');
+    if(modelFirst)w.selectPhoto(a.pixel);else w.selectModel(a.landmark);
+    assert.equal(w.canCommit,true);
+    assert.equal(pairToolbarState(w,{ready:true,implicit:true}).hint,'Double-click either draft point to link the pair.');
+    assert.equal(linkDraftGesture(w,dbl('saved'),commit),false);
+    assert.equal(linkDraftGesture(w,dbl('background'),commit),false);
+    assert.equal(linkDraftGesture(w,dbl('draft'),commit,false),false);
+    assert.equal(linkDraftGesture(w,dbl('draft'),commit),true);assert.equal(calls,1);
+    assert.equal(w.mode,'browse');assert.equal(w.rows.length,2);
+    assert.equal(linkDraftGesture(w,dbl('draft'),commit),true);assert.equal(calls,1);
+  }
+  const w=createPairWorkflow(),a=row('a');w.selectPhoto(a.pixel);w.selectModel(a.landmark);
+  linkDraftGesture(w,{kind:'double-click',target:{kind:'draft'}},()=>false);
+  assert.equal(w.canCommit,true);assert.deepEqual(w.rows,[]);
+});

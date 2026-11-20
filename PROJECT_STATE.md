@@ -1,3 +1,20 @@
+## 8F.6f — Implicit correspondence wizard
+
+Integrated Globe Automatic now sends a selected physical material point
+directly to the editor draft (no Confirm point). Click either viewport
+first; a new valid background click replaces that endpoint. Double-click
+either draft marker with both endpoints present commits using the existing
+canonical duplicate/Undo/fit validation path. Failed commits leave the
+draft; double-clicking saved markers or background does not link. Fast
+Vertex no longer automatically saves on the integrated route. Photo-side
+saved-marker drag during an Add draft preserves the unrelated draft.
+Manual controls, explicit Edit and legacy Flat remain transitional.
+Ctrl replaces Alt (Opera menu conflict); hover updates on key down/up
+even when the cursor is stationary. Existing v4 sessions retained;
+old locally staged points may still be confirmed with manual controls.
+Next: 8F.6g independent drag transactions for model and photo endpoints.
+Browser/full CI pending.
+
 ## 8F.6e — Automatic picking and hover preview
 
 Integrated physical Free View defaults to Automatic: visible Vertex,

@@ -463,9 +463,9 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const hostKeys=[];host.addEventListener=(k,fn)=>{if(k==='keydown')hostKeys.push(fn);};
   host.hidden=true;host.querySelector=k=>{if(!nodes.has(k))nodes.set(k,make());return nodes.get(k);};
   host.querySelectorAll=()=>[];
-  let queuedHover=null;
+  let queuedHover=null;const envEvents={};
   host.ownerDocument={createElement:make,defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
-    ResizeObserver:class{observe(){}},addEventListener(){},requestAnimationFrame(fn){queuedHover=fn;return 1;},cancelAnimationFrame(){queuedHover=null;}}};
+    ResizeObserver:class{observe(){}},addEventListener(k,fn){envEvents[k]=fn;},requestAnimationFrame(fn){queuedHover=fn;return 1;},cancelAnimationFrame(){queuedHover=null;}}};
   const canvas=host.querySelector('canvas'),ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})});
   canvas.getContext=()=>ctx;
   const owner={kind:'object',bank:0,objectType:3};
@@ -475,8 +475,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;const materialHits=[];
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);return true;}});
+  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;const materialHits=[],gestureHits=[];
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';}});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openPhysical(banks);
@@ -514,15 +514,28 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   canvas.events.pointermove(hoverEvent);assert.ok(queuedHover);queuedHover();queuedHover=null;
   assert.ok(host.querySelector('[data-viewer-pick-status]').textContent.includes('Hover: vertex'));
   canvas.events.pointerdown(hoverEvent);canvas.events.pointerup(hoverEvent);
-  assert.equal(api.snapshot().staged.kind,'vertex');assert.deepEqual(api.snapshot().staged.indices,[0]);
-  api.clearLocalPoint();api.resetScene();
-  const autoEvent={...eventForFraming(),altKey:true};
+  assert.equal(api.snapshot().staged,null);assert.equal(materialHits.at(-1).kind,'vertex');assert.deepEqual(materialHits.at(-1).indices,[0]);
+  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,true);
+  // Existing draft marker is a double-click target rather than another pick.
+  const vertexClick={...hoverEvent,clientX:autoVertex[0],clientY:autoVertex[1],timeStamp:100};
+  canvas.events.pointerdown(vertexClick);canvas.events.pointerup(vertexClick);
+  canvas.events.pointerdown({...vertexClick,timeStamp:200});canvas.events.pointerup({...vertexClick,timeStamp:200});
+  assert.equal(gestureHits.at(-1).kind,'double-click');assert.equal(gestureHits.at(-1).target.kind,'draft');
+  assert.equal(materialHits.length,1);
+  api.setPendingVertex(null);api.clearLocalPoint();api.resetScene();
+  // Ctrl changes the stationary hover and click selection; no Alt dependency.
+  const near={...eventForFraming(),clientX:autoVertex[0]+6,clientY:autoVertex[1]-6};
+  canvas.events.pointermove(near);assert.ok(queuedHover);queuedHover();queuedHover=null;
+  assert.ok(host.querySelector('[data-viewer-pick-status]').textContent.includes('Hover:'));
+  envEvents.keydown({key:'Control',type:'keydown'});assert.ok(queuedHover);queuedHover();queuedHover=null;
+  assert.ok(host.querySelector('[data-viewer-pick-status]').textContent.includes('Hover: surface'));
+  envEvents.keyup({key:'Control',type:'keyup'});assert.ok(queuedHover);queuedHover();queuedHover=null;
+  const autoEvent={...eventForFraming(),ctrlKey:true};
   canvas.events.pointerdown(autoEvent);canvas.events.pointerup(autoEvent);
-  assert.equal(api.snapshot().staged.kind,'surface');
-  const autoSaved=api.sessionSnapshot();assert.equal(autoSaved.stagedMode,'auto');
-  api.restoreSession(autoSaved);assert.deepEqual(api.snapshot().staged,autoSaved.staged);
-  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,false);
-  api.clearLocalPoint();api.resetScene();
+  assert.equal(materialHits.at(-1).kind,'surface');assert.equal(api.snapshot().staged,null);
+  const autoSaved=api.sessionSnapshot();assert.equal(autoSaved.stagedMode,null);
+  api.restoreSession(autoSaved);assert.equal(api.snapshot().pickMode,'auto');
+  api.setPendingVertex(null);api.clearLocalPoint();api.resetScene();materialHits.length=0;
   canvas.events.pointerdown(eventForFraming());canvas.events.pointermove({...eventForFraming(),clientX:440});canvas.events.pointerup({...eventForFraming(),clientX:440});
   function eventForFraming(){return {preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};}
   const rotated=api.sessionSnapshot(),rotatedView=api.snapshot();
