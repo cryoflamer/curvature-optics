@@ -758,6 +758,96 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
 
+
+    def test_calibration_explicit_destination_controls(self):
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        target=workspace.locator('#ModernCalibrationApplyTarget')
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        status=workspace.locator('#ModernCalibrationApplyStatus')
+        description=workspace.locator('#ModernCalibrationApplyDescription')
+        self.import_calibration_experiment(data)
+        workspace.locator('[data-calibration-stage="result"]').click()
+        expect(target).to_have_value('Scene')
+        expect(target).to_be_disabled()
+        expect(button).to_be_disabled()
+        data=self.page.evaluate("""data => {
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters,points=rows.map(row=>({
+                id:row.landmark.id,status:'visible',observed:row.pixel,
+                predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight
+            }));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(rows,freeParameters,model,physics,1176,791)};
+            return data;
+        }""",data)
+        self.import_calibration_experiment(data,replace=True)
+        expect(target).to_be_enabled()
+        expect(target).to_have_value('Scene')
+        expect(button).to_have_text('Apply Best Camera to Scene')
+        read=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        draft=read()
+        target.select_option('B')
+        expect(button).to_have_text('Apply Best Camera to Compare B')
+        expect(description).to_contain_text('Compare A retains its physics')
+        expect(description).to_contain_text('shared visibility')
+        self.assertEqual(read(),draft)
+        prompts=[]
+        def dismiss(dialog):
+            prompts.append(dialog.message)
+            dialog.dismiss()
+        self.page.once('dialog',dismiss)
+        button.click()
+        self.assertIn('to Compare B?',prompts[0])
+        self.assertIn('Both Compare panels',prompts[0])
+        expect(workspace).to_be_visible()
+        self.assertEqual(read(),draft)
+        self.assertEqual(self.page.evaluate("CurvatureModernCalibrationResultArchive.list(indexedDB)"),[])
+        # Hold the actual archival acknowledgement. The user's destination
+        # is locked even when a synthetic change event reaches the select.
+        self.page.evaluate("""() => {
+            const api=CurvatureModernCalibrationResultArchive;
+            const gate={ready:false,release:null,restore:()=>{window.CurvatureModernCalibrationResultArchive=api;}};
+            window.__destinationGate=gate;
+            window.CurvatureModernCalibrationResultArchive={...api,async archiveExperiment(...args){
+                const saved=await api.archiveExperiment(...args);
+                await new Promise(resolve=>{gate.release=resolve;gate.ready=true;});
+                return saved;
+            }};
+        }""")
+        try:
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            button.click()
+            self.page.wait_for_function("window.__destinationGate.ready",timeout=30000)
+            expect(target).to_be_disabled()
+            expect(button).to_be_disabled()
+            target.evaluate("(el)=>{el.value='A';el.dispatchEvent(new Event('change',{bubbles:true}));}")
+            expect(target).to_have_value('B')
+            self.page.evaluate("window.__destinationGate.release()")
+            expect(status).to_contain_text('Applied to Compare B. Calibration draft retained.',timeout=30000)
+            expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+            expect(self.page.locator('#ModernModelTabB')).to_have_attribute('aria-pressed','true')
+        finally:
+            self.page.evaluate("""() => {
+                const gate=window.__destinationGate;
+                if(gate.release)gate.release();gate.restore();
+            }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(target).to_be_enabled(timeout=30000)
+        self.assertEqual(read(),draft)
+        target.select_option('A')
+        expect(button).to_have_text('Apply Best Camera to Compare A')
+        expect(description).to_contain_text('Compare B retains its physics')
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        button.click()
+        expect(status).to_contain_text('Applied to Compare A. Calibration draft retained.',timeout=30000)
+        expect(self.page.locator('#ModernModelTabA')).to_have_attribute('aria-pressed','true')
+        self.assertEqual(self.page.evaluate("""() => JSON.parse(
+            localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)).calibrationOrigin.target"""),'A')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_compare_host_apply_and_partial_render(self):
         # Direct host entry point only; destination controls belong to .3.
         # Synthetic imported fit qualifies transaction/presentation plumbing,

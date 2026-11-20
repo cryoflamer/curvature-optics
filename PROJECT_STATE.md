@@ -1,3 +1,25 @@
+## 8F.7d.3 — Explicit calibration destination UI (#11)
+
+Predecessor 58dc353 CI 44804658246 passed. Result now exposes explicit
+Scene / Compare A / Compare B destination, default Scene on fresh mount,
+retained only within page session, never inferred from selected Compare
+side or persisted in the calibration draft. The existing Apply button
+ID remains for compatibility; its label, description and confirmation
+state the destination, common camera/layout, target-only physics,
+shared neutral visibility, reset context/camera paths and protected
+outgoing recovery. Destination is disabled with Apply; a synthetic
+change while busy restores the locked selection. Selection changes
+advance the draft generation guard without invalidating fit. Uses
+ModernApp.applyCalibrationToTarget and optional target guard; standard
+Scene success/failure text preserved, Compare success/presentation
+failure identify target. No Compare overlay or schema changes.
+
+Added destination policy unit coverage and Chromium UI test for default,
+invalid-fit disable, cancellation, locked selector at actual archive
+await, explicit B then A apply and unchanged draft. JS syntax checked
+and actual pure destination helper passed 49 isolated assertions;
+full Node/Chromium CI pending. Next .4 after green.
+
 ## 8F.7d.2a — Compare host browser fixture correction (#11)
 
 CI 44803606473 on 6e09185: Node 2229 passed, one skipped; architecture
@@ -74,7 +96,7 @@ The existing ModernCalibrationTransfer.transfer(record,current,target) already i
 Three requested effort tiers: Instant (1), Medium (2), High (3). Names are recommendations for the user's three-level selector, not runtime configuration changes. Each stage must have full green CI before the next; use targeted tests first and document limits.
 
 - [x] **8F.7d.1 — Target-aware protected Apply (High / 3).** Generalize ModernCalibrationApply to explicit Scene/A/B targets while preserving the existing Scene entry point and compatibility. Capture target before any await, validate supported targets and revisions; carry target through commit/present/result. Reuse existing pure transfer, pin exact outgoing History before mutation, reject stale or concurrent operation, rollback partial synchronous commit; distinguish committed render failure. Extend ModernCalibrationResult tests for both sides, invalid/changed target, failed archive/recovery, stale generations and rollback. No visible new UI.
-- [ ] **8F.7d.2 — Shared-camera Compare host integration (High / 3).** Generalize ModernApp Apply host and common commit/rollback; activate target Compare editor, Accurate presentation, force shared Eye-Lvl, invalidate stale render records, confirm both new A/B results (not just selected-side completion) under the current navigation generation. Reuse canonical Scene camera and both banks, retain Scene optical hypothesis and non-target Compare physics; keep common neutral haze behavior of transfer, disclose it and other existing shared-input changes. Check actual clone invariant and selection. No public UI until backend works and Scene path stays green.
+- [x] **8F.7d.2 — Shared-camera Compare host integration (High / 3).** Generalize ModernApp Apply host and common commit/rollback; activate target Compare editor, Accurate presentation, force shared Eye-Lvl, invalidate stale render records, confirm both new A/B results (not just selected-side completion) under the current navigation generation. Reuse canonical Scene camera and both banks, retain Scene optical hypothesis and non-target Compare physics; keep common neutral haze behavior of transfer, disclose it and other existing shared-input changes. Check actual clone invariant and selection. No public UI until backend works and Scene path stays green.
 - [ ] **8F.7d.3 — Explicit calibration destination UI (Medium / 2).** Expose Scene / Compare A / Compare B on the Result stage; no implicit target from the active Compare editor tab. Make destination and confirmation explicit: both panels receive fitted camera/layout; only target receives archived physics; shared display defaults/haze and cleared unrelated camera paths/narrative are disclosed. Lock destination while Apply runs, preserve draft, show target-specific result/error and protected recovery. Verify DOM controls, cancellation and unchanged Scene Apply. Do not add photo overlay in Compare.
 - [ ] **8F.7d.4 — Calibrated Scene to Compare and live applicability (High / 3).** Provide explicit A/B transition from a calibrated Scene based on the verified immutable archived result, not stale editor contents. Reuse the protected transaction and confirmed archived baseline; disclose that reapplication restores archived shared fit inputs, protect outgoing edited Scene, reject missing/mismatching archive or stale navigation. Preserve one active historical association (target A or B); do not label the other side independently calibrated even if its parameters match. Show minimal per-side association/applicability with missing/invalid/derived states, without computing live RMS. Test shared camera/layout edits versus side-specific optical edits, navigation/selection, unrelated reset. Missing photo must not be silently substituted; historical archive lookup is distinct from photo verification; any archive-only transition policy must be explicitly tested. Wider provenance/library UX remains #13.
 - [ ] **8F.7d.5 — Compare Apply and persistence qualification (High / 3).** Run live Chromium editor/worker Apply to each side and Scene-to-A/B flow; assert seven camera fields, common Eye-Lvl and object arrays, mixed Globe/Flat and differing atmospheres, unchanged non-target physical inputs except common visibility, target selection, verified compact origin, both fresh render completions. Verify real archive/History failure and stale/concurrent navigation, durable reload/local checkpoint, shared URL/JSON/History round-trips and protected outgoing exact recovery. Preserve earlier Scene/overlay/working-URL tests. No required named photo for generic transfer; Soundly scientific research-cycle acceptance remains milestone-level. Close #11 only on full green CI and record any manual acceptance still needed.

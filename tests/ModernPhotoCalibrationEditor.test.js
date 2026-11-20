@@ -193,3 +193,27 @@ test('Flat experiment is rejected before reference decoding or state mutation',(
   const input={format:'curvature-photo-calibration',version:2,scene:{model:{showModel:2}}};
   assert.throws(()=>editor.validateExperiment(input,()=>{throw Error('unexpected decode');}),/Flat calibration experiments are no longer supported/);
 });
+
+test('calibration destination descriptions disclose shared changes and explicit target',()=>{
+  const scene=editor.applyDestination('Scene');
+  assert.equal(scene.button,'Apply Best Camera to Scene');
+  assert.match(scene.description,/inactive Compare pair is reset/);
+  for(const target of ['A','B']){
+    const other=target==='A'?'B':'A',info=editor.applyDestination(target);
+    assert.equal(info.target,target);assert.equal(info.label,'Compare '+target);
+    assert.equal(info.button,'Apply Best Camera to Compare '+target);
+    for(const message of [info.description,info.confirmation]){
+      assert.match(message,/Both Compare panels receive the same best fitted camera/);
+      assert.ok(message.includes('Only Compare '+target+' receives'));
+      assert.ok(message.includes('Compare '+other+' retains its physics'));
+      assert.match(message,/shared visibility/);
+      assert.match(message,/Retained Scene physics is unchanged/);
+      assert.match(message,/camera positions\/sequence are reset/);
+      assert.match(message,/protected in History/);
+      assert.match(message,/draft is retained/);
+    }
+    assert.match(info.description,/historical, not an Accurate render error/);
+    assert.ok(Object.isFrozen(info));
+  }
+  for(const target of [undefined,null,'compare','a','C'])assert.throws(()=>editor.applyDestination(target),/destination/);
+});

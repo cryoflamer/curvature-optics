@@ -9,6 +9,20 @@
     root.document.addEventListener('DOMContentLoaded',()=>api.mount(root.document));}
 }(typeof globalThis!=='undefined'?globalThis:this,function(env,materialAnchor,materialResolver,pointerGestures){
   'use strict';
+  // Destination is a page-local action choice, not part of the fit or draft.
+  function applyDestination(target){
+    if(!['Scene','A','B'].includes(target))throw RangeError('Invalid calibration Apply destination');
+    const label=target==='Scene'?'Scene':'Compare '+target,other=target==='A'?'B':'A';
+    const effect=target==='Scene'?
+      'The fitted camera, captured objects and physical hypothesis replace Scene. The inactive Compare pair is reset to Globe/Flat defaults.':
+      'Both Compare panels receive the same best fitted camera (Eye-Lvl) and captured objects. Only '+label+
+      ' receives the captured physical hypothesis; Compare '+other+' retains its physics except shared visibility, which is reset to off (60 km). Retained Scene physics is unchanged.';
+    const shared='The scene title, description, grid, reset preset and camera positions/sequence are reset; a supported captured display aspect is used when available. Accurate rendering is selected.';
+    const recovery='The previous experiment is protected in History; your calibration draft is retained. Save Snapshot remains a separate action.';
+    return Object.freeze({target,label,button:'Apply Best Camera to '+label,
+      description:effect+' '+shared+' '+recovery+' Canvas Direct Fit RMS is historical, not an Accurate render error.',
+      confirmation:'Apply the best fitted camera and captured scene to '+label+'?\n\n'+effect+'\n\n'+shared+'\n\n'+recovery});
+  }
   function fit(width,height,w,h){
     const scale=Math.min(w/width,h/height);
     return {scale,x:(w-width*scale)/2,y:(h-height*scale)/2};
@@ -506,7 +520,22 @@
     const editingStage=()=>stage==="correspondences",resultStage=()=>stage==="result";
     let scene=null,record=null,image=null,view=null,loadToken=0;
     let applyBusy=false,applyRevision=0,pendingPhotoLoads=0;
-    const applyButton=$('ModernCalibrationApplyScene'),applyStatus=$('ModernCalibrationApplyStatus');
+    const applyButton=$('ModernCalibrationApplyScene'),applyStatus=$('ModernCalibrationApplyStatus'),
+      applyTarget=$('ModernCalibrationApplyTarget'),applyDescription=$('ModernCalibrationApplyDescription');
+    let selectedApplyTarget='Scene';
+    function syncApplyDestination(){
+      const info=applyDestination(selectedApplyTarget);
+      if(applyTarget)applyTarget.value=selectedApplyTarget;
+      if(applyButton)applyButton.textContent=info.button;
+      if(applyDescription)applyDescription.textContent=info.description;
+    }
+    if(applyTarget)applyTarget.onchange=()=>{
+      if(applyBusy){syncApplyDestination();return;}
+      if(['Scene','A','B'].includes(applyTarget.value)&&applyTarget.value!==selectedApplyTarget){
+        selectedApplyTarget=applyTarget.value;applyRevision++;applyMessage('');
+      }
+      syncApplyDestination();
+    };
     function applyMessage(value,error=false){
       if(!applyStatus)return;
       if(env.CurvatureModernStatusMessage?.set)env.CurvatureModernStatusMessage.set(applyStatus,value,error?'error':'info');
@@ -1341,8 +1370,11 @@
       runFit.disabled=stage!=="calibration"||restoring||pendingPhotoLoads>0||applyBusy||
         !!fitWorker||!record||!scene||!initialSupported||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
-      if(applyButton)applyButton.disabled=applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
+      const applyDisabled=applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
         !!fitWorker||!record||!scene||!bestSupported;
+      if(applyButton)applyButton.disabled=applyDisabled;
+      if(applyTarget)applyTarget.disabled=applyDisabled;
+      syncApplyDestination();
       syncHypothesis();
 
       for(const field of fitFields){
@@ -1572,16 +1604,17 @@
     }
     if(applyButton)applyButton.onclick=async()=>{
       if(applyButton.disabled||applyBusy)return;
-      if(!env.confirm('Apply the best fitted camera and captured scene to Scene? The previous experiment will be protected in History. The calibration draft will be kept.'))return;
-      applyBusy=true;syncFitControls();applyMessage('Saving calibration and protecting the previous experiment…');
+      const info=applyDestination(selectedApplyTarget);
+      if(!env.confirm(info.confirmation))return;
+      applyBusy=true;syncFitControls();applyMessage('Saving calibration and protecting the previous experiment for '+info.label+'…');
       try{
-        await env.CurvatureModernApp.applyCalibrationToScene({
-          candidate:applyCandidate,revision:()=>applyRevision+':'+loadToken,
-          saveDraft:()=>persist()
-        });
-        applyMessage('Applied to Scene. Calibration draft retained.');
+        await env.CurvatureModernApp.applyCalibrationToTarget({
+          candidate:applyCandidate,target:()=>selectedApplyTarget,
+          revision:()=>applyRevision+':'+loadToken,saveDraft:()=>persist()
+        },info.target);
+        applyMessage('Applied to '+info.label+'. Calibration draft retained.');
       }catch(error){
-        applyMessage(error.committed?'Applied to Scene, but presentation failed: '+error.message:
+        applyMessage(error.committed?'Applied to '+info.label+', but presentation failed: '+error.message:
           'Apply failed: '+error.message+(error.rollbackError?' · Recovery failed: '+error.rollbackError:''),true);
       }finally{applyBusy=false;syncFitControls();}
     };
@@ -1609,5 +1642,5 @@
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({applyDestination,calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));
