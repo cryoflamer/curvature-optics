@@ -1169,9 +1169,56 @@
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
     },resetScene,enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
-      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
-      if(navigating())throw Error('Integrated viewport session migration is not connected yet');
+      if(navigating()){
+        // Rebuild the original physical frame, not the currently selected pivot.
+        // The local camera/pivot coordinates are meaningful only in that frame.
+        const r=saved?.region,b=saved?.base;
+        if(saved?.version!==2||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||
+          !['navigate','vertex','edge','surface','fast-vertex'].includes(saved.pickMode)||
+          (crop.readOnly&&(saved.free||saved.pickMode!=='navigate'))||
+          !r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||
+          r.x+r.width>crop.source.width+1e-6||r.y+r.height>crop.source.height+1e-6||
+          !Array.isArray(saved.raster)||saved.raster.length!==2||!saved.raster.every(n=>Number.isInteger(n)&&n>0&&n<=2048))
+          throw Error('Invalid integrated viewer session');
+        let next=restoreView(saved.view),g=crop.source.geometry,m=crop.source.mesh;
+        if(saved.free){
+          if(!crop.build||!finite3(b?.worldPoint)||!b.owner||!Array.isArray(b.pixel)||b.pixel.length!==2||!b.pixel.every(Number.isFinite))
+            throw Error('Invalid stored physical frame');
+          g=crop.build({...r},null,b);
+          if(g?.kind!=='region'||Math.hypot(...sub(g.frame.origin,b.worldPoint))>1e-6||
+            Math.hypot(...sub(g.seed,b.pixel))>1e-6||JSON.stringify(g.owner)!==JSON.stringify(b.owner))
+            throw Error('Stored physical frame changed');
+          m=preparePick(g.items);
+          const p=saved.view.orbitPivot;
+          if(p!==undefined){
+            if(!finite3(p?.point)||!finite3(p.eye)||p.eye[2]<=g.near||[...p.point,...p.eye].some(x=>Math.abs(x)>1e9))
+              throw Error('Invalid stored orbit pivot');
+            next={...next,orbitPivot:{point:p.point.slice(),eye:p.eye.slice()}};
+          }
+        }
+        const a=restorePoint(m,saved.staged),c=restorePoint(m,saved.confirmed);
+        if(!Array.isArray(saved.choices)||saved.choices.length>2500)throw Error('Invalid stored candidates');
+        const candidates=saved.choices.map(h=>restorePoint(m,h));
+        if(candidates.some(h=>!h))throw Error('Invalid stored candidate');
+        restoringSession=true;
+        try{
+          stopDrags();clearPick();clearMarkerHover();
+          crop.region={...r};crop.reason='';geometry=g;mesh=m;free=saved.free;staged=a;confirmed=c;choices=candidates;state=next;
+          paths=null;pickCache=null;opticalCache=null;opticalTransform=null;
+          correspondenceMesh=undefined;
+          pickMode.value=saved.pickMode;
+          for(const [i,h] of choices.entries()){const n=dialog.ownerDocument.createElement('option');n.value=String(i);n.textContent=describe(h);pickChoices.append(n);}
+          pickChoices.disabled=choices.length<2;pickChoices.value=saved.choice;
+          syncMode();resizeRaster();
+          const ratio=Math.min(canvas.width,canvas.height)/Math.min(...saved.raster);
+          state={...next,pan:next.pan.map(x=>x*ratio)};
+          sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});
+          updatePickStatus();
+        }finally{restoringSession=false;}
+        sessionChanged();return true;
+      }
       if(!crop||saved?.version!==1||typeof saved.free!=='boolean'||!['navigate','vertex','edge','surface'].includes(saved.pickMode))throw Error('Invalid stored magnifier session');
       restoringSession=true;
       try{

@@ -1,3 +1,22 @@
+## 8F.5b.4a.2 — Integrated session persistence
+
+Integrated viewport snapshots are stored in the browser beside the existing
+IndexedDB calibration draft, bound to its session ID, photo ID and optical
+source. Initial/Free View and Best Camera have separate snapshots. Free View
+rebuilds the original physical frame before restoring orientation, projection,
+zoom, pan, wireframe, rebased orbit pivot and validated local picks/candidates.
+Legacy magnifier session v1 remains unchanged. Undo history (last 50 states)
+is included in the atomic draft and validated on restore. Photo view, active
+pair and incomplete pair were already stored there. Orbit sensitivity is
+already a global UI preference. No new panel persistence or independent
+Initial/Free optical-region history is introduced; Free View retains its
+entry region and Reset View deliberately returns to the full optical source.
+Invalid optional viewport/history state is discarded without deleting pairs.
+Regression coverage added; browser and CI validation pending.
+
+Remaining order: .3 Owner Inspection, .4 Draft Lifecycle, .5 Functional
+Parity, then 8F.5b.4b legacy cleanup and 8F.5c/d/e.
+
 ## Fast Vertex interaction follow-up (8F.5b.4a.1)
 
 Integrated model selection and Delete pair / Delete now use the editor's

@@ -536,6 +536,24 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.deepEqual(api.snapshot(),beforeBest);
   assert.equal(api.resumeScene(),false);
   assert.equal(api.sessionSnapshot().version,2);assert.ok(changes>0);
+  // A new mount/source must reconstruct the same original frame and rebased pivot.
+  api.resetScene();api.setCorrespondences(rows,'a');assert.equal(api.enterFree(),true);
+  api.setCorrespondences(rows,'b');
+  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:423,clientY:315});canvas.events.pointerup({...event,clientX:423,clientY:315});
+  const saved=api.sessionSnapshot(),expected=api.snapshot();
+  api.close();api.openScene(sourceContract);api.restoreSession(JSON.parse(JSON.stringify(saved)));
+  const restored=api.snapshot();
+  assert.equal(restored.mode,'free');assert.deepEqual(restored.view,expected.view);
+  assert.ok(Math.hypot(...restored.pivot.map((x,i)=>x-expected.pivot[i]))<1e-6);
+  assert.deepEqual(restored.region,expected.region);assert.equal(restored.pickMode,expected.pickMode);
+  assert.throws(()=>api.restoreSession({...saved,base:{...saved.base,worldPoint:[0,0,0]}}),/pivot|frame|camera/i);
+  api.resetScene();canvas.events.wheel({...event,deltaY:-120});
+  const optical=api.sessionSnapshot();api.close();api.openScene(sourceContract);
+  api.restoreSession(optical);assert.deepEqual(api.snapshot().region,optical.region);
+  api.openScene({...sourceContract,readOnly:true,title:'Best Camera'});
+  canvas.events.wheel({...event,deltaY:-120});const best=api.sessionSnapshot();
+  api.close();api.openScene({...sourceContract,readOnly:true,title:'Best Camera'});api.restoreSession(best);
+  assert.deepEqual(api.snapshot().region,best.region);assert.throws(()=>api.restoreSession(saved),/Invalid integrated/);
   api.close();assert.equal(host.hidden,true);assert.equal(api.snapshot(),null);
 });
 

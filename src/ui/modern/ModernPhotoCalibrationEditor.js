@@ -406,17 +406,44 @@
     inlineHost.querySelector('[data-viewer-pick-mode]').append(fastOption);
     const inlineDelete=doc.createElement('button');inlineDelete.type='button';inlineDelete.textContent='Delete pair';inlineDelete.disabled=true;inlineDelete.setAttribute('data-viewer-delete-pair','');
     inlineHost.querySelector('[data-viewer-selection-status]').after(inlineDelete);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,()=>{},selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo});
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
-    const MAGNIFIER_KEY='curvature-calibration-magnifier-v1';
+    const MAGNIFIER_KEY='curvature-calibration-magnifier-v1',INLINE_KEY='curvature-calibration-inline-v2';
+    let inlineSessions={initial:null,best:null},inlineRole=null,switchingInline=false;
+    function captureInline(){
+      if(restoring||switchingInline||!inlineSource||!inlineRole||!inlineViewer.isOpen())return;
+      const session=inlineViewer.sessionSnapshot();
+      if(session)inlineSessions[inlineRole]={source:JSON.stringify(inlineSource),session};
+    }
+    function saveInline(){
+      if(restoring||switchingInline||!magnifierSessionId||!scene)return;
+      try{
+        captureInline();
+        env.localStorage.setItem(INLINE_KEY,JSON.stringify({id:magnifierSessionId,photo:record?.id||null,sessions:inlineSessions}));
+      }catch(error){/* Optional UI storage; the atomic calibration draft is independent. */}
+    }
+    function readInline(){
+      try{
+        const saved=JSON.parse(env.localStorage.getItem(INLINE_KEY));
+        if(saved?.id===magnifierSessionId&&saved.photo===(record?.id||null))return {initial:saved.sessions?.initial||null,best:saved.sessions?.best||null};
+      }catch(error){/* Invalid or unavailable UI state. */}
+      return {initial:null,best:null};
+    }
+    function restoreInlineRole(role,source){
+      const stored=inlineSessions[role];
+      if(!stored)return;
+      if(stored.source!==JSON.stringify(source)){inlineSessions[role]=null;return;}
+      try{inlineViewer.restoreSession(stored.session);}
+      catch(error){inlineSessions[role]=null;message('Stored model view discarded: '+error.message);}
+    }
     function newMagnifierSession(){
       magnifierSessionId=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-      pendingMagnifier=null;
-      try{env.localStorage.removeItem(MAGNIFIER_KEY);}catch(error){/* Optional UI storage. */}
+      pendingMagnifier=null;inlineSessions={initial:null,best:null};inlineRole=null;
+      try{env.localStorage.removeItem(INLINE_KEY);env.localStorage.removeItem(MAGNIFIER_KEY);}catch(error){/* Optional UI storage. */}
     }
     function saveMagnifier(){
       if(restoring||!magnifierSessionId||pendingMagnifier)return;
@@ -483,8 +510,9 @@
     }
     function persist(){
       if(restoring||!scene)return;
+      saveInline();
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
-        record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,
+        record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack,
         weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
@@ -514,7 +542,7 @@
         showScene(next);legacyShown=d.legacyShown===true;syncModelRoute();
         magnifierSessionId=typeof d.magnifierSessionId==='string'?d.magnifierSessionId:magnifierSessionId;
         if(record){photoDetails(record,activeSource);fitPhoto();}
-        if(d.view)view=d.view;
+        if(d.view&&[d.view.scale,d.view.x,d.view.y].every(Number.isFinite)&&d.view.scale>0)view=d.view;
         if(d.modelView&&previewValid)modelView=d.modelView;
         showLandmarks.checked=!!d.showLandmarks;
         if(d.selected)selectLandmark(d.selected);
@@ -529,11 +557,26 @@
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
           try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
+        if(record&&Array.isArray(d.undoStack)){
+          undoStack=[];
+          for(const entry of d.undoStack.slice(-50)){
+            try{
+              const prior=observationRows(entry.rows,record.original.width,record.original.height,true,scene.model);
+              validateLegacyTopology(prior,scene);
+              undoStack.push({rows:prior,activePair:prior.some(r=>r.landmark.id===entry.activePair)?entry.activePair:null});
+            }catch(error){/* Discard only invalid history entries. */}
+          }
+          refreshRows();
+        }
         pendingMagnifier=readMagnifier();
+        inlineSessions=readInline();
+        // Initial rendering during draft restoration may have opened a default
+        // viewport. Reopen it after the stored source and fit are available.
+        inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;
         message('Calibration draft restored.');
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
-      finally{restoring=false;if(scene&&!magnifierSessionId)newMagnifierSession();syncFitControls();restoreMagnifier();}
+      finally{restoring=false;if(scene&&!magnifierSessionId)newMagnifierSession();syncFitControls();restoreMagnifier();meshDraw();}
     }
     async function refreshSources(){
       const token=++catalogToken;
@@ -794,7 +837,8 @@
       clearHover();clearAmbiguity();
     }
     function renderModel(){
-      inlineViewer.close();inlineSource=null;initialParked=false;bestCropSource=null;
+      inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;
+      if(!restoring){inlineSessions={initial:null,best:null};saveInline();}
       if(viewer.isCrop())viewer.close();cropSource=null;cancelRegion();
       invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
@@ -943,23 +987,27 @@
       const best=!!(viewBest&&fitBest&&paintedFit&&bestCropSource),source=best?bestCropSource:cropSource;
       if(!source)return true;
       if(inlineSource===source&&inlineViewer.isOpen())return true;
+      const role=best?'best':'initial';
+      captureInline();switchingInline=true;
       try{
         if(best&&inlineSource===cropSource)initialParked=inlineViewer.parkScene();
         if(!best&&initialParked){
           initialParked=false;
-          if(inlineViewer.resumeScene()){inlineSource=source;refreshMagnifierCorrespondences();return true;}
+          if(inlineViewer.resumeScene()){inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();return true;}
         }
-        if(best&&inlineSource&&inlineSource!==cropSource&&inlineSource.width===source.width&&inlineSource.height===source.height&&inlineViewer.updateScenePaint(inlinePaint(source))){
-          inlineSource=source;refreshMagnifierCorrespondences();return true;
+        if(best&&inlineRole==='best'&&inlineSource&&inlineSource.width===source.width&&inlineSource.height===source.height&&inlineViewer.updateScenePaint(inlinePaint(source))){
+          inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();return true;
         }
         inlineViewer.openScene({width:source.width,height:source.height,banks:scene.banks,paint:inlinePaint(source),
           buildFree:best?null:(region,active,selected)=>buildInlineFree(source,region,selected),readOnly:best,
           title:best?'Model · Best Camera':'Model · Initial Camera'});
-        inlineSource=source;refreshMagnifierCorrespondences();return true;
+        inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();
+        if(!restoring)restoreInlineRole(role,source);
+        return true;
       }catch(error){
-        inlineViewer.close();inlineSource=null;initialParked=false;legacyShown=true;syncModelRoute();
+        inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;legacyShown=true;syncModelRoute();
         message('Integrated model unavailable: '+error.message+' · legacy tools retained.');return false;
-      }
+      }finally{switchingInline=false;saveInline();}
     }
     legacyToggle.onclick=()=>{
       if(!globeRoute())return;
@@ -1151,7 +1199,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;selectedObjectKey=null;pickMode.value='vertex';
+      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
@@ -1530,7 +1578,7 @@
       }catch(error){terminateFit();fitStatus.textContent='Cannot start fit: '+error.message;syncFitControls();}
     };
     stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
-    bestView.onclick=()=>{if(!fitBest)return;viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();};
+    bestView.onclick=()=>{if(!fitBest)return;viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();persist();};
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();});
     add.onclick=savePair;
     $('ModernCalibrationCancelEdit').onclick=()=>{activePair=null;resetPending();refreshRows();photoDraw();meshDraw();};
