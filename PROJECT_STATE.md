@@ -1,3 +1,22 @@
+## 8F.7b.2b.1-fix — Chromium regression correction (#9)
+
+CI 44775147087 passed Node and architecture, Chromium 41/43. The new
+atmosphere test failed because the toolbar's author display:flex overrode
+hidden. Reproduced using the exact CSS from the CI trace in local Chromium;
+verified hidden -> display:none and unhidden -> display:flex after the fix.
+Added Standard hidden coverage and refreshed CSS/JS asset cache keys.
+The existing workspace reload test also timed out in Scene, as on 249e663.
+Removed an independently identified startup race: primary tabs are disabled
+until physical/session restoration completes; calibration retains its
+separate draft gate. The five-tab test waits for actual recovery both before
+and after reload, keeps immediate reload, rechecks persisted preference and
+retains all mode/visibility assertions. Diagnostics now capture failed
+subtests, history state, saved preference, persistence status and tabs.
+The original Scene timeout was not reproduced locally: the prior artifact
+omitted subtest diagnostics and a full local repository/browser run was
+unavailable. Full CI required before claiming the second failure fixed;
+Issue #9 remains open. Next 8F.7b.2c only after qualification.
+
 ## 8F.7b.2b.1 — Calibration atmosphere selection (#9)
 
 CI 44772523033 passed all three jobs, including explicit Apply browser smoke.

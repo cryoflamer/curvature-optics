@@ -75,7 +75,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         result = getattr(getattr(self, '_outcome', None), 'result', None)
         if result is None:
             return False
-        return any(test is self for test, _ in result.failures + result.errors)
+        return any(test is self or getattr(test, 'test_case', None) is self
+                   for test, _ in result.failures + result.errors)
 
     def _save_diagnostics(self):
         ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -97,6 +98,12 @@ class ModernBrowserSmoke(unittest.TestCase):
                 studioUiLoaded: !!window.CurvatureModernAnimationStudioUI,
                 studioApiLoaded: !!window.CurvatureModernAnimationStudio,
                 workspaceMode: window.CurvatureModernApp?.getWorkspaceMode?.() ?? null,
+                workspacePreference: JSON.parse(localStorage.getItem(
+                    window.CurvatureModernApplicationPreferences?.STORAGE_KEY) || 'null')?.workspace ?? null,
+                historyState: history.state,
+                persistenceStatus: document.querySelector('#ModernPersistenceStatus')?.textContent,
+                tabs: [...document.querySelectorAll('.modern-tab')].map(t => ({
+                    id:t.id, pressed:t.getAttribute('aria-pressed'), disabled:t.disabled})),
                 animationTabPressed: document.querySelector('#ModernAnimationTab')?.getAttribute('aria-pressed'),
                 animationWorkspaceHidden: document.querySelector('#ModernAnimationWorkspace')?.hidden ?? null,
                 libraryHtml: document.querySelector('#ModernAnimationLibrary')?.innerHTML ?? null,
@@ -604,6 +611,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         vacuum=read()
         select.select_option('standard')
         expect(status).to_contain_text('Initial effective R:')
+        expect(profile).to_be_hidden()
         standard=read()
         self.assertEqual(standard['scene']['physics']['atmosphere'],'standard')
         self.assertEqual(standard['scene']['model'],vacuum['scene']['model'])
@@ -896,14 +904,22 @@ class ModernBrowserSmoke(unittest.TestCase):
         tabs={'scene':'ModernSceneTab','compare':'ModernCompareTab',
               'animation':'ModernAnimationTab','calibration':'ModernPhotoCalibrationOpen',
               'demos':'ModernDemosTab'}
+        # The calibration tab is enabled only after asynchronous Scene/session
+        # and draft restoration, not merely after the document load event.
+        ready=self.page.locator('#ModernPhotoCalibrationOpen')
+        expect(ready).to_be_enabled(timeout=30000)
         for mode in ['compare','animation','calibration','demos','scene']:
             with self.subTest(mode=mode):
                 self.page.locator('#'+tabs[mode]).click()
                 self.page.wait_for_function("m => CurvatureModernApp.getWorkspaceMode() === m",arg=mode)
                 self.assertEqual(self.page.evaluate("""() => JSON.parse(localStorage.getItem(
                     CurvatureModernApplicationPreferences.STORAGE_KEY)).workspace.mode"""),mode)
+                # Keep immediate reload: do not wait for a debounced save.
                 self.page.reload(wait_until='load')
+                expect(ready).to_be_enabled(timeout=30000)
                 self.page.wait_for_function("m => CurvatureModernApp.getWorkspaceMode() === m",arg=mode)
+                self.assertEqual(self.page.evaluate("""() => JSON.parse(localStorage.getItem(
+                    CurvatureModernApplicationPreferences.STORAGE_KEY)).workspace.mode"""),mode)
                 for key,tab in tabs.items():
                     expect(self.page.locator('#'+tab)).to_have_attribute(
                         'aria-pressed','true' if key==mode else 'false')

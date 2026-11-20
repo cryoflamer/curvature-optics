@@ -7568,6 +7568,13 @@
       if(restored||state.compareConfig)syncCompareEditor();
       // No autosave or preference writes from startup selection.
       persistence.ready=true;
+      // The physical session is now authoritative. Do not allow an early
+      // click to be overwritten by asynchronous startup restoration.
+      Object.keys(workspaceTabs).forEach(function(mode){
+        if(mode==='calibration')return; // enabled after its own draft recovery
+        var tab=(mode==='scene'||mode==='compare')?el(workspaceTabs[mode]):newUiEl(workspaceTabs[mode]);
+        if(tab)tab.disabled=false;
+      });
       var navigationAtStartup=workspaceNavigationVersion;
       function restoreWorkspace(){
         if(workspaceNavigationVersion===navigationAtStartup&&startupMode!==currentWorkspaceMode())

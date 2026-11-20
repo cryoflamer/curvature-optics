@@ -1469,6 +1469,7 @@ button{cursor:pointer}
 .modern-photo-calibration button:disabled{opacity:.55;cursor:default}
 .modern-photo-calibration input,.modern-photo-calibration select{border:1px solid #bccddd;border-radius:5px;padding:5px;color:#183550;background:#fff}
 .modern-photo-calibration header,.modern-calibration-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.modern-calibration-toolbar[hidden]{display:none!important}
 .modern-photo-calibration header { justify-content:space-between; }
 .modern-photo-calibration h2,.modern-photo-calibration h3 { margin:.35em 0; }
 .modern-calibration-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-top:12px; }
