@@ -425,6 +425,8 @@
         catch(error){atmosphericShimmer.noteError(name,error);throw error;}
       }:undefined,
       onRemove:atmosphericShimmer?atmosphericShimmer.dispose:undefined}):null;
+  var photoOverlay=root.CurvatureModernPhotoOverlayRenderer?
+    root.CurvatureModernPhotoOverlayRenderer.create(root):null;
   var shimmerFrame=null;
   var shimmerLastFrameMs=null;
   var shimmerPaused={Scene:false,A:false,B:false};
@@ -4726,6 +4728,7 @@
     state.compareSelected=data.compare.selected;
     state.compareEyeLevel=data.display.eyeLevel;state.compareHorizon=data.display.horizon;
     state.mode=data.display.mode;
+    if(photoOverlay)photoOverlay.clear();
     state.calibrationOrigin=data.calibrationOrigin;
     cameraPositions=data.cameraPositions||[];
     cameraSequence=data.cameraSequence?data.cameraSequence.keyframes:[];
@@ -4979,6 +4982,7 @@
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,
         includeGeometrySummary:true,geometryBackend:state.geometryBackend,
+        captureProjection:!!(photoOverlay&&state.calibrationOrigin?.target==='Scene'),
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
@@ -5001,6 +5005,11 @@
         if(fastHorizon)fastHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       markHistoryRendered('Scene');
+      if(photoOverlay){
+        if(currentWorkspaceMode()==='scene')
+          photoOverlay.capture(state.calibrationOrigin,g.Canvas,result.projectionCamera,model.deviceRatio);
+        else photoOverlay.clear();
+      }
       scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
@@ -5020,6 +5029,7 @@
       updateOpticalQualityStatus();
     }catch(error){
       historyRenderedKeys.Scene=null;state.last=null;
+      if(photoOverlay)photoOverlay.clear();
       if(effectiveOpticalQuality()==='fast')clearUnavailablePreview(g);
       updateOpticalQualityStatus(effectiveOpticalQuality()==='fast'?'Fast Preview: '+error.message:undefined,
         effectiveOpticalQuality()==='fast'?'error':'info');
@@ -6980,6 +6990,7 @@
     if(!Object.prototype.hasOwnProperty.call(workspaceTabs,mode))
       throw RangeError('Invalid Modern UI mode');
     if(activateWorkspace(mode)===false)return false;
+    if(mode!=='scene'&&photoOverlay)photoOverlay.clear();
     syncWorkspaceTabs();
     if(remember!==false)rememberWorkspaceMode(mode);
     return true;
@@ -7287,6 +7298,7 @@
       stopCameraKeyboard(true);abortCameraDrag();cancelPending();
       try{
         adapter.applyPreset(model,id);
+        if(photoOverlay)photoOverlay.clear();
         state.calibrationOrigin=undefined;
         state.preset=id;state.scenePresetSelection=id;
         state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';
@@ -7645,6 +7657,7 @@
     getGpuCapabilities:function(){return gpuSnapshot;},
     getGeometryBackend:function(){return state.geometryBackend;},
     getOpticalQuality:function(){return state.opticalQuality;},
+     getPhotoOverlayState:function(){return photoOverlay?photoOverlay.snapshot():null;},
     getEffectiveOpticalQuality:effectiveOpticalQuality,
     getPreviewDetail:function(){return state.previewDetail;},
     getPreviewStride:function(scope){return previewStride(scope||'Scene');}};

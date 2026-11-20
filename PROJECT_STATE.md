@@ -1,3 +1,45 @@
+## 8F.7c.2 — Registered Overlay Renderer (#10)
+
+Previous CI 44782151978: all 45 Chromium tests passed; Node 2210 passed,
+2 failed, 1 skipped; architecture failed because the static
+legacy-isolation-boundary.json was not synchronized when .1 added its
+module, HTML load and literal test requires. Both Node failures concern
+that same stale inventory. The current commit updates the fixture for
+both .1 and .2 by checking actual HTML load order, source tree and added
+literal require paths, without changing the audit/checks or Legacy.
+
+ModernPhotoOverlayRenderer provides an independent, transparent, pointer-
+inert Canvas sibling of the physical Scene canvas. For a Scene origin,
+validate the portable origin, load/validate its immutable archive record,
+compare the entire canonical origin with the archive-derived association,
+resolve the exact original via the existing byte-digest/decoded dimension
+verification path, decode and paint. No thumbnail or substitute fallback.
+Generation guards discard late archive/lookup/decode after replacement
+or navigation; missing asset or mismatched origin stays unavailable.
+Only completed Scene draws supply backing dimensions, captured pixel
+transform/screenSize and selected ordinary aspect. Use the full .1 photo
+rectangle; Canvas bounds clip it. Resize remaps the same baseline,
+with a ResizeObserver hiding stale-sized layers and aligning CSS to
+the source canvas; temporary invalid layouts are retried on the next
+completed draw. No live focal/pose/physics in registration. Ordinary
+Scene/History thumbnails continue to use their original canvases.
+
+Temporary presentation policy until .3 controls: show a verified Scene
+association at 50% opacity. Clear on experiment replacement, unrelated
+preset, navigation away, and failed physical render. Unavailable status
+is inspectable via CurvatureModernApp.getPhotoOverlayState(), not yet
+a user-facing control. Compare is not touched. No storage/schema change.
+Five renderer regression scenarios / 60 assertions pass in the isolated
+JS harness with production state and registration plus injected
+DOM/storage/image doubles. Added real Chromium assertions to existing
+Soundly Apply test: separate canvas, correct backing size and original
+synthetic PNG pixels, unclamped aspect and non-interactive opacity.
+Native Node/full local browser checkout unavailable; full CI pending.
+
+Next .3 — Scene Overlay Controls (Scene only / Photo only / Overlay,
+opacity and source/unavailable state), then .4 lifecycle and .5 real
+Soundly photo qualification. Real original not present in fixture.
+
 ## 8F.7c.1 — Fixed Photo Overlay Registration (#10)
 
 CI 44779900383 completed successfully on 6e0eefc (all three jobs;

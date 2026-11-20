@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 130,
-      "uniqueScripts": 128,
+      "scriptTags": 132,
+      "uniqueScripts": 130,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -247,6 +247,8 @@
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernCalibrationTransfer.js",
         "src/ui/modern/ModernCalibrationApply.js",
+        "src/ui/modern/ModernPhotoOverlayRegistration.js",
+        "src/ui/modern/ModernPhotoOverlayRenderer.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernApp.js",
@@ -457,6 +459,8 @@
       "src/ui/modern/ModernLocationCatalog.js",
       "src/ui/modern/ModernPerformanceReport.js",
       "src/ui/modern/ModernPhotoCalibrationEditor.js",
+      "src/ui/modern/ModernPhotoOverlayRegistration.js",
+      "src/ui/modern/ModernPhotoOverlayRenderer.js",
       "src/ui/modern/ModernReferenceImageImport.js",
       "src/ui/modern/ModernReferenceImageLibraryUI.js",
       "src/ui/modern/ModernRenderProfiler.js",
@@ -497,7 +501,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 222,
+  "sourceJsCount": 224,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1262,6 +1266,7 @@
         "tests/ModernCameraTelemetry.test.js",
         "tests/ModernCanvasDirectAtmosphericParity.test.js",
         "tests/ModernCanvasDirectOrientationParity.test.js",
+        "tests/ModernPhotoOverlayRegistration.test.js",
         "tests/ModernPhysicalCompare.test.js",
         "tests/ModernTargetDirection.test.js",
         "tests/PhysicalAdaptiveGridExtent.test.js",
@@ -1437,7 +1442,8 @@
         "tests/CameraMaterialAnchorFit.test.js",
         "tests/CameraPhysicalFit.test.js",
         "tests/CameraPhysicalPose.test.js",
-        "tests/ModernCanvasDirectPreview.test.js"
+        "tests/ModernCanvasDirectPreview.test.js",
+        "tests/ModernPhotoOverlayRegistration.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -2437,7 +2443,8 @@
       ],
       "commonJsTestCallers": [
         "tests/CurvatureCanvasProjection.test.js",
-        "tests/ModernCanvasDirectPreview.test.js"
+        "tests/ModernCanvasDirectPreview.test.js",
+        "tests/ModernPhotoOverlayRegistration.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -3450,6 +3457,7 @@
         "tests/ModernHistoryPortability.test.js",
         "tests/ModernInverseTemperature97.test.js",
         "tests/ModernMountainGeometry.test.js",
+        "tests/ModernPhotoOverlayRenderer.test.js",
         "tests/ModernProfileTransition.test.js",
         "tests/ModernSceneControls.test.js",
         "tests/ModernSemanticNaming.test.js",
@@ -3554,6 +3562,27 @@
         "tests/ModernCalibrationResult.test.js",
         "tests/ModernLandmarkViewer.test.js",
         "tests/ModernPhotoCalibrationEditor.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernPhotoOverlayRegistration.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernPhotoOverlayRegistration.test.js",
+        "tests/ModernPhotoOverlayRenderer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernPhotoOverlayRenderer.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernPhotoOverlayRenderer.test.js"
       ],
       "commonJsToolCallers": []
     },

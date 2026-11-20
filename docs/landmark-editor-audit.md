@@ -1,3 +1,38 @@
+## 8F.7c.2 — Registered Overlay Renderer
+
+The Scene layer is a separate transparent backing Canvas, a sibling of
+the original graph Canvas. Its destination is the complete registered
+rectangle from .1; clipping belongs to the backing viewport. This is not
+a copy or rerender of the physical Scene, and source pixels/optics remain
+independent of photo opacity. The layer never receives pointer events.
+Only Scene with a Scene calibration association is eligible.
+
+The host captures projection metadata from a completed physical draw.
+Only display aspect, viewport screen size and captured pixel transform
+enter registration; no live camera focal field, sceneSize or orientation.
+The original graph remains the authoritative canvas for History images.
+On resize, real backing dimensions are checked, stale pixels hidden and
+CSS dimensions/offsets aligned. The next completed capture supplies the
+new registration rectangle. Invalid transitional layouts are retriable.
+
+Trust boundary: validate the portable origin and the archived result;
+compare the archive-derived canonical origin to the current one, not
+merely the photo ID. Verify the exact original digest, raster dimensions
+and browser decode through the existing reference library path. Paint
+only verified original bytes. Generation guards reject stale async
+completion on navigation, replacement, unrelated preset or failure.
+Missing archive/photo is unavailable, never replaced by thumbnail or
+a similar image. No mutation of storage or physical experiment.
+
+The temporary default for .2 is 50% photo opacity while the verified
+Scene association is active. .3 introduces user controls and visible
+source/unavailable status; .4 completes the interaction/lifecycle scope.
+The controller is covered by injected DOM/storage unit tests and the
+live Soundly Apply browser scenario now also checks the painted
+synthetic reference pixels and the separate layer's dimensions.
+No rendering parity, actual Soundly original validation or full local
+browser verification is claimed. Compare retains its separate plan.
+
 ## Approved research roadmap — 2026-11-20
 
 This prioritization supersedes the implementation order of 8F.7a.2 below, not its identity, protection, migration or registration contracts. GitHub Issues are the task backlog and acceptance criteria; PROJECT_STATE records the current step; this audit records architecture. One issue may require multiple bounded commits. Priorities are in issue titles pending native label/milestone setup.

@@ -933,6 +933,31 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(verified['record']['payload']['fit']['result']['evaluation']['rmsPx'],
                          result['evaluation']['rmsPx'])
 
+        # The overlay uses the archived original, not the thumbnail or a
+        # second physical render. The regression raster is uniform #eee.
+        overlay=self.page.locator('#ModernGraphHost canvas.modern-reference-photo-overlay')
+        expect(overlay).to_be_visible(timeout=30000)
+        presented=self.page.evaluate("""() => {
+            const state=CurvatureModernApp.getPhotoOverlayState();
+            const layer=document.querySelector('#ModernGraphHost canvas.modern-reference-photo-overlay');
+            const source=[...layer.parentNode.querySelectorAll('canvas')].find(c=>
+                c!==layer&&!c.className.includes('modern-atmospheric'));
+            return {state,width:layer.width,height:layer.height,
+                baseWidth:source.width,baseHeight:source.height,
+                pointer:getComputedStyle(layer).pointerEvents,opacity:getComputedStyle(layer).opacity,
+                pixel:Array.from(layer.getContext('2d').getImageData(
+                    Math.floor(layer.width/2),Math.floor(layer.height/2),1,1).data)};
+        }""")
+        self.assertEqual(presented['state']['status'],'ready')
+        self.assertEqual(presented['state']['resultId'],rid)
+        self.assertEqual((presented['width'],presented['height']),
+                         (presented['baseWidth'],presented['baseHeight']))
+        self.assertEqual(presented['pointer'],'none')
+        self.assertEqual(presented['opacity'],'0.5')
+        self.assertEqual(presented['pixel'],[238,238,238,255])
+        rect=presented['state']['layout']['rect']
+        self.assertAlmostEqual(rect['width']/rect['height'],1176/791,places=10)
+
         # Saving a calibrated Scene remains a separate explicit user action.
         save=self.page.locator('#ModernSnapshotSave')
         expect(save).to_be_visible(timeout=30000)
