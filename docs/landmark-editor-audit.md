@@ -1,3 +1,28 @@
+## 8F.7d.2 — Shared-camera Compare host integration (#11)
+
+Predecessor a7c09e9 CI 44802145613 completed successfully.
+ModernApp exposes applyCalibrationToTarget(editor,target) for explicit
+Scene/A/B destinations; the previous Scene API delegates unchanged.
+The same protected transaction commits/rolls back canonical experiments.
+Compare presentation saves the selected side preference as well as the
+checkpoint, switches to Accurate, clears old Scene/A/B render records,
+clones and History render keys, then activates Compare. The existing
+pair adapter provides shared fitted pose, object layout and Eye-Lvl;
+both fresh results must match the current physical History view keys,
+with unchanged workspace/experiment generations, selected side and
+pair identity/invariant. A failed panel is a committed presentation
+failure, not an unapplied result. Scene retains its existing message.
+No destination UI, schema, optical solver or Compare photo overlay
+changes. Existing Scene transfer defaults and neutral common haze apply.
+
+Added a direct-host Chromium scenario with a synthetic imported fit,
+real archive/recovery, A/B transfers and intentionally missing B
+render after a prior successful Compare; no new fit accuracy claim.
+Actual host code passed nine isolated adapter scenarios / 62 checks
+(success, missing A/B, stale view key, navigation, edit, invalid pair).
+ModernApp and embedded browser JS syntax checked; native Node and
+Chromium CI pending. Next .3 only after green.
+
 ## 8F.7d.1 — Target-aware protected Apply (#11)
 
 Previous documentation baseline 7a6eff5 passed CI 44801043995.
@@ -29,7 +54,7 @@ The existing ModernCalibrationTransfer.transfer(record,current,target) already i
 
 Three requested effort tiers: Instant (1), Medium (2), High (3). Names are recommendations for the user's three-level selector, not runtime configuration changes. Each stage must have full green CI before the next; use targeted tests first and document limits.
 
-- [ ] **8F.7d.1 — Target-aware protected Apply (High / 3).** Generalize ModernCalibrationApply to explicit Scene/A/B targets while preserving the existing Scene entry point and compatibility. Capture target before any await, validate supported targets and revisions; carry target through commit/present/result. Reuse existing pure transfer, pin exact outgoing History before mutation, reject stale or concurrent operation, rollback partial synchronous commit; distinguish committed render failure. Extend ModernCalibrationResult tests for both sides, invalid/changed target, failed archive/recovery, stale generations and rollback. No visible new UI.
+- [x] **8F.7d.1 — Target-aware protected Apply (High / 3).** Generalize ModernCalibrationApply to explicit Scene/A/B targets while preserving the existing Scene entry point and compatibility. Capture target before any await, validate supported targets and revisions; carry target through commit/present/result. Reuse existing pure transfer, pin exact outgoing History before mutation, reject stale or concurrent operation, rollback partial synchronous commit; distinguish committed render failure. Extend ModernCalibrationResult tests for both sides, invalid/changed target, failed archive/recovery, stale generations and rollback. No visible new UI.
 - [ ] **8F.7d.2 — Shared-camera Compare host integration (High / 3).** Generalize ModernApp Apply host and common commit/rollback; activate target Compare editor, Accurate presentation, force shared Eye-Lvl, invalidate stale render records, confirm both new A/B results (not just selected-side completion) under the current navigation generation. Reuse canonical Scene camera and both banks, retain Scene optical hypothesis and non-target Compare physics; keep common neutral haze behavior of transfer, disclose it and other existing shared-input changes. Check actual clone invariant and selection. No public UI until backend works and Scene path stays green.
 - [ ] **8F.7d.3 — Explicit calibration destination UI (Medium / 2).** Expose Scene / Compare A / Compare B on the Result stage; no implicit target from the active Compare editor tab. Make destination and confirmation explicit: both panels receive fitted camera/layout; only target receives archived physics; shared display defaults/haze and cleared unrelated camera paths/narrative are disclosed. Lock destination while Apply runs, preserve draft, show target-specific result/error and protected recovery. Verify DOM controls, cancellation and unchanged Scene Apply. Do not add photo overlay in Compare.
 - [ ] **8F.7d.4 — Calibrated Scene to Compare and live applicability (High / 3).** Provide explicit A/B transition from a calibrated Scene based on the verified immutable archived result, not stale editor contents. Reuse the protected transaction and confirmed archived baseline; disclose that reapplication restores archived shared fit inputs, protect outgoing edited Scene, reject missing/mismatching archive or stale navigation. Preserve one active historical association (target A or B); do not label the other side independently calibrated even if its parameters match. Show minimal per-side association/applicability with missing/invalid/derived states, without computing live RMS. Test shared camera/layout edits versus side-specific optical edits, navigation/selection, unrelated reset. Missing photo must not be silently substituted; historical archive lookup is distinct from photo verification; any archive-only transition policy must be explicitly tested. Wider provenance/library UX remains #13.

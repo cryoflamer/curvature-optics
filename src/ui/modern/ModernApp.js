@@ -4791,7 +4791,12 @@
   }
   // The editor provides a candidate getter and draft generation, not direct
   // access to the live CurveApp. Durable archive/recovery precede mutation.
-  async function applyCalibrationToScene(editor){
+  function applyCalibrationToScene(editor){
+    return applyCalibrationToTarget(editor,'Scene');
+  }
+  async function applyCalibrationToTarget(editor,target){
+    if(!['Scene','A','B'].includes(target))
+      throw RangeError('Explicit calibration Apply target must be Scene, A or B');
     if(calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy)
       throw Error('Finish the pending experiment change first');
     if(!photoCalibrationWorkspaceOpen||!persistence.ready||!experimentHistory||historyLoadError||
@@ -4801,6 +4806,7 @@
     try{
       const controller=root.CurvatureModernCalibrationApply.create({
         candidate:editor.candidate,
+        target:editor.target,
         snapshot:experimentSnapshot,
         revision:()=>[workspaceNavigationVersion,calibrationSceneRevision,currentWorkspaceMode(),editor.revision()].join('|'),
         async archive(candidate){
@@ -4821,35 +4827,61 @@
         async present(info){
           previousExperimentHistoryId=info.recoveryId;
           updatePresetNavigation('Calibration applied. Previous experiment protected in History.');
-          // The ordinary Scene starts in Accurate mode; a later explicit
-          // quality choice is still available. No cross-renderer RMS claim.
+          const mode=info.target==='Scene'?'scene':'compare';
+          const label=mode==='scene'?'Scene':'Compare';
+          // The physical experiment is already committed. Persist the
+          // selected Compare editor side as well: startup normally gives
+          // local workspace preferences precedence over the checkpoint.
+          if(mode==='compare')workspaceState.compareModel=info.target;
           state.opticalQuality='accurate';
           const quality=geometryUi('ModernOpticalQuality');if(quality)quality.value='accurate';
           saveApplicationPreferences();updateOpticalQualityStatus();
-          state.last=null;
+          // Never certify an old render or a partial A/B update. Invalidate
+          // both panels, the old clones and all screenshot eligibility.
+          state.last=null;state.compareLast={A:null,B:null};state.comparePair=null;
+          historyRenderedKeys.Scene=null;historyRenderedKeys.A=null;historyRenderedKeys.B=null;
           try{
-            if(setMode('scene',true)===false)throw Error('Scene activation failed');
+            if(setMode(mode,true)===false)throw Error(label+' activation failed');
           }finally{
             scheduleExperimentSave();flushWorkingSession();
           }
-          const viewRevision=workspaceNavigationVersion;
-          // setMode enqueues the normal Scene redraw on the preceding frame.
-          // draw() catches renderer exceptions and clears state.last.
+          const viewRevision=workspaceNavigationVersion,sceneRevision=calibrationSceneRevision;
+          const expected=experimentSnapshot(),pair=state.comparePair;
+          // setMode enqueues the normal full redraw on the preceding frame.
+          // Graph Redraw is synchronous; draw/drawCompare clear failed results.
           await new Promise((resolve,reject)=>{
-            const timeout=root.setTimeout(()=>reject(Error('Scene render not confirmed')),30000);
+            const timeout=root.setTimeout(()=>reject(Error(label+' render not confirmed')),30000);
             root.requestAnimationFrame(()=>{
               root.clearTimeout(timeout);
-              if(currentWorkspaceMode()!=='scene'||workspaceNavigationVersion!==viewRevision)
-                reject(Error('Scene presentation superseded by navigation'));
-              else if(!state.last)reject(Error('Scene renderer did not complete; see render status'));
-              else resolve();
+              try{
+                if(currentWorkspaceMode()!==mode||workspaceNavigationVersion!==viewRevision)
+                  throw Error(label+' presentation superseded by navigation');
+                if(mode==='scene'){
+                  if(!state.last)throw Error('Scene renderer did not complete; see render status');
+                }else{
+                  if(calibrationSceneRevision!==sceneRevision||state.compareSelected!==info.target||
+                     effectiveOpticalQuality()!=='accurate'||
+                     historyFingerprint.exactSignature(experimentSnapshot())!==historyFingerprint.exactSignature(expected))
+                    throw Error('Compare presentation superseded by experiment change');
+                  if(!pair||state.comparePair!==pair||!compareAdapter.invariant(pair)||
+                     pair.A.viewcenterHorizon!==3||pair.B.viewcenterHorizon!==3)
+                    throw Error('Compare shared-camera invariant not confirmed');
+                  for(const side of ['A','B']){
+                    if(!state.compareLast[side]||
+                       historyRenderedKeys[side]!==historyViewKey(expected,side)||
+                       historyRenderedKeys[side]===null)
+                      throw Error('Compare '+side+' renderer did not complete for the current experiment; see render status');
+                  }
+                }
+                resolve();
+              }catch(error){reject(error);}
             });
           });
-          updatePresetNavigation('Calibration applied. Previous experiment protected in History. Save Snapshot to keep this Scene.');
+          updatePresetNavigation('Calibration applied. Previous experiment protected in History. Save Snapshot to keep this '+label+'.');
           refreshHistoryList().catch(error=>historyStatus('History refresh failed: '+error.message,true));
         }
       });
-      return await controller.apply();
+      return await controller.apply(target);
     }catch(error){
       if(error.committed)updatePresetNavigation('Calibration applied, but presentation failed: '+error.message,true);
       else if(error.rollbackError)updatePresetNavigation('Calibration Apply and rollback failed: '+error.rollbackError,true);
@@ -7704,6 +7736,7 @@
     getCameraHudVisible:function(){return cameraHudVisible;},
     getHistoryStore:function(){return experimentHistory;},
     applyCalibrationToScene:applyCalibrationToScene,
+    applyCalibrationToTarget:applyCalibrationToTarget,
     getBuiltInDemo:function(){return studioActiveDemo?studioActiveDemo.id:null;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?

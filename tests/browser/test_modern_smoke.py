@@ -757,6 +757,107 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),outgoing)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+
+    def test_calibration_compare_host_apply_and_partial_render(self):
+        # Direct host entry point only; destination controls belong to .3.
+        # Synthetic imported fit qualifies transaction/presentation plumbing,
+        # not a fresh fit or physical agreement with the original image.
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        data=self.page.evaluate("""data => {
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters,points=rows.map(row=>({
+                id:row.landmark.id,status:'visible',observed:row.pixel,
+                predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight
+            }));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(rows,freeParameters,model,physics,1176,791)};
+            return data;
+        }""",data)
+        self.import_calibration_experiment(data)
+        ready=self.page.locator('#ModernCalibrationApplyScene')
+        expect(ready).to_be_enabled(timeout=30000)
+        # Keep the real editor draft and archive. Choose destinations only
+        # through the new host API, without changing any public control.
+        exercise="""async ({target,partial}) => {
+            const app=CurvatureModernApp,editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const fitted=editor.exportExperiment(),before=JSON.parse(JSON.stringify(app.getCompareConfig()));
+            const sceneBefore=app.getPhotoCalibrationScene();
+            const oldA=app.getCompareLast().A,oldB=app.getCompareLast().B;
+            if(partial)app.registerCompareGraph('B',{UpdateCanvasSize(){},Redraw(){}});
+            let result=null,error=null;
+            try{
+                result=await app.applyCalibrationToTarget({
+                    candidate:()=>editor.exportExperiment(),revision:()=>0,saveDraft:async()=>{}
+                },target);
+            }catch(e){error={message:e.message,phase:e.phase,committed:e.committed,
+                target:e.target,recoveryId:e.recoveryId,resultId:e.resultId};}
+            const pair=app.getCompareModels(),last=app.getCompareLast(),config=app.getCompareConfig();
+            const sceneAfter=app.getPhotoCalibrationScene();
+            const history=await app.getHistoryStore().list();
+            const rid=(result||error)?.recoveryId;
+            const recovery=history.find(row=>row.id===rid);
+            const saved=JSON.parse(localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY));
+            return {result,error,mode:app.getWorkspaceMode(),quality:app.getOpticalQuality(),
+                selected:app.getWorkspaceState().compareModel,config,before,
+                bothFresh:!!last.A&&!!last.B&&oldA!==last.A&&oldB!==last.B,
+                aReady:!!last.A,bReady:!!last.B,
+                invariant:!!pair&&CurvatureModernCompareModel.invariant(pair),
+                aim:pair&&[pair.A.viewcenterHorizon,pair.B.viewcenterHorizon],
+                cameras:pair&&Object.fromEntries(['A','B'].map(side=>[side,
+                    Object.fromEntries(Object.keys(fitted.fit.result.pose).filter(
+                        k=>['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField'].includes(k))
+                        .map(k=>[k,pair[side][k]]))])),
+                objects:pair&&Object.fromEntries(['A','B'].map(side=>[side,
+                    Object.fromEntries(CurvatureModernExperimentState.OBJECT.map(k=>[k,pair[side][k]]))])),
+                sceneBefore:{physics:sceneBefore.physics,surface:[sceneBefore.model.showModel,sceneBefore.model.rEarth]},
+                sceneAfter:{physics:sceneAfter.physics,surface:[sceneAfter.model.showModel,sceneAfter.model.rEarth]},
+                recovery:recovery&&{pinned:recovery.pinned,config:recovery.experiment.compare},
+                origin:saved.calibrationOrigin,checkpointSelected:saved.compare.selected};
+        }"""
+        for target,partial in [('A',False),('B',False),('A',True)]:
+            if self.page.evaluate("CurvatureModernApp.getWorkspaceMode()")!='calibration':
+                self.page.locator('#ModernPhotoCalibrationOpen').click()
+                expect(workspace).to_be_visible()
+                expect(ready).to_be_enabled(timeout=30000)
+            outcome=self.page.evaluate(exercise,{'target':target,'partial':partial})
+            if partial:
+                self.assertIsNone(outcome['result'])
+                self.assertEqual(outcome['error']['phase'],'present')
+                self.assertTrue(outcome['error']['committed'])
+                self.assertEqual(outcome['error']['target'],target)
+                self.assertIn('Compare B renderer did not complete',outcome['error']['message'])
+                self.assertTrue(outcome['aReady'])
+                self.assertFalse(outcome['bReady'])
+            else:
+                self.assertIsNone(outcome['error'],outcome)
+                self.assertEqual(outcome['result']['target'],target)
+                self.assertTrue(outcome['bothFresh'])
+            self.assertEqual(outcome['mode'],'compare')
+            self.assertEqual(outcome['quality'],'accurate')
+            self.assertEqual(outcome['selected'],target)
+            self.assertEqual(outcome['checkpointSelected'],target)
+            self.assertEqual(outcome['origin']['target'],target)
+            self.assertTrue(outcome['invariant'])
+            self.assertEqual(outcome['aim'],[3,3])
+            self.assertEqual(outcome['sceneBefore'],outcome['sceneAfter'])
+            other='B' if target=='A' else 'A'
+            self.assertEqual(outcome['config'][target]['atmosphere'],data['scene']['physics']['atmosphere'])
+            self.assertEqual(outcome['config'][other],{**outcome['before'][other],
+                             'visibility':{'enabled':False,'rangeKm':60}})
+            for side in ['A','B']:
+                for field,value in outcome['cameras'][side].items():
+                    self.assertAlmostEqual(value,data['fit']['result']['pose'][field],places=7)
+                for field,value in outcome['objects'][side].items():
+                    self.assertEqual(value,data['scene']['model'][field])
+            self.assertTrue(outcome['recovery']['pinned'])
+            for side in ['A','B']:
+                self.assertEqual(outcome['recovery']['config'][side],outcome['before'][side])
+            expect(self.page.locator('#ModernModelTab'+target)).to_have_attribute('aria-pressed','true')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_soundly_calibration_live_apply_qualification(self):
         # One genuine seven-field UI fit, reused across deterministic
         # failure injections and a successful, durable Apply. The historical
