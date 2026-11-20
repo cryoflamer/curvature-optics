@@ -1,3 +1,14 @@
+## 8F.7b.1a.1 — CI correction (#8)
+
+CI 44746304141 on 155873c failed architecture inventory and Chromium
+Python test import. Restored the original browser suite byte-for-byte
+apart from one added identity test; corrected malformed regex and removed
+accidentally duplicated source suffix from replacement-string expansion.
+Regenerated the affected literal CommonJS test-caller inventory entry
+for ModernReferenceImage. No production changes or weakened checks.
+Node job still running when reviewed. New full CI pending; verify before
+8F.7b.1b — Immutable Calibration Result (high reasoning effort).
+
 ## 8F.7b.1a — Canonical reference photo identity (#8)
 
 Added opt-in original-byte SHA-256 identity (version, digest, decoded

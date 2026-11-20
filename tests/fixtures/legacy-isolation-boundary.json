@@ -1143,7 +1143,8 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationPresentationCompositor.test.js",
-        "tests/ModernReferenceImage.test.js"
+        "tests/ModernReferenceImage.test.js",
+        "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
     },
