@@ -26,6 +26,28 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.2a — Protected Apply transaction
+
+#8 qualified by green CI 44765474650. #9 is deliberately staged:
+a protected operation, b explicit editor button and canonical Scene
+integration, c real browser qualification. The Apply controller captures
+a detached portable candidate, outgoing canonical experiment and a host
+revision (navigation/operation generation). Reject running or absent fit
+and concurrent calls. Await durable original and result archival, then
+validate pure Scene transfer and await a pinned exact outgoing recovery.
+Check candidate, state and revision after both awaits. Never mutate live
+inputs until all checks pass. The host commit and rollback are synchronous;
+if commit throws, restore outgoing state and report rollback failure if any.
+After successful commit, a presentation/render failure is explicitly
+committed=true, with recovery and result IDs. No attempt to classify an
+applied calibration as unapplied because a renderer failed. The archive
+and recovery may remain reusable after stale/failure; no deletion.
+This step adds no UI, no direct Scene mutation, no implicit manual Save
+Snapshot, and no Compare Apply. Live host integration must ensure revision
+covers navigation and invalidation even if state later returns to equal
+values, guard draft replacement during awaits, preserve editor draft,
+and distinguish eventual renderer failure from model commit failure.
+
 ## 8F.7b.1g — Foundation qualification
 
 The foundation is exercised end-to-end by

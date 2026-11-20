@@ -445,3 +445,87 @@ test('missing, mismatched and invalid archive never certify an origin; ordinary 
   assert.equal(result.views.Scene.status,'ordinary');
   assert.equal(transfer.applicability(e,record).views.Scene.status,'calibrated');
 });
+
+const applyApi=require('../src/ui/modern/ModernCalibrationApply');
+function applyHost(record,overrides={}){
+  let candidate=input(),live=destination(),revision=0;
+  const trace=[],host={
+    candidate:()=>candidate,snapshot:()=>live,revision:()=>revision,
+    async archive(owned){trace.push('archive');assert.notEqual(owned,candidate);
+      return {row:{id:record.id,record},photoId:'soundly',reused:false};},
+    async protect(previous){trace.push('protect');return {entry:{id:17,pinned:true,experiment:previous}};},
+    commit(next){trace.push('commit');live=next;},
+    rollback(previous){trace.push('rollback');live=previous;},
+    async present(info){trace.push('present');assert.equal(info.recoveryId,17);},
+    ...overrides
+  };
+  return {host,trace,get current(){return live;},get draft(){return candidate;},
+    changeDraft(){candidate.fit.result.pose.Height+=1;},navigate(){revision++;},
+    changeScene(){live.scene.camera.Height+=1;},setLive(v){live=v;}};
+}
+test('protected Apply awaits durable original/result then protected History before committing; draft unchanged',async()=>{
+  const record=await archive.create(input(),env()),h=applyHost(record);
+  const before=copy(h.current),draft=copy(h.draft),controller=applyApi.create(h.host);
+  const applied=await controller.apply();
+  assert.deepEqual(h.trace,['archive','protect','commit','present']);
+  assert.deepEqual(h.current,transfer.transfer(record,before,'Scene'));
+  assert.deepEqual(h.draft,draft);assert.equal(applied.resultId,record.id);
+  assert.equal(applied.recoveryId,17);assert.equal(controller.isBusy(),false);
+});
+test('protected Apply fails closed on archive or History failure and requires a pinned matching checkpoint',async()=>{
+  const record=await archive.create(input(),env());
+  for(const mode of ['archive','missing-photo','history','unpinned','wrong-backup']){
+    const h=applyHost(record),before=copy(h.current);
+    if(mode==='archive')h.host.archive=async()=>{throw Error('storage denied');};
+    if(mode==='missing-photo')h.host.archive=async()=>({row:{id:record.id,record}});
+    if(mode==='history')h.host.protect=async()=>{throw Error('History denied');};
+    if(mode==='unpinned')h.host.protect=async previous=>({entry:{id:1,pinned:false,experiment:previous}});
+    if(mode==='wrong-backup')h.host.protect=async previous=>({entry:{id:1,pinned:true,experiment:{...previous,
+      scene:{...previous.scene,camera:{...previous.scene.camera,Height:9}}}}});
+    const controller=applyApi.create(h.host);
+    await assert.rejects(controller.apply(),e=>e.phase===(['archive','missing-photo'].includes(mode)?'archive':'recovery')&&!e.committed);
+    assert.deepEqual(h.current,before);assert.ok(!h.trace.includes('commit'));assert.equal(controller.isBusy(),false);
+  }
+});
+test('protected Apply rejects stale draft/scene/navigation during either await and concurrent requests',async()=>{
+  const record=await archive.create(input(),env());
+  for(const [step,edit] of [['archive','changeDraft'],['archive','navigate'],['archive','changeScene'],
+    ['protect','changeDraft'],['protect','navigate'],['protect','changeScene']]){
+    const h=applyHost(record);let release,entered;
+    const pending=new Promise(resolve=>{release=resolve;});
+    const ready=new Promise(resolve=>{entered=resolve;});
+    const original=h.host[step];
+    h.host[step]=async arg=>{entered();await pending;return original(arg);};
+    const controller=applyApi.create(h.host),applying=controller.apply();
+    await ready;assert.equal(controller.isBusy(),true);
+    await assert.rejects(controller.apply(),e=>e.phase==='busy');
+    h[edit]();const latest=copy(h.current);release();
+    await assert.rejects(applying,e=>e.phase==='stale'&&!e.committed);
+    assert.deepEqual(h.current,latest);assert.ok(!h.trace.includes('commit'));
+    assert.equal(controller.isBusy(),false);
+  }
+});
+test('partial synchronous commit rolls back; post-commit presentation failure is reported as applied',async()=>{
+  const record=await archive.create(input(),env());
+  const h=applyHost(record),before=copy(h.current);
+  h.host.commit=next=>{h.trace.push('commit');h.setLive(next);throw Error('model update failed');};
+  await assert.rejects(applyApi.create(h.host).apply(),e=>e.phase==='commit'&&!e.committed&&e.rollbackError===null);
+  assert.deepEqual(h.current,before);assert.deepEqual(h.trace,['archive','protect','commit','rollback']);
+  const second=applyHost(record);
+  second.host.present=async()=>{throw Error('render failed');};
+  await assert.rejects(applyApi.create(second.host).apply(),e=>e.phase==='present'&&e.committed&&e.recoveryId===17&&e.resultId===record.id);
+  assert.equal(second.current.calibrationOrigin.resultId,record.id);assert.ok(!second.trace.includes('rollback'));
+});
+test('running or absent fit cannot start archive; rollback failure remains visible',async()=>{
+  const record=await archive.create(input(),env());
+  for(const mode of ['running','absent']){
+    const h=applyHost(record);
+    if(mode==='running')h.draft.fit.running=true;else h.draft.fit.result=null;
+    await assert.rejects(applyApi.create(h.host).apply(),e=>e.phase==='prepare'&&!e.committed);
+    assert.deepEqual(h.trace,[]);
+  }
+  const h=applyHost(record);
+  h.host.commit=()=>{throw Error('commit failed');};
+  h.host.rollback=()=>{throw Error('rollback failed');};
+  await assert.rejects(applyApi.create(h.host).apply(),e=>e.phase==='commit'&&e.rollbackError==='rollback failed');
+});

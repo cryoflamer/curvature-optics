@@ -1,3 +1,18 @@
+## 8F.7b.2a — Protected calibration Apply operation (#9)
+
+Foundation #8 CI 44765474650 passed all three jobs; all acceptance
+criteria qualified. #9 plan: a protected Apply transaction, b explicit
+button and live Scene integration, c browser qualification. All high
+reasoning effort. Added ModernCalibrationApply.create(host), a guarded
+operation capturing an owned candidate and outgoing canonical state.
+Archive original/result first, validate transfer, await exact pinned
+History checkpoint, recheck draft/state/host generation after every
+await, synchronously commit or rollback. Post-commit presentation failure
+explicitly reports applied and recovery ID; concurrency rejected.
+Host contract requires synchronous commit/rollback and durable archive
+and History acknowledgement. This commit does not connect UI, navigation
+or live model; next b does so. Five Node test scenarios added. CI pending.
+
 ## 8F.7b.1g.1 — Durable session qualification correction (#8)
 
 CI 44763446233: Node and architecture passed; Chromium 40/41 passed.
