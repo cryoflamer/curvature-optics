@@ -106,9 +106,15 @@ test('134: local restore, URL auto-sync after edit and reset preserve Modern exp
   assert.equal(h.app.getMode(),'compare');
   assert.ok(h.location.href.includes('experiment='));
   assert.equal(codec.readUrl(new URL(h.location.href).search).display.mode,'compare');
+  assert.equal(h.storage.get(codec.WORKING_URL_KEY),h.location.href);
+  assert.equal(new URL(h.location.href).searchParams.get(codec.WORKING_URL_PARAM),'1');
+  h.nodes.get('ModernCopyExperiment').listeners.click();
+  assert.equal(new URL(h.copied[0]).searchParams.has(codec.WORKING_URL_PARAM),false);
   h.nodes.get('ModernResetExperiment').listeners.click();
   assert.equal(h.storage.has(codec.STORAGE_KEY),false);
+  assert.equal(h.storage.has(codec.WORKING_URL_KEY),false);
   assert.equal(h.assigned.length,1);
+  assert.equal(new URL(h.assigned[0]).searchParams.has(codec.WORKING_URL_PARAM),false);
   assert.equal(new URL(h.assigned[0]).searchParams.has('experiment'),false);
   assert.match(source('CurvatureApp.html'),/ModernRoute.js/);
   assert.match(source('src/app/CurvatureStatePersistence.js'),/GetUrlStr\( 'state' \)/);
@@ -119,7 +125,7 @@ test('134: malformed explicit URL must not fall back to unrelated saved experime
   assert.equal(h.app.getModel().Height,15);
   assert.match(h.nodes.get('ModernPersistenceStatus').textContent,/not restored/);
 });
-function boot(href,saved){
+function boot(href,saved,workingUrl){
   const names=['ModernStatus','ModernCurvatureLabel','ModernViewInfo','ModernModePill',
     'ModernOcclusionWrap','ModernSceneTab','ModernCompareTab','ModernCompareMessage',
     'ModernGraphHost','ModernCompareViews','ModernBackToScene','ModernHeight','ModernFocal',
@@ -138,6 +144,7 @@ function boot(href,saved){
     setAttribute(){},closest(){return {set hidden(value){this.value=value;}};}}]));
   nodes.get('ModernPreset').value='pontchartrain';
   const storage=new Map(saved?[[codec.STORAGE_KEY,saved]]:[]);
+  if(workingUrl)storage.set(codec.WORKING_URL_KEY,workingUrl);
   const copied=[],assigned=[],location={href,search:new URL(href).search,assign(url){assigned.push(url);}};
   const history={state:null,replaceState(_,__,url){location.href=url;location.search=new URL(url).search;}};
   const callbacks=[];
@@ -301,4 +308,38 @@ test('browser bootstrap and ordinary edits preserve historical origin independen
   const restored=boot('https://example.org/CurvatureModern.html',JSON.stringify(saved));
   restored.nodes.get('ModernCopyExperiment').listeners.click();
   assert.deepEqual(codec.readUrl(new URL(restored.copied[0]).search).calibrationOrigin,copied.calibrationOrigin);
+});
+
+test('working URL identity survives lost history independently of timing and distinguishes the public copy',()=>{
+  const data=new Map(),store={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};
+  const embedded=experiment();
+  const working=codec.urlWithWorkingExperiment('https://example.org/CurvatureModern.html',embedded,store);
+  const clean=codec.urlWithExperiment(working,embedded);
+  assert.notEqual(working,clean);
+  assert.equal(codec.isWorkingExperimentUrl(working,store),true);
+  assert.equal(codec.isWorkingExperimentUrl(clean,store),false);
+  assert.equal(codec.isWorkingExperimentUrl(working,null),false);
+  assert.equal(codec.isWorkingExperimentUrl(working,{getItem(){throw Error('blocked');}}),false);
+  assert.equal(codec.isWorkingExperimentUrl(working+'&working-session=1',store),false);
+  assert.equal(codec.isWorkingExperimentUrl(working+'&experiment=changed',store),false);
+  assert.equal(codec.isWorkingExperimentUrl(working+'#different',store),false);
+  assert.deepEqual(codec.readUrl(new URL(working).search),codec.readUrl(new URL(clean).search));
+
+  const latest=experiment();latest.scene.camera.Height=80;latest.display.mode='scene';
+  // The existing real ModernApp VM integration boot has no stored history
+  // state, no sessionStorage and no navigation timing.
+  const resumed=boot(working,JSON.stringify(latest),working);
+  assert.equal(resumed.app.getModel().Height,80);
+  assert.equal(resumed.app.getMode(),'scene');
+  assert.match(resumed.nodes.get('ModernPersistenceStatus').textContent,/Restored working-session storage/);
+  const explicit=boot(clean,JSON.stringify(latest),working);
+  assert.equal(explicit.app.getModel().Height,embedded.scene.camera.Height);
+  assert.equal(explicit.app.getMode(),'compare');
+  assert.equal(explicit.nodes.get('ModernPersistenceStatus').textContent,'Restored shared URL');
+  const foreign=boot(working,JSON.stringify(latest));
+  assert.equal(foreign.app.getModel().Height,embedded.scene.camera.Height);
+  assert.equal(foreign.app.getMode(),'compare');
+  assert.equal(foreign.nodes.get('ModernPersistenceStatus').textContent,'Restored shared URL');
+  codec.clearWorkingExperimentUrl(store);
+  assert.equal(codec.isWorkingExperimentUrl(working,store),false);
 });

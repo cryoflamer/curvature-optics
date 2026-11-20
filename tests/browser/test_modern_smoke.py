@@ -101,6 +101,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 workspacePreference: JSON.parse(localStorage.getItem(
                     window.CurvatureModernApplicationPreferences?.STORAGE_KEY) || 'null')?.workspace ?? null,
                 historyState: history.state,
+                workingUrlMatches: window.CurvatureModernExperimentState?.isWorkingExperimentUrl?.(location.href,localStorage) ?? false,
+                workingUrlMarker: new URL(location.href).searchParams.get('working-session'),
+                navigationType: performance.getEntriesByType('navigation')[0]?.type ?? null,
                 persistenceStatus: document.querySelector('#ModernPersistenceStatus')?.textContent,
                 tabs: [...document.querySelectorAll('.modern-tab')].map(t => ({
                     id:t.id, pressed:t.getAttribute('aria-pressed'), disabled:t.disabled})),
@@ -1577,24 +1580,36 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernCompareTab').click()
         self.page.wait_for_function("""() =>
             history.state?.__curvatureModernAutoExperimentUrlV1===true &&
-            new URL(location.href).searchParams.has('experiment')""",timeout=30000)
+            CurvatureModernExperimentState.isWorkingExperimentUrl(location.href,localStorage)""",timeout=30000)
         url=self.page.url
+        shared_url=self.page.evaluate("""() => {
+            const codec=CurvatureModernExperimentState;
+            return codec.urlWithExperiment(location.href,codec.readUrl(location.search));
+        }""")
+        self.assertNotEqual(url,shared_url)
+        self.assertEqual(self.page.evaluate("""url => {
+            const codec=CurvatureModernExperimentState;
+            return codec.readUrl(new URL(url).search).display.mode;
+        }""",shared_url),'compare')
         self.page.locator('#ModernSceneTab').click()
         self.page.wait_for_function("CurvatureModernApp.getWorkspaceMode()==='scene'")
         self.assertEqual(self.page.url,url)
-        # Reproduce the actual CI artifact: URL survives but its own
-        # top-level history.state is lost. Keep the immediate reload.
-        self.page.evaluate("history.replaceState(null,'',location.href)")
+        # Reproduce the CI artifact, including loss of the previous .5a
+        # fallback. The local URL contract must not depend on either state
+        # object, sessionStorage, or PerformanceNavigationTiming.
+        self.page.evaluate("""() => {
+            history.replaceState(null,'',location.href);
+            sessionStorage.clear();
+        }""")
         self.page.reload(wait_until='load')
         expect(ready).to_be_enabled(timeout=30000)
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'scene')
         expect(self.page.locator('#ModernPersistenceStatus')).not_to_have_text('Restored shared URL')
-        self.assertEqual(self.page.evaluate("performance.getEntriesByType('navigation')[0].type"),'reload')
 
-        # A deliberate fresh visit to the exact same URL is a shared link,
-        # not a local continuation. Its subsequent reload must stay explicit.
+        # The public copy of the SAME payload is still an explicit shared
+        # link even when the browser retains an unrelated local session.
         self.page.goto('about:blank')
-        self.page.goto(url,wait_until='load')
+        self.page.goto(shared_url,wait_until='load')
         expect(ready).to_be_enabled(timeout=30000)
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Restored shared URL')
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'compare')
@@ -1602,6 +1617,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(ready).to_be_enabled(timeout=30000)
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Restored shared URL')
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'compare')
+
+        # Even a marked address remains portable to another browser: its
+        # flag alone cannot authorize restoration of local working state.
+        foreign=self.browser.new_context(viewport={'width':1440,'height':900})
+        try:
+            page=foreign.new_page()
+            page.goto(url,wait_until='load')
+            expect(page.locator('#ModernPhotoCalibrationOpen')).to_be_enabled(timeout=30000)
+            expect(page.locator('#ModernPersistenceStatus')).to_have_text('Restored shared URL')
+            self.assertEqual(page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'compare')
+        finally:
+            foreign.close()
 
     def test_explicit_workspace_link_then_user_choice_survives_reload(self):
         self.open_modern()

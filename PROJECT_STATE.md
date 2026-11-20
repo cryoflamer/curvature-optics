@@ -1,3 +1,40 @@
+## 8F.7c.5b — Working URL Identity Fix (#10)
+
+CI 44795528786: architecture and Node passed; Chromium 45/47. The
+universal 32-case raster matrix and extended live Apply lifecycle passed.
+Both failing workspace tests ended in Compare with persisted Scene
+preference, null history.state and "Restored shared URL". The .5a
+timing/sessionStorage fallback did not prevent this classification;
+the artifacts do not expose which of its conditions failed.
+
+Replace the ambiguous auto/shared URL identity contract rather than
+guess another browser navigation type. Automatically issued experiment
+addresses carry working-session=1 and an exact matching address in the
+browser's localStorage. On startup, a matching marked address means
+resume the newest local checkpoint and workspace preference, even with
+no history.state/sessionStorage/navigation timing. The normal legacy
+history marker still works. Classify once before the asynchronous
+checkpoint read, not twice across it.
+
+Copy Experiment always strips the working-session marker, and a marked
+address without the matching local issuance record still imports its
+embedded payload as a shared link. Reset clears the local URL record and
+marker. This deliberately distinguishes the local working address from
+the public copy: reopening the same locally issued working address in
+the same browser resumes work; use Copy Experiment for an explicit
+portable snapshot of the same payload. Older unmarked automatic links
+without their history marker remain inherently ambiguous.
+
+Added deterministic production-code VM regression for lost history,
+latest local state vs public copy/foreign marked address, exact marker
+matching, and reset. Browser regression now clears both history.state
+and sessionStorage, verifies the immediate Scene reload and explicit
+public copy reload, and opens the marked URL in an isolated context.
+Diagnostic artifacts also report URL identity and navigation type.
+Six focused scenarios / 755 checks passed using an isolated JS harness
+with URL/DOM/storage adapters; native full Node/Chromium CI still needed.
+No photo registration or physical renderer changes; #10 stays open.
+
 ## 8F.7c.5a — Qualification Fix (#10)
 
 CI 44792344236: Node and architecture green; Chromium failed the

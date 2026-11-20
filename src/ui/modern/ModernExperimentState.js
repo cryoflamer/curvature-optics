@@ -234,9 +234,12 @@
     if(values.length!==1)throw RangeError('Repeated experiment parameter');
     return decode(values[0]);
   }
+  var WORKING_URL_PARAM='working-session',WORKING_URL_KEY='curvature-modern-working-url-v1';
   function urlWithExperiment(href,value){
     var url=new URL(href);
     url.searchParams.set('ui','modern');url.searchParams.delete('state');
+    // Explicitly shared links must never inherit a local resume marker.
+    url.searchParams.delete(WORKING_URL_PARAM);
     url.searchParams.set(PARAM,encode(value));
     // Shared links always point to the actual primary Modern document.
     // Old canonical links via CurvatureApp.html?ui=modern still resolve through
@@ -244,7 +247,32 @@
     url.pathname=url.pathname.replace(/CurvatureApp\.html$/,'CurvatureModern.html');
     return url.href;
   }
+  function urlWithWorkingExperiment(href,value,storage){
+    var url=new URL(urlWithExperiment(href,value));
+    url.searchParams.set(WORKING_URL_PARAM,'1');
+    // Record the exact generated address, not just an untrusted flag.
+    // A marked URL opened in a different browser without this record
+    // still imports its embedded experiment as an ordinary shared link.
+    try{if(storage)storage.setItem(WORKING_URL_KEY,url.href);}
+    catch(ignore){/* history.state remains the compatibility fallback. */}
+    return url.href;
+  }
+  function isWorkingExperimentUrl(href,storage){
+    try{
+      var url=new URL(href);
+      return url.searchParams.getAll(WORKING_URL_PARAM).length===1&&
+        url.searchParams.get(WORKING_URL_PARAM)==='1'&&
+        url.searchParams.getAll(PARAM).length===1&&!!storage&&
+        storage.getItem(WORKING_URL_KEY)===url.href;
+    }catch(ignore){return false;}
+  }
+  function clearWorkingExperimentUrl(storage){
+    if(storage)storage.removeItem(WORKING_URL_KEY);
+  }
   return Object.freeze({VERSION:VERSION,PARAM:PARAM,STORAGE_KEY:STORAGE_KEY,
+    WORKING_URL_PARAM:WORKING_URL_PARAM,WORKING_URL_KEY:WORKING_URL_KEY,
+    urlWithWorkingExperiment:urlWithWorkingExperiment,isWorkingExperimentUrl:isWorkingExperimentUrl,
+    clearWorkingExperimentUrl:clearWorkingExperimentUrl,
     CAMERA:CAMERA,OBJECT:OBJECT,capture:capture,validate:validate,validateCalibrationOrigin:validateCalibrationOrigin,
     encode:encode,decode:decode,readUrl:readUrl,urlWithExperiment:urlWithExperiment});
 }));

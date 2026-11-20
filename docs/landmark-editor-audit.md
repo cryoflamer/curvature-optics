@@ -1,3 +1,26 @@
+## 8F.7c.5b — Working URL Identity Fix
+
+The universal raster matrix passed CI 44795528786; only workspace
+startup classification failed. The artifacts confirm the saved Scene
+preference was bypassed by a shared-URL restore of Compare after loss
+of history.state. The failed .5a fallback's precise rejected condition
+is not observable from those artifacts.
+
+Separate local working addresses from explicit public snapshot links.
+A working-session=1 marker plus the exact matching browser-local
+issued address authorizes local recovery; neither navigation timing nor
+sessionStorage is required. A marker alone does not override a shared
+payload in another browser. Copy Experiment strips the marker, reset
+clears it, and startup classifies once before reading the checkpoint.
+The same issued working address in its original browser resumes the
+latest session; an explicit public copy of its payload imports that
+snapshot. Retain compatibility with the existing history-state marker.
+No changes to physical render or photo registration.
+
+Regression checks exercise lost history and sessionStorage, local
+checkpoint recovery, explicit shared copy, foreign marked address and
+reset. Six isolated JS scenarios passed; full CI pending.
+
 ## 8F.7c.5a — Qualification Fix
 
 Failed raster qualification did not demonstrate bad photo registration:

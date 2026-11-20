@@ -534,7 +534,6 @@
   // Its history marker survives reload, so browser workspace preferences remain
   // authoritative without giving an imported/shared URL the wrong mode.
   var AUTO_EXPERIMENT_HISTORY_KEY='__curvatureModernAutoExperimentUrlV1';
-  var AUTO_EXPERIMENT_RELOAD_KEY='curvature-modern-auto-experiment-reload-v1';
   var EDITED_SHARED_URL_KEY='__curvatureModernEditedSharedUrlV1';
   var WORKSPACE_ENTRY_KEY='__curvatureModernWorkspaceChoiceV1';
   var persistence={ready:false,explicitUrl:false,timer:null,dirty:false,latestTimestamp:0,
@@ -1153,13 +1152,10 @@
           var previous=root.history.state;
           var historyState=Object.assign({},previous&&typeof previous==='object'?previous:{});
           historyState[AUTO_EXPERIMENT_HISTORY_KEY]=true;
-          var generatedUrl=experiments.urlWithExperiment(url.href,current);
-          // Chromium can lose top-level history.state across an immediate
-          // reload while an embedded demo is navigating. Remember only the
-          // exact generated URL in this tab, never classify a fresh link
-          // navigation as local merely because its bytes happen to match.
-          try{if(root.sessionStorage)root.sessionStorage.setItem(AUTO_EXPERIMENT_RELOAD_KEY,generatedUrl);}
-          catch(ignore){}
+          // Automatic addresses and explicit share links have distinct
+          // intent. The exact locally issued address survives loss of
+          // history.state, without relying on browser navigation timing.
+          var generatedUrl=experiments.urlWithWorkingExperiment(url.href,current,preferencesStorage());
           root.history.replaceState(historyState,'',generatedUrl);
         }
       }catch(error){errors.push('URL: '+error.message);}
@@ -4854,31 +4850,19 @@
       calibrationApplyBusy=false;updatePresetNavigation();
     }
   }
-  function generatedUrlReload(){
-    try{
-      var navigation=root.performance&&root.performance.getEntriesByType&&
-        root.performance.getEntriesByType('navigation')[0];
-      return !!(navigation&&navigation.type==='reload'&&root.sessionStorage&&
-        root.sessionStorage.getItem(AUTO_EXPERIMENT_RELOAD_KEY)===root.location.href);
-    }catch(ignore){return false;}
-  }
   function isExplicitSharedExperiment(){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
     var historyState=root.history&&root.history.state;
-    var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true)||generatedUrlReload();
+    var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true)||
+      experiments.isWorkingExperimentUrl(root.location.href,preferencesStorage());
     var editedHere=!!(historyState&&historyState[EDITED_SHARED_URL_KEY]===root.location.href);
     return params.has(experiments.PARAM)&&!generated&&!editedHere;
   }
-  function restoreExperiment(remoteRecord,remoteError){
+  function restoreExperiment(remoteRecord,remoteError,explicit){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
-    var explicit=isExplicitSharedExperiment();
     persistence.explicitUrl=explicit;
-    // A fresh visit to a copied link must remain explicit on its later
-    // reload, even if this same tab once generated the identical URL.
-    if(explicit)try{if(root.sessionStorage)root.sessionStorage.removeItem(AUTO_EXPERIMENT_RELOAD_KEY);}
-    catch(ignore){}
     var data=null,source='';
     try{
       if(explicit){
@@ -4939,6 +4923,7 @@
     try{
       if(root.localStorage){
         root.localStorage.removeItem(experiments.STORAGE_KEY);
+        experiments.clearWorkingExperimentUrl(root.localStorage);
         if(sessionAutosave)root.localStorage.removeItem(sessionAutosave.META_KEY);
       }
     }catch(error){persistenceStatus('Could not clear saved experiment: '+error.message,true);return;}
@@ -4946,6 +4931,7 @@
       if(root.location&&root.location.href){
         var url=new URL(root.location.href);
         url.searchParams.delete(experiments.PARAM);url.searchParams.delete('state');
+        url.searchParams.delete(experiments.WORKING_URL_PARAM);
         url.searchParams.set('ui','modern');
         if(typeof root.location.assign==='function')root.location.assign(url.href);
         else persistenceStatus('Reload this page to restore the default experiment');
@@ -7623,8 +7609,11 @@
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
     bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
+    // Resolve link intent once for the whole startup transaction. Do not
+    // reclassify it after the asynchronous checkpoint read.
+    var explicitAtStartup=isExplicitSharedExperiment();
     function finishStartup(remoteRecord,remoteError){
-      var restored=restoreExperiment(remoteRecord,remoteError);
+      var restored=restoreExperiment(remoteRecord,remoteError,explicitAtStartup);
       if(!initialCamera)initialCamera=captureCameraPose();
       syncNumericInputs();
       // Resolve the top-level workspace once, independently of the scene
@@ -7673,7 +7662,7 @@
       resetHistoryBaseline();
     }
     bindWorkingSessionLifecycle();
-    if(sessionAutosave&&root.indexedDB&&!isExplicitSharedExperiment()){
+    if(sessionAutosave&&root.indexedDB&&!explicitAtStartup){
       persistenceStatus('Restoring working session…');
       sessionAutosave.read(root.indexedDB).then(function(record){
         finishStartup(record,null);
