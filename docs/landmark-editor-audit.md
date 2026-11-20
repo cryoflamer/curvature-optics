@@ -18,14 +18,13 @@ This prioritization supersedes the implementation order of 8F.7a.2 below, not it
 
 ### Milestone 3 — Comparative Physical Research (P2 backlog)
 - #18 Reusable Material Correspondences and Alternative Hypothesis Calibration.
-- #19 Independent Experiment Comparison.
 - #20 Quantitative Photo Residuals and Atmospheric Parameter Sweeps.
 P3: existing presentation and video technical debt #1, #2, #5; revisit when justified. #6 and #7 remain open pending explicit scope reconciliation, not duplicate implementation tasks.
 
 ### Shared-camera Compare contract
 A calibration may be applied to Scene, Compare A or Compare B. Design compact origin for all three targets in #8, even while UI is implemented Scene-first. The fitted seven camera parameters, Eye-Lvl aim and captured object layout become shared Compare inputs; only the chosen side receives the captured physical hypothesis. Retain alternative-side physics subject to existing shared-control constraints; make shared changes explicit and protect the outgoing experiment before mutation. The archive remains immutable. Distinguish target association and actual fit applicability per side; an alternative side is not automatically independently calibrated even if its inputs happen to coincide. Shared camera changes can invalidate applicability on both sides. Preserve origin on derived edits; clear on unrelated reset. Historical Canvas Direct RMS is not a live Accurate residual.
 
-Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Preserve standard shared-camera Compare; independent cameras and independent fits are later #19/#18 work. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
+Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
 ## 8F.7a.2 — Photo-centric research workflow audit
 
