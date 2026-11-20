@@ -98,7 +98,7 @@ function createHistoryNavigationHarness(){
     }},
     document:{},root:{},
     saveApplicationPreferences(){preferencesWrites++;},
-    updateSnapshotSaveAction(){},renderAnimationStudio(){},
+    updateSnapshotSaveAction(){},refreshCalibrationApplicability(){},renderAnimationStudio(){},
     historySelectedIds(){return [];},historyMultiCount(){},
     updateHistorySelection(entry){ctx.historySelectedId=entry?String(entry.id):'';},
     setHistoryManageMode(){},historyStatus(){},

@@ -1,3 +1,58 @@
+## 8F.7p.2 — Complete checkpoint extraction and verified original hydration (#14)
+
+Predecessor b68ffeb CI 44820260917: Chromium 51/51 success; Node
+2238 passed/4 failed/1 skipped; architecture blocked by reviewed
+legacy-isolation fixture. Those failures were caused by unregistered
+new helper modules and a stale standalone History VM harness reference,
+not by failing calibration behavior. This stage registers three explicit
+Modern-only scripts, updates the static source boundary inventory and
+helper load-order inventory, and mocks the archived-applicability refresh
+in the isolated History navigation harness. Existing runtime History
+refresh remains unchanged.
+
+Added ModernCalibrationProjectCheckpoint: lossless v2 editor draft
+snapshot minus all original/thumbnail raster data URLs. Preserves
+captured scene (both object banks and physics), ordered Fit/Validation
+correspondences and material anchors, pending pixel/model, selected/
+editing pair, active photo provenance, Undo/Redo, fit/params/status,
+initial/best presentation view, residual mode, selected owner and
+physical session's initial inline-view snapshot. Strict structural
+and existing PhotoCalibrationEditor observation/fit validation runs
+before constructing the bounded versioned project envelope. Unsupported
+Flat or incompatible/corrupt data fail closed for explicit recovery;
+no silent scientific fallback or conversion. No-photo sessions are
+valid only without image observations/fit. Legacy portable calibration
+JSON export remains unchanged.
+
+captureVerified() stages the real original through
+ReferenceImageLibrary.ensureOriginal (content SHA-256, dimensions and
+browser decoding), then removes raster bytes from the project row,
+preserving the source alias/attribution. prepare() calls the existing
+findOriginal verification path, rehydrates original bytes, validates
+the complete editor-state candidate and optional inline binding, and
+returns it without mutating the editor, History or a project.
+Missing original, mismatched dimensions/provenance and malformed
+checkpoints reject before activation. The photo Library and project
+database are independent; stage .3 will manage durable migration
+ordering and idempotency, stage .5 generation-guarded activation.
+
+ModernPhotoCalibrationEditor.captureDraftState now supplies the
+same v2 JSON for legacy persist and explicit project extraction;
+new mounted captureProjectCheckpoint / prepareProjectCheckpoint
+APIs do not run automatically, do not switch projects, and do not
+alter current single-draft startup behavior. Project DB v2 remains
+unopened by the existing editor to avoid blocking its legacy v1
+connection before the .3/.5 migration. Model/Store/Checkpoint now
+load before ModernApp and remain isolated from Legacy.
+
+Seven new Node test groups cover genuine Soundly mixed material
+observations, full seven-field saved fit, complete pending/Undo/Redo/
+inline/view round-trip, no-photo, missing/damaged originals, malformed
+or inconsistent fit/provenance and content dedup. Full native CI is
+pending; source fixture was updated against the repository-derived
+static inventory (must be independently confirmed by CI).
+No migration, project switching or new UI here.
+
 ## 8F.7p.1 — Versioned Calibration Project model and atomic storage (#14)
 
 Predecessor fed8f52 CI 44818302908: Node and architecture passed;
@@ -181,12 +236,12 @@ incrementally integrating. Unsupported Flat remains a recovery case;
 
 - [x] **8F.7p.0 — Audit and revised roadmap (High / 3).** This documentation
   baseline; current source findings and contracts, no production change.
-- [ ] **8F.7p.1 — Versioned project model and durable store (High / 3).**
+- [x] **8F.7p.1 — Versioned project model and durable store (High / 3).**
   Pure DTO validation, small list projection, per-ID read/create/CAS
   update/rename/delete, quotas, atomic revision/fork primitives, DB upgrade
   with legacy unchanged. Test malformed, empty, no-photo, duplicate IDs,
   stale updates/deletes and transaction abort. No editor integration.
-- [ ] **8F.7p.2 — Checkpoint extraction and verified asset hydration (High / 3).**
+- [x] **8F.7p.2 — Checkpoint extraction and verified asset hydration (High / 3).**
   Extract complete editor checkpoint capture/prepare/activate contracts;
   preserve both banks, pending/undo/redo, free parameters, fit and view,
   including inline state. Reuse verified Library identity, source metadata

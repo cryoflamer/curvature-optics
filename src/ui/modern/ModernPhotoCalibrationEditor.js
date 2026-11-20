@@ -778,13 +778,40 @@
         request.onerror=()=>reject(request.error);
       });
     }
-    function persist(){
-      if(restoring||!scene)return;
-      saveInline();
-      const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
+    function captureDraftState(){
+      // The same byte-for-byte v2 checkpoint serves the existing legacy
+      // autosave and future verified multi-project extraction.
+      if(!scene)return null;
+      return JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,physicalSessionId,undoStack:workflow.undoStack,redoStack:workflow.redoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,stage,resultCamera,resultViews,residualMode:residualMode.value}));
+    }
+    function captureInlineState(){
+      captureInline();
+      return physicalSessionId?jsonCopy({id:physicalSessionId,photo:record?.id||null,
+        sessions:inlineSessions}):null;
+    }
+    async function captureProjectCheckpoint(){
+      if(!scene||restoring||pendingPhotoLoads||fitWorker||applyBusy)
+        throw Error('Stop pending calibration operations before capturing a project');
+      const helper=env.CurvatureModernCalibrationProjectCheckpoint;
+      if(!helper)throw Error('Calibration Project checkpoint helper unavailable');
+      // Explicit opt-in: this stages a verified image in the independent
+      // Library but never changes the active draft or creates a project.
+      return helper.captureVerified(captureDraftState(),captureInlineState(),env);
+    }
+    async function prepareProjectCheckpoint(project){
+      const helper=env.CurvatureModernCalibrationProjectCheckpoint;
+      if(!helper)throw Error('Calibration Project checkpoint helper unavailable');
+      // Validation/decode only; project activation and its generations
+      // belong to 8F.7p.5. Never replace current editor on failed prepare.
+      return helper.prepare(project,env);
+    }
+    function persist(){
+      if(restoring||!scene)return;
+      saveInline();
+      const data=captureDraftState();
       const saved=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
         await new Promise((resolve,reject)=>{
@@ -1636,7 +1663,7 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

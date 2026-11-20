@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 132,
-      "uniqueScripts": 130,
+      "scriptTags": 135,
+      "uniqueScripts": 133,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -243,6 +243,9 @@
         "src/ui/modern/CalibrationPointerGestures.js",
         "src/ui/modern/ModernLandmarkViewer.js",
         "src/ui/modern/ModernPhotoCalibrationEditor.js",
+        "src/ui/modern/ModernCalibrationProject.js",
+        "src/ui/modern/ModernCalibrationProjectStore.js",
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationResult.js",
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernCalibrationTransfer.js",
@@ -434,6 +437,9 @@
       "src/ui/modern/ModernAtmosphericPresentation.js",
       "src/ui/modern/ModernAtmosphericShimmer.js",
       "src/ui/modern/ModernCalibrationApply.js",
+      "src/ui/modern/ModernCalibrationProject.js",
+      "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
+      "src/ui/modern/ModernCalibrationProjectStore.js",
       "src/ui/modern/ModernCalibrationResult.js",
       "src/ui/modern/ModernCalibrationResultArchive.js",
       "src/ui/modern/ModernCalibrationTransfer.js",
@@ -501,7 +507,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 224,
+  "sourceJsCount": 227,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1151,12 +1157,14 @@
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernReferenceImageLibrary.js",
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationResult.js",
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernReferenceImageImport.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationPresentationCompositor.test.js",
+        "tests/ModernCalibrationProjectCheckpoint.test.js",
         "tests/ModernReferenceImage.test.js",
         "tests/ModernReferenceImageLibrary.test.js"
       ],
@@ -1168,6 +1176,7 @@
       ],
       "commonJsSourceCallers": [
         "src/animation/ModernDemoCatalog.js",
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationResultArchive.js"
       ],
       "commonJsTestCallers": [
@@ -3067,6 +3076,40 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernCalibrationProject.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
+        "src/ui/modern/ModernCalibrationProjectStore.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationProjectCheckpoint.test.js",
+        "tests/ModernCalibrationProjects.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCalibrationProjectCheckpoint.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationProjectCheckpoint.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCalibrationProjectStore.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationProjects.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernCalibrationResult.js": {
       "directHtmlLoads": [
         "modern"
@@ -3553,12 +3596,14 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationResult.js"
       ],
       "commonJsTestCallers": [
         "tests/CalibrationPairWorkflow.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
         "tests/CameraMaterialAnchorPersistence.test.js",
+        "tests/ModernCalibrationProjectCheckpoint.test.js",
         "tests/ModernCalibrationResult.test.js",
         "tests/ModernLandmarkViewer.test.js",
         "tests/ModernPhotoCalibrationEditor.test.js"
@@ -3591,10 +3636,12 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationResult.js",
         "src/ui/modern/ModernCalibrationResultArchive.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCalibrationProjectCheckpoint.test.js",
         "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
