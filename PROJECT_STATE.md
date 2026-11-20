@@ -1,3 +1,42 @@
+## 8F.7c.4 — Fixed Registration and Lifecycle (#10)
+
+Previous CI 44787911867 on 9a28df1 completed green. The registration
+controller now retains immutable baseline intrinsics and caches the
+completed viewport signature (aspect, backing dimensions, screen size,
+captured scales/offsets/context scale). Repeated physical edits and
+motion frames with unchanged layout reuse the exact photo raster.
+Changed layout recomputes uniformly; resize cannot resurrect stale pixels,
+and callbacks queued by detached observers cannot affect new layers.
+
+Completed Canvas Direct motion frames now supply the same presentation
+layout capture as normal Scene draws. CSS fallback camera preview only
+transforms the original graph canvas, not its photo sibling. Hidden
+workspace Scene draws are guarded. Provisional direct-motion backing
+pixels invalidate History render keys and thumbnail capture is blocked
+during active motion/drag/held CSS preview; normal completed Accurate
+renders restore eligibility. Ordinary thumbnail capture never composites
+the reference-photo layer, even while Photo only covers the graph.
+
+The existing immutable calibration origin remains the only persistent
+registration identity. Restore/reload resolves the verified original
+again; preset replacement or navigation clears the previous generation.
+Display choices remain local to the page session (reload Overlay 50%),
+not physical snapshot state. Compare overlay is not added in this step.
+
+Nine focused renderer scenarios / 120 assertions passed in the isolated
+JS harness, including unchanged raster reuse and stale ResizeObserver
+callback exclusion. ModernApp syntax compiled. Expanded the existing
+real browser Apply scenario with pure physical thumbnail byte equality,
+reload/default mode, calibration leave/return, live physical edits
+(camera, geometry, radius, atmosphere), actual pointer motion, protected
+History return with edited physics and fixed baseline, and viewport
+resize. Full native Node/Chromium CI pending; no real original Soundly
+photo available in this environment. No previous assertions removed.
+
+Next: 8F.7c.5 — Soundly Overlay Qualification, full CI and actual
+reference photo visual acceptance, four display aspects / DPR and
+missing-reference handling. Issue #10 remains open.
+
 ## 8F.7c.3 — Scene Overlay Controls (#10)
 
 Previous CI 44783682787 at 063d4c5 was fully green (Node, architecture,

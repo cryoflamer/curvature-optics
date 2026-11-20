@@ -11,8 +11,8 @@
   function create(env,options={}){
     const registration=env.CurvatureModernPhotoOverlayRegistration;
     const state=env.CurvatureModernExperimentState;
-    let generation=0,key=null,origin=null,reference=null,image=null;
-    let source=null,layer=null,observer=null,layout=null,dimensions=null;
+    let generation=0,key=null,origin=null,reference=null,image=null,registrationModel=null;
+    let source=null,layer=null,observer=null,layout=null,dimensions=null,layoutKey=null;
     let status='inactive',error='',pending=null;
     // Local presentation choices; not part of the physical experiment.
     let mode='overlay',opacity=50,painted=false;
@@ -41,10 +41,11 @@
       if(observer)observer.disconnect();
       observer=null;
       if(layer&&layer.parentNode)layer.parentNode.removeChild(layer);
-      layer=null;source=null;layout=null;dimensions=null;painted=false;
+      layer=null;source=null;layout=null;dimensions=null;layoutKey=null;painted=false;
     }
     function clear(){
-      generation++;detach();key=null;origin=null;reference=null;image=null;
+      if(status==='inactive'&&!key&&!layer&&!pending)return;
+      generation++;detach();key=null;origin=null;reference=null;image=null;registrationModel=null;
       status='inactive';error='';pending=null;notify();
     }
     function fail(message){
@@ -76,7 +77,9 @@
           background:'transparent',opacity:'0.5',zIndex:'2',display:'none'});
         source.parentNode.appendChild(layer);
         if(env.ResizeObserver){
+          const observedLayer=layer,observedSource=source;
           observer=new env.ResizeObserver(()=>{
+            if(layer!==observedLayer||source!==observedSource)return;
             // A valid CSS alignment does not authorize previously stale
             // backing pixels. Only paint() can mark a completed layer ready.
             if(align())present();
@@ -126,7 +129,7 @@
       try{
         const checked=state.validateCalibrationOrigin(candidate),next=JSON.stringify(checked);
         if(next!==key){
-          clear();key=next;origin=checked;status='loading';
+          clear();key=next;origin=checked;registrationModel=registration.create(checked);status='loading';
         }
         if(status==='unavailable')return;
         if(source!==canvas){detach();source=canvas;}
@@ -135,9 +138,20 @@
         // Copy the completed capture's layout only. The live pose, focal
         // field, zoom and sceneSize are intentionally not passed through.
         try{
-          layout=registration.create(origin).layout({aspect,width,height,
-            screenSize:camera?.screenSize,pixelTransform:camera?.pixelTransform});
-          dimensions={width,height};
+          const v=camera?.pixelTransform;
+          // This key deliberately excludes the live pose, focal length,
+          // world and atmosphere, even when a fast motion frame completes.
+          const nextLayoutKey=JSON.stringify([aspect,width,height,camera?.screenSize,
+            v?.width,v?.height,v?.scaleX,v?.scaleY,v?.offsetX,v?.offsetY,v?.contextScale]);
+          if(layoutKey===nextLayoutKey&&painted&&layer&&image){
+            // The existing raster is already registered. Keep exactly the
+            // same pixels during ordinary physical edits and camera motion.
+            if(align())present();
+            return;
+          }
+          layout=registrationModel.layout({aspect,width,height,
+            screenSize:camera?.screenSize,pixelTransform:v});
+          dimensions={width,height};layoutKey=nextLayoutKey;
         }catch(e){
           // A hidden or resizing graph may report a temporary invalid
           // capture. Hide the stale layer and retry the next completed draw.

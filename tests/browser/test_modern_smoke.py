@@ -988,6 +988,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Leave a nondefault mode active while saving: History is still pure Scene.
         mode.select_option('photo')
 
+        # Capture the independent physical canvas while Photo only covers it.
+        # A pure History thumbnail must be byte-identical to this oracle.
+        pure_thumbnail=self.page.evaluate("""() => {
+            const layer=document.querySelector('#ModernGraphHost canvas.modern-reference-photo-overlay');
+            const base=[...layer.parentNode.querySelectorAll('canvas')].find(c=>
+                c!==layer&&!c.className.includes('modern-atmospheric'));
+            const p=CurvatureModernApp.getAtmosphericPresentation();
+            const layers=p&&p.ready('Scene')?[p.getCanvas('Scene'),p.getGuideCanvas('Scene')]:[base];
+            return CurvatureModernExperimentThumbnail.capture(document,'scene',[{layers}]);
+        }""")
+        self.assertIsNotNone(pure_thumbnail)
         # Saving a calibrated Scene remains a separate explicit user action.
         save=self.page.locator('#ModernSnapshotSave')
         expect(save).to_be_visible(timeout=30000)
@@ -998,6 +1009,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(len(manual),1)
         self.assertTrue(manual[0]['pinned'])
         self.assertEqual(manual[0]['experiment']['calibrationOrigin']['resultId'],rid)
+        self.assertEqual(manual[0]['thumbnail'],pure_thumbnail)
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
         checkpoint=self.page.evaluate("""async () =>
@@ -1013,7 +1025,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(read_scene(),actual)
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getOpticalQuality()"),'accurate')
         self.assertEqual(len(recovery_rows()),2)
+        expect(overlay).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().resultId"),rid)
+        expect(mode).to_have_value('overlay')
+        expect(opacity).to_have_value('50')
         ready.click()
+        expect(overlay).to_have_count(0)
+
         expect(button).to_be_enabled(timeout=30000)
         self.assertEqual(read()['fit']['result'],result)
         self.assertEqual(read()['observations'],fitted['observations'])
@@ -1021,6 +1039,83 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationClose').click()
         expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
         self.assertEqual(read_scene(),actual)
+        expect(overlay).to_be_visible(timeout=30000)
+        fixed=self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect")
+
+        # Exercise the committed physical path with a bundle of edits, without
+        # applying a new calibration or changing the display aspect.
+        # A real renderer completion must reuse the existing photo raster.
+        self.page.evaluate("""() => {
+            const app=CurvatureModernApp,m=app.getModel();
+            window.__photoBeforeEdit=app.getLastRender();
+            window.__fixedPhotoCanvas=document.querySelector('#ModernGraphHost canvas.modern-reference-photo-overlay');
+            m.Pan+=.001;m.Nick+=.001;m.Roll+=.1;m.Height+=1;
+            m.CameraEast+=.5;m.CameraNorth+=.5;m.FocalLengthField*=.99;
+            m.rEarth*=1.01;m.ObjSize=m.ObjSize.map(x=>x*1.01);
+            m.Update();
+            document.getElementById('ModernRender').click();
+        }""")
+        self.page.wait_for_function("CurvatureModernApp.getLastRender() && CurvatureModernApp.getLastRender()!==window.__photoBeforeEdit",timeout=30000)
+        self.assertNotEqual(read_scene(),actual)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),fixed)
+        self.assertTrue(self.page.evaluate("window.__fixedPhotoCanvas===document.querySelector('#ModernGraphHost canvas.modern-reference-photo-overlay')"))
+        self.page.evaluate("""() => {
+            window.__photoBeforeEdit=CurvatureModernApp.getLastRender();
+            const e=document.getElementById('ModernAtmosphere');
+            e.value=e.value==='vacuum'?'standard':'vacuum';
+            e.dispatchEvent(new Event('change',{bubbles:true}));
+        }""")
+        self.page.wait_for_function("CurvatureModernApp.getLastRender() && CurvatureModernApp.getLastRender()!==window.__photoBeforeEdit",timeout=30000)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),fixed)
+
+        # The actual pointer route may use Direct or the CSS fallback.
+        # Both must leave the registered photo in its original viewport.
+        base=self.page.locator('#ModernGraphHost canvas:not(.modern-reference-photo-overlay):not(.modern-atmospheric-image):not(.modern-atmospheric-guides)').first
+        base.scroll_into_view_if_needed()
+        bounds=base.bounding_box()
+        self.assertIsNotNone(bounds)
+        x=bounds['x']+bounds['width']*.5
+        y=bounds['y']+bounds['height']*.5
+        old_pan=self.page.evaluate("CurvatureModernApp.getModel().Pan")
+        self.page.mouse.move(x,y)
+        self.page.mouse.down()
+        try:
+            self.page.mouse.move(x+8,y+3,steps=3)
+            self.page.evaluate("() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))")
+            self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),fixed)
+            expect(overlay).to_be_visible()
+        finally:
+            self.page.mouse.up()
+        self.page.wait_for_function("p=>CurvatureModernApp.getModel().Pan!==p",arg=old_pan,timeout=30000)
+        self.page.wait_for_function("CurvatureModernApp.getPhotoOverlayState().available",timeout=30000)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),fixed)
+
+        # Preserve the edited experiment (and its historical baseline) in
+        # History, leave it for an unrelated preset, then restore via Previous.
+        edited=read_scene()
+        preset=self.page.locator('#ModernPreset')
+        preset.select_option('chicago')
+        expect(preset).to_have_value('chicago',timeout=30000)
+        expect(panel).to_be_hidden()
+        expect(overlay).to_have_count(0)
+        previous=self.page.locator('#ModernPreviousExperiment')
+        expect(previous).to_be_enabled(timeout=30000)
+        previous.click()
+        expect(preset).to_have_value('custom',timeout=30000)
+        expect(overlay).to_be_visible(timeout=30000)
+        self.assertEqual(read_scene(),edited)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().resultId"),rid)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),fixed)
+        backing=self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().backing")
+        self.page.set_viewport_size({'width':1100,'height':800})
+        self.page.wait_for_function("""before => {
+            const s=CurvatureModernApp.getPhotoOverlayState();
+            return s.available&&s.backing.width!==before.width;
+        }""",arg=backing,timeout=30000)
+        resized=self.page.evaluate("CurvatureModernApp.getPhotoOverlayState()")
+        self.assertEqual(resized['resultId'],rid)
+        self.assertAlmostEqual(resized['layout']['rect']['width']/resized['layout']['rect']['height'],1176/791,places=10)
+        self.assertEqual(read_scene(),edited)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_legacy_json_import_apply_and_reload(self):

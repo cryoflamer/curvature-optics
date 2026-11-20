@@ -1249,7 +1249,8 @@
     return [base];
   }
   function historyThumbnail(snapshot){
-    if(!thumbnailApi||effectiveOpticalQuality()!=='accurate'||state.frame!==null)return null;
+    if(!thumbnailApi||effectiveOpticalQuality()!=='accurate'||state.frame!==null||
+      cameraDirectMotion||activeCameraPointer||(cameraPreview&&cameraPreview.isActive()))return null;
     var mode=snapshot.display.mode;
     if(mode!=='scene'&&mode!=='compare')return null;
     var views=mode==='scene'?['Scene']:['A','B'];
@@ -5007,8 +5008,14 @@
     var fov=el('ModernViewAngle');if(fov&&Number.isFinite(model.ViewAngle))
       fov.value=String(Number(model.ViewAngle.toFixed(4)));
   }
+  function hasScenePhoto(){return !!(photoOverlay&&state.calibrationOrigin?.target==='Scene'&&currentWorkspaceMode()==='scene');}
+  function captureScenePhoto(g,result,aspect){
+    if(!photoOverlay)return;
+    if(hasScenePhoto())photoOverlay.capture(state.calibrationOrigin,g.Canvas,result.projectionCamera,aspect);
+    else photoOverlay.clear();
+  }
   function draw(g){
-    if(state.mode!=='scene')return;
+    if(state.mode!=='scene'||photoCalibrationWorkspaceOpen||animationWorkspaceOpen||state.demosActive)return;
     try{
       var startedAt=profileNow();
       var separateDecorations=!!(atmosphericPresentation&&atmosphericPresentation.enabled('Scene'));
@@ -5018,7 +5025,7 @@
         transitionProfile:state.transitionProfile,inverseProfile:state.inverseProfile,interactive:false,
         deferDecorations:separateDecorations,showCaptions:state.captionMode!=='off',captionMode:state.captionMode,
         includeGeometrySummary:true,geometryBackend:state.geometryBackend,
-        captureProjection:!!(photoOverlay&&state.calibrationOrigin?.target==='Scene'),
+        captureProjection:hasScenePhoto(),
         opticalQuality:effectiveOpticalQuality(),
         previewLod:{stride:previewStride('Scene')},
         forceColdOptics:state.opticalSample==='cold'
@@ -5041,11 +5048,7 @@
         if(fastHorizon)fastHorizon.textContent='Exact horizon: disabled in Fast Preview';
       }else if(state.compareHorizon)drawCompareHorizon('Scene',guideGraph,model,sceneOptions);
       markHistoryRendered('Scene');
-      if(photoOverlay){
-        if(currentWorkspaceMode()==='scene')
-          photoOverlay.capture(state.calibrationOrigin,g.Canvas,result.projectionCamera,model.deviceRatio);
-        else photoOverlay.clear();
-      }
+      captureScenePhoto(g,result,model.deviceRatio);
       scheduleShimmerFrame();
       var finishedAt=profileNow();
       if(renderProfiler)renderProfiler.recordRender({viewport:'Scene',
@@ -6562,7 +6565,14 @@
       // Never call Update() or change either live model while moving. The
       // physical camera uses these pose fields and the original per-side
       // surface, atmosphere and authored object geometry.
-      root.CurvatureMainCanvasRenderer.renderPhysical(view.graph,frame,view.options);
+      // The direct-motion painter overwrites the authoritative backing
+      // canvas while the committed pose may still be unchanged. Do not
+      // allow these provisional pixels into an ordinary History thumbnail.
+      historyRenderedKeys[view.side]=null;
+      var capturePhoto=view.side==='Scene'&&hasScenePhoto();
+      var motionResult=root.CurvatureMainCanvasRenderer.renderPhysical(view.graph,frame,
+        capturePhoto?Object.assign({},view.options,{captureProjection:true}):view.options);
+      if(capturePhoto)captureScenePhoto(view.graph,motionResult,frame.deviceRatio);
       // Screen-space guides are drawn only after the direct painter. A cached
       // optical horizon may be reprojected at the new pose, but no RK4 solve
       // is permitted in the moving RAF callback. On mouseup normal drawing

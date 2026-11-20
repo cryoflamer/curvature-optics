@@ -1,3 +1,33 @@
+## 8F.7c.4 — Fixed Registration and Lifecycle
+
+Keep a registration model per validated archive association. Cache only
+the completed display aspect, backing size, screen size and captured
+viewport transform; identical layout preserves the already-painted
+photo pixels while camera/geometry/atmosphere change. Never use the
+live focal or pose in the signature. Direct-motion completed frames
+also supply the actual captured viewport; CSS fallback warps only its
+physical source canvas. A resize must paint a fresh rectangle before
+showing stale-sized pixels again. Detached ResizeObserver callbacks
+are scoped to the source and layer that installed them.
+
+Hidden Scene workspaces do not paint queued Scene draws. Association
+replacement and navigation clear the generation; late archive/decoder
+work cannot paint a superseded reference. Reload and History restore
+rebuild from the portable immutable origin and verified original, not
+the edited live camera. Page-local mode/opacity preferences are not
+serialized in the experiment.
+
+Provisional Canvas Direct motion overwrites physical backing pixels
+without necessarily committing pose fields. Invalidate thumbnail
+render keys before that paint, reject thumbnail capture during active
+motion or held CSS preview, and requalify on normal Accurate completion.
+History image sources remain the original physical canvas/presentation
+guides, never the separate reference overlay. Browser regression checks
+byte-identical pure thumbnails while Photo only is active, reload,
+navigation, physical/pose edits, pointer drag, protected History return
+and resize. Prior CI 44787911867 green; extended suite pending. Actual
+Soundly photograph and full aspect/DPR acceptance remain .5.
+
 ## 8F.7c.3 — Scene Overlay Controls
 
 The Scene toolbar appears only for a Scene calibration association. It

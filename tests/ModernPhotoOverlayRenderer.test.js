@@ -146,3 +146,32 @@ test('Photo only falls back to Scene while loading, unavailable, or backing pixe
   assert.equal(f.updates.at(-1).effectiveMode,'scene');
   assert.equal(f.updates.at(-1).available,false);
 });
+
+test('unchanged completed viewport reuses the same photo raster through physical and motion frames',async()=>{
+  const f=fixture();f.capture();await nextTurn();
+  const layer=f.children[0],layout=f.presenter.snapshot().layout,before=f.calls.slice();
+  for(const fields of [{sceneSize:1,zoom:2},{sceneSize:500,zoom:9,pos:[1,2,3]},
+    {center:[1,0,2],up:[0,1,0],objectZExtend:4}]){
+    f.capture(origin,{...f.camera(),...fields});
+    assert.equal(f.children[0],layer);
+    assert.equal(f.presenter.snapshot().layout,layout);
+  }
+  assert.deepEqual(f.calls,before);
+  // Layout change even with identical backing-store size is not ignored.
+  const changed=f.camera();changed.pixelTransform.offsetX+=6;
+  f.capture(origin,changed);
+  assert.equal(f.presenter.snapshot().layout.rect.x,layout.rect.x+6);
+  assert.equal(f.calls.filter(c=>c[0]==='archive').length,1);
+  assert.equal(f.calls.filter(c=>c[0]==='draw').length,2);
+});
+test('queued resize from a detached generation cannot invalidate the new photo layer',async()=>{
+  const f=fixture();f.capture();await nextTurn();
+  const old=f.observers[0];f.presenter.clear();f.capture();await nextTurn();
+  const newLayer=f.children[0],updates=f.updates.length;
+  old.fn();
+  assert.equal(f.updates.length,updates);
+  assert.equal(f.children[0],newLayer);
+  assert.equal(f.presenter.snapshot().available,true);
+  f.presenter.clear();const count=f.updates.length;f.presenter.clear();
+  assert.equal(f.updates.length,count);
+});
