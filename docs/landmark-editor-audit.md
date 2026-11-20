@@ -1,3 +1,16 @@
+## 8F.7p.2b — Overview checkpoint test fixture isolation (#14)
+
+CI 44822308945 (c47c5367): Chromium and architecture checks passed;
+Node 2248 passed, one failed, one skipped. The last failure was the
+checkpoint overview disagreement assertion, which passed a fresh, empty
+Reference Image Library to prepare() instead of the verified Library from
+capture(). Hydration correctly rejected the missing original before it
+could reach the intended overview consistency guard. The test now uses
+the exact capture environment and verified Library for this assertion;
+all earlier negative tests continue to use their independent fixtures.
+No production checkpoint, hydration, photo attribution, storage or History
+behavior was changed. Full GitHub CI must pass before starting 8F.7p.3.
+
 ## 8F.7p.2a — Qualification test expectations and isolated History VM (#14)
 
 CI 44821720111 (45cfc44): architecture success, Node 2245 passed,
