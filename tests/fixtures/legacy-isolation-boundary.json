@@ -504,6 +504,7 @@
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
       "src/ui/modern/ModernCalibrationProjectMigration.js",
+      "src/ui/modern/ModernCalibrationProjectPersistence.js",
       "src/x.js",
       "src/xtc.js"
     ]

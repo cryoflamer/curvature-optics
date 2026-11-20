@@ -1,3 +1,15 @@
+## 8F.7p.4a — Deferred persistence module registered in static boundary (#14)
+
+Fast CI 44834253141: all 205 Node tests passed, including eight new
+coordinator regressions; Legacy isolation audit rejected the fixture
+because the intentionally unbound persistence module was missing from
+matrix.notDirectlyLoadedByTheseEntrypoints. It is now recorded there
+in canonical sorted order, alongside its already reviewed source-module
+and CommonJS references. Browser entrypoints remain unchanged and no
+source logic was modified. Full CI remains a separate milestone gate.
+
+Direct commit to built-in-demo, no PR; reasoning level Medium / 2.
+
 ## 8F.7p.4 — Generation-bound Calibration Project persistence coordinator (#14)
 
 Full CI 44832598251 and Fast CI 44832598273 on 2d4fc00 were green.
