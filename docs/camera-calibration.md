@@ -1,3 +1,17 @@
+## 8F.5b.2 — Integrated model viewer architecture audit
+
+User confirmed 8F.5b.1 selection UX works, then proposed eliminating the
+floating Magnifier as a separate normal workflow. Audit baseline 53386a6,
+CI 44646834128 success. See docs/calibration-model-viewer-audit.md for
+source dependencies, risks, target contract and staged plan.
+Do not start material authoring until the integrated viewport is ready:
+8F.5b.3a host-neutral optical navigation; .3b inline Globe Initial/Best
+and Free View; .4a legacy vertex/inspection and draft migration; .4b
+remove redundant Globe paths after parity; then resume 8F.5c/d/e.
+Keep calibration state, fit/worker, resolver, portable schemas and legacy
+Flat compatibility unchanged. Audit only; no runtime change or new
+browser benchmark. Next: 8F.5b.3a.
+
 ## 8F.5a — Existing correspondence markers in Magnifier
 
 8F.4d.2 CI: architecture and Node passed, Chromium failed on the recurring

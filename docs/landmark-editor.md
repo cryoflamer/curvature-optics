@@ -1,3 +1,17 @@
+## 8F.5b.2 — Integrated model viewer architecture audit
+
+User confirmed 8F.5b.1 selection UX works, then proposed eliminating the
+floating Magnifier as a separate normal workflow. Audit baseline 53386a6,
+CI 44646834128 success. See docs/calibration-model-viewer-audit.md for
+source dependencies, risks, target contract and staged plan.
+Do not start material authoring until the integrated viewport is ready:
+8F.5b.3a host-neutral optical navigation; .3b inline Globe Initial/Best
+and Free View; .4a legacy vertex/inspection and draft migration; .4b
+remove redundant Globe paths after parity; then resume 8F.5c/d/e.
+Keep calibration state, fit/worker, resolver, portable schemas and legacy
+Flat compatibility unchanged. Audit only; no runtime change or new
+browser benchmark. Next: 8F.5b.3a.
+
 ## 8F.5b.1 — Magnifier selection UX
 
 Navigate now shows existing correspondence markers only; local candidate
@@ -510,7 +524,12 @@ added for CI.
 | --- | --- |
 | 8F.5a | Display committed correspondences in both magnifier views using the shared anchor resolver; stable numbering/colors, visibility and crop handling; no editing yet. Test existing vertex and new material marker placement. |
 | 8F.5b | Synchronize active pair selection across table, photo, model and both magnifier views; selection itself must not mutate observations or invalidate fit. Test hidden markers and ambiguous selections. |
-| 8F.5c | Add explicit Use in calibration for a locally confirmed anchor; reuse pending-pair flow in both click orders, keep Magnifier open, prevent duplicate commits, preserve fast vertex workflow. Test creation, cancellation, missing-side states and persistence. |
+| 8F.5b.2 | Architecture audit: replace separate Main Model and Magnifier with one integrated Globe model viewport. See [integrated viewer audit](calibration-model-viewer-audit.md). |
+| 8F.5b.3a | Host-neutral viewport and optical zoom/pan/reset, explicit physical Free View. |
+| 8F.5b.3b | Inline Globe viewport with Initial/Best optical sources and shared selection. |
+| 8F.5b.4a | Fast Vertex, owner inspection, fallback and draft/session migration. |
+| 8F.5b.4b | Retire duplicated Globe model paths after parity; browser and performance qualification. |
+| 8F.5c | Add explicit Use in calibration for a locally confirmed anchor in the integrated model viewport; reuse pending-pair flow in both click orders, prevent duplicate commits, preserve fast vertex workflow. Test creation, cancellation, missing-side states and persistence. |
 | 8F.5d | Add transactional edit of existing model anchors, including type conversion and precise adjustment. Apply retains original photo pixel, ID, role and weight; Cancel retains old fit and observation; Undo restores committed changes. Test active-fit cancellation and stale-result invalidation only on committed edits. |
 | 8F.5e | End-to-end browser qualification: both creation orders, old/new anchor editing, Apply/Cancel/Undo, cross-view synchronization, reload and exchange, fit/residuals, non-Soundly geometry, and legacy vertex workflow. Resolve UX regressions before real-photo research. |
 
