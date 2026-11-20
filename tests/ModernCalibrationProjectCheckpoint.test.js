@@ -144,6 +144,7 @@ test('missing original, different digest, invalid decode and damaged source abor
   const hydrated=await checkpoint.prepare(mutated,environment,library,importer);
   assert.equal(hydrated.photo.title,'Changed');
   const wrong=copy(project);wrong.photo.aliasId='other';
+  wrong.checkpoint.payload.inline.photo='other'; // isolate attribution guard from inline guard
   await assert.rejects(checkpoint.prepare(wrong,environment,library,importer),/metadata|attribution/);
 });
 test('malformed checkpoint, stale fit, pending out of bounds and unrelated inline session fail closed',async()=>{
@@ -162,7 +163,7 @@ test('malformed checkpoint, stale fit, pending out of bounds and unrelated inlin
   const corrupted=copy(project);
   corrupted.checkpoint.payload.draft.record={original:{dataUrl:'data:image/png;base64,AAAA'}};
   await assert.rejects(checkpoint.prepare(corrupted,environment,library,importer),
-    /embedded reference/);
+    /embedded-photo/);
   const other=copy(project);other.overview.rowCount=7;
   await assert.rejects(checkpoint.prepare(other,environment,library,importer),/overview disagree/);
 });
@@ -175,7 +176,7 @@ test('photo identity is verified and reused; no false link to a new title or ali
   assert.equal(library.originals.size,1);
   assert.equal(a.checkpoint.payload.recordMetadata.title,'Source Soundly');
   assert.equal(b.checkpoint.payload.recordMetadata.title,'Another title');
-  await assert.rejects(checkpoint.extract(d,inline(d),
+  assert.throws(()=>checkpoint.extract(d,inline(d),
     {...a.photo.identity,width:10}),/identity dimensions/);
   assert.throws(()=>checkpoint.extract({...d,record:null,rows:[]},null,a.photo.identity),
     /No-photo|cannot contain/);

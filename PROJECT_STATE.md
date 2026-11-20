@@ -1,3 +1,18 @@
+## 8F.7p.2a — Qualification test expectations and isolated History VM (#14)
+
+CI 44821720111 (45cfc44): architecture success, Node 2245 passed,
+4 failed, 1 skipped. Three failures were assertions in the new
+checkpoint tests: wrong-alias fixture hit inline binding before photo
+attribution, embedded-photo error text did not match the overly narrow
+regex, and a synchronous extraction error was incorrectly passed to
+assert.rejects instead of assert.throws. The fourth was a second
+isolated History VM harness missing a mock for the previously added
+refreshCalibrationApplicability hook. All were corrected without
+changing the production extraction/hydration, persistence, migration or
+History logic. Each assertion still tests the intended failure
+contract; the alias fixture now matches inline identity to reach
+attribution independently. Actual CI remains pending.
+
 ## 8F.7p.2 — Complete checkpoint extraction and verified original hydration (#14)
 
 Predecessor b68ffeb CI 44820260917: Chromium 51/51 success; Node

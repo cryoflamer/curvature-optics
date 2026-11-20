@@ -209,6 +209,7 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
   const ctx={
     Promise,JSON,Error,RangeError,historyRestoreBusy:false,presetSwitchBusy:false,calibrationApplyBusy:false,
     previousExperimentHistoryId:null,updatePresetNavigation(){},
+    refreshCalibrationApplicability(){},
     historyOpenedFromPicker:true,historyFocusFromPickerId:'42',
     historyWizardReferenceChoosing:false,
     animationReturnAfterRestore:false,animationWorkspaceOpen:true,
