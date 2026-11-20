@@ -485,3 +485,15 @@ test('already-migrated marker survives project deletion and never resurrects leg
   assert.equal((await store.list(db)).length,0);
   assert.deepEqual(await store.legacy(db),raw);
 });
+
+
+test('orphaned project summary after migration is not mistaken for deliberate deletion',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const adopted=await migration.migrate(env,{adapter,decoder:importer,now:950});
+  await store.remove(db,adopted.project.id,1);
+  db.tables.get(store.SUMMARIES).set(adopted.project.id,model.summary(adopted.project));
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,now:951}),
+    /Orphan calibration project metadata/);
+  assert.deepEqual(await store.legacy(db),raw);
+  assert.equal((await store.migrationMarker(db)).projectId,adopted.project.id);
+});

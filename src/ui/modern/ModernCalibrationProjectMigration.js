@@ -89,7 +89,10 @@
     if(existing.status==='already-removed')
       return {status:'already-removed',marker:existing.marker,project:null};
     const record=existing.project||await store.get(env.indexedDB,existing.projectId);
-    if(!record)throw Error('Migration marker points to a missing project; preserve legacy raw recovery');
+    // A retained marker also outlives an intentionally deleted project.
+    // Do not re-adopt the legacy draft or silently recreate that identity.
+    // get() already rejects orphan summary rows as storage corruption.
+    if(!record)return {status:'already-removed',marker:existing.marker||null,project:null};
     await checkpoint.prepare(record,env,adapter,decoder);
     return {status:'already',marker:existing.marker||null,project:record};
   }

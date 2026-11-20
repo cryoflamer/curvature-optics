@@ -1,3 +1,18 @@
+## 8F.7p.3d — Retained marker after deletion (#14)
+
+CI 44829091348 (e466358b): architecture green; Node 2258 passed,
+1 failed, 1 skipped. The sole remaining failing case was a missing
+project after intentional deletion of the adopted calibration. The
+migration marker intentionally survives, so a retry must report
+already-removed and must never resurrect the legacy draft. checkedExisting
+now reports that terminal state when get() finds neither row nor summary;
+get() continues rejecting an orphan summary as corruption. Added an
+orphan-summary fail-closed regression. Original legacy bytes remain
+untouched and recovery/export stays possible. No other migration,
+History or physical code changed. Fresh complete CI required.
+
+Direct commit to built-in-demo, no PR; reasoning level Medium / 2.
+
 ## 8F.7p.3c — Photo-free readback comparison corrected (#14)
 
 CI 44828340372 (ed630456): architecture green; Node 2253 passed,
