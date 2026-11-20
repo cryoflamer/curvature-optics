@@ -1,3 +1,25 @@
+## 8F.7b.1e — Pure Calibration Transfer (#8)
+
+Previous CI 44750532466 passed all three jobs. Added pure
+ModernCalibrationTransfer.transfer(record,current,target). Validates source
+and destination, copies exact seven fitted fields, Eye-Lvl and captured
+object banks, preserves original raster identity and normal display aspect.
+Scene transfer resets inactive Compare to captured Globe vs Flat.
+Compare A/B transfer preserves other-side optics and retained Scene optics,
+uses a single shared camera/layout and neutral shared haze. Missing legacy
+physics uses neutral canonical defaults; no live unrelated values.
+Captured v1 record lacks narrative/preset/grid/path context: use generic
+title, custom selection, pontchartrain reset, neutral grid; omit outgoing
+camera positions/sequence. Reject unsupported destination ranges and
+noncanonical rFEarth rather than silently changing unrepresentable inputs.
+No storage or live UI mutation. Four new Node regression scenarios.
+96 focused headless assertions passed on production transfer/state/Compare
+modules and Soundly captured geometry with injected archive validator/origin.
+Full archive-to-transfer integration tests await Node CI; the combined
+headless dependency load exceeded the connector call limit.
+Next 8F.7b.1f — Calibration Applicability (high reasoning effort).
+Full CI pending.
+
 ## 8F.7b.1d — Experiment Origin Contract (#8)
 
 Previous 8F.7b.1c CI 44749515364 passed all three jobs. Optional

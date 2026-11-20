@@ -267,3 +267,94 @@ test('origin is created from archived fit and contains no mutable alias, provena
   }
   assert.throws(()=>archive.origin(record,'C'),/target/);
 });
+
+const transfer=require('../src/ui/modern/ModernCalibrationTransfer');
+const codec=require('../src/ui/modern/ModernExperimentState');
+const compare=require('../src/ui/modern/ModernCompareState');
+const compareModel=require('../src/ui/modern/ModernCompareModel');
+function destination(){
+  const m={...copy(fixture.model),deviceRatio:16/9,Height:17,showGrid:1,DemoText:'Unrelated scene',
+    Description:'Unrelated description',NObjects:[2,3],viewcenterHorizon:0};
+  return codec.capture(m,{atmosphere:'inverse-temperature',occlusionRadius:987654,
+    visibility:{enabled:true,rangeKm:140},temperatureProfile:{temperatureC:30,pressureHpa:900,gradientKPerKm:10},
+    preset:'custom',resetPreset:'chicago'},compare.preset('flat-inverse'),
+    {mode:'scene',eyeLevel:false,horizon:true,selected:'B'});
+}
+function rebind(raw){
+  const {model,physics}=raw.scene;
+  raw.fit.result.materialBinding=editor.fitBinding(raw.observations,raw.fit.freeParameters,model,physics,1176,791);
+}
+test('pure Scene transfer uses exact best camera and captured object banks, initializes fresh Compare',async()=>{
+  const raw=input(),record=await archive.create(raw,env()),current=destination(),before=copy(current);
+  current.cameraPositions=[{id:'old',name:'Old',camera:copy(current.scene.camera)}];
+  const saved=copy(current),next=transfer.transfer(record,current,'Scene');
+  assert.deepEqual(current,saved);
+  assert.deepEqual(next.scene.camera,{...record.payload.fit.result.pose,viewcenterHorizon:3,deviceRatio:16/9});
+  for(const k of codec.OBJECT)assert.deepEqual(next.scene.objects[k],raw.scene.model[k]);
+  assert.deepEqual(next.scene.surface,{showModel:1,rEarth:6371000});
+  assert.equal(next.scene.atmosphere,'vacuum');
+  assert.deepEqual(next.scene.temperatureProfile,raw.scene.physics.temperatureProfile);
+  assert.deepEqual(next.scene.visibility,{enabled:false,rangeKm:60});
+  assert.equal(next.scene.occlusionRadius,6371000);
+  assert.equal(next.scene.showGrid,false);assert.equal(next.scene.preset,'custom');
+  assert.equal(next.scene.resetPreset,'pontchartrain');
+  assert.equal(next.cameraPositions,undefined);assert.equal(next.cameraSequence,undefined);
+  assert.equal(next.compare.A.surface,'globe');assert.equal(next.compare.B.surface,'flat');
+  assert.equal(next.compare.A.atmosphere,'vacuum');assert.equal(next.compare.B.atmosphere,'vacuum');
+  assert.equal(next.display.mode,'scene');assert.equal(next.calibrationOrigin.target,'Scene');
+  assert.equal(next.calibrationOrigin.photo.width,1176);assert.equal(next.calibrationOrigin.photo.height,791);
+  assert.deepEqual(codec.decode(codec.encode(next)),next);
+  next.scene.objects.NObjects[0]=1;assert.equal(record.payload.scene.model.NObjects[0],128);
+  assert.equal(before.scene.camera.Height,17);
+});
+test('Compare A and B transfer share exact camera/layout and change selected physics only, except shared haze',async()=>{
+  const raw=input();raw.scene.physics.atmosphere='temperature-lapse';
+  raw.scene.physics.temperatureProfile={temperatureC:19,pressureHpa:1000,gradientKPerKm:-10};
+  raw.fit.result.atmosphere='temperature-lapse';rebind(raw);
+  const record=await archive.create(raw,env());
+  for(const target of ['A','B']){
+    const current=destination(),other=target==='A'?'B':'A';
+    current.compare.A.visibility={enabled:true,rangeKm:20};current.compare.B.visibility={enabled:true,rangeKm:20};
+    const before=copy(current),next=transfer.transfer(record,current,target);
+    assert.deepEqual(current,before);assert.equal(next.display.mode,'compare');
+    assert.equal(next.compare.selected,target);assert.equal(next.compare.preset,'custom');
+    assert.equal(next.calibrationOrigin.target,target);
+    assert.equal(next.compare[target].surface,'globe');assert.equal(next.compare[target].radiusKm,6371);
+    assert.equal(next.compare[target].atmosphere,'temperature-lapse');
+    assert.deepEqual(next.compare[target].temperatureProfile,raw.scene.physics.temperatureProfile);
+    assert.deepEqual(next.compare[other],{...before.compare[other],visibility:{enabled:false,rangeKm:60}});
+    for(const k of ['surface','atmosphere','occlusionRadius','visibility','temperatureProfile','transitionProfile','inverseProfile'])
+      assert.deepEqual(next.scene[k],before.scene[k]);
+    const model={...next.scene.camera,...next.scene.objects,showGrid:0,metricGridExtentKm:0,
+      Update(){this.camViewAngle=2*Math.atan(43.2/(2*this.FocalLengthField));}};
+    const pair=compare.pair(model,next.compare,compareModel);
+    assert.ok(compareModel.invariant(pair));
+    for(const side of ['A','B'])for(const k of Object.keys(record.payload.fit.result.pose))
+      assert.equal(pair[side][k],record.payload.fit.result.pose[k]);
+    assert.deepEqual(codec.decode(codec.encode(next)),next);
+  }
+});
+test('supported captured aspect wins; unsupported original aspect stays separate; missing legacy controls have deterministic defaults',async()=>{
+  for(const [capture,expected] of [[1.5,1.5],[2/3,2/3],[9/16,9/16],[16/9,16/9],[1176/791,16/9],[undefined,16/9]]){
+    const raw=input();if(capture!==undefined)raw.scene.model.deviceRatio=capture;
+    delete raw.scene.physics.temperatureProfile;rebind(raw);
+    const record=await archive.create(raw,env()),next=transfer.transfer(record,destination(),'Scene');
+    assert.equal(next.scene.camera.deviceRatio,expected);
+    assert.equal(next.scene.camera.FocalLengthField,record.payload.fit.result.pose.FocalLengthField);
+    assert.deepEqual(next.scene.temperatureProfile,{temperatureC:15,pressureHpa:1013.25,gradientKPerKm:-6.5});
+    assert.equal(next.calibrationOrigin.photo.width/next.calibrationOrigin.photo.height,1176/791);
+  }
+});
+test('pure transfer rejects unsupported target, unrepresentable object domain and flat reference constants without mutation',async()=>{
+  const current=destination(),before=copy(current),raw=input(),record=await archive.create(raw,env());
+  assert.throws(()=>transfer.transfer(record,current,'C'),/target/);
+  let altered=input();altered.scene.model.rFEarth=12345678;rebind(altered);
+  const unsupported=await archive.create(altered,env());
+  assert.throws(()=>transfer.transfer(unsupported,current,'Scene'),/flat reference radius/);
+  altered=input();altered.scene.model.NObjects[1]=201;rebind(altered);
+  const tooMany=await archive.create(altered,env());
+  assert.throws(()=>transfer.transfer(tooMany,current,'B'),/outside supported range/);
+  const corrupt=copy(record);corrupt.payload.fit.result.pose.Height+=1;
+  assert.throws(()=>transfer.transfer(corrupt,current,'Scene'),/digest mismatch/);
+  assert.deepEqual(current,before);
+});

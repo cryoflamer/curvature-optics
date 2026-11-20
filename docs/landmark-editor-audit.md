@@ -26,6 +26,38 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1e — Pure calibration transfer
+
+`ModernCalibrationTransfer.transfer(record,current,target)` returns a
+detached canonical experiment. No persistence, render, or live mutation.
+The full immutable result and outgoing state are validated; copies only
+seven best camera values, Eye-Lvl, captured object arrays and physical
+hypothesis. Preserve supported captured display aspect; otherwise retain
+outgoing supported normal aspect. Original dimensions remain in origin;
+never compensate by altering focal field. Destination validation fails
+for unsupported values (e.g. more than 200 objects per bank). The v1
+state cannot encode rFEarth; require the existing normal constant
+10007543, since it can affect Flat guides outside the fitted Globe view.
+
+For Scene, use captured surface and atmosphere, initialize Compare from
+the new Scene (Globe vs Flat with same atmosphere). For A/B, transfer
+surface/radius and atmosphere only to explicitly selected side, preserve
+retained Scene optics and other-side optics; both models share the
+transferred camera and objects. Shared Compare haze becomes neutral
+on both sides, not independent; report shared effects before future Apply.
+Missing/partial captured temperature profile uses the physical defaults
+15 C, 1013.25 hPa, -6.5 K/km per missing field. Other uncaptured controls:
+occlusionRadius 6371000, neutral visibility, standard transition weight 0,
+temperature-lapse inverse weight 0. No current unrelated physics borrowed.
+
+Archive v1 has no canonical title, reset preset, grid or camera-path
+context: generic Calibrated camera title, empty description, custom
+selection, pontchartrain reset, grid off/extent zero. Drop outgoing
+saved camera positions and sequence (protected by future Apply recovery).
+Retain ordinary display preferences, disable retired probe. Target origin
+comes from immutable result, not from current camera. This step does not
+assert Accurate residuals, resolve missing assets or apply live state.
+
 ## 8F.7b.1d — Canonical experiment origin
 
 Optional `calibrationOrigin` version 1 embedded in experiment version 1.
