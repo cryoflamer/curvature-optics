@@ -145,3 +145,38 @@ test('production camera scale and actual window mapping agree for baseline rays'
     }
   }
 });
+
+test('generic photo shapes preserve angular scale, clipping and center for every Scene aspect and DPR',()=>{
+  const photos=[{width:400,height:200},{width:200,height:400},
+    {width:250,height:250},{width:350,height:150}];
+  let cropped=0,uncovered=0;
+  for(const photo of photos){
+    const reg=api.create({photo,baselineCamera:{...origin.baselineCamera,FocalLengthField:100}});
+    const center=[photo.width/2,photo.height/2];
+    assert.deepEqual(reg.ray(center),[0,0,1]);
+    for(const aspect of aspects){
+      const baseline=reg.layout(graphWindow(aspect,1));
+      for(const dpr of [1,2,3]){
+        const v=graphWindow(aspect,dpr),l=reg.layout(v),r=l.rect;
+        close(r.width/r.height,photo.width/photo.height);
+        const c=point(l,center);
+        close(c[0],v.pixelTransform.offsetX);close(c[1],v.pixelTransform.offsetY);
+        for(const key of ['x','y','width','height']){
+          close(r[key],baseline.rect[key]*dpr);
+          close(l.clip[key],baseline.clip[key]*dpr);
+        }
+        const x0=Math.max(0,r.x),x1=Math.min(v.width,r.x+r.width);
+        const y0=Math.max(0,r.y),y1=Math.min(v.height,r.y+r.height);
+        close(l.clip.x,x0);close(l.clip.y,y0);
+        close(l.clip.width,x1-x0);close(l.clip.height,y1-y0);
+        if(l.clip.width<r.width-1e-8||l.clip.height<r.height-1e-8)cropped++;
+        if(l.clip.width<v.width-1e-8||l.clip.height<v.height-1e-8)uncovered++;
+        const a=point(l,[photo.width/5,photo.height/5]);
+        const b=point(l,[2*photo.width/5,2*photo.height/5]);
+        close((b[0]-a[0])/(photo.width/5),l.scale);
+        close((b[1]-a[1])/(photo.height/5),l.scale);
+      }
+    }
+  }
+  assert.ok(cropped>0&&uncovered>0);
+});

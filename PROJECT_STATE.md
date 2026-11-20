@@ -1,3 +1,43 @@
+## 8F.7c.5 — Reference Photo Overlay Qualification (#10)
+
+Previous CI 44790816422 on 64666ea: all three jobs green, including the
+extended live Apply/Scene lifecycle and pure History thumbnail checks.
+
+Approved scope correction: registration is universal. No specific
+photograph, location, historical fit, or named experiment is a gate for
+Scene Overlay. Soundly remains an existing end-to-end calibration
+regression and possible research example, not an overlay acceptance
+dependency. Keep the physical-renderer/fit accuracy questions separate.
+
+New generic numerical matrix: four original raster shapes (400x200,
+200x400, 250x250, 350x150), all four supported display aspects
+(3:2, 2:3, 16:9, 9:16), DPR 1/2/3 = 48 cases. Tests assert centered rays,
+uniform x/y scale, clipping intersection, original proportions and
+backing-coordinate scaling. Seven registration scenarios / 1188
+assertions passed in isolated JS harness, including 821 new assertions.
+
+New Chromium matrix: independent test graph using production GraphX3DX,
+actual Canvas Direct renderer capture, real PNG decode and real archive /
+Reference Image Library; no application-preset-specific observations.
+Four synthetic 5x5 color grids, four actual graph aspects, DPR 1 and 2
+browser contexts = 32 cases. A deliberately synthetic fixed candidate
+provides identity only, not evidence of fit accuracy. Compare actual
+photo rectangle to the existing physical-camera intrinsics oracle,
+sample actual colored backing pixels, test transparent uncovered
+margins, cropping, unchanged physical Canvas bytes, missing original
+and missing archive using real IndexedDB store clearing in isolated
+contexts. Existing live application Apply regression now also verifies
+the visible missing-original fallback with unchanged Scene/checkpoint
+identity and disabled photo controls. No existing tests removed.
+
+No production renderer, schema or calibration behavior changed.
+Browser test JS syntax checked; new full Chromium/native CI pending.
+The local environment cannot execute the full repository browser suite.
+Issue #10 acceptance wording corrected; close only after green CI.
+Next after qualification: #11 — Calibration Integration in Shared-Camera
+Compare (one shared camera for A and B, explicit target, protected
+outgoing experiment), then #12 Compare overlay.
+
 ## 8F.7c.4 — Fixed Registration and Lifecycle (#10)
 
 Previous CI 44787911867 on 9a28df1 completed green. The registration
@@ -30,12 +70,11 @@ real browser Apply scenario with pure physical thumbnail byte equality,
 reload/default mode, calibration leave/return, live physical edits
 (camera, geometry, radius, atmosphere), actual pointer motion, protected
 History return with edited physics and fixed baseline, and viewport
-resize. Full native Node/Chromium CI pending; no real original Soundly
-photo available in this environment. No previous assertions removed.
+resize. Native CI 44790816422 subsequently passed. No previous assertions removed.
 
-Next: 8F.7c.5 — Soundly Overlay Qualification, full CI and actual
-reference photo visual acceptance, four display aspects / DPR and
-missing-reference handling. Issue #10 remains open.
+Next: 8F.7c.5 — Reference Photo Overlay Qualification, full CI,
+generic raster/aspect/DPR matrix and missing-reference handling.
+Issue #10 remains open until qualification CI passes.
 
 ## 8F.7c.3 — Scene Overlay Controls (#10)
 
@@ -70,11 +109,11 @@ JS harness (two new scenarios, 39 additional assertions). The live
 Soundly Apply Chromium test now switches all three modes and opacity,
 checks the same renderer result identity, unchanged Scene and registered
 rectangle, and saves a snapshot while Photo only is selected.
-Full CI pending; actual original Soundly photo unavailable here.
+Full CI subsequently passed (44787911867).
 
 Next: 8F.7c.4 — Fixed Registration and Lifecycle, including real camera
 motion, render/layout transitions, History/reload and pure thumbnails.
-Then .5 — Soundly Overlay Qualification. Compare remains separate.
+Then .5 — Reference Photo Overlay Qualification. Compare remains separate.
 
 ## 8F.7c.2 — Registered Overlay Renderer (#10)
 
@@ -115,15 +154,15 @@ synthetic PNG pixels, unclamped aspect and non-interactive opacity.
 Native Node/full local browser checkout unavailable; full CI pending.
 
 Next .3 — Scene Overlay Controls (Scene only / Photo only / Overlay,
-opacity and source/unavailable state), then .4 lifecycle and .5 real
-Soundly photo qualification. Real original not present in fixture.
+opacity and source/unavailable state), then .4 lifecycle and .5 generic
+reference photo qualification.
 
 ## 8F.7c.1 — Fixed Photo Overlay Registration (#10)
 
 CI 44779900383 completed successfully on 6e0eefc (all three jobs;
 Chromium 45/45, both new live Apply/legacy scenarios passed).
-#9 automated acceptance is complete; #10 still requires the real
-reference photograph, not just the synthetic qualification raster.
+#9 automated acceptance is complete; #10 requires universal raster and
+viewport qualification, not a particular photographed experiment.
 
 Approved interpretation: Scene does not acquire custom photo dimensions,
 refit or adjust its camera/optics for the picture. Photo remains a separate
@@ -161,8 +200,8 @@ Remaining proposed commit sequence:
   opacity and source/unavailable state.
 - 8F.7c.4 — Fixed Registration and Lifecycle: physical edits, recovery,
   reload/History and pure thumbnails; no tracking live camera.
-- 8F.7c.5 — Soundly Overlay Qualification: full CI + actual original
-  photo acceptance; no renderer parity requirement.
+- 8F.7c.5 — Reference Photo Overlay Qualification: full CI and generic
+  raster/viewport/DPR acceptance; no renderer parity requirement.
 No visible overlay, storage schema or physical renderer change in .1.
 Next .2 after green CI; Compare integration remains separate (#11/#12).
 

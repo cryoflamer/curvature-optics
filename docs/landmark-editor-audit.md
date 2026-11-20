@@ -1,3 +1,28 @@
+## 8F.7c.5 — Reference Photo Overlay Qualification
+
+Universal presentation contract: the photograph is identified by the
+verified original bytes/dimensions and immutable calibration baseline.
+Overlay registration has no dependency on Soundly, its object topology,
+or any particular physical observation. A known synthetic raster is a
+better automated positioning oracle than a real photograph; no named
+experiment is required for #10 acceptance. Existing Soundly calibration
+and lifecycle regression remains intact. Research-cycle acceptance later
+in the milestone is separate from this reusable component.
+
+The generic numeric matrix covers four original shapes, four standard
+Scene aspects and DPR 1/2/3. The generic browser matrix uses four actual
+PNG color-grid originals, actual browser backing pixels/DPR 1/2, a
+separate production graph and renderer projection capture, and standard
+archive/library records with synthetic fixed candidate input. The color
+grid checks original pixels at independently calculated angular positions,
+clipping and uncovered margins, and unchanged physical canvas bytes.
+Actual IndexedDB missing-original and missing-result paths are checked;
+the live Scene regression also checks unavailable status and fallback
+controls after deletion of original bytes in its isolated test context.
+These are presentation and lifecycle tests, not a fit-accuracy or
+renderer-equivalence claim. Previous full CI 44790816422 is green;
+current qualification must pass full CI before closing #10.
+
 ## 8F.7c.4 — Fixed Registration and Lifecycle
 
 Keep a registration model per validated archive association. Cache only
@@ -25,8 +50,8 @@ History image sources remain the original physical canvas/presentation
 guides, never the separate reference overlay. Browser regression checks
 byte-identical pure thumbnails while Photo only is active, reload,
 navigation, physical/pose edits, pointer drag, protected History return
-and resize. Prior CI 44787911867 green; extended suite pending. Actual
-Soundly photograph and full aspect/DPR acceptance remain .5.
+and resize. Extended suite passed CI 44790816422. Generic raster/aspect/DPR
+acceptance, independent of any named photograph, remains .5.
 
 ## 8F.7c.3 — Scene Overlay Controls
 
@@ -52,7 +77,7 @@ Display settings are page-session only, default Overlay 50%, retained
 across navigation and association changes in that session, reset on
 reload. No storage schema, physical snapshot fingerprint, archive,
 calibration parameters or History source canvas change. .4 owns full
-lifecycle/interaction acceptance and .5 real Soundly qualification.
+lifecycle/interaction acceptance and .5 universal raster qualification.
 Two new focused regression scenarios plus extended live Chromium Apply
 checks cover display controls and no physical rerender. The predecessor
 CI 44783682787 is green; current full CI still required.
@@ -89,8 +114,8 @@ source/unavailable status; .4 completes the interaction/lifecycle scope.
 The controller is covered by injected DOM/storage unit tests and the
 live Soundly Apply browser scenario now also checks the painted
 synthetic reference pixels and the separate layer's dimensions.
-No rendering parity, actual Soundly original validation or full local
-browser verification is claimed. Compare retains its separate plan.
+No rendering parity or particular photographed experiment is required.
+Compare retains its separate plan.
 
 ## Approved research roadmap — 2026-11-20
 

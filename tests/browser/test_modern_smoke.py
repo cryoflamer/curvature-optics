@@ -1116,7 +1116,203 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(resized['resultId'],rid)
         self.assertAlmostEqual(resized['layout']['rect']['width']/resized['layout']['rect']['height'],1176/791,places=10)
         self.assertEqual(read_scene(),edited)
+
+        # Simulate external loss of original bytes in this isolated browser
+        # context, while retaining the actual archive and physical checkpoint.
+        # Do not use the calibration draft or its thumbnail as a fallback.
+        ready.click()
+        expect(overlay).to_have_count(0)
+        self.page.evaluate("""() => new Promise((resolve,reject)=>{
+            const lib=CurvatureModernReferenceImageLibrary;
+            const request=indexedDB.open(lib.DATABASE,1);
+            request.onerror=()=>reject(request.error);
+            request.onsuccess=()=>{
+                const db=request.result,tx=db.transaction(lib.STORE,'readwrite');
+                tx.oncomplete=()=>{db.close();resolve();};
+                tx.onabort=()=>{db.close();reject(tx.error);};
+                tx.objectStore(lib.STORE).clear();
+            };
+        })""")
+        workspace.locator('#ModernCalibrationClose').click()
+        expect(panel).to_be_visible()
+        expect(panel.locator('#ModernPhotoOverlayStatus')).to_contain_text(
+            'Reference photo original unavailable',timeout=30000)
+        expect(mode).to_have_value('scene')
+        expect(mode).to_be_disabled()
+        expect(opacity).to_be_disabled()
+        expect(overlay).to_have_count(0)
+        self.assertEqual(read_scene(),edited)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().resultId"),rid)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_reference_photo_overlay_raster_matrix(self):
+        # No named experiment, historical photo or fitted observation coordinates.
+        # Real Chromium image decode, IndexedDB archive/library, GraphX3DX
+        # viewport, physical Canvas Direct renderer and production photo layer.
+        # A synthetic archived candidate establishes identity, not fit accuracy.
+        exercise="""async () => {
+            const check=(ok,msg)=>{if(!ok)throw Error(msg);};
+            const near=(a,b,tol,msg)=>check(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
+            const app=CurvatureModernApp, archive=CurvatureModernCalibrationResultArchive,
+                resultApi=CurvatureModernCalibrationResult, lib=CurvatureModernReferenceImageLibrary,
+                imp=CurvatureModernReferenceImageImport, physical=CurvaturePhysicalCamera,
+                photoCamera=CurvatureCameraPhysicalPose, renderer=CurvatureMainCanvasRenderer;
+            const {model,physics}=app.getPhotoCalibrationScene();
+            Object.assign(model,{showModel:1,viewcenterHorizon:3,Height:10,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,FocalLengthField:100,NObjects:[1,0]});
+            physics.atmosphere='vacuum';
+            model.camViewAngle=2*Math.atan(43.2/(2*model.FocalLengthField));
+            const pose=Object.fromEntries(['CameraEast','CameraNorth','Height','Pan','Nick','Roll',
+                'FocalLengthField'].map(k=>[k,model[k]]));
+            const host=document.createElement('div');
+            host.style.cssText='position:relative;width:360px;overflow:hidden;background:white';
+            document.body.appendChild(host);
+            // The legacy graph factory emits its markup through document.writeln.
+            // Redirect only this new test graph's synchronous construction;
+            // don't replace the real Scene or its renderer.
+            let graph;
+            const write=document.writeln;
+            try{
+                document.writeln=(...parts)=>host.insertAdjacentHTML('beforeend',parts.join(''));
+                graph=NewGraphX3D({Id:'QualificationPhotoGraph',Width:'100%',Height:'66.67%',
+                    BorderWidth:0,AutoReset:true,AutoClear:true,AutoScalePix:true});
+            }finally{document.writeln=write;}
+            const source=graph.Canvas, presenter=CurvatureModernPhotoOverlayRenderer.create(window);
+            const delay=()=>new Promise(r=>requestAnimationFrame(r));
+            async function ready(){
+                for(let i=0;i<300;i++){
+                    const s=presenter.snapshot();
+                    if(s.available)return s;
+                    if(s.status==='unavailable')throw Error(s.error);
+                    await delay();
+                }
+                throw Error('Reference presentation timed out: '+JSON.stringify(presenter.snapshot()));
+            }
+            async function clearStore(api){
+                await new Promise((resolve,reject)=>{
+                    const request=indexedDB.open(api.DATABASE,1);
+                    request.onerror=()=>reject(request.error);
+                    request.onsuccess=()=>{
+                        const db=request.result,tx=db.transaction(api.STORE,'readwrite');
+                        tx.oncomplete=()=>{db.close();resolve();};
+                        tx.onabort=()=>{db.close();reject(tx.error);};
+                        tx.objectStore(api.STORE).clear();
+                    };
+                });
+            }
+            async function unavailable(origin,camera,aspect,message){
+                presenter.clear();presenter.setMode('photo');
+                presenter.capture(origin,source,camera,aspect);
+                for(let i=0;i<300&&presenter.snapshot().status!=='unavailable';i++)await delay();
+                const s=presenter.snapshot();
+                check(s.status==='unavailable'&&s.error.includes(message),'Missing asset status '+JSON.stringify(s));
+                check(s.effectiveMode==='scene'&&!s.available&&!host.querySelector('.modern-reference-photo-overlay'),
+                    'Missing asset must not cover the physical canvas');
+            }
+            let cases=0,samples=0,cropped=0,uncovered=0,lastOrigin,lastCamera,lastAspect;
+            const aspects=[1.5,2/3,16/9,9/16];
+            try{
+                for(const [w,h] of [[400,200],[200,400],[250,250],[350,150]]){
+                    const raster=document.createElement('canvas');raster.width=w;raster.height=h;
+                    const ctx=raster.getContext('2d'),marks=[];
+                    for(let j=0;j<5;j++)for(let i=0;i<5;i++){
+                        const color=[20+40*i,20+40*j,30+7*(5*j+i),255];
+                        ctx.fillStyle='rgb('+color.slice(0,3).join(',')+')';
+                        ctx.fillRect(i*w/5,j*h/5,w/5,h/5);
+                        marks.push({u:(i+.5)*w/5,v:(j+.5)*h/5,color});
+                    }
+                    const blob=await new Promise(r=>raster.toBlob(r,'image/png'));
+                    const referenceImage=await imp.ingest(new File([blob],'Grid '+w+'x'+h+'.png',
+                        {type:'image/png'}),'grid_'+w+'_'+h,window);
+                    const landmark={id:'b0:p0:v0',bank:0,objectType:model.ObjType[0],primitive:0,vertex:0};
+                    const pixel=[w/2,h/2],row={kind:'vertex',landmark,pixel,weight:1,included:true};
+                    const input={format:'curvature-photo-calibration',version:2,scene:{model,physics},
+                        referenceImage,referenceSource:null,observations:[row],
+                        fit:{method:'canvas-direct',maxIterations:80,freeParameters:[],running:false,status:'fixed',
+                            result:{status:'fixed',pose,method:'canvas-direct',atmosphere:'vacuum',
+                                initialRmsPx:0,evaluations:1,acceptedSteps:0,freeParameters:[],
+                                evaluation:{valid:true,rmsPx:0,weightedRmsPx:0,cost:0,
+                                    points:[{id:landmark.id,observed:pixel,predicted:pixel,weight:1,status:'visible'}]}}}};
+                    const saved=await archive.archiveExperiment(indexedDB,input,window);
+                    const origin=resultApi.origin(saved.row.record,'Scene');
+                    presenter.clear();presenter.setMode('overlay');
+                    for(const aspect of aspects){
+                        graph.CanvasRatioHW=1/aspect;graph.LastCanvasWidth=0;
+                        graph.UpdateCanvasSize();
+                        model.deviceRatio=aspect;
+                        const render=renderer.renderPhysical(graph,model,{atmosphere:'vacuum',opticalQuality:'canvas-direct',
+                            geometryBackend:'canvas',captureProjection:true,captionMode:'off',showCaptions:false});
+                        const camera=render.projectionCamera,v=camera.pixelTransform;
+                        const base=source.toDataURL();
+                        presenter.capture(origin,source,camera,aspect);
+                        const s=await ready(),layer=host.querySelector('.modern-reference-photo-overlay');
+                        check(layer.width===source.width&&layer.height===source.height,'Backing dimensions');
+                        near(v.contextScale,devicePixelRatio,1e-9,'Actual Chromium DPR');
+                        near(source.width/source.height,aspect,.02,'Actual graph aspect');
+                        // Independent oracle: use the existing two physical
+                        // camera intrinsics, not the overlay registration API.
+                        const photo=photoCamera.photoCamera(model,w,h);
+                        const baseline=physical.create(model);
+                        const scale=-v.scaleY*camera.screenSize*photo.sceneSize/(h*baseline.sceneSize);
+                        const x=v.offsetX-w*scale/2,y=v.offsetY-h*scale/2;
+                        const rr=s.layout.rect;
+                        for(const [a,b] of [[rr.x,x],[rr.y,y],[rr.width,w*scale],[rr.height,h*scale]])
+                            near(a,b,1e-7,'Independent angular rectangle');
+                        near(rr.width/rr.height,w/h,1e-10,'Original aspect preserved');
+                        const c=layer.getContext('2d');
+                        const read=(x,y)=>Array.from(c.getImageData(x,y,1,1).data);
+                        let checked=0;
+                        for(const m of marks){
+                            const px=Math.floor(x+m.u*scale),py=Math.floor(y+m.v*scale);
+                            if(px<2||py<2||px>=layer.width-2||py>=layer.height-2)continue;
+                            check(read(px,py).every((n,i)=>n===m.color[i]),
+                                'Control marker mismatch '+JSON.stringify({w,h,aspect,px,py,actual:read(px,py),expected:m.color}));
+                            checked++;samples++;
+                        }
+                        check(checked>=5,'Insufficient visible control marks');
+                        // Verify transparent uncovered pixels and cropped
+                        // rectangles; no stretching the original into clip.
+                        for(const px of [2,layer.width-3])for(const py of [2,layer.height-3]){
+                            if(px<x-2||px>x+w*scale+2||py<y-2||py>y+h*scale+2){
+                                check(read(px,py)[3]===0,'Uncovered pixel must stay transparent');uncovered++;
+                            }
+                        }
+                        if(x< -2||y< -2||x+w*scale>layer.width+2||y+h*scale>layer.height+2)cropped++;
+                        presenter.setMode('photo');presenter.setMode('scene');presenter.setMode('overlay');
+                        check(source.toDataURL()===base,'Physical pixels changed by overlay');
+                        cases++;lastOrigin=origin;lastCamera=camera;lastAspect=aspect;
+                    }
+                }
+                check(cropped>0&&uncovered>0,'Crop and uncovered margins both exercised');
+                await clearStore(lib);
+                await unavailable(lastOrigin,lastCamera,lastAspect,'original unavailable');
+                await clearStore(archive);
+                await unavailable(lastOrigin,lastCamera,lastAspect,'result unavailable');
+                return {cases,samples,cropped,uncovered,dpr:devicePixelRatio};
+            }finally{
+                presenter.clear();graph.CancelPendingDraws();
+                if(graph.ResizeTimer)clearTimeout(graph.ResizeTimer);
+                host.remove();
+            }
+        }"""
+        for dpr in [1,2]:
+            with self.subTest(dpr=dpr):
+                context=self.browser.new_context(viewport={'width':1440,'height':900},device_scale_factor=dpr)
+                try:
+                    page=context.new_page()
+                    errors=[]
+                    page.on('pageerror',lambda exc:errors.append(str(exc)))
+                    page.goto(self.base_url,wait_until='load',timeout=30000)
+                    expect(page.locator('#ModernSceneTab')).to_be_enabled(timeout=30000)
+                    outcome=page.evaluate(exercise)
+                    self.assertEqual(outcome['cases'],16)
+                    self.assertEqual(outcome['dpr'],dpr)
+                    self.assertGreaterEqual(outcome['samples'],80)
+                    self.assertGreater(outcome['cropped'],0)
+                    self.assertGreater(outcome['uncovered'],0)
+                    self.assertEqual(errors,[])
+                finally:
+                    context.close()
 
     def test_calibration_legacy_json_import_apply_and_reload(self):
         workspace=self.open_physical_calibration()
