@@ -1529,3 +1529,7 @@ button{cursor:pointer}
 .modern-inline-viewer [data-viewer-frame]{flex:none;aspect-ratio:800 / 540;width:100%;min-height:80px;box-sizing:border-box}
 .modern-inline-viewer [data-viewer-selection-status]{flex:none}
 .modern-calibration-inline-help{font-size:12px}
+
+/* A context menu has one active item shared by pointer and keyboard. */
+.modern-photo-calibration .modern-calibration-context-menu button[role=menuitem]{background:transparent;border-color:transparent;color:#1f5f99}
+.modern-photo-calibration .modern-calibration-context-menu button[role=menuitem]:focus:not(:disabled){background:#236ab4;border-color:#236ab4;color:#fff;outline:none}

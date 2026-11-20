@@ -159,6 +159,12 @@ test('context menu clamps, routes activation and dismisses without a workspace a
   assert.equal(dom.style.left,'106px');assert.equal(dom.style.top,'96px');assert.equal(doc.activeElement,dom.children[1]);
   dom.children[0].onclick();assert.deepEqual(called,[]);
   let stopped=false;const key=k=>dom.events.keydown({key:k,preventDefault(){},stopPropagation(){stopped=true;}});
+  assert.equal(dom.className,'modern-calibration-context-menu');
+  dom.children[2].events.pointerenter({pointerType:'mouse'});assert.equal(doc.activeElement,dom.children[2]);
+  dom.children[0].events.pointerenter({pointerType:'mouse'});assert.equal(doc.activeElement,dom.children[2]);
+  dom.children[1].events.pointerenter({pointerType:'touch'});assert.equal(doc.activeElement,dom.children[2]);
+  assert.deepEqual(called,[]);assert.equal(menu.visible,true);
+  key('ArrowUp');assert.equal(doc.activeElement,dom.children[1]);
   key('ArrowDown');assert.equal(doc.activeElement,dom.children[2]);
   key('Enter');assert.equal(stopped,true);doc.activeElement.onclick();
   assert.deepEqual(called,['cancel']);assert.equal(menu.visible,false);assert.equal(doc.activeElement,source);

@@ -518,7 +518,7 @@
   }
   function createContextMenu(doc,env,workspace){
     const menu=doc.createElement('div');
-    menu.hidden=true;menu.setAttribute('role','menu');menu.setAttribute('aria-label','Correspondence actions');
+    menu.className='modern-calibration-context-menu';menu.hidden=true;menu.setAttribute('role','menu');menu.setAttribute('aria-label','Correspondence actions');
     Object.assign(menu.style,{position:'fixed',zIndex:'10050',minWidth:'190px',maxWidth:'calc(100vw - 12px)',
       maxHeight:'calc(100vh - 12px)',overflowY:'auto',padding:'4px',background:'#fff',color:'#17212d',
       border:'1px solid #a8bdcd',borderRadius:'6px',boxShadow:'0 5px 20px #0003'});
@@ -533,6 +533,7 @@
       for(const item of items){
         const b=doc.createElement('button');b.type='button';b.textContent=item.label;b.disabled=item.disabled;
         b.setAttribute('role','menuitem');Object.assign(b.style,{display:'block',width:'100%',textAlign:'left',padding:'7px 10px'});
+        b.addEventListener('pointerenter',event=>{if(!b.disabled&&event.pointerType!=='touch')b.focus({preventScroll:true});});
         b.onclick=()=>{if(b.disabled)return;close(true);run(item.id);};menu.append(b);buttons.push(b);
       }
       menu.style.left='0px';menu.style.top='0px';menu.hidden=false;
