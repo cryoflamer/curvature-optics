@@ -8,34 +8,55 @@
   root.CurvatureModernPhotoOverlayRenderer=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  function create(env){
+  function create(env,options={}){
     const registration=env.CurvatureModernPhotoOverlayRegistration;
     const state=env.CurvatureModernExperimentState;
     let generation=0,key=null,origin=null,reference=null,image=null;
     let source=null,layer=null,observer=null,layout=null,dimensions=null;
     let status='inactive',error='',pending=null;
-    // Temporary initial display policy until the dedicated .3 controls:
-    // a verified Scene association is shown at 50% opacity.
+    // Local presentation choices; not part of the physical experiment.
+    let mode='overlay',opacity=50,painted=false;
+    function effectiveMode(){return painted&&status==='ready'?mode:'scene';}
+    function notify(){if(typeof options.onChange==='function')options.onChange(snapshot());}
+    function present(){
+      if(layer){
+        const active=effectiveMode();
+        layer.style.display=active==='scene'?'none':'';
+        layer.style.opacity=String(active==='photo'?1:opacity/100);
+        // White outside the registered picture (and behind transparent pixels)
+        // in Photo only. Do not change opacity/visibility of the source canvas.
+        layer.style.background=active==='photo'?'#fff':'transparent';
+      }
+      notify();
+    }
+    function setMode(value){
+      if(!['scene','photo','overlay'].includes(value))throw RangeError('Unknown photo display mode');
+      mode=value;present();return snapshot();
+    }
+    function setOpacity(value){
+      if(!Number.isInteger(value)||value<0||value>100)throw RangeError('Invalid photo opacity');
+      opacity=value;present();return snapshot();
+    }
     function detach(){
       if(observer)observer.disconnect();
       observer=null;
       if(layer&&layer.parentNode)layer.parentNode.removeChild(layer);
-      layer=null;source=null;layout=null;dimensions=null;
+      layer=null;source=null;layout=null;dimensions=null;painted=false;
     }
     function clear(){
       generation++;detach();key=null;origin=null;reference=null;image=null;
-      status='inactive';error='';pending=null;
+      status='inactive';error='';pending=null;notify();
     }
     function fail(message){
       generation++;detach();reference=null;image=null;pending=null;
-      status='unavailable';error=String(message?.message||message);
+      status='unavailable';error=String(message?.message||message);notify();
     }
     function align(){
       if(!source||!layer||!dimensions)return false;
       if(source.width!==dimensions.width||source.height!==dimensions.height||
          !source.parentNode||source.parentNode!==layer.parentNode||
          !(source.offsetWidth>0&&source.offsetHeight>0)){
-        layer.style.display='none';return false;
+        painted=false;present();return false;
       }
       layer.style.left=source.offsetLeft+'px';layer.style.top=source.offsetTop+'px';
       layer.style.width=source.offsetWidth+'px';layer.style.height=source.offsetHeight+'px';
@@ -45,7 +66,7 @@
       if(!image||!source||!layout||!dimensions)return;
       if(source.width!==dimensions.width||source.height!==dimensions.height||!source.parentNode||
          !(source.offsetWidth>0&&source.offsetHeight>0)){
-        if(layer)layer.style.display='none';return;
+        painted=false;present();return;
       }
       if(!layer){
         layer=env.document.createElement('canvas');
@@ -56,11 +77,14 @@
         source.parentNode.appendChild(layer);
         if(env.ResizeObserver){
           observer=new env.ResizeObserver(()=>{
-            if(align()&&image&&layout)layer.style.display='';
+            // A valid CSS alignment does not authorize previously stale
+            // backing pixels. Only paint() can mark a completed layer ready.
+            if(align())present();
           });
           observer.observe(source);
         }
       }
+      painted=false;
       if(layer.width!==dimensions.width)layer.width=dimensions.width;
       if(layer.height!==dimensions.height)layer.height=dimensions.height;
       if(!align())return;
@@ -72,8 +96,7 @@
       // Canvas clips to its backing bounds. Never shrink the destination to
       // layout.clip, which would stretch the entire original into the crop.
       if(layout.clip)ctx.drawImage(image,r.x,r.y,r.width,r.height);
-      layer.style.display='';
-      status='ready';error='';
+      painted=true;status='ready';error='';present();
     }
     async function resolveOriginal(expected,token){
       const archive=env.CurvatureModernCalibrationResultArchive,
@@ -118,11 +141,11 @@
         }catch(e){
           // A hidden or resizing graph may report a temporary invalid
           // capture. Hide the stale layer and retry the next completed draw.
-          detach();status='layout-unavailable';error=String(e.message||e);return;
+          detach();status='layout-unavailable';error=String(e.message||e);notify();return;
         }
         if(image){status='loaded';error='';paint();return;}
         if(!pending){
-          status='loading';error='';
+          status='loading';error='';notify();
           const token=generation;
           pending=resolveOriginal(origin,token).catch(e=>{
             if(token===generation)fail(e);
@@ -132,9 +155,11 @@
     }
     function snapshot(){
       return {status,error,resultId:origin?.resultId||null,reference:reference?{...reference}:null,
+        photo:origin?{width:origin.photo.width,height:origin.photo.height}:null,
+        mode,opacity,effectiveMode:effectiveMode(),available:painted&&status==='ready',
         layout,backing:dimensions?{...dimensions}:null};
     }
-    return Object.freeze({capture,clear,snapshot});
+    return Object.freeze({capture,clear,snapshot,setMode,setOpacity});
   }
   return Object.freeze({create});
 }));

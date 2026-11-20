@@ -958,6 +958,36 @@ class ModernBrowserSmoke(unittest.TestCase):
         rect=presented['state']['layout']['rect']
         self.assertAlmostEqual(rect['width']/rect['height'],1176/791,places=10)
 
+        # Presentation controls must not redraw or change the physical Scene.
+        panel=self.page.locator('#ModernPhotoOverlayControls')
+        mode=panel.locator('#ModernPhotoOverlayMode')
+        opacity=panel.locator('#ModernPhotoOverlayOpacity')
+        expect(panel).to_be_visible()
+        expect(mode).to_have_value('overlay')
+        expect(panel.locator('#ModernPhotoOverlayStatus')).to_contain_text('Verified original')
+        self.page.evaluate("window.__photoControlRender=CurvatureModernApp.getLastRender()")
+        opacity.evaluate("(el) => {el.value='23';el.dispatchEvent(new Event('input',{bubbles:true}));}")
+        expect(overlay).to_have_css('opacity','0.23')
+        expect(panel.locator('#ModernPhotoOverlayOpacityValue')).to_have_text('23%')
+        mode.select_option('scene')
+        expect(overlay).to_be_hidden()
+        expect(opacity).to_be_disabled()
+        mode.select_option('photo')
+        expect(overlay).to_be_visible()
+        expect(overlay).to_have_css('opacity','1')
+        expect(overlay).to_have_css('background-color','rgb(255, 255, 255)')
+        expect(self.page.locator('#ModernGraphHost')).to_have_attribute('data-photo-display-mode','photo')
+        expect(opacity).to_be_disabled()
+        mode.select_option('overlay')
+        expect(overlay).to_have_css('opacity','0.23')
+        expect(overlay).to_have_css('background-color','rgba(0, 0, 0, 0)')
+        expect(opacity).to_be_enabled()
+        self.assertTrue(self.page.evaluate("window.__photoControlRender===CurvatureModernApp.getLastRender()"))
+        self.assertEqual(read_scene(),actual)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoOverlayState().layout.rect"),rect)
+        # Leave a nondefault mode active while saving: History is still pure Scene.
+        mode.select_option('photo')
+
         # Saving a calibrated Scene remains a separate explicit user action.
         save=self.page.locator('#ModernSnapshotSave')
         expect(save).to_be_visible(timeout=30000)

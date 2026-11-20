@@ -426,7 +426,7 @@
       }:undefined,
       onRemove:atmosphericShimmer?atmosphericShimmer.dispose:undefined}):null;
   var photoOverlay=root.CurvatureModernPhotoOverlayRenderer?
-    root.CurvatureModernPhotoOverlayRenderer.create(root):null;
+    root.CurvatureModernPhotoOverlayRenderer.create(root,{onChange:syncPhotoOverlayControls}):null;
   var shimmerFrame=null;
   var shimmerLastFrameMs=null;
   var shimmerPaused={Scene:false,A:false,B:false};
@@ -1033,6 +1033,41 @@
   }
   function persistenceStatus(message,isError){
     modernStatus(el('ModernPersistenceStatus'),message||'',isError?'error':'info');
+  }
+  // Overlay choices are local presentation state, not physical edits. The
+  // renderer notifies this same UI path after async verification or resize.
+  function syncPhotoOverlayControls(){
+    var panel=newUiEl('ModernPhotoOverlayControls'),host=newUiEl('ModernGraphHost');
+    if(!panel||!photoOverlay)return;
+    var p=photoOverlay.snapshot(),eligible=currentWorkspaceMode()==='scene'&&
+      state.calibrationOrigin?.target==='Scene';
+    panel.hidden=!eligible;
+    if(host)host.dataset.photoDisplayMode=eligible?p.effectiveMode:'scene';
+    var mode=newUiEl('ModernPhotoOverlayMode'),opacity=newUiEl('ModernPhotoOverlayOpacity'),
+      output=newUiEl('ModernPhotoOverlayOpacityValue'),statusNode=newUiEl('ModernPhotoOverlayStatus');
+    if(mode){mode.disabled=!p.available;mode.value=p.available?p.mode:'scene';}
+    if(opacity){opacity.disabled=!p.available||p.mode!=='overlay';opacity.value=String(p.opacity);}
+    if(output)output.textContent=p.opacity+'%';
+    if(!statusNode)return;
+    var message='',kind='info';
+    if(p.available&&p.reference&&p.photo)
+      message=p.reference.title+' · '+p.photo.width+' × '+p.photo.height+' · Verified original';
+    else if(p.status==='unavailable'){
+      message='Reference unavailable: '+p.error+' · Showing Scene only';kind='warning';
+    }else if(p.status==='layout-unavailable'){
+      message='Waiting for a valid viewport · Showing Scene only';kind='warning';
+    }else if(p.status==='ready'||p.status==='loaded'){
+      message='Waiting for reference presentation · Showing Scene only';
+    }else message='Loading verified reference photo…';
+    if(statusNode.textContent!==message||statusNode.dataset.statusKind!==kind)
+      modernStatus(statusNode,message,kind);
+  }
+  function bindPhotoOverlayControls(){
+    var mode=newUiEl('ModernPhotoOverlayMode'),opacity=newUiEl('ModernPhotoOverlayOpacity');
+    if(!photoOverlay||!mode||!opacity)return;
+    mode.addEventListener('change',function(){photoOverlay.setMode(mode.value);});
+    opacity.addEventListener('input',function(){photoOverlay.setOpacity(Number(opacity.value));});
+    syncPhotoOverlayControls();
   }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
@@ -4730,6 +4765,7 @@
     state.mode=data.display.mode;
     if(photoOverlay)photoOverlay.clear();
     state.calibrationOrigin=data.calibrationOrigin;
+    syncPhotoOverlayControls();
     cameraPositions=data.cameraPositions||[];
     cameraSequence=data.cameraSequence?data.cameraSequence.keyframes:[];
     initialCamera=null;
@@ -6991,6 +7027,7 @@
       throw RangeError('Invalid Modern UI mode');
     if(activateWorkspace(mode)===false)return false;
     if(mode!=='scene'&&photoOverlay)photoOverlay.clear();
+    syncPhotoOverlayControls();
     syncWorkspaceTabs();
     if(remember!==false)rememberWorkspaceMode(mode);
     return true;
@@ -7300,6 +7337,7 @@
         adapter.applyPreset(model,id);
         if(photoOverlay)photoOverlay.clear();
         state.calibrationOrigin=undefined;
+        syncPhotoOverlayControls();
         state.preset=id;state.scenePresetSelection=id;
         state.atmosphere=adapter.PRESETS[id].atmosphere||'standard';
         state.occlusionRadius=6371000;state.visibility={enabled:false,rangeKm:60};
@@ -7448,6 +7486,7 @@
     bindSettingsTabs();
     bindHelp();
     bindDisplayPanels();
+    bindPhotoOverlayControls();
     bindCompareEditor();
     bindShimmerControls();
     bindVisibilityControls();

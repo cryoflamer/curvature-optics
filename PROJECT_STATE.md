@@ -1,3 +1,42 @@
+## 8F.7c.3 — Scene Overlay Controls (#10)
+
+Previous CI 44783682787 at 063d4c5 was fully green (Node, architecture,
+Chromium). Static isolation correction from .2 is confirmed.
+
+Scene viewport now has a reference-photo toolbar when the current
+Scene carries a calibration origin. Scene only hides the photo;
+Photo only shows the same registered rectangle at full opacity with a
+white viewport background (including uncovered/transparent pixels),
+and hides physical HUD/target/temperature overlays without changing
+their preferences; Overlay shows the reference at the chosen 0–100%
+opacity. A disabled selector/slider and explicit status explain loading,
+invalid viewport or unavailable archive/original. Verified title and
+original dimensions are shown. No alternative photo is substituted.
+
+The controls are CSS presentation only: no physical redraw, camera edit,
+archive write, fit, history fingerprint or experiment-schema change.
+Default remains Overlay 50%; choices are retained in the current page
+session across navigation/association changes and reset on reload.
+The photo registration itself does not change with the display mode.
+Ordinary Scene thumbnail capture still uses the physical canvas layers.
+
+The renderer reports requested and effective mode separately. Photo only
+cannot mask Scene while the photo is missing, loading or backing pixels
+are stale. CSS-only resize alignment cannot resurrect invalid old pixels;
+a fresh completed layout/paint is required. The UI observes synchronous
+and asynchronous presentation status via one callback.
+
+Seven focused renderer scenarios / 99 assertions passed in an isolated
+JS harness (two new scenarios, 39 additional assertions). The live
+Soundly Apply Chromium test now switches all three modes and opacity,
+checks the same renderer result identity, unchanged Scene and registered
+rectangle, and saves a snapshot while Photo only is selected.
+Full CI pending; actual original Soundly photo unavailable here.
+
+Next: 8F.7c.4 — Fixed Registration and Lifecycle, including real camera
+motion, render/layout transitions, History/reload and pure thumbnails.
+Then .5 — Soundly Overlay Qualification. Compare remains separate.
+
 ## 8F.7c.2 — Registered Overlay Renderer (#10)
 
 Previous CI 44782151978: all 45 Chromium tests passed; Node 2210 passed,

@@ -1,3 +1,32 @@
+## 8F.7c.3 — Scene Overlay Controls
+
+The Scene toolbar appears only for a Scene calibration association. It
+exposes Scene only, Photo only, Overlay and a 0–100% photo opacity slider.
+No change invokes a physical redraw or recomputes registration. Scene only
+hides the independent photo layer; Photo only makes it opaque with white
+behind transparent/uncovered pixels, without hiding or altering the
+underlying physical backing canvas. Scene HUD, target and temperature
+indicators are visually suppressed in Photo only, without changing
+their own preferences. Overlay uses transparent background and selected
+alpha. The slider is disabled except for a ready Overlay.
+
+The controller separates the user's requested mode from effective mode.
+Loading, verification failure and stale backing-store dimensions fall
+back to Scene only; a valid CSS alignment alone cannot restore a stale
+layer. A successful completed paint re-enables the requested mode.
+A common notification callback updates the toolbar synchronously and
+after async original verification or viewport changes. Show original title,
+dimensions and verified status, or a clear unavailable/waiting reason.
+
+Display settings are page-session only, default Overlay 50%, retained
+across navigation and association changes in that session, reset on
+reload. No storage schema, physical snapshot fingerprint, archive,
+calibration parameters or History source canvas change. .4 owns full
+lifecycle/interaction acceptance and .5 real Soundly qualification.
+Two new focused regression scenarios plus extended live Chromium Apply
+checks cover display controls and no physical rerender. The predecessor
+CI 44783682787 is green; current full CI still required.
+
 ## 8F.7c.2 — Registered Overlay Renderer
 
 The Scene layer is a separate transparent backing Canvas, a sibling of

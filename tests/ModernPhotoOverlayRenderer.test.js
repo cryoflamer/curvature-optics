@@ -13,7 +13,7 @@ const origin={version:1,target:'Scene',resultId:'calibration-result-v1-'+digest,
     rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.7555}};
 const nextTurn=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
-  const calls=[],children=[],observers=[];
+  const calls=[],children=[],observers=[],updates=[];
   const host={appendChild(c){children.push(c);c.parentNode=this;},
     removeChild(c){children.splice(children.indexOf(c),1);c.parentNode=null;}};
   const source={width:810,height:1440,offsetWidth:405,offsetHeight:720,
@@ -31,14 +31,14 @@ function fixture(){
       calls.push(['find',identity]);const record={id:'photo',title:'Original',original:{dataUrl:'data:image/png;base64,test',width:1176,height:791}};
       await verify(record);return {id:record.id,record};}},
     CurvatureModernReferenceImageImport:{async verifyOriginal(record){calls.push(['verify',record.id]);}}};
-  const presenter=renderer.create(env);
+  const presenter=renderer.create(env,{onChange:s=>updates.push(s)});
   function camera(){
     const {width,height}=source;
     return {screenSize:1,sceneSize:99,zoom:5,pixelTransform:{width,height,contextScale:2,
       scaleX:height,scaleY:-height,offsetX:width/2,offsetY:height/2}};
   }
   const capture=(o=origin,c=camera())=>presenter.capture(o,source,c,9/16);
-  return {env,source,host,children,observers,calls,presenter,capture,camera};
+  return {env,source,host,children,observers,calls,updates,presenter,capture,camera};
 }
 test('verified original is clipped by an independent transparent noninteractive backing canvas',async()=>{
   const f=fixture();f.capture();
@@ -101,4 +101,48 @@ test('late archive or image decode cannot repaint a cleared or replaced associat
     this.naturalWidth=1176;this.naturalHeight=791;resolve();};});}};
   f.capture();await nextTurn();f.presenter.clear();release();await nextTurn();
   assert.equal(f.children.length,0);assert.equal(f.presenter.snapshot().status,'inactive');
+});
+
+test('three display modes and opacity change only presentation and never repaint the source',async()=>{
+  const f=fixture();f.capture();await nextTurn();
+  const layer=f.children[0],before=f.calls.slice(),layout=f.presenter.snapshot().layout;
+  f.presenter.setOpacity(23);
+  assert.equal(layer.style.opacity,'0.23');
+  f.presenter.setMode('scene');
+  assert.equal(layer.style.display,'none');
+  assert.equal(f.presenter.snapshot().effectiveMode,'scene');
+  f.observers[0].fn();assert.equal(layer.style.display,'none');
+  f.presenter.setMode('photo');
+  assert.equal(layer.style.display,'');assert.equal(layer.style.background,'#fff');
+  assert.equal(layer.style.opacity,'1');
+  assert.equal(f.presenter.snapshot().effectiveMode,'photo');
+  f.presenter.setOpacity(0);assert.equal(layer.style.opacity,'1');
+  f.presenter.setMode('overlay');
+  assert.equal(layer.style.background,'transparent');assert.equal(layer.style.opacity,'0');
+  f.presenter.setOpacity(100);assert.equal(layer.style.opacity,'1');
+  assert.deepEqual(f.calls,before);
+  assert.deepEqual(f.presenter.snapshot().layout,layout);
+  assert.deepEqual(f.source.style,{opacity:'',transform:''});
+  assert.equal(f.updates.at(-1).opacity,100);
+  for(const n of [-1,101,1.5,NaN,'20'])assert.throws(()=>f.presenter.setOpacity(n),/opacity/);
+  assert.throws(()=>f.presenter.setMode('bad'),/mode/);
+});
+test('Photo only falls back to Scene while loading, unavailable, or backing pixels are stale',async()=>{
+  const f=fixture();f.presenter.setMode('photo');f.capture();
+  assert.equal(f.presenter.snapshot().effectiveMode,'scene');
+  assert.equal(f.updates.at(-1).status,'loading');
+  await nextTurn();
+  assert.equal(f.updates.at(-1).effectiveMode,'photo');
+  f.source.width*=2;f.source.height*=2;f.observers[0].fn();
+  assert.equal(f.presenter.snapshot().available,false);
+  assert.equal(f.updates.at(-1).effectiveMode,'scene');
+  f.presenter.setOpacity(50);assert.equal(f.children[0].style.display,'none');
+  f.capture();assert.equal(f.presenter.snapshot().effectiveMode,'photo');
+  f.presenter.clear();
+  assert.equal(f.updates.at(-1).effectiveMode,'scene');assert.equal(f.children.length,0);
+  f.env.CurvatureModernCalibrationResultArchive.get=async()=>null;
+  f.capture();await nextTurn();
+  assert.equal(f.updates.at(-1).status,'unavailable');
+  assert.equal(f.updates.at(-1).effectiveMode,'scene');
+  assert.equal(f.updates.at(-1).available,false);
 });

@@ -1561,3 +1561,17 @@ button{cursor:pointer}
 .modern-photo-calibration #ModernCalibrationPairList:not(:has(.is-fit-failure)) :is(th,td):nth-child(6){display:none}
 
 .modern-inline-viewer[hidden],#ModernCalibrationInlinePanel[hidden],#ModernCalibrationResultModel[hidden]{display:none!important}
+
+/* Registered reference photo: display-only controls, not physical settings. */
+.modern-photo-overlay-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:9px 17px;background:#192d47;color:#d6e4f3;font-size:12px}
+.modern-photo-overlay-controls[hidden]{display:none}
+.modern-photo-overlay-controls label{display:flex;align-items:center;gap:8px;font-weight:600}
+.modern-photo-overlay-controls select{min-width:112px;padding:5px 8px;border:1px solid #7890aa;border-radius:6px;background:#fff;color:#213d59;font:inherit}
+.modern-photo-overlay-opacity input{width:clamp(90px,15vw,180px);accent-color:#83b8f4}
+.modern-photo-overlay-opacity output{min-width:3em;text-align:right;font-variant-numeric:tabular-nums}
+.modern-photo-overlay-controls .modern-status-message{flex:1 1 180px;overflow-wrap:anywhere;min-width:0}
+.modern-photo-overlay-controls .modern-status-message[data-status-kind="warning"]{color:#ffd1a0}
+.modern-photo-overlay-controls :disabled{opacity:.6}
+#ModernGraphHost[data-photo-display-mode="photo"] .modern-camera-telemetry,
+#ModernGraphHost[data-photo-display-mode="photo"] .modern-target-direction,
+#ModernGraphHost[data-photo-display-mode="photo"] .modern-temperature-column{visibility:hidden}
