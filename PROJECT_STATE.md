@@ -1,3 +1,19 @@
+## 8F.6g — Independent endpoint drag transactions
+
+Integrated Globe saved and draft markers are draggable on either viewport.
+Model drag uses automatic visible material picking, CSS hysteresis and Ctrl
+surface bypass independently of manual pick mode. Transient ghost moves,
+without changing the camera, rows or draft; invalid targets show a red
+cross. Release validates the canonical anchor (duplicate protection),
+updates only that endpoint, and repivots to the accepted model point
+without shifting its projection. Invalid/outside release, Escape,
+pointer cancellation, capture loss and window blur leave the original.
+Saved changes preserve ID, opposite endpoint, weight, role, order and
+unrelated draft/selection; exactly one Undo entry (no entry for no-op).
+Draft moves never change saved rows. Fit invalidates only on real changes.
+Legacy routes unchanged. Undo preserving unrelated draft and Redo remain
+8F.6i; empty-background pivot reset next (8F.6h). Full CI/browser pending.
+
 ## 8F.6f — Implicit correspondence wizard
 
 Integrated Globe Automatic now sends a selected physical material point

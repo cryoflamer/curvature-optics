@@ -475,8 +475,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;const materialHits=[],gestureHits=[];
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';}});
+  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;const materialHits=[],gestureHits=[],moves=[];let acceptMove=false;
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';},onMoveEndpoint:(target,hit)=>{moves.push({target,hit});return acceptMove;}});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openPhysical(banks);
@@ -506,6 +506,7 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const beforeMarker=api.snapshot().view;
   canvas.events.pointerdown(markerEvent);canvas.events.pointermove({...markerEvent,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,clientX:markerEvent.clientX+25});
   assert.deepEqual(api.snapshot().view,beforeMarker);
+  assert.equal(moves.length,1);assert.equal(moves[0].target.id,'physical');
   canvas.events.pointerdown({...markerEvent,button:2});canvas.events.pointermove({...markerEvent,button:2,clientX:markerEvent.clientX+25});canvas.events.pointerup({...markerEvent,button:2,clientX:markerEvent.clientX+25});
   assert.equal(api.snapshot().view.yaw,beforeMarker.yaw);assert.ok(api.snapshot().view.pan[0]>beforeMarker.pan[0]);
   api.setCorrespondences([],null);api.resetScene();
@@ -522,6 +523,25 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   canvas.events.pointerdown({...vertexClick,timeStamp:200});canvas.events.pointerup({...vertexClick,timeStamp:200});
   assert.equal(gestureHits.at(-1).kind,'double-click');assert.equal(gestureHits.at(-1).target.kind,'draft');
   assert.equal(materialHits.length,1);
+  // An independent draft endpoint drag uses actual automatic picks and
+  // never invokes the ordinary selection/pairing callback during motion.
+  moves.length=0;acceptMove=true;
+  const beforeDrag=api.sessionSnapshot();
+  canvas.events.pointerdown(vertexClick);
+  canvas.events.pointermove({...vertexClick,clientX:400,clientY:300,ctrlKey:true});
+  assert.deepEqual(api.sessionSnapshot(),beforeDrag);assert.equal(moves.length,0);
+  canvas.events.pointerup({...vertexClick,clientX:400,clientY:300,ctrlKey:true});
+  assert.equal(moves.length,1);assert.equal(moves[0].target.kind,'draft');assert.equal(moves[0].hit.kind,'surface');
+  assert.equal(materialHits.length,1);assert.equal(api.snapshot().view.yaw,beforeDrag.view.yaw);
+  const afterDrag=api.sessionSnapshot();
+  // Release outside or lose capture: no commit or camera change.
+  canvas.events.pointerdown(vertexClick);canvas.events.pointermove({...vertexClick,clientX:400,clientY:300});
+  canvas.events.pointerup({...vertexClick,clientX:-10,clientY:300});
+  assert.equal(moves.length,1);assert.deepEqual(api.sessionSnapshot(),afterDrag);
+  canvas.events.pointerdown(vertexClick);canvas.events.pointermove({...vertexClick,clientX:400,clientY:300});
+  canvas.events.lostpointercapture({pointerId:1});
+  assert.equal(moves.length,1);assert.deepEqual(api.sessionSnapshot(),afterDrag);
+  acceptMove=false;
   api.setPendingVertex(null);api.clearLocalPoint();api.resetScene();
   // Ctrl changes the stationary hover and click selection; no Alt dependency.
   const near={...eventForFraming(),clientX:autoVertex[0]+6,clientY:autoVertex[1]-6};

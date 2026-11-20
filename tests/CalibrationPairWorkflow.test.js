@@ -83,3 +83,34 @@ test('implicit pairing links only a complete draft on its marker, in either orde
   linkDraftGesture(w,{kind:'double-click',target:{kind:'draft'}},()=>false);
   assert.equal(w.canCommit,true);assert.deepEqual(w.rows,[]);
 });
+
+test('saved endpoint moves preserve unrelated draft, order, identity and history',()=>{
+  const editor=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  const engine=require('../src/geometry/CurvatureGeometryEngine');
+  const resolver=require('../src/calibration/CameraMaterialAnchorResolver');
+  const model={showModel:1,rEarth:6371000,Height:12,Pan:3,CameraNorth:25,CameraEast:15,
+    NObjects:[2,0],ObjType:[3,3],ObjDist:[1000,1200],ObjDeltaDist:[100,100],
+    ObjSideType:[0,0],ObjSidePos:[30,40],ObjSideVar:[0,0],ObjSizeType:[0,0],ObjSize:[10,20],ObjSizeVar:[0,0]};
+  const ps=engine.createObjectSequenceScene({...model,geometryRadius:model.rEarth},0,true,
+    {opticsNeutral:true,physicalSurface:true,curvature:1/model.rEarth}).primitives;
+  const session=resolver.create(model),index=ps.findIndex(p=>p.metadata?.landmarkOwner&&p.points.length>=3);
+  const p=ps[index],material=(id,i)=>session.fromPick({kind:'vertex',bank:0,index,primitive:p.metadata.landmarkPrimitive,owner:p.metadata.landmarkOwner,indices:[i],weights:[1]},id);
+  const a=editor.pair(material('a',0),[11,12],100,100,2,false),b=editor.pair(material('b',1),[21,22],100,100,3,true);
+  const w=createPairWorkflow();w.replaceAll([a,b]);w.selectPhoto([50,60]);w.selectModel(material('draft',2));w.select('b');
+  const draft=w.snapshot().draft;
+  assert.equal(editor.moveSavedEndpoint(w,'a',{landmark:material('new-id',2)},100,100,model),true);
+  assert.equal(w.rows[0].landmark.id,'a');assert.deepEqual(w.rows[0].pixel,a.pixel);
+  assert.equal(w.rows[0].included,false);assert.equal(w.rows[0].weight,2);assert.deepEqual(w.rows[1],b);
+  assert.deepEqual(w.snapshot().draft,draft);assert.equal(w.activePair,'b');assert.equal(w.undoStack.length,1);
+  const before=w.snapshot();
+  assert.equal(editor.moveSavedEndpoint(w,'a',{landmark:material('other-id',2)},100,100,model),false);
+  assert.throws(()=>editor.moveSavedEndpoint(w,'a',{landmark:b.landmark},100,100,model),/already paired/);
+  assert.throws(()=>editor.moveSavedEndpoint(w,'a',{pixel:[-1,10]},100,100,model),/Invalid correspondence/);
+  assert.deepEqual(w.snapshot(),before);
+  assert.equal(editor.moveSavedEndpoint(w,'a',{pixel:[31,32]},100,100,model),true);
+  assert.deepEqual(w.rows[0].landmark,before.rows[0].landmark);
+  assert.deepEqual(w.snapshot().draft,draft);assert.equal(w.undoStack.length,2);
+  assert.equal(editor.moveSavedEndpoint(w,'a',{pixel:[31,32]},100,100,model),false);
+  assert.equal(w.undoStack.length,2);
+  assert.equal(w.canCommit,true);
+});
