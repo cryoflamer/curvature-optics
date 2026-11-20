@@ -1,3 +1,29 @@
+## 8F.7a.2 — Photo-centric research workflow audit (revised plan)
+
+User approved a Scene overlay with independent photo aspect, Canvas Direct
+fit as a starting point for normal Accurate experimentation, and reciprocal
+navigation between History, Reference Image Library and unfinished
+calibration projects. See docs/landmark-editor-audit.md 8F.7a.2; it supersedes
+the mandatory arbitrary-Scene-aspect and renderer-equivalence gates of
+8F.7a. Existing photo links belong to Animation keyframes, not History
+snapshots; reuse the existing original library and History, not a second
+physical journal. Keep the four Scene aspects; register original photo
+angular coordinates against an applied baseline and real renderer pixel
+transform, not fit-to-canvas stretching or tracking current camera edits.
+Proposed content-bound photo identity, immutable archived calibration
+result, bounded optional experiment origin, distinct current vs derived
+fit status, protected apply and existing explicit Save Snapshot. Unrelated
+old Scene recovery must commit before applying. Existing active draft
+remains usable; migrate later to independent Calibration Projects, with
+guarded switches, per-project UI and non-cascading deletion. Use Animation
+workspace concurrency patterns, not its concrete schema/localStorage
+payload. History and reference-library reverse lookups reuse authoritative
+records; full research bundle later. No runtime/schema changes; source
+audit only. Next: 8F.7b.1 minimal identity/result archive/state and pure
+transfer mapping; then 8F.7b.2 Apply/recovery, c Overlay, d History,
+e Calibration Projects, f Reference Library related navigation, g closure.
+Full revised acceptance in audit.
+
 ## 8F.7a — Calibration to Scene architecture audit
 
 User confirmed the 8F.6 tests passed and approved completing the original

@@ -1,3 +1,358 @@
+## 8F.7a.2 — Photo-centric research workflow audit
+
+Baseline 11c416d (8F.7a audit). User-approved refinements: preserve normal
+Scene aspect ratios, register the photograph as an overlay, accept Canvas
+Direct calibration as a starting point for Accurate Scene experiments,
+and enable navigation among calibrated snapshots, photos and unfinished
+calibration work from History, Reference Image Library and Photo Calibration.
+This section supersedes the mandatory custom-aspect and cross-renderer parity
+gates and the implementation order in 8F.7a below. The protected apply
+transaction and captured-hypothesis requirements remain valid. Audit only.
+
+### Source inventory: what already exists
+
+| Component | Current source contract / extension point |
+| --- | --- |
+| Modern experiment | `ModernExperimentState.capture/validate` owns a strict v1 allowlist (camera, two object banks, surface/atmosphere, Compare, display, optional camera positions/sequence). No reference-image or calibration field. `ModernApp.experimentSnapshot/applyExperiment` transport this through working session, URL and History. |
+| History | `ModernExperimentHistory` IDB snapshots store uses numeric local IDs, immutable validated experiments, exact/physical signatures, features, bounded thumbnail, names, pins, source and timestamps. Portable v1 only accepts experiment/name/description/pinned/thumbnail/createdAt. record/import deduplicate exact signatures, recovery/manual pins protected, auto pruned. |
+| History UI | `ModernExperimentHistoryFilters.normalize/update/matches/filter/active` has keyword, mode, geometry, atmosphere and A/B relations, with AND constraints on one side. `ModernApplicationPreferences.historyFilters` independently normalizes the saved fields. `ModernApp.refreshHistoryList/updateHistorySelection` selects and focuses a card without restoring it; existing transient Picker focus can show an entry outside saved filters. `ModernExperimentHistoryUI.makeCard/renderDetails` and `ModernSnapshotPresentation.inspect/inspectorMarkup` share read-only presentation with Studio. |
+| Reference Image Library | `src/animation/ModernReferenceImageLibrary.js` owns originals, metadata revisions and thumbnails in IDB observations keyed by string ID. list returns compact metadata, get returns original; create/importAssets validate/quota-check; importAssets remaps conflicting IDs based on complete record content, not a universal photo-content identity. Limits 100 records / 64 Mi characters. Original bytes remain fixed under metadata edits; deletion explicitly disabled while keyframe links exist. `ModernReferenceImageLibraryUI.mount/fill/reload` lazily loads selected original; no related-calibration/History query. |
+| Existing photo links | `ModernAnimationProject` keyframes own `referenceImageIds` and local `sourceSnapshotId`; `ModernAnimationLibrary.referenceIds/collectReferences/remapReferences` implements portable bundle v2 with required original assets when linked (v1 still valid). This is keyframe-to-photo association, NOT a direct History snapshot-to-photo binding. No automatic inference that a source History snapshot is calibrated just because a later keyframe has a reference. Library UI explanatory text about exports predates bundle v2. Keep these paths working; reuse asset verification/remapping but not keyframe ID semantics. |
+| Photo Calibration | `ModernPhotoCalibrationEditor.photoChoices/refreshSources` aggregates library, saved animation projects and built-in demo originals; library links are project/keyframe names, demo IDs are namespaced. Local file import uses calibration-photo as a local ID; portable calibration v1/v2/v3 embeds original and observations + best result. `persist/restoreDraft` writes one version-2 draft at IDB curvature-photo-calibration/draft/active, including photo bytes, scene, committed and pending pairs, Undo/Redo, fit, stage, selected owner and views. `saveInline/readInline` uses a SINGLE localStorage curvature-calibration-inline-v2 slot keyed by physicalSessionId and photo ID. New photo/reset/import currently replaces work after confirmation, not a project switch. |
+| Animation workspace precedent | `ModernAnimationDraftAutosave.normalizeCollection/withWorkspace/withoutWorkspace/reconcileCollection/writeCollectionMerged` implements multi-workspace collection, baseline-aware merging, fork on concurrent edits, guarded deletion and session-local recovery. `ModernAnimationWorkspaceSwitch` persists outgoing work and checks generation before activation; `ModernAnimationWorkspacePersistence` serializes writes and absorbs late completion. Pattern worth reusing; these concrete modules depend on animation schemas, library IDs, wizard/demo callbacks and localStorage backup of relatively small drafts. Do not transplant them unchanged or write original photo data URLs to localStorage. |
+
+Audited current source at baseline, not just earlier design notes. No live
+browser experiment in this audit.
+
+### Overlay: register angular coordinates, not outer Canvas aspect
+
+Keep the four normal Scene aspect presets and their existing codec domain.
+Original photo width/height remain exact calibration inputs and persisted
+reference dimensions; they need not be the Scene viewport ratio. Do not
+round the photo's ratio, stretch it to fill the graph, or silently change
+the optimized focal field to compensate. Transfer the seven fitted fields,
+Eye-Lvl aim and captured physical hypothesis, select a supported Scene
+display aspect (retain captured supported aspect if available, otherwise
+the user's normal Scene aspect/default), keep the reference dimensions
+separately. Show photo bounds, possibly clipped by the Scene. A presentation
+zoom/fit can expose the entire registered rectangle later, but must scale
+both layers together and not mutate physical camera parameters.
+
+Source basis: `CameraPhysicalPose.photoCamera` uses centered full-raster
+coordinates with screenSize=1, zoom=1, objectZExtend=0;
+`CurvaturePhysicalCamera.create` derives sceneSize using the aspect-dependent
+3:2 convention; `CurvatureMainCanvasRenderer.configureCamera` captures the
+actual GraphX3DX camera/window via `CurvatureCanvasProjection.capture`.
+`CameraLandmarkProjection.cameraProjector` and
+`CurvatureCanvasDirectPreview.cameraProjection` use the same perspective
+scale q = screenSize / sceneSize * (distance - objectZExtend) * zoom.
+The existing renderer already returns projectionCamera when captureProjection
+is requested, for both direct and accurate paths. Use the actual completed
+render's transform, not DOM CSS dimensions or assumed height/width.
+
+Proposed initial mathematical contract (derive/test before shipping):
+for photo and Scene calibration-baseline cameras with identical position
+and orientation, let q_p and q_s denote that perspective scale. For original
+photo dimensions W,H, photo coordinates are
+u = W/2 + H*q_p*(right/depth),
+v = H/2 - H*q_p*(up/depth).
+For the Scene captured window scales a_x,a_y (usually signed opposite)
+and offsets b_x,b_y, the corresponding registration is
+x = b_x + a_x*q_s/(H*q_p)*(u-W/2),
+y = b_y - a_y*q_s/(H*q_p)*(v-H/2).
+For square-pixel rendering the two positive scales agree; verify tolerance,
+do not silently distort. Use backing-store pixels and transform to a
+presentation layer with correct CSS/DPR mapping. If the viewport clips
+part of the photo, clip in presentation rather than rescale independently.
+A known photo point and a ray at the image center are test oracles. In the
+Soundly example use original 1176x791 (not rounded preview). For identical
+pose and same optical rays this mapping preserves the projected positions
+at a different aspect; it does not assert that Canvas Direct and Accurate
+produce identical rays.
+
+Crucial distinction: the registration rectangle is anchored to the
+*applied fit's baseline* and the selected viewport layout, not auto-refit
+to the changing live camera or geometry. Recompute for resize/DPR and
+explicit display aspect changes using baseline intrinsics. Do not use
+live focal/pose changes to track/warp/realign the observation: that
+would conceal the residual being investigated. Camera changes, atmosphere
+or radius changes must remain visible against the fixed photo. If user
+explicitly wants a different registration/zoom, keep it separate and
+labeled, with reset to calibrated registration. No per-point homography
+or elastic fitting. Retain source identity even when Overlay is off.
+
+Initial modes: Scene only, Photo only, Overlay opacity. Split and Blink
+are optional follow-up, not prerequisites to Apply. A separate presentation
+layer must not repaint or mutate underlying optics, intercept Scene
+navigation unintentionally, or contaminate ordinary accurate History
+thumbnails. Reuse existing canvas-layer and presentation conventions;
+avoid adapting the Animation keyframe photo panel into a physical
+registration engine. A saved pure Scene render remains distinct from
+an optionally exported overlay composite.
+
+### Optical method policy
+
+Transfer the best valid Canvas Direct camera and captured atmosphere,
+without a mandatory Accurate-vs-Direct equality gate. Render normal
+Accurate Scene afterwards, optionally select existing supported quality
+modes by user choice. Treat fit RMS explicitly as Canvas Direct residual
+under its source hypothesis and original raster; do not claim it is the
+Accurate Scene error, or silently re-optimize/adjust temperature gradient.
+The user may adjust the atmosphere/gradient after transfer, or create
+another fit of the same compatible observations under a different
+hypothesis. Measure renderer discrepancy when helpful; do not block use
+of the fitted pose because the optical methods differ. Vacuum same-method
+projection/overlay is a useful regression oracle, not a requirement that
+all physics models produce equal images.
+
+### Data model: one physical journal, editable projects, immutable results
+
+Proposed entities (contracts; no names or schemas in production yet):
+
+1. Reference observation: existing Image Library original plus canonical
+   content identity. Use SHA-256 of decoded original file bytes and the
+   validated decoded orientation/dimensions; hash bytes, not the data URL
+   spelling or editable title/source metadata. Local library ID and
+   built-in demo namespace remain lookup aliases, NOT portable identity.
+   Distinct encoded files of the same scene are distinct unless explicitly
+   related later; no automatic perceptual deduplication. Local-file
+   calibration and demo original should be resolved/imported into the
+   existing library before an applied link becomes durable, collision
+   checked by bytes/dimensions, using existing verification/quota policy.
+   Reuse a matching original; the ordinary image metadata may differ.
+   Preserve assertion of source attribution, no external upload.
+2. Calibration Project: stable project ID, name, timestamps and revision,
+   one editable working draft (including captured hypothesis, reference
+   identity, committed and pending material observations, Undo/Redo,
+   stage, free fields, Fit/Validation roles, best candidate, view state).
+   A project can exist before a fit or before a photo is selected. Store
+   optional view state by project/session, not the shared inline slot.
+   Support Open/New/Rename/Duplicate/Delete later. Duplicate with same
+   compatible anchors to test an alternate atmosphere without re-picking.
+   Do not introduce a separate global correspondence-set database yet:
+   clone/version rows inside projects and results; promote reusable sets
+   only when the later workflow justifies it.
+3. Calibration Result: immutable revision identity, binding to exact
+   reference original, captured model/physics, initial and best pose,
+   committed rows including roles, method/free fields and validated
+   evaluation/status. Freeze at explicit Apply (and optional explicit
+   archive in subsequent project UI), not every Worker progress event.
+   Store project ID as an optional historical parent; not identity of a
+   mutable draft. Preserve stopped/stalled valid candidates as such.
+   Result can be reopened as a cloned editable project from any linked
+   snapshot; editing/refitting cannot rewrite a previously linked result.
+   Archive original once via asset store, not as a data URL in every
+   result or snapshot. Reuse the portable calibration validator and
+   material anchor binding; retain full observations and source data
+   for reproducibility. Content-bound ID/digest plus collision checks
+   prevents imports from redirecting older snapshot links.
+4. Scene Snapshot: existing validated physical experiment in History,
+   with bounded optional observation reference and calibration-origin
+   summary (immutable result ID/digest, photo identity and dimensions,
+   fit-method/status, Fit/Validation counts and RMS if known, baseline
+   fitted camera/context identity). A generic photo-associated snapshot
+   need not have a fit. Several snapshots can share one result or photo;
+   a new fit has a new result identity. One primary reference initially,
+   no general graph database. Do not duplicate physical snapshot storage
+   in Photo Calibration.
+
+Keep the compact origin in canonical experiment state (optional validated
+extension, old v1 inputs must still work; decide version strategy with
+compatibility tests before implementation), rather than a sidecar attached
+only after saving History: `experimentSnapshot/applyExperiment`, session
+autosave, protected recovery, URL and portable History must round-trip the
+link. An active calibration origin then exists BEFORE user clicks Save.
+No image bytes or entire fit/rows in the canonical physical JSON or URL.
+Compact origin sufficient to show attribution even when full local result
+or original is unavailable; distinguish unavailable asset, unavailable
+archived result, and ordinary unlinked snapshot. Do not create fake draft
+or substitute a same-name image when resolving an imported link.
+Use verified digests not local numeric History IDs for cross-browser links.
+Compare's shared-camera A/B semantics must remain unchanged. Independent
+fitted cameras from separate snapshots can be inspected via restore/overlay
+and related list; a future independent-snapshot comparison is a distinct
+feature, not current Compare.
+
+Fit applicability: derive status from canonical current inputs against
+stored fit baseline. Exact/tolerance-normalized seven camera fields
+(account for model.Update numerical round-trip), Eye-Lvl and calibrated
+object/geometry/atmospheric hypothesis; distinguish active vs inactive
+atmosphere controls; display-only guides/aspect/opacity do not invalidate
+fit as long as registered photo projection uses the baseline. A changed
+camera/aim/physical hypothesis is "Derived from calibration", not a fresh
+calibrated fit. A Compare A/B experiment with changed or mixed physical
+hypotheses must not be labeled calibrated for both sides. Keep origin
+historical; reset/new unrelated preset clears it, derived edits preserve
+it with explicit current-vs-source summary; restore/reload derives same
+status. Historical fit RMS is never a generic live score.
+
+### History and reference library navigation
+
+History remains one physical-snapshot journal with current pinned/recent,
+selection, restore, edit metadata, export and deletion behaviors. Add
+filter group for all / calibration-linked (exact and derived) / other,
+and optional Calibrated vs Derived distinction and photo-identity filter.
+A photo-linked but never calibrated snapshot is not calibrated. Extend
+both HistoryFilters and ApplicationPreferences normalization plus controls
+and shared presentation, with legacy defaults and Studio picker/wizard
+regressions (these use same filter helper). Keyword search includes source
+photo title and compact calibration data, but exact filter uses identity.
+Filter operation is read-only. Each linked card/details shows historical
+method/status/RMS, photo and origin applicability clearly. Actions:
+Restore Scene, View original, Open calibration result/project (explicit
+open/clone, preserve other in-progress work), Related experiments. Reuse
+existing selected-card focus outside filters, without modifying the
+user's saved filters or auto-restoring the scene.
+
+Reference Image Library adds related snapshot/results/projects counts and
+links for selected photo, and start calibration for that photo using
+explicit current Scene capture. Derive the reverse lookup from authoritative
+History entries, project summaries and result records by content identity,
+not a second persistent index initially. The existing Library limits make
+read-only scans reasonable; do not read all full-resolution photos for
+every card or block startup. Refresh on committed store changes and guard
+old asynchronous selection response (existing library is lazy with a
+busy/dirty check). Keep existing animation keyframe links visible but
+separately identified. Existing raw link names are not calibration proof.
+Use stable lookup even after title edits or ID remaps. Preserve focused
+navigation on missing/deleted item without changing Scene. A later
+referential index only if profiling warrants it.
+
+### Multi-project calibration storage and migration
+
+One mutable active draft is not sufficient to resume work on a second
+photo. Add a lightweight Calibration Projects library inside existing
+Photo Calibration, not a second immutable physical History. A landing
+list can show photo, name, stage, row count, fit status/RMS, updated time,
+linked snapshot count; opening an item restores its exact draft, including
+pending endpoint and Undo/Redo. Keep one active editor at a time. Separate
+per-project revision/checkpoint and immutable result archive from view
+preferences. A named project may contain additional completed runs later;
+archive only applied/explicit results initially.
+
+Migration: validate existing IDB draft/active and optional matching inline
+view (physicalSessionId and photo identity). Create a project UUID and
+adopt the old record with all rows, photo, fit and editor state, atomic
+versioned migration / marker. Do not remove old record or old localStorage
+slot until new durable checkpoint verifies; idempotent reload, no
+duplicate migration. Unsupported Flat draft must remain recoverable/exportable
+per existing rejection policy; not silently dropped or converted. Prevent
+startup auto-enter from overwriting a pending restore. Stored photo bytes
+can be migrated to a verified Library asset before referencing; retain
+old copy on quota/failure. Keep one-project Apply usable while adding
+multi-project UI afterwards.
+
+Reuse Animation's sequencing / generation / conflict-fork pattern, not the
+concrete schemas. IDB project records with per-ID revisions and small
+metadata index; transaction compare-and-swap on current revision.
+Serialize writes with fixed project ID + generation captured at scheduling,
+not the active ID at eventual commit. Concurrent same-project edits:
+explicit conflict/fork preserving both; independent projects do not
+overwrite each other; stale delete cannot wipe newer work. Switching
+while Worker active: explicitly stop/retain best or refuse until stopped;
+discard late Worker/image/restore callbacks using session/project generation.
+Require outgoing checkpoint success before switching, preserve original
+draft if incoming validation/decode fails, restore UI busy flags.
+Return an observable persistence outcome (current persist is void and
+catches internally; not adequate as an apply/switch commit promise).
+Store large originals and full checkpoint only in IDB, localStorage
+optional bounded UI/session metadata (no data URLs or pretend
+synchronous backup of huge records). Expose unsaved status and portable
+export if durable storage fails. Protect unfinished and linked data;
+no silent eviction.
+
+Delete rules: deleting snapshot never deletes projects/results/photos;
+deleting mutable project never deletes archived results used by snapshots
+(or implicitly deletes snapshots/photos). Reopen archived result as a
+new project even if its original parent was deleted. Initially retain
+archived results, keep Library original deletion disabled as now.
+Later explicit cleanup requires checking snapshots, projects, archives,
+Studio saved/draft/Undo links, missing imported refs and race protection;
+no cascade. Imported historical dangling links remain inspectable as
+metadata. Reverse counts derived from authoritative stores, not manually
+maintained counters.
+
+### Apply first; portability and identity foundations
+
+Do not wait for all project-library features. First create the minimal
+durable identity/immutable-result infrastructure and pure mapping; preserve
+the current single draft. Validate source/target, stop or disallow running
+Worker/pending pair edits, capture stable candidate, verify original,
+commit result archive, then protect outgoing physical Scene with existing
+History record(...,'recovery',...) and await success. Recheck candidate,
+navigation and exact outgoing signature after awaits; no overwriting
+newer edits. Because stores are separate IDB databases there is no global
+atomic transaction: stage durable prerequisites before apply, retry
+idempotently by content/revision; an unlinked archived result/recovery
+checkpoint after an aborted apply is recoverable, not justification to
+delete data or fake success. Reuse applyExperiment/setMode/controls/
+autosave/Previous flow with rollback and render-error distinction from
+8F.7a. Calibration draft and archive stay intact. No automatic final
+manual snapshot; user saves via existing button. A new unrelated Scene
+or failed application must not retain wrong calibration origin.
+
+Fingerprint/portability dependencies: `ModernExperimentFingerprint.exactSignature`
+currently JSON-serializes the full validated experiment (except Compare
+selected editor); include canonical observation/result identity in exact
+signature (not mutable alias/title), so independently sourced equal
+physics does not collapse, and the existing Save button doesn't falsely
+hide. Keep physicalSignature/auto-history semantics and thumbnail viewKey
+based on render inputs, independent of provenance and photo overlay UI.
+Audit History import dedup, Session/URL round-trip, Studio baseExperiment
+and camera/physics applyValue, compatibility reference contracts and
+exports; these validate full experiment and may compare JSON equality.
+Provenance is not a new animated physical parameter; derived frame edits
+do not inherit a claim of a fresh fit. History portable export of compact
+links remains usable without bytes, explicitly label metadata-only.
+A portable research export with verified originals and immutable results
+can reuse the Animation Library asset collection/remap design; imported
+same-ID-different-content records must be rejected/remapped without
+rewriting existing associations. Preserve standalone old calibration
+exports v1/v2/v3, History v1 and animation v1/v2; decide optional versioned
+extensions before coding. Never silently strip a known origin or silently
+replace an original.
+
+### Revised sequence and acceptance
+
+- 8F.7b.1 — canonical compact reference/calibration origin, asset identity
+  and minimal immutable result archive; pure validated calibration-to-
+  Scene mapping with supported aspect and Eye-Lvl, old source defaults
+  and tests. No new global aspect domain. Persistence failure/retry,
+  content collision, archived candidate immutability, versioned old data
+  compatibility, exact vs derived classification and fingerprint checks.
+- 8F.7b.2 — Apply Best Camera to Scene, protected outgoing recovery,
+  candidate/generation checks, ordinary Scene render with explicit existing
+  Save Snapshot. Reload/restore retains link and draft. Exercise real
+  Soundly 14-point camera fit (1176x791), old import and unrelated outgoing
+  Scene, failure cases, previous and normal Back to Scene.
+- 8F.7c — registered Reference Photo Overlay, photo only/scene only/opacity;
+  numerical angular mapping tests for different ratios/resize/DPR and
+  live pose/focal changes (photo must not follow fit errors); browser
+  validation with real reference. No renderer parity gate. Split/Blink
+  optional. Pure accurate snapshot thumbnails remain unaffected.
+- 8F.7d — History filters/details/navigation for exact calibrated/derived/
+  other and selected photo; restore existing pinned and ordinary entries;
+  portable origin-only links and explicit unavailable asset/result status.
+- 8F.7e — Calibration Projects library, migrate active legacy draft,
+  per-project autosave/inline state, independent open/new/duplicate,
+  guarded switches/deletes/reload/conflicts; reopen immutable result
+  as a separate draft. No new physical journal.
+- 8F.7f — Reference Image Library related items and reciprocal focused
+  navigation; optional explicit full research bundle (original+result+
+  snapshots/projects) after compact portability tests.
+- 8F.7g — full Node/Chromium/architecture and manual end-to-end research
+  cycle; close stage only after CI. 8F.8 may add sharing material
+  correspondences across verified compatible geometry, profile sweep
+  and independent snapshot comparison. Do not imply a unique atmospheric
+  solution from minimum RMS.
+
+No production code, schema or tests changed in this audit. Formula and
+UI/identity contracts are proposed and need actual numerical/browser
+verification. Existing CI on 5c33675 was green per 8F.7a; this docs-only
+revision is not a new test run.
+
+---
+
 ## 8F.7a — Calibration to Scene: transfer architecture audit
 
 Baseline: 5c33675b21d7ecad8f1110c5f02c3ff9153d6967; GitHub Actions run
