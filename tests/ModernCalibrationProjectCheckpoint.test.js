@@ -159,13 +159,15 @@ test('malformed checkpoint, stale fit, pending out of bounds and unrelated inlin
     /fit result|Stored fit/);
   await assert.rejects(checkpoint.captureVerified(d,{...inline(d),id:'unrelated'},environment,library,importer),
     /inline session/);
-  const {project}=await capture(d);
+  const {project,environment:verifiedEnvironment,library:verifiedLibrary}=await capture(d);
   const corrupted=copy(project);
   corrupted.checkpoint.payload.draft.record={original:{dataUrl:'data:image/png;base64,AAAA'}};
   await assert.rejects(checkpoint.prepare(corrupted,environment,library,importer),
     /embedded-photo/);
   const other=copy(project);other.overview.rowCount=7;
-  await assert.rejects(checkpoint.prepare(other,environment,library,importer),/overview disagree/);
+  // Use the verified photo catalog from capture, so the overview guard is reached.
+  await assert.rejects(checkpoint.prepare(other,verifiedEnvironment,verifiedLibrary,importer),
+    /overview disagree/);
 });
 test('photo identity is verified and reused; no false link to a new title or alias is introduced',async()=>{
   const d=draft(),environment=env(),library=catalog(environment);

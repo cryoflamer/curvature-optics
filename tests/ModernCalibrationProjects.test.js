@@ -284,3 +284,172 @@ test('storage errors and mismatching metadata fail closed without guessing a pro
   assert.equal(db.tables.get(store.PROJECTS).get(A).revision,1);
   await assert.rejects(store.remove(db,A,1),/metadata does not match/);
 });
+
+
+// 8F.7p.3: one-time adoption, recovery, and competing-tab safety.
+const migration=require('../src/ui/modern/ModernCalibrationProjectMigration');
+const importer=require('../src/ui/modern/ModernReferenceImageImport');
+const sample=require('./fixtures/soundly-mixed-calibration.json');
+function legacyRecord(){
+  const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC','base64');
+  bytes.writeUInt32BE(1176,16);bytes.writeUInt32BE(791,20);
+  return {version:1,id:'soundly',title:'Source Soundly',
+    original:{dataUrl:'data:image/png;base64,'+bytes.toString('base64'),width:1176,height:791}};
+}
+function legacyDraft(version=2){
+  const rows=copy(sample.observations);
+  if(version===1)for(const row of rows)delete row.included;
+  const d={version,scene:{model:copy(sample.model),
+      physics:{atmosphere:'vacuum',temperatureProfile:copy(sample.options.temperatureProfile)}},
+    record:legacyRecord(),activeSource:{source:'demo',demoId:'soundly',
+      key:'demo_soundly',links:['Original'],imported:false},
+    rows,pending:[330,151],pendingModel:copy(rows[0].landmark),
+    activePair:rows[0].landmark.id,editing:rows[0].landmark.id,
+    explicitAdd:false,view:{scale:.8,x:8,y:14},
+    physicalSessionId:'physical-session-1',undoStack:[],redoStack:[],
+    selectedOwner:{bank:0,objectType:8},weight:'2',
+    freeParameters:sample.options.freeParameters.slice(),
+    fitBest:null,fitStatus:'Stopped; best valid fit retained if available',
+    viewBest:false,stage:'calibration',resultCamera:'initial',
+    resultViews:{initial:{scale:1,x:10,y:20},best:null},residualMode:'off'};
+  if(version===1){
+    delete d.selectedOwner;delete d.residualMode;delete d.resultViews;
+    delete d.physicalSessionId;d.magnifierSessionId='physical-session-1';
+  }
+  return d;
+}
+function migrationEnv(db,inline=null){
+  return {indexedDB:db,crypto:webcrypto,
+    localStorage:{getItem:key=>key===migration.INLINE_KEY?inline:null},
+    Image:class{constructor(){this.naturalWidth=1176;this.naturalHeight=791;}async decode(){}}};
+}
+function originalCatalog(env){
+  const originals=new Map();
+  return {originals,
+    async ensureOriginal(_db,record,_crypto,verify){
+      await verify(record);
+      const identity=await importer.identify(record,env);
+      if(!originals.has(identity.sha256))originals.set(identity.sha256,copy(record));
+      return {identity,row:{record:copy(originals.get(identity.sha256))},reused:false};
+    },
+    async findOriginal(_db,identity,_crypto,verify){
+      const saved=originals.get(identity.sha256);
+      if(!saved)return null;
+      await verify(saved);
+      return {id:saved.id,record:copy(saved)};
+    }};
+}
+const inlineState=d=>({id:d.physicalSessionId||d.magnifierSessionId,
+  photo:d.record.id,sessions:{initial:{source:JSON.stringify({bank:0}),
+    session:{zoom:1.2,pivot:[1,2,3]}}}});
+
+test('migration adopts a verified V2 original and matching inline exactly once, without changing raw draft',async()=>{
+  const raw=legacyDraft(),before=copy(raw),inline=inlineState(raw);
+  const db=memoryIndexedDB(raw),env=migrationEnv(db,JSON.stringify(inline)),adapter=originalCatalog(env);
+  const first=await migration.migrate(env,{adapter,decoder:importer,now:200});
+  assert.equal(first.status,'migrated');
+  assert.equal(first.project.revision,1);
+  assert.equal(first.project.overview.rowCount,14);
+  assert.equal(first.project.checkpoint.payload.draft.record,null);
+  assert.equal(JSON.stringify(first.project).includes('data:image'),false);
+  assert.equal(first.project.checkpoint.payload.inline.id,raw.physicalSessionId);
+  assert.equal(first.project.checkpoint.payload.draft.pending[0],330);
+  assert.deepEqual(await store.legacy(db),before);
+  assert.equal((await store.list(db)).length,1);
+  assert.equal((await store.migrationMarker(db)).projectId,first.project.id);
+  assert.equal(JSON.parse(await migration.rawRecovery(db)).record.original.dataUrl,
+    raw.record.original.dataUrl);
+  const again=await migration.migrate(env,{adapter,decoder:importer,now:300});
+  assert.equal(again.status,'already');
+  assert.equal(again.project.id,first.project.id);
+  assert.equal((await store.list(db)).length,1);
+});
+
+test('legacy V1 fit-role upgrade is explicit and retains original raw bytes',async()=>{
+  const raw=legacyDraft(1),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const upgraded=migration.normalizeLegacy(raw);
+  assert.equal(upgraded.version,2);
+  assert.equal(upgraded.physicalSessionId,'physical-session-1');
+  assert.ok(upgraded.rows.every(row=>row.included===true));
+  assert.equal(upgraded.residualMode,'off');
+  assert.deepEqual(raw.rows[0].included,undefined);
+  const adopted=await migration.migrate(env,{adapter,decoder:importer,now:400});
+  assert.equal(adopted.status,'migrated');
+  assert.equal(adopted.project.checkpoint.payload.draft.rows.length,14);
+  assert.deepEqual(await store.legacy(db),raw);
+});
+
+test('migration does not lose unresolved Flat, corrupt V1 or unrelated inline',async()=>{
+  const flat=legacyDraft();flat.scene.model.showModel=2;
+  const db=memoryIndexedDB(flat),env=migrationEnv(db),adapter=originalCatalog(env);
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer}),/Flat/);
+  assert.equal(await store.migrationMarker(db),null);
+  assert.deepEqual(await store.legacy(db),flat);
+  const unknown=legacyDraft(1);unknown.unreviewedParameter=4;
+  assert.throws(()=>migration.normalizeLegacy(unknown),/Unknown legacy V1/);
+  const wrong=legacyDraft(),other={...inlineState(wrong),id:'different'};
+  assert.equal(migration.matchingInline(migrationEnv(db,JSON.stringify(other)).localStorage,wrong),null);
+  assert.deepEqual(await store.list(db),[]);
+});
+
+test('atomic marker/project write prevents duplicate migration in concurrent tabs',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const results=await Promise.all([
+    migration.migrate(env,{adapter,decoder:importer,now:500}),
+    migration.migrate(env,{adapter,decoder:importer,now:501})
+  ]);
+  assert.deepEqual(results.map(x=>x.status).sort(),['already','migrated']);
+  assert.equal(results[0].project.id,results[1].project.id);
+  assert.equal((await store.list(db)).length,1);
+  assert.deepEqual(await store.legacy(db),raw);
+});
+
+test('failed marker transaction aborts both rows, preserves source, and allows retry',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  db.failMutation(store.CONTROL,'add');
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,now:600}),
+    /Injected transaction failure/);
+  assert.equal(await store.migrationMarker(db),null);
+  assert.deepEqual(await store.list(db),[]);
+  assert.deepEqual(await store.legacy(db),raw);
+  const repaired=await migration.migrate(env,{adapter,decoder:importer,now:601});
+  assert.equal(repaired.status,'migrated');
+});
+
+test('concurrent change to legacy source rejects adoption and leaves raw export available',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const earlier=adapter.ensureOriginal;
+  adapter.ensureOriginal=async(...args)=>{
+    const saved=await earlier(...args);
+    db.tables.get('draft').set('active',{...copy(raw),fitStatus:'Newer editor draft'});
+    return saved;
+  };
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,now:700}),
+    /Legacy calibration changed/);
+  assert.equal(await store.migrationMarker(db),null);
+  assert.equal((await store.list(db)).length,0);
+  assert.match(await migration.rawRecovery(db),/Newer editor draft/);
+});
+
+test('migration quota failure leaves legacy untouched and no marker',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  for(let i=1;i<=store.MAX_PROJECTS;i++){
+    await store.create(db,project('calibration-project-v1-'+i.toString(16).padStart(32,'0')));
+  }
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,now:800}),
+    /storage limit/);
+  assert.equal(await store.migrationMarker(db),null);
+  assert.deepEqual(await store.legacy(db),raw);
+  assert.equal((await store.list(db)).length,store.MAX_PROJECTS);
+});
+
+test('already-migrated marker survives project deletion and never resurrects legacy draft',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const adopted=await migration.migrate(env,{adapter,decoder:importer,now:900});
+  await store.remove(db,adopted.project.id,1);
+  const again=await migration.migrate(env,{adapter,decoder:importer,now:901});
+  assert.equal(again.status,'already-removed');
+  assert.equal(again.project,null);
+  assert.equal((await store.list(db)).length,0);
+  assert.deepEqual(await store.legacy(db),raw);
+});
