@@ -1069,16 +1069,33 @@ class ModernBrowserSmoke(unittest.TestCase):
         storage=self.page.locator('#ModernPersistenceStatus')
         ready_status=lambda side: self.page.locator('#ModernCalibrationApplicability'+side)
         fields=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField']
-        def checkpoint():
-            expect(storage).to_have_text('Working session saved',timeout=30000)
-            return self.page.evaluate("""async () => {
-                const codec=CurvatureModernExperimentState,f=CurvatureModernExperimentFingerprint;
-                const local=codec.validate(JSON.parse(localStorage.getItem(codec.STORAGE_KEY)));
-                const remote=(await CurvatureModernSessionAutosave.read(indexedDB)).experiment;
-                if(f.exactSignature(local)!==f.exactSignature(remote))
-                    throw Error('Local and IndexedDB checkpoints differ');
-                return remote;
-            }""")
+        def checkpoint(side=None,before=None):
+            # Poll resolved IDB values explicitly. Playwright's page predicate
+            # can treat an async Promise itself as truthy before it resolves.
+            # History fingerprints intentionally ignore selected A/B; durable
+            # checkpoint equality must include it.
+            return self.page.evaluate("""async ({side,before}) => {
+                const codec=CurvatureModernExperimentState,autosave=CurvatureModernSessionAutosave;
+                const canonical=e=>JSON.stringify(codec.validate(e));
+                const deadline=performance.now()+30000;
+                let detail='';
+                do {
+                    const row=await autosave.read(indexedDB);
+                    const local=JSON.parse(localStorage.getItem(codec.STORAGE_KEY));
+                    const stamp=Number(localStorage.getItem(autosave.META_KEY));
+                    if(row&&local){
+                        const remote=row.experiment;
+                        const matches=canonical(local)===canonical(remote);
+                        detail=JSON.stringify({local:local.compare.selected,remote:remote.compare.selected,
+                            stamp,remoteStamp:row.savedAt,matches});
+                        if(matches&&stamp===row.savedAt&&(!side||remote.compare.selected===side)&&
+                           (!before||canonical(before)===canonical(remote)))
+                            return remote;
+                    }
+                    await new Promise(resolve=>setTimeout(resolve,50));
+                }while(performance.now()<deadline);
+                throw Error('Expected durable checkpoint not reached: '+detail);
+            }""",{'side':side,'before':before})
         def configure_flat(side):
             self.page.locator('#ModernModelTab'+side).click()
             self.page.locator('#ModernSettingsSurface').click()
@@ -1089,13 +1106,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.locator('#ModernModelAtmosphere').select_option('standard')
             # Wait for the intended durable state, not a previous saved
             # status that can remain visible during the autosave debounce.
-            self.page.wait_for_function("""async side => {
-                const row=await CurvatureModernSessionAutosave.read(indexedDB);
-                const e=row?.experiment;
+            self.page.wait_for_function("""side => {
+                const e=JSON.parse(localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY));
                 return e?.display.mode==='compare'&&e.compare.selected===side&&
                     e.compare[side].surface==='flat'&&e.compare[side].atmosphere==='standard';
             }""",arg=side,timeout=30000)
-            e=checkpoint()
+            e=checkpoint(side=side)
+            self.assertEqual(e['compare']['selected'],side)
             self.assertEqual(e['compare'][side]['surface'],'flat')
             self.assertEqual(e['compare'][side]['atmosphere'],'standard')
             return e
@@ -1152,7 +1169,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(ready_status(side)).to_contain_text('Calibrated · archived fit inputs match',timeout=30000)
             other='B' if side=='A' else 'A'
             expect(ready_status(other)).to_contain_text('Derived · no independent fit')
-            current=checkpoint()
+            current=checkpoint(side=side)
             self.assertEqual(current['display']['mode'],'compare')
             self.assertEqual(current['compare']['selected'],side)
             self.assertEqual(current['calibrationOrigin']['target'],side)
@@ -1284,13 +1301,8 @@ class ModernBrowserSmoke(unittest.TestCase):
 
         # Real protected History restore (not a simulated state assignment).
         self.page.locator('#ModernPreviousExperiment').click()
-        self.page.wait_for_function("""async before => {
-            const row=await CurvatureModernSessionAutosave.read(indexedDB);
-            return row&&CurvatureModernExperimentFingerprint.exactSignature(row.experiment)===
-                CurvatureModernExperimentFingerprint.exactSignature(before);
-        }""",arg=before_b,timeout=30000)
+        self.assertEqual(checkpoint(before=before_b),before_b)
         expect(ready_status('A')).to_contain_text('associated fit inputs changed')
-        self.assertEqual(checkpoint(),before_b)
 
         # Apply to Scene and use the new archive-only transition for both
         # explicit destinations; recover Scene in between.
@@ -1311,12 +1323,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(current['calibrationOrigin']['resultId'],calibrated_b['calibrationOrigin']['resultId'])
             if side=='A':
                 self.page.locator('#ModernPreviousExperiment').click()
-                self.page.wait_for_function("""async before => {
-                    const row=await CurvatureModernSessionAutosave.read(indexedDB);
-                    return row&&CurvatureModernExperimentFingerprint.exactSignature(row.experiment)===
-                        CurvatureModernExperimentFingerprint.exactSignature(before);
-                }""",arg=scene,timeout=30000)
-                self.assertEqual(checkpoint(),scene)
+                self.assertEqual(checkpoint(before=scene),scene)
 
         # Restore the mixed B checkpoint through the actual public URL.
         # Same browser has the verified immutable archive; a foreign one

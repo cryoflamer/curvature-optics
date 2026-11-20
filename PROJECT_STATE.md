@@ -1,3 +1,15 @@
+## 8F.7d.5b — Durable checkpoint qualification synchronization (#11)
+
+CI on d5e7ebd reached the genuine fit and write-failure checks;
+Chromium 50/51. Outgoing checkpoint retained selected A while local
+storage had selected B. The qualification now polls resolved IDB reads
+with a bounded timeout and matches full validated state plus checkpoint
+timestamp, not the History fingerprint (which intentionally ignores the
+selected side). Configure waits for synchronous local target physics
+before awaiting the durable checkpoint; restore checks use the same
+explicit polling. No production change or relaxed comparison.
+Embedded JS parse checked; native CI remains pending.
+
 ## 8F.7d.5a — Compare qualification settings navigation (#11)
 
 CI 44810282627 on 1be3947: Node 2233 passed, one skipped;
