@@ -1,3 +1,13 @@
+## 8F.7p.3a — Legacy/Modern static inventory correction (#14)
+
+The new migration module is intentionally not loaded by either HTML entrypoint
+before the guarded startup integration in stage 8F.7p.5. The reviewed
+Legacy/Modern isolation fixture now records it as an unbound source module,
+its three static CommonJS dependencies and its new Node test caller.
+No production behavior or migration logic changed.
+The full CI acceptance result remains pending for this corrective commit.
+Reasoning level before this corrective commit: Medium / 2.
+
 ## 8F.7p.3 — Explicit idempotent legacy migration and recovery (#14)
 
 Baseline 41d997ec, CI 44824348072 and 44824338033 green.
