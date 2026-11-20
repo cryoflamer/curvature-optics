@@ -1,3 +1,25 @@
+## 8F.7c.5a — Qualification Fix (#10)
+
+CI 44792344236: Node and architecture green; Chromium failed the
+new raster matrix at 2:3 in both DPR contexts, plus the existing
+immediate workspace reload test. The matrix had changed CanvasRatioHW
+at constant physical width; GraphX3DX only reallocates backing height
+when backing width changes. Exercise distinct actual CSS widths and
+assert CSS dimensions as well as backing aspect, retaining every pixel,
+crop, DPR and unavailable-original assertion.
+
+The downloaded browser diagnostics showed workspace preference Scene
+but restored shared URL Compare, with history.state null. Preserve an
+exact auto-generated experiment URL in tab-local sessionStorage as a
+fallback only for a true reload; clear that marker on a fresh explicit
+shared link. Keep the normal history-state and explicit-link precedence.
+Added a deterministic lost-history-state reload regression and fresh
+same-URL navigation/reload checks; no retries or weakened assertions.
+
+ModernApp and embedded browser matrix JS syntax checked. Full Chromium
+CI is needed to confirm both fixes. Issue #10 remains open; #11 follows
+only after green qualification. Physical optics and overlay math unchanged.
+
 ## 8F.7c.5 — Reference Photo Overlay Qualification (#10)
 
 Previous CI 44790816422 on 64666ea: all three jobs green, including the

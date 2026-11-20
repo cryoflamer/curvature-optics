@@ -534,6 +534,7 @@
   // Its history marker survives reload, so browser workspace preferences remain
   // authoritative without giving an imported/shared URL the wrong mode.
   var AUTO_EXPERIMENT_HISTORY_KEY='__curvatureModernAutoExperimentUrlV1';
+  var AUTO_EXPERIMENT_RELOAD_KEY='curvature-modern-auto-experiment-reload-v1';
   var EDITED_SHARED_URL_KEY='__curvatureModernEditedSharedUrlV1';
   var WORKSPACE_ENTRY_KEY='__curvatureModernWorkspaceChoiceV1';
   var persistence={ready:false,explicitUrl:false,timer:null,dirty:false,latestTimestamp:0,
@@ -1152,7 +1153,14 @@
           var previous=root.history.state;
           var historyState=Object.assign({},previous&&typeof previous==='object'?previous:{});
           historyState[AUTO_EXPERIMENT_HISTORY_KEY]=true;
-          root.history.replaceState(historyState,'',experiments.urlWithExperiment(url.href,current));
+          var generatedUrl=experiments.urlWithExperiment(url.href,current);
+          // Chromium can lose top-level history.state across an immediate
+          // reload while an embedded demo is navigating. Remember only the
+          // exact generated URL in this tab, never classify a fresh link
+          // navigation as local merely because its bytes happen to match.
+          try{if(root.sessionStorage)root.sessionStorage.setItem(AUTO_EXPERIMENT_RELOAD_KEY,generatedUrl);}
+          catch(ignore){}
+          root.history.replaceState(historyState,'',generatedUrl);
         }
       }catch(error){errors.push('URL: '+error.message);}
     }
@@ -4846,11 +4854,19 @@
       calibrationApplyBusy=false;updatePresetNavigation();
     }
   }
+  function generatedUrlReload(){
+    try{
+      var navigation=root.performance&&root.performance.getEntriesByType&&
+        root.performance.getEntriesByType('navigation')[0];
+      return !!(navigation&&navigation.type==='reload'&&root.sessionStorage&&
+        root.sessionStorage.getItem(AUTO_EXPERIMENT_RELOAD_KEY)===root.location.href);
+    }catch(ignore){return false;}
+  }
   function isExplicitSharedExperiment(){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
     var historyState=root.history&&root.history.state;
-    var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true);
+    var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true)||generatedUrlReload();
     var editedHere=!!(historyState&&historyState[EDITED_SHARED_URL_KEY]===root.location.href);
     return params.has(experiments.PARAM)&&!generated&&!editedHere;
   }
@@ -4859,6 +4875,10 @@
     var params=new URLSearchParams(root.location.search||'');
     var explicit=isExplicitSharedExperiment();
     persistence.explicitUrl=explicit;
+    // A fresh visit to a copied link must remain explicit on its later
+    // reload, even if this same tab once generated the identical URL.
+    if(explicit)try{if(root.sessionStorage)root.sessionStorage.removeItem(AUTO_EXPERIMENT_RELOAD_KEY);}
+    catch(ignore){}
     var data=null,source='';
     try{
       if(explicit){

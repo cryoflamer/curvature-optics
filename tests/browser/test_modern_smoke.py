@@ -1237,8 +1237,16 @@ class ModernBrowserSmoke(unittest.TestCase):
                     const origin=resultApi.origin(saved.row.record,'Scene');
                     presenter.clear();presenter.setMode('overlay');
                     for(const aspect of aspects){
-                        graph.CanvasRatioHW=1/aspect;graph.LastCanvasWidth=0;
+                        // GraphX3DX's backing resize is width-triggered.
+                        // A height-only ratio edit at the same width leaves
+                        // its old backing height untouched. Exercise real
+                        // width changes as well as the new requested aspect.
+                        const cssWidth=[360,362,384,288][aspects.indexOf(aspect)];
+                        host.style.width=cssWidth+'px';
+                        graph.CanvasRatioHW=1/aspect;
                         graph.UpdateCanvasSize();
+                        near(source.offsetWidth,cssWidth,1,'Graph CSS width');
+                        near(source.offsetHeight,cssWidth/aspect,1,'Graph CSS height');
                         model.deviceRatio=aspect;
                         const render=renderer.renderPhysical(graph,model,{atmosphere:'vacuum',opticalQuality:'canvas-direct',
                             geometryBackend:'canvas',captureProjection:true,captionMode:'off',showCaptions:false});
@@ -1561,6 +1569,39 @@ class ModernBrowserSmoke(unittest.TestCase):
                         'aria-pressed','true' if key==mode else 'false')
                 expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible() if mode=='calibration' else expect(self.page.locator('#ModernPhotoCalibration')).to_be_hidden()
                 expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible() if mode=='animation' else expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+
+    def test_generated_experiment_url_reload_without_history_state(self):
+        self.open_modern()
+        ready=self.page.locator('#ModernPhotoCalibrationOpen')
+        expect(ready).to_be_enabled(timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""() =>
+            history.state?.__curvatureModernAutoExperimentUrlV1===true &&
+            new URL(location.href).searchParams.has('experiment')""",timeout=30000)
+        url=self.page.url
+        self.page.locator('#ModernSceneTab').click()
+        self.page.wait_for_function("CurvatureModernApp.getWorkspaceMode()==='scene'")
+        self.assertEqual(self.page.url,url)
+        # Reproduce the actual CI artifact: URL survives but its own
+        # top-level history.state is lost. Keep the immediate reload.
+        self.page.evaluate("history.replaceState(null,'',location.href)")
+        self.page.reload(wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'scene')
+        expect(self.page.locator('#ModernPersistenceStatus')).not_to_have_text('Restored shared URL')
+        self.assertEqual(self.page.evaluate("performance.getEntriesByType('navigation')[0].type"),'reload')
+
+        # A deliberate fresh visit to the exact same URL is a shared link,
+        # not a local continuation. Its subsequent reload must stay explicit.
+        self.page.goto('about:blank')
+        self.page.goto(url,wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Restored shared URL')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'compare')
+        self.page.reload(wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Restored shared URL')
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'compare')
 
     def test_explicit_workspace_link_then_user_choice_survives_reload(self):
         self.open_modern()
