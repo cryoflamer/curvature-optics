@@ -848,6 +848,89 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)).calibrationOrigin.target"""),'A')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+
+    def test_archived_scene_transition_and_compare_applicability(self):
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        data=self.page.evaluate("""data => {
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters,points=rows.map(row=>({
+                id:row.landmark.id,status:'visible',observed:row.pixel,
+                predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight
+            }));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(rows,freeParameters,model,physics,1176,791)};
+            return data;
+        }""",data)
+        self.import_calibration_experiment(data)
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        expect(button).to_be_enabled(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        button.click()
+        scene_status=self.page.locator('#ModernCalibrationApplicabilityScene')
+        to_b=self.page.locator('#ModernCalibrationSceneToB')
+        expect(scene_status).to_contain_text('Calibrated',timeout=30000)
+        expect(to_b).to_be_enabled(timeout=30000)
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text('Save Snapshot to keep this Scene',timeout=30000)
+        # A derived, edited Scene is still explicitly re-applicable.
+        self.page.evaluate("""() => {
+            const m=CurvatureModernApp.getModel();m.Height+=7;m.Update();
+            document.getElementById('ModernRender').click();
+        }""")
+        expect(scene_status).to_contain_text('associated fit inputs changed',timeout=30000)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Working session saved',timeout=30000)
+        outgoing=self.page.evaluate("""() => JSON.parse(localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY))""")
+        # Archive-only transition deliberately works without the photo.
+        clear="""apiName => new Promise((resolve,reject)=>{
+            const api=window[apiName],request=indexedDB.open(api.DATABASE);
+            request.onerror=()=>reject(request.error);
+            request.onsuccess=()=>{
+                const db=request.result,tx=db.transaction(api.STORE,'readwrite');
+                tx.oncomplete=()=>{db.close();resolve();};
+                tx.onabort=()=>{db.close();reject(tx.error);};
+                tx.objectStore(api.STORE).clear();
+            };
+        })"""
+        self.page.evaluate(clear,'CurvatureModernReferenceImageLibrary')
+        self.page.once('dialog',lambda dialog:dialog.dismiss())
+        to_b.click()
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),49.8)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        to_b.click()
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text('Save Snapshot to keep this Compare',timeout=30000)
+        a=self.page.locator('#ModernCalibrationApplicabilityA')
+        b=self.page.locator('#ModernCalibrationApplicabilityB')
+        expect(a).to_contain_text('Derived · no independent fit',timeout=30000)
+        expect(b).to_contain_text('Calibrated · archived fit inputs match')
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),42.8)
+        self.assertTrue(self.page.evaluate("""async outgoing => {
+            const rows=await CurvatureModernApp.getHistoryStore().list();
+            const f=CurvatureModernExperimentFingerprint;
+            return rows.some(row=>row.pinned&&f.exactSignature(row.experiment)===f.exactSignature(outgoing));
+        }""",outgoing))
+        # Side-only physics changes do not invalidate the associated B.
+        self.page.locator('#ModernModelTabA').click()
+        self.page.evaluate("""() => {
+            const n=document.getElementById('ModernModelAtmosphere');
+            n.value='standard';n.dispatchEvent(new Event('change',{bubbles:true}));
+        }""")
+        expect(b).to_contain_text('Calibrated')
+        self.page.evaluate("""() => {
+            const m=CurvatureModernApp.getModel();m.Height+=2;m.Update();
+            document.getElementById('ModernRecalculateCompare').click();
+        }""")
+        expect(b).to_contain_text('associated fit inputs changed')
+        expect(a).to_contain_text('no independent fit')
+        self.page.evaluate(clear,'CurvatureModernCalibrationResultArchive')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernCompareTab').click()
+        expect(b).to_contain_text('Archive result missing',timeout=30000)
+        expect(a).to_contain_text('No independent fit')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_compare_host_apply_and_partial_render(self):
         # Direct host entry point only; destination controls belong to .3.
         # Synthetic imported fit qualifies transaction/presentation plumbing,

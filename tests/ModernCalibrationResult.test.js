@@ -638,3 +638,59 @@ test('Compare Apply failure boundaries preserve outgoing state and report the at
     assert.equal(controller.isBusy(),false);
   }
 });
+
+test('archived Scene transition restores archived inputs while protecting edited outgoing Scene, without photo or draft',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['A','B']){
+    const h=applyHost(record),scene=transfer.transfer(record,destination(),'Scene');
+    scene.scene.camera.Height+=9;scene.compare.B.atmosphere='standard';
+    h.setLive(scene);const before=copy(h.current),draft=copy(h.draft);
+    delete h.host.candidate;delete h.host.archive;
+    h.host.loadArchived=async id=>{h.trace.push('lookup');assert.equal(id,record.id);return {id,record};};
+    const result=await applyApi.create(h.host).apply(target);
+    assert.deepEqual(h.trace,['lookup','protect','commit','present']);
+    assert.deepEqual(h.current,transfer.transfer(record,before,target));
+    assert.deepEqual(h.draft,draft);assert.equal(result.photoId,null);assert.equal(result.archiveOnly,true);
+    assert.equal(result.resultId,record.id);assert.equal(result.target,target);
+    const a=transfer.applicability(h.current,record);
+    assert.equal(a.views[target].status,'calibrated');
+    assert.equal(a.views[target==='A'?'B':'A'].status,'derived');
+  }
+});
+test('archived transition rejects missing, invalid, mismatched origins and changed workspace before mutation',async()=>{
+  const record=await archive.create(input(),env());
+  for(const mode of ['ordinary','compare','wrong-target','missing','corrupt','mismatch','navigation','edit','recovery']){
+    const h=applyHost(record),scene=transfer.transfer(record,destination(),'Scene');
+    if(mode==='ordinary')delete scene.calibrationOrigin;
+    if(mode==='compare')scene.display.mode='compare';
+    if(mode==='mismatch')scene.calibrationOrigin.historicalFit.rmsPx+=1;
+    h.setLive(scene);delete h.host.candidate;delete h.host.archive;
+    h.host.loadArchived=async id=>{
+      h.trace.push('lookup');
+      if(mode==='missing')return null;
+      if(mode==='corrupt'){const bad=copy(record);bad.payload.fit.result.pose.Height+=1;return {id,record:bad};}
+      if(mode==='navigation')h.navigate();
+      if(mode==='edit')h.changeScene();
+      return {id,record};
+    };
+    if(mode==='recovery')h.host.protect=async()=>{throw Error('History denied');};
+    const before=copy(h.current),controller=applyApi.create(h.host);
+    await assert.rejects(controller.apply(mode==='wrong-target'?'Scene':'A'),e=>{
+      assert.equal(e.committed,false);
+      assert.equal(e.phase,['ordinary','compare','wrong-target'].includes(mode)?'prepare':
+        ['navigation','edit'].includes(mode)?'stale':mode==='recovery'?'recovery':'archive');
+      return true;
+    });
+    if(mode==='edit')before.scene.camera.Height+=1;
+    assert.deepEqual(h.current,before);assert.ok(!h.trace.includes('commit'));assert.equal(controller.isBusy(),false);
+  }
+});
+test('archived transition also rejects a stale generation after protecting History',async()=>{
+  const record=await archive.create(input(),env()),h=applyHost(record);
+  h.setLive(transfer.transfer(record,destination(),'Scene'));
+  const before=copy(h.current),protect=h.host.protect;
+  h.host.loadArchived=async id=>({id,record});
+  h.host.protect=async previous=>{const backup=await protect(previous);h.navigate();return backup;};
+  await assert.rejects(applyApi.create(h.host).apply('B'),e=>e.phase==='stale'&&!e.committed);
+  assert.deepEqual(h.current,before);assert.ok(!h.trace.includes('commit'));
+});

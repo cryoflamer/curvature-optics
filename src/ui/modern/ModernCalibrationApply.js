@@ -20,7 +20,11 @@
     return error;
   }
   function create(host){
-    for(const k of ['candidate','snapshot','revision','archive','protect','commit','rollback','present'])
+    // Archived Scene transition has a different source contract: read a
+    // verified immutable result, never reconstruct an editable candidate.
+    const archived=typeof host?.loadArchived==='function';
+    for(const k of ['snapshot','revision','protect','commit','rollback','present',
+      ...(archived?['loadArchived']:['candidate','archive'])])
       if(typeof host?.[k]!=='function')throw TypeError('Missing calibration Apply host '+k);
     // A mutable destination selector is optional. If supplied, it must
     // agree with the explicit request for its entire pre-commit lifetime.
@@ -44,14 +48,17 @@
           throw Error('Explicit calibration Apply target must be Scene, A or B');
         if(host.target&&host.target()!==target)
           throw Error('Calibration Apply destination does not match the selected target');
-        const revision=host.revision(),candidate=copy(host.candidate());
-        if(!candidate?.fit?.result||candidate.fit.running)
+        const revision=host.revision();
+        const candidate=archived?null:copy(host.candidate());
+        if(!archived&&(!candidate?.fit?.result||candidate.fit.running))
           throw Error('Stop calibration and retain a valid best camera first');
         const before=state.validate(host.snapshot());
+        if(archived&&(target==='Scene'||before.display.mode!=='scene'||before.calibrationOrigin?.target!=='Scene'))
+          throw Error('Archived transition requires a Scene calibration origin and explicit Compare A or B');
         const candidateStamp=JSON.stringify(candidate),beforeStamp=JSON.stringify(before);
         function current(){
           if((host.target&&host.target()!==target)||host.revision()!==revision||
-             JSON.stringify(host.candidate())!==candidateStamp||
+             (!archived&&JSON.stringify(host.candidate())!==candidateStamp)||
              JSON.stringify(state.validate(host.snapshot()))!==beforeStamp)
             throw Error('Calibration draft, experiment, workspace or destination changed; apply again');
         }
@@ -59,10 +66,14 @@
         phase='archive';
         // archiveExperiment must durably resolve original then immutable
         // result; it must reject on failure. No live mutation has occurred.
-        const saved=await host.archive(candidate);
+        const saved=archived?{row:await host.loadArchived(before.calibrationOrigin.resultId),reused:true}:
+          await host.archive(candidate);
+        if(archived&&!saved.row)throw Error('Archived calibration result is missing');
         const record=results.validate(saved?.row?.record);
-        if(saved.row.id!==record.id||typeof saved.photoId!=='string'||!saved.photoId)
+        if(saved.row.id!==record.id||(!archived&&(typeof saved.photoId!=='string'||!saved.photoId)))
           throw Error('Invalid durable calibration acknowledgement');
+        if(archived&&transfer.applicability(before,record).resultStatus!=='verified')
+          throw Error('Scene calibration origin does not match a valid archived result');
         phase='stale';current();
         phase='transfer';
         const next=transfer.transfer(record,before,target);
@@ -94,8 +105,9 @@
           const e=failure('present',error,true);
           e.recoveryId=backup.entry.id;e.resultId=record.id;throw e;
         }
-        return Object.freeze({target,resultId:record.id,photoId:saved.photoId,
-          recoveryId:backup.entry.id,reused:saved.reused===true});
+        return Object.freeze({target,resultId:record.id,photoId:archived?null:saved.photoId,
+          recoveryId:backup.entry.id,reused:saved.reused===true,
+          ...(archived?{archiveOnly:true}:{})});
       }catch(error){
         const e=error?.phase===phase&&typeof error.committed==='boolean'?
           error:failure(phase,error,committed);

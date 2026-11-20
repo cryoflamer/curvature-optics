@@ -1069,6 +1069,87 @@
     opacity.addEventListener('input',function(){photoOverlay.setOpacity(Number(opacity.value));});
     syncPhotoOverlayControls();
   }
+  // Read-only archive association, independent of reference image availability.
+  // No RMS recomputation. Cache only the immutable row; applicability always
+  // uses the current canonical snapshot. Re-read on navigation/new origin and
+  // after explicit renders, with stale async lookup suppression.
+  var calibrationLookup={id:null,row:null,status:'idle',pending:false};
+  function refreshCalibrationApplicability(reload){
+    var scenePanel=newUiEl('ModernCalibrationSceneTransfer');
+    if(!scenePanel)return;
+    var origin=state.calibrationOrigin,mode=currentWorkspaceMode();
+    var api=root.CurvatureModernCalibrationTransfer,archive=root.CurvatureModernCalibrationResultArchive;
+    var sceneVisible=mode==='scene'&&!!origin,compareVisible=mode==='compare'&&!!origin;
+    scenePanel.hidden=!sceneVisible;
+    var sceneStatus=newUiEl('ModernCalibrationApplicabilityScene');
+    var a=newUiEl('ModernCalibrationApplicabilityA'),b=newUiEl('ModernCalibrationApplicabilityB');
+    if(a)a.hidden=!compareVisible;if(b)b.hidden=!compareVisible;
+    if(!origin){
+      calibrationLookup={id:null,row:null,status:'idle',pending:false};
+      return;
+    }
+    if(calibrationLookup.id!==origin.resultId)
+      calibrationLookup={id:origin.resultId,row:null,status:'idle',pending:false};
+    var lookup=calibrationLookup;
+    if(!sceneVisible&&!compareVisible)return;
+    var assessment=null,problem=null;
+    try{
+      if(lookup.status==='ready'&&api)assessment=api.applicability(experimentSnapshot(),lookup.row?.record);
+      else if(lookup.status==='invalid')problem='Archive unavailable or invalid';
+      else if(!api||!archive||!root.indexedDB)problem='Archive unavailable';
+    }catch(error){problem='Archive or experiment invalid';}
+    var verified=assessment?.resultStatus==='verified';
+    function show(node,view){
+      if(!node)return;
+      var associated=origin.target===view;
+      var entry=assessment?.views[view],message,kind='info';
+      if(verified){
+        if(entry.status==='calibrated')message='Calibrated · archived fit inputs match';
+        else if(associated){message='Derived · associated fit inputs changed';kind='warning';}
+        else message='Derived · no independent fit'+(entry.matchesFit?' (inputs match archive)':'');
+      }else{
+        kind='warning';
+        var reason=problem||(assessment?
+          (assessment.resultStatus==='missing'?'Archive result missing':'Archive result invalid or mismatched'):
+          'Checking archived result…');
+        message=(associated?'Associated · unverified':'No independent fit')+' · '+reason;
+      }
+      if(node.textContent!==message||node.dataset.statusKind!==kind)modernStatus(node,message,kind);
+    }
+    show(sceneStatus,'Scene');show(a,'A');show(b,'B');
+    for(const side of ['A','B']){
+      var button=newUiEl('ModernCalibrationSceneTo'+side);
+      if(button){
+        button.hidden=origin.target!=='Scene';
+        button.disabled=!verified||!sceneVisible||calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy;
+      }
+    }
+    if((reload||lookup.status==='idle')&&!lookup.pending&&archive&&root.indexedDB){
+      lookup.pending=true;
+      Promise.resolve().then(()=>archive.get(root.indexedDB,lookup.id)).then(row=>{
+        lookup.row=row;lookup.status='ready';
+      },()=>{lookup.row=null;lookup.status='invalid';}).finally(()=>{
+        lookup.pending=false;
+        if(calibrationLookup===lookup)refreshCalibrationApplicability(false);
+      });
+    }
+  }
+  function bindCalibrationSceneTransfer(){
+    for(const side of ['A','B']){
+      var button=newUiEl('ModernCalibrationSceneTo'+side);
+      if(!button)continue;
+      button.addEventListener('click',async()=>{
+        if(button.disabled)return;
+        var other=side==='A'?'B':'A';
+        if(!root.confirm('Apply archived Scene calibration to Compare '+side+'? Both panels restore the archived best camera (Eye-Lvl) and captured objects, replacing current shared edits. Only Compare '+side+' receives archived physics; Compare '+other+' retains its physics except shared neutral visibility. Scene physics stays unchanged. Scene title, description, grid, reset preset and camera paths are reset; the supported captured aspect is restored when available. Accurate rendering is selected. The current experiment is protected in History. This is an archive-only transfer; the original photograph is not verified or substituted.'))return;
+        try{await applyArchivedCalibrationToCompare(side);}
+        catch(error){
+          updatePresetNavigation((error.committed?'Calibration applied, but presentation failed: ':'Archived calibration Apply failed: ')+error.message+
+            (error.rollbackError?' · Recovery failed: '+error.rollbackError:''),true);
+        }
+      });
+    }
+  }
   function experimentSnapshot(){
     if(!experiments||!compareState)return null;
     var config=state.compareConfig||compareState.initial(model,state.atmosphere,state.occlusionRadius,state.temperatureProfile,state.transitionProfile,state.inverseProfile);
@@ -1172,6 +1253,7 @@
     if(!persistence.ready||!experiments||!root.location)return;
     calibrationSceneRevision++;
     updateSnapshotSaveAction();
+    refreshCalibrationApplicability();
     persistence.dirty=true;
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
@@ -4794,26 +4876,38 @@
   function applyCalibrationToScene(editor){
     return applyCalibrationToTarget(editor,'Scene');
   }
-  async function applyCalibrationToTarget(editor,target){
+  function applyCalibrationToTarget(editor,target){
+    return runCalibrationApply(editor,target,false);
+  }
+  function applyArchivedCalibrationToCompare(target){
+    return runCalibrationApply(null,target,true);
+  }
+  async function runCalibrationApply(editor,target,archived){
     if(!['Scene','A','B'].includes(target))
       throw RangeError('Explicit calibration Apply target must be Scene, A or B');
     if(calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy)
       throw Error('Finish the pending experiment change first');
-    if(!photoCalibrationWorkspaceOpen||!persistence.ready||!experimentHistory||historyLoadError||
+    if(archived?(currentWorkspaceMode()!=='scene'||state.calibrationOrigin?.target!=='Scene'||target==='Scene'):
+       !photoCalibrationWorkspaceOpen)
+      throw Error(archived?'Archived transition requires Scene and explicit Compare A or B':'Calibration Apply requires the active editor and available History storage');
+    if(!persistence.ready||!experimentHistory||historyLoadError||
        !root.CurvatureModernCalibrationApply||!root.CurvatureModernCalibrationResultArchive||!root.indexedDB)
-      throw Error('Calibration Apply requires the active editor and available History storage');
-    calibrationApplyBusy=true;updatePresetNavigation();
+      throw Error('Calibration Apply requires available History storage');
+    calibrationApplyBusy=true;updatePresetNavigation();refreshCalibrationApplicability();
     try{
       const controller=root.CurvatureModernCalibrationApply.create({
-        candidate:editor.candidate,
-        target:editor.target,
+        ...(archived?{
+          loadArchived:id=>root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,id)
+        }:{
+          candidate:editor.candidate,target:editor.target,
+          async archive(candidate){
+            // Keep the editable original draft durable independently of archive.
+            await editor.saveDraft();
+            return root.CurvatureModernCalibrationResultArchive.archiveExperiment(root.indexedDB,candidate,root);
+          }
+        }),
         snapshot:experimentSnapshot,
-        revision:()=>[workspaceNavigationVersion,calibrationSceneRevision,currentWorkspaceMode(),editor.revision()].join('|'),
-        async archive(candidate){
-          // Keep the editable original draft durable independently of archive.
-          await editor.saveDraft();
-          return root.CurvatureModernCalibrationResultArchive.archiveExperiment(root.indexedDB,candidate,root);
-        },
+        revision:()=>[workspaceNavigationVersion,calibrationSceneRevision,currentWorkspaceMode(),archived?'archive':editor.revision()].join('|'),
         protect:previous=>experimentHistory.record(previous,'recovery',historyThumbnail(previous)),
         commit(next){
           cancelEdits();cancelPending();cancelHistoryAuto();
@@ -4887,7 +4981,7 @@
       else if(error.rollbackError)updatePresetNavigation('Calibration Apply and rollback failed: '+error.rollbackError,true);
       throw error;
     }finally{
-      calibrationApplyBusy=false;updatePresetNavigation();
+      calibrationApplyBusy=false;updatePresetNavigation();refreshCalibrationApplicability(true);
     }
   }
   function isExplicitSharedExperiment(){
@@ -6993,7 +7087,7 @@
     var liveDescription=el('ModernSceneDescription');
     if(liveDescription)liveDescription.textContent=model.Description||'Custom physical scene';
     model.Update();refreshLabels();
-    if(!liveMotion)scheduleExperimentSave();
+    if(!liveMotion){scheduleExperimentSave();refreshCalibrationApplicability(true);}
     if(state.mode==='compare'){
       if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
       updateCameraHud();
@@ -7086,6 +7180,7 @@
     syncPhotoOverlayControls();
     syncWorkspaceTabs();
     if(remember!==false)rememberWorkspaceMode(mode);
+    refreshCalibrationApplicability(true);
     return true;
   }
   function activateWorkspace(mode){
@@ -7543,6 +7638,7 @@
     bindHelp();
     bindDisplayPanels();
     bindPhotoOverlayControls();
+    bindCalibrationSceneTransfer();
     bindCompareEditor();
     bindShimmerControls();
     bindVisibilityControls();
@@ -7700,6 +7796,7 @@
       });
       updateSnapshotSaveAction();
       resetHistoryBaseline();
+      refreshCalibrationApplicability();
     }
     bindWorkingSessionLifecycle();
     if(sessionAutosave&&root.indexedDB&&!explicitAtStartup){
@@ -7737,6 +7834,7 @@
     getHistoryStore:function(){return experimentHistory;},
     applyCalibrationToScene:applyCalibrationToScene,
     applyCalibrationToTarget:applyCalibrationToTarget,
+    applyArchivedCalibrationToCompare:applyArchivedCalibrationToCompare,
     getBuiltInDemo:function(){return studioActiveDemo?studioActiveDemo.id:null;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?
