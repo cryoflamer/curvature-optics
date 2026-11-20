@@ -12,6 +12,7 @@ on:
     branches: [built-in-demo]
     paths:
       - '.github/workflows/full-verification.yml'
+      - '.github/workflows/ci.yml'
       - 'tools/run-browser-smoke.py'
 
 permissions:

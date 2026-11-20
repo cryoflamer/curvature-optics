@@ -1,3 +1,22 @@
+## CI documentation structure correction — reviewed 140.12.76 gate
+
+Initial workflow-split commit 40c5bb62 passed Fast CI 44831875225
+(185 Node cases + full protected Architecture/Legacy). Full CI
+44831875341 exercised both Chromium shards (26 + 25, all 51 passed)
+and Architecture/Legacy (passed), but one Node documentation test
+failed: the added docs/ci-workflow.md exceeded the intentionally capped
+active documentation directory (58 Markdown files). This correction
+relocates the entire CI policy into the canonical docs/development.md
+guide, removes the extra docs/ci-workflow.md, and updates links.
+It also updates the old GitHub Actions description to match real triggers.
+The two cheap current-documentation tests are now included in Fast CI,
+and edits to either CI workflow require one full qualification run.
+The documentation retention guard remains unchanged. No scientific,
+browser-test or application source logic changed.
+
+Direct commit on built-in-demo, no PR; reasoning level Medium / 2.
+Fresh Fast and Full CI are required before declaring qualification.
+
 ## CI workflow split — targeted development, fast push and full milestone verification
 
 Previous known-good full run: 44829619433 at c62cc737, Node 2260 passed /
@@ -13,7 +32,7 @@ and per-shard failure artifacts; Playwright downloads are cached.
 Edits to the full workflow or shard runner also trigger one full qualification.
 Full verification is still a milestone requirement: fast green never means
 all scientific/visual suites were exercised. New regular development
-commits do not need to wait for full CI. Detailed policy: docs/ci-workflow.md.
+commits do not need to wait for full CI. Detailed policy: docs/development.md.
 
 Important: main remains GitHub's default branch; the declared nightly schedule
 cannot activate until the full workflow file is also installed on main.

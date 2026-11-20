@@ -20,6 +20,6 @@ controlled diagnostics.
 
 ## Development and CI verification
 
-See [CI verification policy](../docs/ci-workflow.md) for targeted commands,
+See [CI verification policy](../docs/development.md#ci-verification-policy) for targeted commands,
 fast checks on `built-in-demo` pushes, and full milestone verification.
 The expensive numerical and browser suites still run in Full CI.

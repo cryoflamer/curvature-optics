@@ -48,7 +48,9 @@ jobs:
             tests/ModernAnimationWorkspacePersistence.test.js \
             tests/ModernAnimationWorkspaceRecovery.test.js \
             tests/ModernUiBootstrap.test.js \
-            tests/ModernPrimaryEntry.test.js
+            tests/ModernPrimaryEntry.test.js \
+            tests/HistoricalDocumentationCleanup141276.test.js \
+            tests/DocumentationConsolidation141275.test.js
 
   fast-architecture:
     if: ${{ github.event_name == 'push' || inputs.scope == 'fast' }}
