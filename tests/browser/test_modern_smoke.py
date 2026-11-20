@@ -1056,6 +1056,285 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(self.page.locator('#ModernModelTab'+target)).to_have_attribute('aria-pressed','true')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+
+    def test_compare_calibration_live_research_cycle_qualification(self):
+        # One genuine UI/worker seven-parameter fit, with the existing
+        # regression observations and synthetic storage raster. No claim
+        # about a named original photograph or Accurate renderer RMS.
+        self.open_modern()
+        ready=self.page.locator('#ModernPhotoCalibrationOpen')
+        expect(ready).to_be_enabled(timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        preset_status=self.page.locator('#ModernPresetSwitchStatus')
+        storage=self.page.locator('#ModernPersistenceStatus')
+        ready_status=lambda side: self.page.locator('#ModernCalibrationApplicability'+side)
+        fields=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField']
+        def checkpoint():
+            expect(storage).to_have_text('Working session saved',timeout=30000)
+            return self.page.evaluate("""async () => {
+                const codec=CurvatureModernExperimentState,f=CurvatureModernExperimentFingerprint;
+                const local=codec.validate(JSON.parse(localStorage.getItem(codec.STORAGE_KEY)));
+                const remote=(await CurvatureModernSessionAutosave.read(indexedDB)).experiment;
+                if(f.exactSignature(local)!==f.exactSignature(remote))
+                    throw Error('Local and IndexedDB checkpoints differ');
+                return remote;
+            }""")
+        def configure_flat(side):
+            self.page.locator('#ModernModelTab'+side).click()
+            self.page.locator('#ModernModelFlat').click()
+            self.page.evaluate("""() => {
+                const n=document.getElementById('ModernModelAtmosphere');
+                n.value='standard';n.dispatchEvent(new Event('change',{bubbles:true}));
+            }""")
+            e=checkpoint()
+            self.assertEqual(e['compare'][side]['surface'],'flat')
+            self.assertEqual(e['compare'][side]['atmosphere'],'standard')
+            return e
+        outgoing=configure_flat('B')
+        self.assertEqual(outgoing['display']['mode'],'compare')
+        ready.click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        workspace.locator('#ModernCalibrationRunFit').click()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        target=workspace.locator('#ModernCalibrationApplyTarget')
+        status=workspace.locator('#ModernCalibrationApplyStatus')
+        expect(button).to_be_enabled(timeout=120000)
+        read=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        fitted=read()
+        fit=fitted['fit']['result']
+        self.assertFalse(fitted['fit']['running'])
+        self.assertEqual(fit['freeParameters'],fields)
+        self.assertTrue(fit['evaluation']['valid'])
+        self.assertGreater(fit['acceptedSteps'],0)
+        self.assertEqual(len(fit['evaluation']['points']),len(fitted['observations']))
+        self.assertLess(fit['evaluation']['rmsPx'],fit['initialRmsPx'])
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text(
+            'Draft saved in this browser.',timeout=30000)
+        def draft_unchanged():
+            current=read()
+            for key in ['scene','observations','referenceImage']:
+                self.assertEqual(current[key],fitted[key])
+            self.assertEqual(current['fit']['result'],fit)
+        def apply():
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            button.click()
+        def open_editor():
+            ready.click()
+            expect(workspace).to_be_visible()
+            expect(button).to_be_enabled(timeout=30000)
+            draft_unchanged()
+        def history_rows():
+            return self.page.evaluate("CurvatureModernApp.getHistoryStore().list()")
+        def archive_rows():
+            return self.page.evaluate("CurvatureModernCalibrationResultArchive.list(indexedDB)")
+        def mark_old_renders():
+            self.page.evaluate("""() => {
+                const last=CurvatureModernApp.getCompareLast();
+                window.__compareQualificationOld={A:last.A,B:last.B};
+            }""")
+        def verify_compare(side,before):
+            expect(preset_status).to_contain_text('Save Snapshot to keep this Compare',timeout=30000)
+            expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+            expect(self.page.locator('#ModernModelTab'+side)).to_have_attribute('aria-pressed','true')
+            expect(ready_status(side)).to_contain_text('Calibrated · archived fit inputs match',timeout=30000)
+            other='B' if side=='A' else 'A'
+            expect(ready_status(other)).to_contain_text('Derived · no independent fit')
+            current=checkpoint()
+            self.assertEqual(current['display']['mode'],'compare')
+            self.assertEqual(current['compare']['selected'],side)
+            self.assertEqual(current['calibrationOrigin']['target'],side)
+            self.assertEqual(current['compare'][side]['surface'],'globe')
+            self.assertEqual(current['compare'][side]['atmosphere'],fitted['scene']['physics']['atmosphere'])
+            self.assertEqual(current['compare'][other],{**before['compare'][other],
+                             'visibility':{'enabled':False,'rangeKm':60}})
+            for key in ['surface','atmosphere','occlusionRadius','temperatureProfile',
+                        'transitionProfile','inverseProfile','visibility']:
+                self.assertEqual(current['scene'][key],before['scene'][key])
+            check=self.page.evaluate("""async ({before,current,fields}) => {
+                const app=CurvatureModernApp,codec=CurvatureModernExperimentState,
+                    fingerprint=CurvatureModernExperimentFingerprint;
+                const pair=app.getCompareModels(),last=app.getCompareLast(),old=window.__compareQualificationOld;
+                const record=(await CurvatureModernCalibrationResultArchive.get(
+                    indexedDB,current.calibrationOrigin.resultId)).record;
+                const result=CurvatureModernCalibrationTransfer.applicability(current,record);
+                const key=e=>fingerprint.exactSignature(e);
+                const rows=await app.getHistoryStore().list();
+                const matching=rows.find(row=>row.pinned&&key(row.experiment)===key(before));
+                const url=codec.urlWithExperiment(location.href,current);
+                return {invariant:CurvatureModernCompareModel.invariant(pair),
+                    fresh:!!last.A&&!!last.B&&last.A!==old.A&&last.B!==old.B,
+                    accurate:app.getOpticalQuality()==='accurate',
+                    aim:[pair.A.viewcenterHorizon,pair.B.viewcenterHorizon],
+                    cameras:['A','B'].map(side=>Object.fromEntries(fields.map(k=>[k,pair[side][k]]))),
+                    layouts:['A','B'].map(side=>Object.fromEntries(codec.OBJECT.map(k=>[k,pair[side][k]]))),
+                    recovery:!!matching,verified:result.resultStatus,
+                    json:key(codec.decode(codec.encode(current)))===key(current),
+                    url:key(codec.readUrl(new URL(url).search))===key(current),
+                    recordId:record.id,shareUrl:url};
+            }""",{'before':before,'current':current,'fields':fields})
+            for key in ['invariant','fresh','accurate','recovery','json','url']:
+                self.assertTrue(check[key],key)
+            self.assertEqual(check['verified'],'verified')
+            self.assertEqual(check['aim'],[3,3])
+            for camera in check['cameras']:
+                for field in fields:
+                    self.assertAlmostEqual(camera[field],fit['pose'][field],places=7)
+            for layout in check['layouts']:
+                for key,value in layout.items():
+                    self.assertEqual(value,fitted['scene']['model'][key])
+            self.assertEqual(check['recordId'],current['calibrationOrigin']['resultId'])
+            return current,check['shareUrl']
+
+        target.select_option('A')
+        # Real write errors in each durable store must leave the outgoing
+        # Compare untouched; prior Scene and host-level failure cases remain.
+        initial_pinned=[row['id'] for row in history_rows() if row['pinned']]
+        for store,count in [('archive',0),('history',1)]:
+            self.page.evaluate("""store => {
+                const proto=IDBDatabase.prototype,original=proto.transaction;
+                const name=store==='archive'?CurvatureModernCalibrationResultArchive.DATABASE:
+                    CurvatureModernExperimentHistory.DATABASE;
+                window.__compareQualificationRestore=()=>{proto.transaction=original;};
+                proto.transaction=function(stores,mode,...args){
+                    if(this.name===name&&mode==='readwrite')throw Error('Compare '+store+' write rejected');
+                    return original.call(this,stores,mode,...args);
+                };
+            }""",store)
+            try:
+                apply()
+                expect(status).to_contain_text('Apply failed: Compare '+store+' write rejected',timeout=30000)
+                expect(workspace).to_be_visible()
+                expect(button).to_be_enabled()
+                draft_unchanged()
+            finally:
+                self.page.evaluate("window.__compareQualificationRestore()")
+            self.assertEqual(len(archive_rows()),count)
+            self.assertCountEqual([row['id'] for row in history_rows() if row['pinned']],initial_pinned)
+            self.assertEqual(self.page.evaluate("""() => JSON.parse(
+                localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY))"""),outgoing)
+
+        # Hold a durable acknowledgement, reject a competing Apply, and
+        # navigate away/back to the same editor. No stale commit is allowed.
+        self.page.evaluate("""() => {
+            const api=CurvatureModernCalibrationResultArchive;
+            const gate={ready:false,release:null,restore:()=>{window.CurvatureModernCalibrationResultArchive=api;}};
+            window.__compareQualificationGate=gate;
+            window.CurvatureModernCalibrationResultArchive={...api,async archiveExperiment(...args){
+                const saved=await api.archiveExperiment(...args);
+                await new Promise(resolve=>{gate.release=resolve;gate.ready=true;});
+                return saved;
+            }};
+        }""")
+        try:
+            apply()
+            self.page.wait_for_function("window.__compareQualificationGate.ready",timeout=30000)
+            expect(target).to_be_disabled()
+            rejected=self.page.evaluate("""async () => {
+                try{await CurvatureModernApp.applyCalibrationToTarget({},'B');return false;}
+                catch(error){return error.message.includes('pending experiment change');}
+            }""")
+            self.assertTrue(rejected)
+            self.page.locator('#ModernCompareTab').click()
+            expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+            ready.click()
+            expect(workspace).to_be_visible()
+            self.page.evaluate("window.__compareQualificationGate.release()")
+            expect(status).to_contain_text('changed; apply again',timeout=30000)
+            expect(button).to_be_enabled()
+            draft_unchanged()
+        finally:
+            self.page.evaluate("""() => {
+                const gate=window.__compareQualificationGate;
+                if(gate.release)gate.release();gate.restore();
+            }""")
+        self.assertCountEqual([row['id'] for row in history_rows() if row['pinned']],initial_pinned)
+        mark_old_renders()
+        apply()
+        expect(status).to_contain_text('Applied to Compare A. Calibration draft retained.',timeout=30000)
+        calibrated_a,_=verify_compare('A',outgoing)
+        self.assertEqual(calibrated_a['compare']['B']['surface'],'flat')
+        self.assertEqual(calibrated_a['compare']['B']['atmosphere'],'standard')
+
+        # Make the non-target A a genuinely different optical hypothesis
+        # before applying to B; association must follow the explicit target.
+        before_b=configure_flat('A')
+        open_editor()
+        target.select_option('B')
+        mark_old_renders()
+        apply()
+        expect(status).to_contain_text('Applied to Compare B. Calibration draft retained.',timeout=30000)
+        calibrated_b,share_url=verify_compare('B',before_b)
+        self.assertEqual(calibrated_b['compare']['A']['surface'],'flat')
+        self.assertEqual(calibrated_b['compare']['A']['atmosphere'],'standard')
+        self.assertEqual(calibrated_a['calibrationOrigin']['resultId'],calibrated_b['calibrationOrigin']['resultId'])
+        self.assertEqual(len(archive_rows()),1)
+
+        # Real protected History restore (not a simulated state assignment).
+        self.page.locator('#ModernPreviousExperiment').click()
+        self.page.wait_for_function("""async before => {
+            const row=await CurvatureModernSessionAutosave.read(indexedDB);
+            return row&&CurvatureModernExperimentFingerprint.exactSignature(row.experiment)===
+                CurvatureModernExperimentFingerprint.exactSignature(before);
+        }""",arg=before_b,timeout=30000)
+        expect(ready_status('A')).to_contain_text('associated fit inputs changed')
+        self.assertEqual(checkpoint(),before_b)
+
+        # Apply to Scene and use the new archive-only transition for both
+        # explicit destinations; recover Scene in between.
+        open_editor()
+        target.select_option('Scene')
+        apply()
+        expect(status).to_contain_text('Applied to Scene. Calibration draft retained.',timeout=30000)
+        expect(preset_status).to_contain_text('Save Snapshot to keep this Scene',timeout=30000)
+        scene=checkpoint()
+        self.assertEqual(scene['calibrationOrigin']['target'],'Scene')
+        for side in ['A','B']:
+            transfer=self.page.locator('#ModernCalibrationSceneTo'+side)
+            expect(transfer).to_be_enabled(timeout=30000)
+            mark_old_renders()
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            transfer.click()
+            current,_=verify_compare(side,scene)
+            self.assertEqual(current['calibrationOrigin']['resultId'],calibrated_b['calibrationOrigin']['resultId'])
+            if side=='A':
+                self.page.locator('#ModernPreviousExperiment').click()
+                self.page.wait_for_function("""async before => {
+                    const row=await CurvatureModernSessionAutosave.read(indexedDB);
+                    return row&&CurvatureModernExperimentFingerprint.exactSignature(row.experiment)===
+                        CurvatureModernExperimentFingerprint.exactSignature(before);
+                }""",arg=scene,timeout=30000)
+                self.assertEqual(checkpoint(),scene)
+
+        # Restore the mixed B checkpoint through the actual public URL.
+        # Same browser has the verified immutable archive; a foreign one
+        # receives only the compact association, never a verified fit claim.
+        self.page.goto('about:blank')
+        self.page.goto(share_url,wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        expect(ready_status('B')).to_contain_text('Calibrated · archived fit inputs match',timeout=30000)
+        expect(self.page.locator('#ModernModelTabB')).to_have_attribute('aria-pressed','true')
+        self.page.reload(wait_until='load')
+        expect(ready).to_be_enabled(timeout=30000)
+        expect(ready_status('B')).to_contain_text('Calibrated · archived fit inputs match',timeout=30000)
+        expect(self.page.locator('#ModernModelTabB')).to_have_attribute('aria-pressed','true')
+        # The explicit shared URL still has exactly the same compact origin.
+        self.assertEqual(self.page.evaluate("CurvatureModernExperimentState.readUrl(location.search)"),calibrated_b)
+        foreign=self.browser.new_context(viewport={'width':1440,'height':900})
+        try:
+            page=foreign.new_page()
+            page.goto(share_url,wait_until='load')
+            expect(page.locator('#ModernPhotoCalibrationOpen')).to_be_enabled(timeout=30000)
+            expect(page.locator('#ModernCalibrationApplicabilityB')).to_contain_text(
+                'Associated · unverified · Archive result missing',timeout=30000)
+            expect(page.locator('#ModernCalibrationApplicabilityA')).to_contain_text('No independent fit')
+        finally:
+            foreign.close()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_soundly_calibration_live_apply_qualification(self):
         # One genuine seven-field UI fit, reused across deterministic
         # failure injections and a successful, durable Apply. The historical
