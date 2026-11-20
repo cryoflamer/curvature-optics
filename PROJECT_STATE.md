@@ -1,3 +1,22 @@
+## 8F.7b.1g — Integration and Qualification (#8)
+
+Previous CI 44752200956 passed all three jobs. Added browser foundation
+qualification using the actual calibration worker and all 14 observed
+Soundly correspondences (initial RMS 314.7555157775399 px, required
+best RMS <15 px, full 80-iteration budget). Uses synthetic real PNG at
+1176x791 because the numerical fixture omits the original photograph;
+not a claim that a real Soundly photo was archived. Exercises verified
+photo/result durability, idempotence, all three transfer targets,
+applicability/restore, exact URL codec, History pinned saves and portable
+deduplication, Studio derived frame, actual session and camera reload,
+missing result versus independently removed original. Prior regressions
+cover legacy formats, validation roles, collisions and storage failures.
+No production code or Apply UI changed. New CI pending; keep #8 open
+until green, then mark final acceptance, close #8 and proceed to #9
+8F.7b.2 — Apply Calibrated Camera to Scene (high reasoning effort).
+Manual actual-photo/overlay qualification belongs to subsequent Apply
+and overlay milestones.
+
 ## 8F.7b.1f — Calibration Applicability (#8)
 
 Previous CI 44751489131 passed all three jobs. Added pure

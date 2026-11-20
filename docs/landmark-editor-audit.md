@@ -26,6 +26,29 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1g — Foundation qualification
+
+The foundation is exercised end-to-end by
+`test_soundly_calibration_foundation_end_to_end` in Chromium: real
+Calibration Worker runs the full 80-iteration-budget Canvas Direct
+fit of all 14 mixed material/legacy Soundly rows, then immutable result
+creation, original verification and durable reuse, Scene/A/B transfer,
+derived and restored status, portable History deduplication, Studio
+derived-frame preservation, URL startup and session reload with live
+camera verification. Independently remove the test original in isolated
+storage to verify archive availability and photo availability are separate.
+No new Apply UI or overlay. No renderer-equivalence requirement.
+
+Numerical fixture contains observed pixel coordinates and physical
+hypothesis, but not the real encoded photograph; use a clearly labeled
+synthetic PNG with exact fixture dimensions for real decoder and IDB
+coverage. This does NOT certify the real photo's digest or prove a unique
+physical solution. Historical Canvas Direct RMS remains a historical
+residual; no Accurate error measured here. Earlier tests qualify old
+formats, failed transactions, topology/identity checks, independent source
+metadata and unsupported inputs. Close #8 only after full CI is green;
+then #9 intentionally introduces the explicit protected Apply operation.
+
 ## 8F.7b.1f — Historical fit applicability
 
 `ModernCalibrationTransfer.applicability(experiment,record)` is read-only

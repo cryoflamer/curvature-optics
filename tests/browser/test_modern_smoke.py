@@ -881,6 +881,150 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual((result['identity']['width'], result['identity']['height']), (3, 2))
         self.assertRegex(result['identity']['sha256'], r'^[0-9a-f]{64}$')
 
+    def test_soundly_calibration_foundation_end_to_end(self):
+        self.open_modern()
+        fixture = json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        demo = json.loads((ROOT/'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
+        # Real worker, all 14 historical observed coordinates, actual numerical
+        # optimization. The fixture intentionally omits the original photograph.
+        # Synthetic PNG qualifies the storage/decode contract, NOT the photo's
+        # evidential identity or the real observation's archival provenance.
+        prepared = self.page.evaluate("""async ({fixture,demo}) => {
+            const check=(condition,message)=>{if(!condition)throw Error(message);};
+            const editor=CurvatureModernPhotoCalibrationEditor, archive=CurvatureModernCalibrationResultArchive,
+                transfer=CurvatureModernCalibrationTransfer, codec=CurvatureModernExperimentState,
+                library=CurvatureModernReferenceImageLibrary, importer=CurvatureModernReferenceImageImport,
+                historyApi=CurvatureModernExperimentHistory, animation=CurvatureModernAnimationProject;
+            const model=fixture.model, observations=fixture.observations;
+            const options={...fixture.options,maxIterations:80};
+            const physics={atmosphere:options.atmosphere,temperatureProfile:options.temperatureProfile};
+            const result=await new Promise((resolve,reject)=>{
+                const worker=new Worker('src/calibration/CameraCalibrationWorker.js');
+                const timeout=setTimeout(()=>{worker.terminate();reject(Error('Soundly worker timed out'));},120000);
+                const finish=(fn,value)=>{clearTimeout(timeout);worker.terminate();fn(value);};
+                worker.onerror=e=>finish(reject,Error(e.message));
+                worker.onmessage=e=>{
+                    if(e.data.type==='complete')finish(resolve,e.data.result);
+                    if(e.data.type==='error')finish(reject,Error(e.data.message));
+                };
+                worker.postMessage({model,input:editor.fitRows(observations),options});
+            });
+            check(result.evaluation.valid,'Invalid Soundly fit');
+            check(result.evaluation.points.length===14,'Expected all 14 Fit rows');
+            check(Math.abs(result.initialRmsPx-314.7555157775399)<1e-5,'Initial RMS regression');
+            check(result.evaluation.rmsPx<15&&result.acceptedSteps>0,'Soundly fit did not improve');
+            result.materialBinding=editor.fitBinding(observations,options.freeParameters,model,physics,1176,791);
+            const canvas=document.createElement('canvas');canvas.width=1176;canvas.height=791;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#ecaf41';ctx.fillRect(0,0,1176,791);
+            const referenceImage={version:1,id:'qualification_raster',title:'Synthetic qualification raster',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:1176,height:791}};
+            const data={format:'curvature-photo-calibration',version:3,scene:{model,physics},observations,
+                referenceImage,referenceSource:null,fit:{method:'canvas-direct',maxIterations:80,
+                    freeParameters:options.freeParameters,result,running:false}};
+            const saved=await archive.archiveExperiment(indexedDB,data,window);
+            const record=saved.row.record;
+            const repeated=await archive.archiveExperiment(indexedDB,{...data,
+                referenceImage:{...referenceImage,id:'qualification_alias',title:'Alias'}},window);
+            check(repeated.reused&&repeated.photoReused&&repeated.row.id===record.id,'Duplicate archival');
+            const original=await library.findOriginal(indexedDB,record.payload.photo,crypto,r=>importer.verifyOriginal(r,window));
+            check(original.id===saved.photoId,'Original identity resolution failed');
+            const current=codec.validate(demo.baseExperiment), history=historyApi.create({indexedDB});
+            const items=[];
+            for(const target of ['Scene','A','B']){
+                const e=transfer.transfer(record,current,target), a=transfer.applicability(e,record);
+                check(a.views[target].status==='calibrated','Transfer status '+target);
+                for(const key of options.freeParameters)check(e.scene.camera[key]===result.pose[key],'Pose '+key);
+                check(e.scene.camera.viewcenterHorizon===3,'Eye-Lvl');
+                check(a.historicalFit.rmsPx===result.evaluation.rmsPx,'Historical RMS changed');
+                check(a.liveRmsPx===undefined,'Historical RMS presented as live');
+                check(JSON.stringify(codec.decode(codec.encode(e)))===JSON.stringify(e),'URL codec '+target);
+                const changed=structuredClone(e);changed.scene.camera.Height+=1;
+                check(transfer.applicability(changed,record).views[target].status==='derived','Derived '+target);
+                changed.scene.camera.Height=e.scene.camera.Height;
+                changed.scene.camera.deviceRatio=9/16;
+                check(transfer.applicability(changed,record).views[target].status==='calibrated','Display-only '+target);
+                if(target!=='Scene'){
+                    const other=target==='A'?'B':'A';
+                    check(a.views[other].status==='derived','Alternative side certified');
+                    for(const k of ['surface','radiusKm','atmosphere','occlusionRadius'])
+                        check(e.compare[other][k]===current.compare[other][k],'Alternative physics '+k);
+                }
+                const entry=(await history.record(e,'manual')).entry;
+                check(entry.pinned,'Protected history entry');
+                items.push({id:entry.id,target,experiment:e});
+            }
+            const rows=await Promise.all(items.map(x=>history.get(x.id)));
+            const portable=historyApi.exportPortable(rows), imported=historyApi.parsePortable(portable);
+            check(!portable.includes('data:image/'),'Image bytes leaked into History');
+            const again=await history.importEntries(imported);
+            check(again.created===0&&again.reused===3,'Portable History deduplication');
+            const base=items[0].experiment, derived=structuredClone(base);derived.scene.camera.Height+=1;
+            const p=animation.create([base,derived],{id:'qualification',mode:'camera'});
+            const frame=animation.frameExperiment(p,1);
+            check(transfer.applicability(frame,record).views.Scene.status==='derived','Studio frame provenance');
+            check(JSON.stringify(frame.calibrationOrigin)===JSON.stringify(base.calibrationOrigin),'Studio lost origin');
+            check((await archive.list(indexedDB)).length===1,'Duplicate result');
+            check((await library.list(indexedDB)).length===1,'Duplicate image');
+            return {id:record.id,photoId:saved.photoId,items:items.map(({id,target})=>({id,target})),
+                link:codec.urlWithExperiment(location.href,items[0].experiment),
+                initial:result.initialRmsPx,rms:result.evaluation.rmsPx,status:result.status,
+                pose:result.pose};
+        }""", {'fixture': fixture, 'demo': demo})
+        self.assertLess(prepared['rms'], 15)
+        self.assertAlmostEqual(prepared['initial'], 314.7555157775399, places=5)
+        self.page.goto(prepared['link'], wait_until='load')
+        expect(self.page.locator('#ModernPreset')).to_have_value('custom', timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.locator('#ModernSceneTab').click()
+        self.page.wait_for_function("""async id => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.display.mode==='scene'&&saved.experiment.calibrationOrigin?.resultId===id;
+        }""", arg=prepared['id'], timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernPreset')).to_have_value('custom', timeout=30000)
+        restored = self.page.evaluate("""async prepared => {
+            const archive=CurvatureModernCalibrationResultArchive, transfer=CurvatureModernCalibrationTransfer,
+                codec=CurvatureModernExperimentState, library=CurvatureModernReferenceImageLibrary,
+                importer=CurvatureModernReferenceImageImport, session=CurvatureModernSessionAutosave;
+            const check=(condition,message)=>{if(!condition)throw Error(message);};
+            const record=(await archive.get(indexedDB,prepared.id)).record;
+            const current=session.normalize(await session.read(indexedDB),codec.validate).experiment;
+            check(transfer.applicability(current,record).views.Scene.status==='calibrated','Restored session not calibrated');
+            const m=CurvatureModernApp.getModel();
+            for(const k of Object.keys(record.payload.fit.result.pose))
+                check(Math.abs(m[k]-prepared.pose[k])<1e-7,'Live restored camera '+k);
+            const h=CurvatureModernExperimentHistory.create({indexedDB});
+            for(const item of prepared.items){
+                const row=await h.get(item.id);
+                check(transfer.applicability(row.experiment,record).views[item.target].status==='calibrated','Restored history '+item.target);
+            }
+            check(transfer.applicability(current,null).resultStatus==='missing','Missing result distinction');
+            // Simulate independent loss of original storage, not an exposed
+            // delete feature. Isolated browser context is discarded after test.
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(library.DATABASE,1);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction(library.STORE,'readwrite');
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};
+                    tx.objectStore(library.STORE).delete(prepared.photoId);
+                };
+            });
+            const missing=await library.findOriginal(indexedDB,record.payload.photo,crypto,r=>importer.verifyOriginal(r,window));
+            check(missing===null,'Missing photograph replaced');
+            let rejected=false;try{await archive.save(indexedDB,record,window);}catch(e){rejected=/original photo is unavailable/.test(e.message);}
+            check(rejected,'Missing original save accepted');
+            check(transfer.applicability(current,(await archive.get(indexedDB,prepared.id)).record).views.Scene.status==='calibrated',
+                'Historical applicability confused with asset availability');
+            return {rms:record.payload.fit.result.evaluation.rmsPx,
+                historicalStatus:record.payload.fit.result.status,photoMissing:missing===null};
+        }""", prepared)
+        self.assertEqual(restored['rms'], prepared['rms'])
+        self.assertEqual(restored['historicalStatus'], prepared['status'])
+        self.assertTrue(restored['photoMissing'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_calibration_result_archive_roundtrip(self):
         self.page.goto(self.base_url)
         self.page.wait_for_function('!!window.CurvatureModernCalibrationResultArchive')
