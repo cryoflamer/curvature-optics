@@ -474,8 +474,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[],deleted=[];let undos=0;
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++});
+  const fastHits=[],deleted=[],owners=[];let undos=0;
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o)});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openScene(sourceContract);
@@ -522,6 +522,12 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   canvas.events.pointerdown(click);canvas.events.pointerup(click);
   assert.deepEqual(fastHits,[{kind:'vertex',bank:0,index:0,vertex:0}]);
   assert.equal(api.snapshot().staged,null);
+  select.value='owner';select.onchange();
+  const beforeOwner=api.snapshot();
+  const middle={...event,clientX:400,clientY:300};canvas.events.pointerdown(middle);canvas.events.pointerup(middle);
+  assert.deepEqual(owners,[owner]);assert.deepEqual(api.snapshot(),beforeOwner);
+  api.setInspectedOwner(owner,'Owner',['P0']);
+  assert.equal(host.querySelector('[data-viewer-owner-status]').textContent,'Owner');
   api.resetScene();
   canvas.events.wheel({...event,deltaY:-120});
   const beforeBest=api.snapshot();
@@ -573,4 +579,17 @@ test('rebasing a physical orbit pivot preserves projection, zoom, rays and subse
     const n2=viewer.rebaseRegionPivot(g,viewer.orbit(n,40,30),points[1],1024,768);
     near(viewer.regionCamera(g,n2,1024,768).project(points[2]).pixel,viewer.regionCamera(g,viewer.orbit(n,40,30),1024,768).project(points[2]).pixel);
   }
+});
+
+test('owner inspection follows painted coverage including masks, lines and transparent ambiguity',()=>{
+  const owner={kind:'object',bank:0},span={kind:'span',bank:0};
+  const fill=[[0,0],[20,0],[20,20],[0,20]],bounds={x:0,y:0,X:20,Y:20};
+  const entry=(o,path={})=>({bounds,path:{fill,edges:[],...path},entry:o?{item:{owner:o}}:null});
+  const back=entry(owner),front=entry(span,{fill:[],edges:[[[0,10],[20,10]]],strokeWidth:2});
+  assert.deepEqual(viewer.ownerAtFrame({entries:[back,front]},[10,10]),span);
+  assert.deepEqual(viewer.ownerAtFrame({entries:[back,front]},[10,5]),owner);
+  assert.equal(viewer.ownerAtFrame({entries:[back,entry(null)]},[10,5]),null);
+  assert.equal(viewer.ownerAtFrame({entries:[back,entry(span,{alpha:.5})]},[10,5]),null);
+  assert.deepEqual(viewer.ownerAtFrame({entries:[back,entry(span,{alpha:0})]},[10,5]),owner);
+  assert.equal(viewer.ownerAtFrame({entries:[back]},[40,40]),null);
 });

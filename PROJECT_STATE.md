@@ -1,3 +1,16 @@
+## 8F.5b.4a.3 — Integrated Owner Inspection
+
+Owner Inspection in the integrated Globe Pick menu selects the top painted
+owner (object or individual span) using the existing optical/physical
+painter paths, including line coverage and horizon masks. It neither stages
+a material point nor changes the orbit or observations. It reuses the
+editor's existing owner packages, labels and selection, exposes the selected
+owner's primitive list and approximate range, and shows a dashed contextual
+outline (which may include occluded portions). Owner identity and mode
+are persisted with the existing draft/session. Best Camera remains read-only;
+legacy tools and Flat are retained. Remaining: .4 Draft Lifecycle,
+.5 Functional Parity, .4b cleanup, then 8F.5c/d/e.
+
 ## 8F.5b.4a.2 — Integrated session persistence
 
 Integrated viewport snapshots are stored in the browser beside the existing

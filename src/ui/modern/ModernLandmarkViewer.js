@@ -569,6 +569,22 @@
       return t>=-1e-9&&t<=1+1e-9&&Math.hypot(...sub(q,mul(d,t)))<=r;
     });
   }
+  // Owner inspection follows actual painter coverage, including lines and
+  // horizon masks. It does not stage a material hit or change the orbit.
+  function ownerAtFrame(frame,p,strokeWidth=1){
+    if(!frame)return null;
+    for(let i=frame.entries.length-1;i>=0;i--){
+      const e=frame.entries[i],path=e.path;
+      const width=path.strokeWidth??strokeWidth;
+      if((path.alpha??path.p?.style?.alpha??1)<=0||!inBounds(e.bounds,p,width/2+1e-6)||
+        !opticalCoverage({...path,strokeWidth:width},p))continue;
+      // An opaque non-owner mask or unresolved topology must not expose
+      // a hidden object behind it.
+      if(!e.entry||(path.alpha??path.p?.style?.alpha??1)<1)return null;
+      return e.entry.item.owner||null;
+    }
+    return null;
+  }
   function opticalNearby(frame,p,r=0){
     return frame.entries.filter(e=>inBounds(e.bounds,p,r+(e.path.strokeWidth||0)/2+1e-6));
   }
@@ -757,7 +773,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null}={}){
     let inlineOpen=false,parkedScene=null;
     const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
@@ -775,6 +791,42 @@
     function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
     let activeCorrespondence=null,hoveredCorrespondence=null;
     const selectionStatus=dialog.querySelector('[data-viewer-selection-status]');
+    let inspectedOwner=null;
+    const ownerMode=()=>inline&&pickMode.value==='owner'&&typeof onInspectOwner==='function';
+    const ownerStatus=inline?dialog.querySelector('[data-viewer-owner-status]'):null;
+    const ownerList=inline?dialog.querySelector('[data-viewer-owner-list]'):null;
+    function inspectOwnerAt(css){
+      const p=backing(css),t=opticalTransform;
+      if(free)return ownerAtFrame(pickCache,p);
+      if(!t||p[0]<t.x||p[0]>=t.x+t.width||p[1]<t.y||p[1]>=t.y+t.height)return null;
+      return ownerAtFrame(opticalCache,[(p[0]-t.offsetX)/t.scale,(p[1]-t.offsetY)/t.scale]);
+    }
+    function setInspectedOwner(owner,label='',primitives=[]){
+      inspectedOwner=owner;
+      if(ownerStatus)setText(ownerStatus,label||'No owner selected.');
+      if(ownerList){
+        ownerList.replaceChildren();
+        for(const p of primitives){const n=dialog.ownerDocument.createElement('option');n.textContent=p;n.value=p;ownerList.append(n);}
+        ownerList.disabled=!primitives.length;
+      }
+    }
+    function outlineOwner(entries,transform,ctx){
+      if(!inspectedOwner)return;
+      const key=JSON.stringify(inspectedOwner);
+      // Dashed contextual outline of the selected owner's projected primitives;
+      // it is not a visibility certificate.
+      ctx.save();ctx.strokeStyle='#a126dd';ctx.lineWidth=2.5;
+      ctx.setLineDash?.([5,4]);
+      for(const e of entries){
+        if(!e.entry||JSON.stringify(e.entry.item.owner)!==key)continue;
+        const {fill,edges}=e.path;
+        ctx.beginPath();
+        if(fill.length>=3){ctx.moveTo(...transform(fill[0]));for(const q of fill.slice(1))ctx.lineTo(...transform(q));ctx.closePath();}
+        for(const [a,b] of edges){ctx.moveTo(...transform(a));ctx.lineTo(...transform(b));}
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     const deleteButton=inline?dialog.querySelector('[data-viewer-delete-pair]'):null;
     if(deleteButton)deleteButton.onclick=()=>{if(activeCorrespondence!==null)onDeleteCorrespondence?.(activeCorrespondence);};
     const tooltip=dialog.querySelector('[data-viewer-marker-tooltip]');
@@ -840,7 +892,7 @@
     function pickAvailable(){return !!crop&&!crop.readOnly&&(free||!!opticalCache);}
     function fastVertex(){return inline&&typeof onFastVertex==='function'&&pickMode.value==='fast-vertex';}
     function pickKind(){return fastVertex()?'vertex':pickMode.value;}
-    function pickActive(){return pickAvailable()&&pickMode.value!=='navigate';}
+    function pickActive(){return pickAvailable()&&pickMode.value!=='navigate'&&!ownerMode();}
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
     function updatePickStatus(message=''){pickStatus.textContent=!pickActive()?'':message||(fastVertex()?(staged?'Choose candidate, then Use vertex.':'Click a visible vertex to pair; drag to navigate.'):'')||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
     function syncPoint(){
@@ -869,6 +921,7 @@
       const t=opticalTransform;if(!opticalCache||!t){committedMarkers(()=>({visibility:'optical geometry unavailable'}));return;}
       const ctx=canvas.getContext('2d');ctx.save();ctx.beginPath();ctx.rect(t.x,t.y,t.width,t.height);ctx.clip();
       try{
+        if(inline&&ownerMode())outlineOwner(opticalCache.entries,p=>[p[0]*t.scale+t.offsetX,p[1]*t.scale+t.offsetY],ctx);
         committedMarkers(opticalScreen);
         for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18'],[hover,'#008ab1']]:[])){
           if(!h)continue;const q=opticalScreen(h);
@@ -878,6 +931,7 @@
     }
     function markers(){
       if(paths&&crop&&free){
+        if(inline&&ownerMode()&&pickCache)outlineOwner(pickCache.entries,p=>p,canvas.getContext('2d'));
         committedMarkers(h=>{const visibility=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'visibility unresolved';return {visibility,pixel:paths.camera.project(h.point)?.pixel};});
         for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18']]:[])){
           if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
@@ -941,7 +995,7 @@
       if(fastVertex()&&choices.length===1&&acceptFastVertex())return;
       syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
     }
-    pickMode.onchange=()=>{cancelHover();if(inline)clearPick();clearMarkerHover();syncMode();render();};
+    pickMode.onchange=()=>{cancelHover();if(inline&&!ownerMode())clearPick();clearMarkerHover();syncMode();render();};
     pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;selectOrbitPoint(staged);syncPoint();updatePickStatus();redrawMarkers();};
     dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
@@ -956,6 +1010,8 @@
     dialog.querySelector('[data-viewer-sensitivity-reset]').onclick=()=>setSensitivity(DEFAULT_SENSITIVITY);
     function syncMode(){
       if(inline&&navigating())heading.textContent=free?'Model · Free View':crop.title;
+      if(ownerStatus)ownerStatus.hidden=!ownerMode();
+      if(ownerList)ownerList.hidden=!ownerMode();
       if(deleteButton){deleteButton.hidden=!crop;deleteButton.disabled=activeCorrespondence===null;}
       sceneControls.style.display=crop?'':'none';
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
@@ -964,7 +1020,7 @@
       pickControls.style.display=pickAvailable()?'':'none';
       for(const el of localControls)el.style.display=pickActive()?'':'none';
       selectionStatus.style.display=crop?'':'none';
-      canvas.style.cursor=drag?.moved?'grabbing':pickActive()?'crosshair':hoveredCorrespondence!==null?'pointer':crop&&!free&&!crop.build&&!navigating()?'default':'grab';
+      canvas.style.cursor=drag?.moved?'grabbing':(pickActive()||ownerMode())?'crosshair':hoveredCorrespondence!==null?'pointer':crop&&!free&&!crop.build&&!navigating()?'default':'grab';
     }
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
@@ -1088,7 +1144,7 @@
     });
     canvas.addEventListener('pointermove',e=>{
       const css=[e.clientX,e.clientY];
-      if(!drag){if(inline&&markerAtCSS(css)!==null){cancelHover();hoverMarker(css);}else if(pickActive()){if(hoveredCorrespondence!==null){clearMarkerHover();redrawMarkers();}queueHover(css);}else hoverMarker(css);return;}
+      if(!drag){if(ownerMode()){clearMarkerHover();canvas.style.cursor='crosshair';return;}if(inline&&markerAtCSS(css)!==null){cancelHover();hoverMarker(css);}else if(pickActive()){if(hoveredCorrespondence!==null){clearMarkerHover();redrawMarkers();}queueHover(css);}else hoverMarker(css);return;}
       if(drag.id!==e.pointerId)return;
       if(!drag.moved&&Math.hypot(...sub(css,drag.start))<3)return;
       drag.moved=true;clearMarkerHover();canvas.style.cursor='grabbing';const delta=sub(css,drag.css);
@@ -1103,10 +1159,11 @@
       if(drag?.id!==e.pointerId)return;const d=drag;drag=null;clearMarkerHover();
       if(d.moved||Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])>=3||d.pan||d.button!==0){redrawMarkers();return;}
       const css=[e.clientX,e.clientY];
-      if(crop&&(inline||pickMode.value==='navigate')){
+      if(crop&&!ownerMode()&&(inline||pickMode.value==='navigate')){
         const id=markerAtCSS(css,activeCorrespondence);
         if(id!==null){onSelectCorrespondence(id);hoverMarker(css);return;}
       }
+      if(ownerMode()&&pickAvailable()){const owner=inspectOwnerAt(css);onInspectOwner(owner);redrawMarkers();return;}
       if(pickActive())stageAt(css);else hoverMarker(css);
     });
     const end=e=>{if(drag?.id===e.pointerId){drag=null;clearMarkerHover();redrawMarkers();}};
@@ -1176,7 +1233,7 @@
         // The local camera/pivot coordinates are meaningful only in that frame.
         const r=saved?.region,b=saved?.base;
         if(saved?.version!==2||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||
-          !['navigate','vertex','edge','surface','fast-vertex'].includes(saved.pickMode)||
+          !['navigate','vertex','edge','surface','fast-vertex','owner'].includes(saved.pickMode)||
           (crop.readOnly&&(saved.free||saved.pickMode!=='navigate'))||
           !r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||
           r.x+r.width>crop.source.width+1e-6||r.y+r.height>crop.source.height+1e-6||
@@ -1234,9 +1291,9 @@
         sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
       }finally{restoringSession=false;}
       sessionChanged();
-    },clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
+    },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));

@@ -404,9 +404,14 @@
     inlineHost.querySelector('canvas').setAttribute('aria-label','Integrated calibration model');
     const fastOption=doc.createElement('option');fastOption.value='fast-vertex';fastOption.textContent='Fast Vertex';
     inlineHost.querySelector('[data-viewer-pick-mode]').append(fastOption);
+    const ownerOption=doc.createElement('option');ownerOption.value='owner';ownerOption.textContent='Owner Inspection';
+    inlineHost.querySelector('[data-viewer-pick-mode]').append(ownerOption);
+    const ownerInfo=doc.createElement('p');ownerInfo.setAttribute('data-viewer-owner-status','');ownerInfo.hidden=true;
+    const ownerPrimitives=doc.createElement('select');ownerPrimitives.setAttribute('data-viewer-owner-list','');ownerPrimitives.setAttribute('aria-label','Selected owner primitives');ownerPrimitives.hidden=true;
+    inlineHost.querySelector('[data-viewer-selection-status]').after(ownerInfo,ownerPrimitives);
     const inlineDelete=doc.createElement('button');inlineDelete.type='button';inlineDelete.textContent='Delete pair';inlineDelete.disabled=true;inlineDelete.setAttribute('data-viewer-delete-pair','');
     inlineHost.querySelector('[data-viewer-selection-status]').after(inlineDelete);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo});
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
@@ -513,7 +518,7 @@
       saveInline();
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack,
-        weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
+        selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
@@ -568,6 +573,7 @@
           }
           refreshRows();
         }
+        if(d.selectedOwner){const found=[...packages.values()].find(p=>JSON.stringify(p.owner)===JSON.stringify(d.selectedOwner));selectedObjectKey=found?.key??null;refreshObjectSelection();}
         pendingMagnifier=readMagnifier();
         inlineSessions=readInline();
         // Initial rendering during draft restoration may have opened a default
@@ -934,11 +940,25 @@
         (pkg.owner.kind==='span'?' · individual span':' · '+pkg.spanOwners.length+' incoming spans')+(ownerSpans.has(pkg.key)?'':' · not visible in identity pass'):
         'No owner selected. Click a visible object or span, or choose from the list.';
     }
+    function selectInlineOwner(owner){
+      if(viewBest||!globeRoute()||legacyShown)return false;
+      const pkg=owner?[...packages.values()].find(p=>JSON.stringify(p.owner)===JSON.stringify(owner)):null;
+      if(owner&&!pkg){message('Stable owner identity unavailable.');return false;}
+      const result=selectObject(pkg?.key??null);persist();return result;
+    }
+    function syncInlineOwner(){
+      const pkg=packages.get(selectedObjectKey);
+      const primitives=pkg?pkg.primaryIndices.map(i=>{
+        const p=scene.banks[pkg.owner.bank][i];
+        return 'P'+(p.metadata.landmarkPrimitive??i)+' · '+p.type+' · '+p.points.length+' vertices';
+      }):[];
+      inlineViewer.setInspectedOwner(pkg?.owner||null,pkg?packageLabel(pkg)+' · '+primitives.length+' primitives'+(pkg.rangeMetres===null?'':' · approx. '+pkg.rangeMetres.toFixed(1)+' m')+' · dashed contextual outline':'Click an object or span to inspect its owner.',primitives);
+    }
     function selectObject(key){
       if(viewBest)return false;
       if(key!==null&&!packages.has(key))return false;
       const changed=selectedObjectKey!==key;
-      selectedObjectKey=key;refreshObjectSelection();meshDraw();
+      selectedObjectKey=key;refreshObjectSelection();meshDraw();syncInlineOwner();
       if(viewer.isOpen()&&!viewer.isCrop()&&changed){if(key===null)viewer.close();else openViewer();}
       return true;
     }
@@ -993,7 +1013,7 @@
         if(best&&inlineSource===cropSource)initialParked=inlineViewer.parkScene();
         if(!best&&initialParked){
           initialParked=false;
-          if(inlineViewer.resumeScene()){inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();return true;}
+          if(inlineViewer.resumeScene()){inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();syncInlineOwner();return true;}
         }
         if(best&&inlineRole==='best'&&inlineSource&&inlineSource.width===source.width&&inlineSource.height===source.height&&inlineViewer.updateScenePaint(inlinePaint(source))){
           inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();return true;
@@ -1003,7 +1023,7 @@
           title:best?'Model · Best Camera':'Model · Initial Camera'});
         inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();
         if(!restoring)restoreInlineRole(role,source);
-        return true;
+        syncInlineOwner();return true;
       }catch(error){
         inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;legacyShown=true;syncModelRoute();
         message('Integrated model unavailable: '+error.message+' · legacy tools retained.');return false;
