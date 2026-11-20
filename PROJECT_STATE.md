@@ -1,3 +1,22 @@
+## 8F.7d.2a — Compare host browser fixture correction (#11)
+
+CI 44803606473 on 6e09185: Node 2229 passed, one skipped; architecture
+136/136; Chromium 47/48. Only the newly added direct-host test errored
+at line 848, reading before[other] when getCompareConfig() was null.
+The preceding Apply and both-render assertions passed. A fresh Scene
+legitimately has no runtime Compare cache: experimentSnapshot() supplies
+the default A/B pair independently when capturing canonical state.
+
+The browser fixture now explicitly saves the initial Scene checkpoint
+before opening calibration, captures the canonical outgoing experiment
+from localStorage before each Apply, and verifies exact recovery
+fingerprint, both previous side configurations and non-target physics.
+It distinguishes the initially absent runtime pair from initialized A/B
+on later attempts and requires old A/B render results before the
+deliberately missing-B test. Existing assertions remain; no production
+code or renderer change. Embedded JS syntax checked; full native CI
+pending. Do not proceed to .3 before green.
+
 ## 8F.7d.2 — Shared-camera Compare host integration (#11)
 
 Predecessor a7c09e9 CI 44802145613 completed successfully.

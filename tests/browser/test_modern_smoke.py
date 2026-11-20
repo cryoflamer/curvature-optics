@@ -762,7 +762,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Direct host entry point only; destination controls belong to .3.
         # Synthetic imported fit qualifies transaction/presentation plumbing,
         # not a fresh fit or physical agreement with the original image.
-        workspace=self.open_physical_calibration()
+        self.open_modern()
+        self.page.locator('#ModernRender').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
         data=self.soundly_calibration_experiment()
         data=self.page.evaluate("""data => {
             const {model,physics}=data.scene,rows=data.observations;
@@ -783,8 +789,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         # through the new host API, without changing any public control.
         exercise="""async ({target,partial}) => {
             const app=CurvatureModernApp,editor=CurvatureModernPhotoCalibrationEditor.mount(document);
-            const fitted=editor.exportExperiment(),before=JSON.parse(JSON.stringify(app.getCompareConfig()));
-            const sceneBefore=app.getPhotoCalibrationScene();
+            const fitted=editor.exportExperiment(),sceneBefore=app.getPhotoCalibrationScene();
+            // Scene can retain an uninitialized runtime Compare pair. Read
+            // the canonical outgoing checkpoint that Apply protects, not
+            // an optional runtime cache. The checkpoint already contains
+            // the same default pair that experimentSnapshot() supplies.
+            const outgoing=CurvatureModernExperimentState.validate(JSON.parse(
+                localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)));
+            const before=outgoing.compare,runtimeBefore=app.getCompareConfig();
+            if(runtimeBefore&&['A','B'].some(side=>
+                JSON.stringify(runtimeBefore[side])!==JSON.stringify(before[side])))
+                throw Error('Outgoing checkpoint does not match live Compare physics');
             const oldA=app.getCompareLast().A,oldB=app.getCompareLast().B;
             if(partial)app.registerCompareGraph('B',{UpdateCanvasSize(){},Redraw(){}});
             let result=null,error=null;
@@ -814,15 +829,24 @@ class ModernBrowserSmoke(unittest.TestCase):
                     Object.fromEntries(CurvatureModernExperimentState.OBJECT.map(k=>[k,pair[side][k]]))])),
                 sceneBefore:{physics:sceneBefore.physics,surface:[sceneBefore.model.showModel,sceneBefore.model.rEarth]},
                 sceneAfter:{physics:sceneAfter.physics,surface:[sceneAfter.model.showModel,sceneAfter.model.rEarth]},
-                recovery:recovery&&{pinned:recovery.pinned,config:recovery.experiment.compare},
+                recovery:recovery&&{pinned:recovery.pinned,config:recovery.experiment.compare,
+                    exact:CurvatureModernExperimentFingerprint.exactSignature(recovery.experiment)===
+                        CurvatureModernExperimentFingerprint.exactSignature(outgoing)},
+                hadRuntimePair:!!runtimeBefore,hadOldA:!!oldA,hadOldB:!!oldB,
                 origin:saved.calibrationOrigin,checkpointSelected:saved.compare.selected};
         }"""
-        for target,partial in [('A',False),('B',False),('A',True)]:
+        for index,(target,partial) in enumerate([('A',False),('B',False),('A',True)]):
             if self.page.evaluate("CurvatureModernApp.getWorkspaceMode()")!='calibration':
                 self.page.locator('#ModernPhotoCalibrationOpen').click()
                 expect(workspace).to_be_visible()
                 expect(ready).to_be_enabled(timeout=30000)
             outcome=self.page.evaluate(exercise,{'target':target,'partial':partial})
+            if index==0:
+                self.assertFalse(outcome['hadRuntimePair'])
+            else:
+                self.assertTrue(outcome['hadRuntimePair'])
+                self.assertTrue(outcome['hadOldA'])
+                self.assertTrue(outcome['hadOldB'])
             if partial:
                 self.assertIsNone(outcome['result'])
                 self.assertEqual(outcome['error']['phase'],'present')
@@ -853,6 +877,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 for field,value in outcome['objects'][side].items():
                     self.assertEqual(value,data['scene']['model'][field])
             self.assertTrue(outcome['recovery']['pinned'])
+            self.assertTrue(outcome['recovery']['exact'])
             for side in ['A','B']:
                 self.assertEqual(outcome['recovery']['config'][side],outcome['before'][side])
             expect(self.page.locator('#ModernModelTab'+target)).to_have_attribute('aria-pressed','true')
