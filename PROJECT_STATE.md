@@ -1,3 +1,20 @@
+## Active roadmap — Photo-based Physical Research (2026-11-20)
+
+User approved prioritized GitHub Issues #8–#20 and explicit calibration
+targets Scene / Compare A / Compare B. See the approved roadmap at the
+top of docs/landmark-editor-audit.md. P0 order: #8 foundation, #9 Scene
+apply, #10 Scene overlay, #11 shared-camera Compare apply, #12 Compare
+overlay, #13 provenance/History and milestone verification. P1 #14–#17
+projects/navigation/reopen/bundle; P2 #18–#20 future comparative research.
+P3 existing technical debt #1/#2/#5. #6/#7 retained pending scope review.
+Native milestone/priority label creation unavailable through current
+connector; grouping and priorities documented in issue bodies/titles.
+Baseline 6ee1829 full CI passed (44741109985). No runtime or test changes
+in this planning commit. Next active issue #8, step 8F.7b.1. Origin
+contract must support Compare side association from the start; shared
+camera and objects, chosen-side physics, fixed common photo registration.
+Independent-camera Compare is deferred to #19.
+
 ## 8F.7a.2 — Photo-centric research workflow audit (revised plan)
 
 User approved a Scene overlay with independent photo aspect, Canvas Direct

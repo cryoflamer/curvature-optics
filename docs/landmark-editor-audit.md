@@ -1,3 +1,32 @@
+## Approved research roadmap — 2026-11-20
+
+This prioritization supersedes the implementation order of 8F.7a.2 below, not its identity, protection, migration or registration contracts. GitHub Issues are the task backlog and acceptance criteria; PROJECT_STATE records the current step; this audit records architecture. One issue may require multiple bounded commits. Priorities are in issue titles pending native label/milestone setup.
+
+### Milestone 1 — Photo-based Physical Research (P0)
+1. #8 Calibration Transfer Foundation (8F.7b.1) — next.
+2. #9 Apply Calibrated Camera to Scene (8F.7b.2).
+3. #10 Registered Reference Photo Overlay in Scene (8F.7c).
+4. #11 Calibration Integration in Shared-Camera Compare.
+5. #12 Registered Reference Photo Overlay in Compare.
+6. #13 Calibration Provenance and History Integration (8F.7d and milestone verification).
+
+### Milestone 2 — Research Workspace Management (P1)
+7. #14 Calibration Projects (8F.7e).
+8. #15 Reference Image Research Navigation (8F.7f).
+9. #16 Reopen Archived Calibration as Editable Project.
+10. #17 Portable Research Bundle.
+
+### Milestone 3 — Comparative Physical Research (P2 backlog)
+- #18 Reusable Material Correspondences and Alternative Hypothesis Calibration.
+- #19 Independent Experiment Comparison.
+- #20 Quantitative Photo Residuals and Atmospheric Parameter Sweeps.
+P3: existing presentation and video technical debt #1, #2, #5; revisit when justified. #6 and #7 remain open pending explicit scope reconciliation, not duplicate implementation tasks.
+
+### Shared-camera Compare contract
+A calibration may be applied to Scene, Compare A or Compare B. Design compact origin for all three targets in #8, even while UI is implemented Scene-first. The fitted seven camera parameters, Eye-Lvl aim and captured object layout become shared Compare inputs; only the chosen side receives the captured physical hypothesis. Retain alternative-side physics subject to existing shared-control constraints; make shared changes explicit and protect the outgoing experiment before mutation. The archive remains immutable. Distinguish target association and actual fit applicability per side; an alternative side is not automatically independently calibrated even if its inputs happen to coincide. Shared camera changes can invalidate applicability on both sides. Preserve origin on derived edits; clear on unrelated reset. Historical Canvas Direct RMS is not a live Accurate residual.
+
+Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Preserve standard shared-camera Compare; independent cameras and independent fits are later #19/#18 work. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
+
 ## 8F.7a.2 — Photo-centric research workflow audit
 
 Baseline 11c416d (8F.7a audit). User-approved refinements: preserve normal
