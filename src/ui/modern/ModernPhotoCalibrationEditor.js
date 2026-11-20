@@ -627,7 +627,7 @@
       if(!viewer.isCrop()||scene?.model.showModel!==1)return;
       let resolver;
       const descriptors=rows.map((row,i)=>{
-        const common={id:row.landmark.id,label:pairLabel(row,i),color:COLORS[i%COLORS.length]};
+        const common={id:row.landmark.id,label:pairLabel(row,i),color:COLORS[i%COLORS.length],kind:row.kind};
         try{
           if(!resolver)resolver=materialResolver.create(scene.model);
           const q=resolver.resolveLandmark(row.kind,row.landmark);

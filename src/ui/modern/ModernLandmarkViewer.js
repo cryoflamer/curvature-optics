@@ -677,9 +677,9 @@
   function drawCorrespondence(canvas,p,row){
     const ctx=canvas.getContext('2d');ctx.save();ctx.font='bold 13px sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=2;
-    ctx.fillStyle=row.color;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(...p,10,0,2*Math.PI);ctx.fill();ctx.stroke();
+    ctx.fillStyle=row.color;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(...p,row.hovered?12:10,0,2*Math.PI);ctx.fill();ctx.stroke();
     ctx.fillStyle='#fff';ctx.fillText(row.label,p[0],p[1]);
-    if(row.selected){ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.arc(...p,14,0,2*Math.PI);ctx.stroke();}
+    if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
   function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{}){
@@ -695,21 +695,42 @@
     let correspondenceRows=[],correspondenceMesh=null,correspondenceCache=[],correspondenceState=[];
     const correspondenceStatus=dialog.querySelector('[data-viewer-correspondence-status]');
     function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
-    let activeCorrespondence=null;
+    let activeCorrespondence=null,hoveredCorrespondence=null;
+    const selectionStatus=dialog.querySelector('[data-viewer-selection-status]');
+    const tooltip=dialog.querySelector('[data-viewer-marker-tooltip]');
+    const localControls=dialog.querySelectorAll('[data-viewer-local-pick]');
+    function clearMarkerHover(){hoveredCorrespondence=null;tooltip.hidden=true;canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build?'default':'grab';}
+    function markerAtCSS(css,active=null){
+      const r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
+      return correspondenceAt(correspondenceState,[(css[0]-r.left)*scale[0],(css[1]-r.top)*scale[1]],scale,active);
+    }
+    function hoverMarker(css){
+      const id=crop&&pickMode.value==='navigate'?markerAtCSS(css):null;
+      const changed=id!==hoveredCorrespondence;hoveredCorrespondence=id;
+      const row=correspondenceState.find(r=>r.id===id);
+      canvas.style.cursor=id!==null?'pointer':crop&&!free&&!crop.build?'default':'grab';
+      tooltip.hidden=!row;
+      if(row){const r=frame.getBoundingClientRect();setText(tooltip,'Correspondence #'+row.label+' · '+row.kind+' · click to select');
+        tooltip.style.left=Math.max(0,Math.min(css[0]-r.left+14,frame.clientWidth-tooltip.offsetWidth-4))+'px';
+        tooltip.style.top=Math.max(0,Math.min(css[1]-r.top+16,frame.clientHeight-tooltip.offsetHeight-4))+'px';}
+      if(changed)redrawMarkers();
+    }
     function setCorrespondences(rows,active=null){
       activeCorrespondence=active;
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
-      if(crop&&dialog.open)redrawMarkers();
+      if(crop&&dialog.open){clearMarkerHover();redrawMarkers();}
     }
     function committedMarkers(project){
       if(correspondenceMesh!==mesh){correspondenceMesh=mesh;correspondenceCache=mesh?correspondenceHits(mesh,correspondenceRows):correspondenceRows.map(r=>({...r,hit:null}));}
       correspondenceState=correspondenceCache.map(row=>{
         const q=row.hit?project(row.hit):{visibility:'geometry unavailable'};
         const selected=row.id===activeCorrespondence;
-        return {id:row.id,label:row.label,color:row.color,selected,visibility:q.visibility,pixel:q.pixel||null};
+        return {id:row.id,label:row.label,color:row.color,kind:row.anchor?.kind||row.kind||'vertex',selected,hovered:row.id===hoveredCorrespondence,visibility:q.visibility,pixel:q.pixel||null};
       });
       for(const row of correspondenceState.filter(r=>!r.selected).concat(correspondenceState.filter(r=>r.selected)))
         if(row.pixel&&['visible','wireframe'].includes(row.visibility))drawCorrespondence(canvas,row.pixel,row);
+      const selected=correspondenceState.find(r=>r.selected);
+      setText(selectionStatus,selected?'Selected correspondence: #'+selected.label+' · '+selected.kind+' · '+selected.visibility:'Navigate: click a numbered correspondence to select it.');
       if(correspondenceStatus){
         const visible=correspondenceState.filter(r=>['visible','wireframe'].includes(r.visibility)).length;
         setText(correspondenceStatus,correspondenceState.length?
@@ -725,10 +746,10 @@
     function pickAvailable(){return !!crop&&(free||!!opticalCache);}
     function pickActive(){return pickAvailable()&&pickMode.value!=='navigate';}
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
-    function updatePickStatus(message=''){pickStatus.textContent=message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
+    function updatePickStatus(message=''){pickStatus.textContent=!pickActive()?'':message||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
     function syncPoint(){
       const h=staged||confirmed,editable=!!staged;
-      details.style.display=h?'':'none';confirmButton.disabled=!editable;cancelButton.disabled=!editable;
+      details.style.display=h&&pickActive()?'':'none';confirmButton.disabled=!editable;cancelButton.disabled=!editable;
       parameters.style.display=editable&&h.kind!=='vertex'?'':'none';
       for(const [i,n] of paramInputs.entries()){
         n.closest('label').style.display=editable&&h.kind==='surface'&&i===1||editable&&h.kind!=='vertex'&&i===0?'':'none';
@@ -752,7 +773,7 @@
       const ctx=canvas.getContext('2d');ctx.save();ctx.beginPath();ctx.rect(t.x,t.y,t.width,t.height);ctx.clip();
       try{
         committedMarkers(opticalScreen);
-        for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18'],[pickActive()?hover:null,'#008ab1']]){
+        for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18'],[hover,'#008ab1']]:[])){
           if(!h)continue;const q=opticalScreen(h);
           if(q.visibility==='visible')drawPickMarker(canvas,h,{project:()=>q},color);
         }
@@ -761,7 +782,7 @@
     function markers(){
       if(paths&&crop&&free){
         committedMarkers(h=>{const visibility=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'visibility unresolved';return {visibility,pixel:paths.camera.project(h.point)?.pixel};});
-        for(const [h,color] of [[confirmed,'#25834b'],[staged,'#b83d18']]){
+        for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18']]:[])){
           if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
         }
         if(pickActive())drawPickMarker(canvas,hover,paths.camera,'#008ab1');
@@ -802,7 +823,7 @@
       pickChoices.replaceChildren();for(const [i,h] of choices.entries()){const option=dialog.ownerDocument.createElement('option');option.value=String(i);option.textContent=describe(h);pickChoices.append(option);}
       pickChoices.disabled=choices.length<2;syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
     }
-    pickMode.onchange=()=>{cancelHover();syncMode();render();};
+    pickMode.onchange=()=>{cancelHover();clearMarkerHover();syncMode();render();};
     pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;syncPoint();updatePickStatus();redrawMarkers();};
     dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
@@ -821,7 +842,9 @@
       spans.closest('label').style.display=crop?'none':'';
       freeButton.disabled=!crop||free||!crop.build;freeButton.title=crop?.reason||'';
       pickControls.style.display=pickAvailable()?'':'none';
-      canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build?'default':'';
+      for(const el of localControls)el.style.display=pickActive()?'':'none';
+      selectionStatus.style.display=crop?'':'none';
+      canvas.style.cursor=drag?.moved?'grabbing':pickActive()?'crosshair':hoveredCorrespondence!==null?'pointer':crop&&!free&&!crop.build?'default':'grab';
     }
     const viewport=()=>[env.innerWidth,env.innerHeight];
     function readRect(){try{return JSON.parse(env.localStorage.getItem(WINDOW_KEY));}catch(e){return null;}}
@@ -838,7 +861,7 @@
     }
     function render(){
       if((!geometry&&!crop)||!dialog.open)return;
-      resizeRaster();
+      clearMarkerHover();resizeRaster();
       if(crop&&!free){
         cancelHover();opticalCache=null;opticalTransform=null;pickCache=null;
         try{
@@ -863,7 +886,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(dialog.open)dialog.close();sessionChanged();}
+    function close(){stopDrags();clearMarkerHover();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(dialog.open)dialog.close();sessionChanged();}
     dialog.querySelector('[data-viewer-close]').onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -912,14 +935,14 @@
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{state=zoom(state,Number(n.dataset.viewerZoom));render();});
     canvas.addEventListener('pointerdown',e=>{
       if((!geometry&&!crop?.build)||drag||windowDrag||![0,1,2].includes(e.button))return;
-      e.preventDefault();canvas.focus({preventScroll:true});cancelHover();drag={id:e.pointerId,css:[e.clientX,e.clientY],start:[e.clientX,e.clientY],moved:false,pan:e.button!==0||e.shiftKey,button:e.button};canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();canvas.focus({preventScroll:true});cancelHover();clearMarkerHover();drag={id:e.pointerId,css:[e.clientX,e.clientY],start:[e.clientX,e.clientY],moved:false,pan:e.button!==0||e.shiftKey,button:e.button};canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove',e=>{
       const css=[e.clientX,e.clientY];
-      if(!drag){if(pickActive())queueHover(css);return;}
+      if(!drag){if(pickActive())queueHover(css);else hoverMarker(css);return;}
       if(drag.id!==e.pointerId)return;
       if(!drag.moved&&Math.hypot(...sub(css,drag.start))<3)return;
-      drag.moved=true;const delta=sub(css,drag.css);
+      drag.moved=true;clearMarkerHover();canvas.style.cursor='grabbing';const delta=sub(css,drag.css);
       if(crop&&!free&&!enterFree())return;
       // Orbit uses CSS pixels only. Pan still maps into backing-store pixels.
       const r=canvas.getBoundingClientRect();
@@ -927,22 +950,23 @@
       drag.css=css;render();
     });
     canvas.addEventListener('pointerup',e=>{
-      if(drag?.id!==e.pointerId)return;const d=drag;drag=null;
-      if(d.moved||Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])>=3||d.pan||d.button!==0)return;
+      if(drag?.id!==e.pointerId)return;const d=drag;drag=null;clearMarkerHover();
+      if(d.moved||Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])>=3||d.pan||d.button!==0){redrawMarkers();return;}
       if(crop&&pickMode.value==='navigate'){
         const r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
         const id=correspondenceAt(correspondenceState,[(e.clientX-r.left)*scale[0],(e.clientY-r.top)*scale[1]],scale,activeCorrespondence);
         if(id!==null)onSelectCorrespondence(id);
+        hoverMarker([e.clientX,e.clientY]);
       }else if(pickActive())stageAt([e.clientX,e.clientY]);
     });
-    const end=e=>{if(drag?.id===e.pointerId)drag=null;};
+    const end=e=>{if(drag?.id===e.pointerId){drag=null;clearMarkerHover();redrawMarkers();}};
     for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
-    canvas.addEventListener('pointerleave',()=>{cancelHover();if(pickActive()&&!drag){redrawMarkers();updatePickStatus();}});
+    canvas.addEventListener('pointerleave',()=>{cancelHover();clearMarkerHover();if(!drag){redrawMarkers();updatePickStatus();}});
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('wheel',e=>{e.preventDefault();if(!drag&&(!crop||enterFree())){state=zoom(state,Math.exp(-e.deltaY*.0015));render();}},{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
-    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(staged||hover){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
+    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
     env.addEventListener('pagehide',()=>sessionChanged());
     dialog.addEventListener('close',()=>{if(!dialog.open){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});

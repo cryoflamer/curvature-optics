@@ -1,3 +1,17 @@
+## 8F.5b.1 — Magnifier selection UX
+
+Navigate now shows existing correspondence markers only; local candidate
+controls, staged/confirmed marks and weight editing are hidden (local
+draft retained when switching modes). Hover uses the same CSS-pixel hit
+test as selection, changes cursor to pointer and highlights marker with
+contrast ring and tooltip. Empty geometry uses grab and drag grabbing.
+Dedicated fixed-height selected correspondence status shows ID label, kind
+and visibility, even when hidden. No mutation of committed pairs or fit.
+8F.5b full CI 44645416002 passed. Next: 8F.5c Use in calibration.
+Updated browser regression to require Navigate hides local controls and
+retain explicit picking-mode Clear point. JS syntax checked; browser
+verification pending.
+
 ## 8F.5b — Cross-view correspondence selection
 
 The editor owns activePair; both Magnifier views receive it with read-only

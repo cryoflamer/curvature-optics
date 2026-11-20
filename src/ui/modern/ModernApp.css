@@ -1517,3 +1517,6 @@ button{cursor:pointer}
 .modern-landmark-viewer footer{display:flex;align-items:flex-end;gap:6px}
 .modern-photo-calibration .modern-landmark-viewer [data-viewer-resize]{flex:0 0 28px;width:28px;height:28px;padding:0;line-height:1;cursor:nwse-resize;touch-action:none;user-select:none}
 .modern-landmark-viewer [data-viewer-titlebar]:focus-visible,.modern-landmark-viewer canvas:focus-visible{outline:2px solid #397bad;outline-offset:-2px}
+
+.modern-landmark-viewer [data-viewer-selection-status]{flex:0 0 1.5em;height:1.5em;line-height:1.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:700}
+.modern-landmark-viewer [data-viewer-marker-tooltip]{position:absolute;z-index:2;pointer-events:none;background:#142e45;color:white;padding:5px 8px;border-radius:4px;font-size:12px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
