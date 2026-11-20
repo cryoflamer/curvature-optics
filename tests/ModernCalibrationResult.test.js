@@ -358,3 +358,90 @@ test('pure transfer rejects unsupported target, unrepresentable object domain an
   assert.throws(()=>transfer.transfer(corrupt,current,'Scene'),/digest mismatch/);
   assert.deepEqual(current,before);
 });
+
+test('calibrated status follows archived input equivalence, not display or historical RMS as live score',async()=>{
+  const record=await archive.create(input(),env()),base=transfer.transfer(record,destination(),'Scene');
+  const inspect=e=>transfer.applicability(e,record);
+  const first=inspect(base);
+  assert.equal(first.resultStatus,'verified');assert.equal(first.views.Scene.status,'calibrated');
+  assert.deepEqual(first.activeViews,['Scene']);assert.equal(first.historicalFit.verified,true);
+  assert.equal(first.historicalFit.method,'canvas-direct');assert.equal(first.historicalFit.rmsPx,5);
+  assert.equal(first.liveRmsPx,undefined);
+  assert.ok(Object.isFrozen(first.views.Scene.differences));
+  for(const k of ['Height','FocalLengthField','Pan','Nick','Roll','CameraEast','CameraNorth']){
+    const e=copy(base);e.scene.camera[k]+=.01;
+    const a=inspect(e);assert.equal(a.views.Scene.status,'derived');
+    assert.ok(a.views.Scene.differences.includes('camera.'+k));
+    e.scene.camera[k]=base.scene.camera[k];assert.equal(inspect(e).views.Scene.status,'calibrated');
+  }
+  const e=copy(base);e.scene.camera.Height+=1e-10;
+  e.scene.camera.deviceRatio=9/16;e.scene.showGrid=true;e.scene.gridExtentKm=123;
+  e.display.eyeLevel=!e.display.eyeLevel;e.display.horizon=!e.display.horizon;
+  e.scene.visibility={enabled:true,rangeKm:25};e.scene.title='Renamed';
+  e.scene.temperatureProfile.gradientKPerKm=10;e.scene.occlusionRadius+=100;
+  e.scene.objects.ObjDist[1]+=10; // dormant bank
+  assert.equal(inspect(e).views.Scene.status,'calibrated');
+  e.scene.camera.viewcenterHorizon=0;assert.deepEqual(inspect(e).views.Scene.differences,['camera.viewcenterHorizon']);
+  e.scene.camera.viewcenterHorizon=3;e.scene.objects.ObjDist[0]+=1;
+  assert.deepEqual(inspect(e).views.Scene.differences,['objects.ObjDist.0']);
+  assert.deepEqual(inspect(codec.decode(codec.encode(e))),inspect(e));
+});
+test('active physical inputs invalidate fit; inactive profiles, guides and alternate side do not',async()=>{
+  const raw=input();raw.scene.physics.atmosphere='temperature-lapse';raw.fit.result.atmosphere='temperature-lapse';
+  rebind(raw);const record=await archive.create(raw,env());
+  for(const target of ['Scene','A','B']){
+    const base=transfer.transfer(record,destination(),target),e=copy(base);
+    const live=target==='Scene'?e.scene:e.compare[target];
+    live.temperatureProfile.gradientKPerKm+=1;
+    assert.deepEqual(transfer.applicability(e,record).views[target].differences,['physics.temperatureProfile.gradientKPerKm']);
+    live.temperatureProfile.gradientKPerKm-=1;
+    live.inverseProfile.weight=.5;live.transitionProfile.weight=.8;live.occlusionRadius+=100;
+    assert.equal(transfer.applicability(e,record).views[target].status,'calibrated');
+    if(target==='Scene')live.surface.rEarth+=1;else live.radiusKm+=.001;
+    assert.deepEqual(transfer.applicability(e,record).views[target].differences,['physics.radiusKm']);
+    if(target==='Scene')live.surface.rEarth-=1;else live.radiusKm-=.001;
+    live.atmosphere='vacuum';
+    assert.deepEqual(transfer.applicability(e,record).views[target].differences,['physics.atmosphere']);
+  }
+});
+test('Compare separates association from numerical equivalence; shared camera affects both',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['A','B']){
+    const other=target==='A'?'B':'A',e=transfer.transfer(record,destination(),target);
+    e.compare[other]=copy(e.compare[target]);e.compare.selected=other;
+    let a=transfer.applicability(e,record);
+    assert.deepEqual(a.activeViews,['A','B']);assert.equal(a.views[target].status,'calibrated');
+    assert.equal(a.views[other].status,'derived');assert.equal(a.views[other].associated,false);
+    assert.equal(a.views[other].matchesFit,true);
+    e.scene.camera.viewcenterHorizon=0; // Compare clones always use Eye-Lvl.
+    assert.equal(transfer.applicability(e,record).views[target].status,'calibrated');
+    e.scene.camera.Height+=1;a=transfer.applicability(e,record);
+    for(const side of ['A','B']){
+      assert.equal(a.views[side].status,'derived');assert.deepEqual(a.views[side].differences,['camera.Height']);
+    }
+    e.scene.camera.Height-=1;e.compare[other].surface='flat';
+    a=transfer.applicability(e,record);assert.equal(a.views[target].status,'calibrated');
+    assert.deepEqual(a.views[other].differences,['physics.surface']);
+    e.display.mode='scene';a=transfer.applicability(e,record);
+    assert.deepEqual(a.activeViews,['Scene']);assert.equal(a.views.Scene.associated,false);
+    assert.equal(a.views.Scene.status,'derived');
+  }
+});
+test('missing, mismatched and invalid archive never certify an origin; ordinary stays ordinary',async()=>{
+  const record=await archive.create(input(),env()),e=transfer.transfer(record,destination(),'Scene');
+  const missing=transfer.applicability(e,null);
+  assert.equal(missing.resultStatus,'missing');assert.equal(missing.views.Scene.status,'unresolved');
+  assert.equal(missing.views.Scene.matchesFit,null);assert.equal(missing.historicalFit.verified,false);
+  const fake=copy(e);fake.calibrationOrigin.historicalFit.rmsPx+=1;
+  assert.equal(transfer.applicability(fake,record).resultStatus,'mismatch');
+  const wrong=copy(record);wrong.payload.fit.result.pose.Height+=1;
+  assert.equal(transfer.applicability(e,wrong).resultStatus,'invalid');
+  const changed=input();changed.fit.result.pose.Height+=1;
+  const different=await archive.create(changed,env());
+  assert.equal(transfer.applicability(e,different).resultStatus,'mismatch');
+  const ordinary=copy(e);delete ordinary.calibrationOrigin;
+  const result=transfer.applicability(ordinary,record);
+  assert.equal(result.resultStatus,'unlinked');assert.equal(result.historicalFit,null);
+  assert.equal(result.views.Scene.status,'ordinary');
+  assert.equal(transfer.applicability(e,record).views.Scene.status,'calibrated');
+});

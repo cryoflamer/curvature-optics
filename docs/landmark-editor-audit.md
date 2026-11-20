@@ -26,6 +26,42 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1f — Historical fit applicability
+
+`ModernCalibrationTransfer.applicability(experiment,record)` is read-only
+and returns activeViews, origin, resultStatus, historicalFit and per-view
+(Scene/A/B) associated, status, matchesFit and differences. With no
+origin, status ordinary; with unresolved archive, status unresolved and
+matchesFit null. Result status distinguishes missing, mismatch, invalid,
+verified and unlinked. Compare the full normalized origin with the
+validated result (including baseline camera, photo identity and metrics);
+an ID alone does not certify a portable link. Reuse the pure transfer
+baseline to avoid divergent defaults or unrepresentable source fields.
+No storage or photo resolution in this function: verified refers to the
+archived result, not availability of original bytes. Caller resolves
+photo independently for overlay and navigation.
+
+For a verified record, only the historically associated view with
+matching inputs is calibrated; otherwise derived. An alternative view may
+match the fit's inputs without being independently calibrated. No automatic
+retargeting on mode/editor changes. Shared seven fitted camera values and
+object arrays affect all views. Compare actually forces Eye-Lvl (the
+retained Scene aim is not its effective aim); Scene aim must be Eye-Lvl.
+Compare geometry in radiusKm and Scene radius in metres are normalized.
+Check exact enum/count fields and floating-point round-trip tolerance
+1e-9 + 1e-12*max(abs(a),abs(b)) in canonical units; this is NOT a
+measurement error or fit-quality threshold. Ignore banks empty in both
+states; compare all captured layout fields in populated banks
+conservatively. Check surface, active Globe radius, atmosphere and active
+temperature-lapse fields; inactive temperature/engineered profile
+parameters and occlusion radius for simple archived hypotheses are ignored.
+Visibility, guides/grid, aspect and display controls are presentation.
+Return deterministic changed field paths; returning to baseline recovers
+calibrated status, not a new fit. Historical RMS/method/status remain
+separate from any live Accurate error. Unverified compact-origin metrics
+are explicitly marked verified:false. No UI classification or residual
+recalculation in this step.
+
 ## 8F.7b.1e — Pure calibration transfer
 
 `ModernCalibrationTransfer.transfer(record,current,target)` returns a

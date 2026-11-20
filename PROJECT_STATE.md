@@ -1,3 +1,24 @@
+## 8F.7b.1f — Calibration Applicability (#8)
+
+Previous CI 44751489131 passed all three jobs. Added pure
+ModernCalibrationTransfer.applicability(experiment,record), verifies full
+origin against validated archive, reuses transfer baseline and legacy
+defaults, returns per-Scene/A/B historical association, input equivalence,
+classification and differing field paths. Only associated matching view
+is calibrated; unassociated equivalent view remains derived. Missing,
+mismatched or invalid result is unresolved, not certified; ordinary
+unlinked state stays ordinary. Compare uses effective Eye-Lvl on both
+clones; shared camera/layout changes affect both. Active simple optical
+hypothesis and captured active object banks matter; inactive temperature
+and profile controls, empty banks, haze/grid/aspect/other presentation
+do not. Tiny numerical tolerance only for floating round trips. Historical
+Canvas Direct metrics remain separate from live Accurate residuals.
+Four new Node regression scenarios. 351 focused assertions passed
+using production transfer/state/Compare modules and Soundly geometry,
+injected archive validation/origin. Full archive integration awaits CI.
+No UI or asset resolution changes. Next #8 8F.7b.1g — Integration and
+Qualification (high reasoning effort).
+
 ## 8F.7b.1e — Pure Calibration Transfer (#8)
 
 Previous CI 44750532466 passed all three jobs. Added pure
