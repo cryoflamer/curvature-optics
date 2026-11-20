@@ -17,7 +17,7 @@ const modernScripts = scriptTags.filter(tag => tag.file.startsWith('src/ui/moder
 // This list is an intentional preservation gate, not permission to remove
 // future scripts absent from this test.
 const required = [
-  'CalibrationPointerGestures.js', 'ModernCalibrationProject.js', 'ModernCalibrationProjectStore.js', 'ModernCalibrationProjectCheckpoint.js', 'ModernCalibrationResult.js', 'ModernCalibrationResultArchive.js', 'ModernCalibrationTransfer.js', 'ModernCalibrationApply.js', 'ModernPhotoOverlayRegistration.js', 'ModernPhotoOverlayRenderer.js',
+  'CalibrationPointerGestures.js', 'ModernCalibrationProject.js', 'ModernCalibrationProjectStore.js', 'ModernCalibrationProjectCheckpoint.js', 'ModernCalibrationProjectMigration.js', 'ModernCalibrationResult.js', 'ModernCalibrationResultArchive.js', 'ModernCalibrationTransfer.js', 'ModernCalibrationApply.js', 'ModernPhotoOverlayRegistration.js', 'ModernPhotoOverlayRenderer.js',
   'ModernAnimationPreviewGraph.js', 'ModernAnimationProjectWizardUI.js', 'ModernAnimationStudioUI.js', 'ModernApp.js', 'ModernApplicationPreferences.js', 'ModernAtmosphericPresentation.js',
   'ModernAtmosphericShimmer.js', 'ModernCameraDragPreview.js', 'ModernCameraDirectMotion.js', 'ModernCameraHud.js',
   'ModernCameraInteraction.js', 'ModernCameraNavigation.js', 'ModernCameraPerspectiveWarp.js',
@@ -40,8 +40,12 @@ test('Modern helper inventory remains reviewed and locally available', () => {
   assert.deepEqual(actual, [...required].sort(), 'review newly added/removed modules explicitly');
   for (const name of required) {
     assert.ok(fs.statSync(path.join(modernDir, name)).size > 0, name + ' must have source');
-    assert.equal(tagsFor(name).length, ['ModernCompareGraph.js','ModernAnimationPreviewGraph.js'].includes(name) ? 2 : 1,
-      name + ' must remain loaded by Modern');
+    // Migration stays opt-in until guarded startup wiring in 8F.7p.5.
+    // Inventory the source module without requiring a parser-time script.
+    const deferred=name==='ModernCalibrationProjectMigration.js';
+    assert.equal(tagsFor(name).length, deferred?0:
+      ['ModernCompareGraph.js','ModernAnimationPreviewGraph.js'].includes(name)?2:1,
+      name + (deferred?' must remain unbound during 8F.7p.3':' must remain loaded by Modern'));
   }
 });
 
@@ -56,7 +60,8 @@ test('140.12.72: Compare graphs A and B retain distinct parser-time script loads
 test('140.12.72: Modern dependency modules load before the Scene bootstrap', () => {
   const appIndex = tagsFor('ModernApp.js')[0].index;
   for (const name of required) {
-    if (name === 'ModernApp.js' || name === 'ModernCompareGraph.js') continue;
+    if (name === 'ModernApp.js' || name === 'ModernCompareGraph.js' ||
+        name === 'ModernCalibrationProjectMigration.js') continue;
     assert.ok(tagsFor(name)[0].index < appIndex, name + ' must load before ModernApp');
   }
 });

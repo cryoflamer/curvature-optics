@@ -1,3 +1,21 @@
+## 8F.7p.3b — Direct-branch CI qualification correction (#14)
+
+Built-in-demo CI 44827295086 (0d1dcff): Chromium passed; Node 2249
+passed, 8 failed, 1 skipped; architecture failed at the static boundary.
+Five new migration tests failed because the in-memory IndexedDB double
+dropped the explicit key supplied to IDBObjectStore.add(value,key) for
+the out-of-line project-control store; the real browser API supports
+that call. The mock now forwards both add/put keys, with a regression
+for the explicit marker key. The static Legacy/Modern fixture gains the
+new test's direct ReferenceImageImport CommonJS caller. The Modern
+helper inventory now lists the deliberately unbound migration module
+but keeps its HTML load forbidden until guarded startup activation in
+8F.7p.5. No production migration, optical computation or History code
+was modified. Full fresh CI is still required before 8F.7p.4.
+
+Workflow: commit directly to built-in-demo, no PR; recommend reasoning
+level before every commit (this corrective change: High / 3).
+
 ## 8F.7p.3a — Legacy/Modern static inventory correction (#14)
 
 The new migration module is intentionally not loaded by either HTML entrypoint

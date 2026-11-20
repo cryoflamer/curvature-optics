@@ -68,7 +68,9 @@ function memoryIndexedDB(legacy={version:2,record:{original:{dataUrl:'data:image
                   return item;
                 }
                 return {get:key=>request('get',key),getAll:()=>request('all'),
-                  add:val=>request('add',val),put:val=>request('put',val),
+                  // Honor out-of-line keys: project-control has no keyPath.
+                  add:(val,key)=>request('add',val,key),
+                  put:(val,key)=>request('put',val,key),
                   delete:key=>request('delete',key)};
               },
               start(unlock){
@@ -129,6 +131,22 @@ function memoryIndexedDB(legacy={version:2,record:{original:{dataUrl:'data:image
     }
   };
 }
+
+test('IndexedDB mock preserves explicitly keyed control records',async()=>{
+  const db=memoryIndexedDB();
+  await store.list(db); // Installs v2 out-of-line project-control store.
+  await new Promise((resolve,reject)=>{
+    const opening=db.open(store.DATABASE,store.VERSION);
+    opening.onerror=()=>reject(opening.error);
+    opening.onsuccess=()=>{
+      const tx=opening.result.transaction(store.CONTROL,'readwrite');
+      tx.objectStore(store.CONTROL).add({version:1},'migration-marker');
+      tx.oncomplete=resolve;
+      tx.onabort=tx.onerror=()=>reject(tx.error);
+    };
+  });
+  assert.deepEqual(db.tables.get(store.CONTROL).get('migration-marker'),{version:1});
+});
 
 test('project envelope protects identities, typed fields, checkpoint, photo bytes and deep input copies',()=>{
   const raw=model.fresh({id:A,now:100,photo,checkpoint:{version:1,

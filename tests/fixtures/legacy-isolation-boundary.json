@@ -3656,6 +3656,7 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernCalibrationProjectCheckpoint.test.js",
+        "tests/ModernCalibrationProjects.test.js",
         "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
