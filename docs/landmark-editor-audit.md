@@ -1,3 +1,43 @@
+## 8F.7p.1 — Versioned Calibration Project model and atomic storage (#14)
+
+Predecessor fed8f52 CI 44818302908: Node and architecture passed;
+Chromium 50/51, with existing 8F.7d.5 regression at archived Scene
+transition after restoring Previous. Root cause: History restore's
+setMode() recomputed the archived Apply buttons under historyRestoreBusy,
+then finally released the busy lock without updating the controls.
+Fixed refresh on release; existing complete browser qualification tests
+this transition. Not caused by the project-store change.
+
+Added isolated ModernCalibrationProject (v1, secure stable IDs, bounded
+JSON-only checkpoints, original SHA-256/dimensions plus alias, fit/list
+summary, result ID links, monotonic CAS revision and explicit full-candidate
+fork) and ModernCalibrationProjectStore (upgrade of the existing
+curvature-photo-calibration DB from v1 to v2). The original draft/active
+store and bytes are retained. Atomic projects+project-summaries writes;
+a separate project-control store is reserved for the later migration
+marker. Fast list reads metadata only (never decodes originals), storage
+has quota, strict malformed/collision rejection, revision checks for
+update/rename/delete and conflict fork preserving complete stale work,
+including concurrent deletion. No cascading deletion of image/archive/
+History data. Legacy raw read is exposed for idempotent migration in .3.
+No project is created automatically by upgrade.
+
+Nine new Node test groups cover V1 upgrade, malformed envelopes,
+no-photo, exact checkpoint copying, optimistic concurrency and forks,
+atomic second-store failure, quotas, deletion and corrupt index.
+All nine passed in a standalone V8 test harness using the repository's
+unit fixtures and an in-memory serialized IndexedDB implementation.
+Full native Node/Chromium CI pending. Neither editor nor HTML load the new
+modules yet; adopting a v2 connection in the editor and extracting
+validated real checkpoints are deliberately staged for .2. Opening the
+new v2 DB while a live editor caches its old v1 connection would block
+the upgrade; the integration must close or upgrade that connection and
+provide an explicit recovery path rather than doing this silently.
+The checkpoint envelope is currently bounded JSON, not a fully validated
+editor-state schema; .2 supplies that domain validator. No photo originals
+are written to project rows. Stage .3 owns migration. Existing source
+and physical experiments are not rewritten. Next .2 only after CI green.
+
 ## Approved revised execution roadmap — 2026-11-20
 
 User-approved reorder: workspace management before additional visualization.

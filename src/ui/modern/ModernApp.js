@@ -4540,7 +4540,13 @@
           (backup.created?'saved as protected recovery point.':'already in history.'));
         return refreshHistoryList(id).then(function(){setHistoryOpen(false);});
       });
-    }).finally(function(){historyRestoreBusy=false;});
+    }).finally(function(){
+      historyRestoreBusy=false;
+      // setMode refreshed the archived Scene actions while History restore
+      // still owned the busy lock. Release it and recompute enabled state,
+      // otherwise the second Scene -> Compare transfer remains disabled.
+      refreshCalibrationApplicability();
+    });
   }
   function downloadHistoryJson(contents,filename){
     var address=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
