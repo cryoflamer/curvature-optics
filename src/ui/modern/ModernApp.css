@@ -1542,3 +1542,6 @@ button{cursor:pointer}
 .modern-photo-calibration[data-calibration-stage=calibration] #ModernCalibrationPairList :is(th,td):last-child{display:none}
 .modern-photo-calibration[data-calibration-stage=result] #ModernCalibrationMesh{cursor:grab}
 .modern-photo-calibration[data-calibration-stage=result] #ModernCalibrationPhoto{cursor:grab}
+
+.modern-photo-calibration tr.is-fit-failure td{background:#fff0ed;color:#9b2525}
+.modern-photo-calibration tr.is-fit-failure td button{margin-left:4px}

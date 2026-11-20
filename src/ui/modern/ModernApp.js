@@ -4954,7 +4954,13 @@
     }
   }
   function drawCompare(side,g){
-    if(state.mode!=='compare'||!state.comparePair)return;
+    // GraphX3DX may deliver a queued draw after a workspace has been hidden.
+    // In that case there is no valid window transform to capture.
+    if(state.mode!=='compare'||!state.comparePair||photoCalibrationWorkspaceOpen||animationWorkspaceOpen||state.demosActive)return;
+    var canvas=g&&g.Canvas;
+    if(!canvas||!(canvas.width>0&&canvas.height>0)||
+       (typeof canvas.clientWidth==='number'&&canvas.clientWidth<=0)||
+       (typeof canvas.clientHeight==='number'&&canvas.clientHeight<=0)||!(g.ContextScale>0))return;
     var m=state.comparePair[side];
     if(!m)return;
     try{

@@ -557,6 +557,16 @@
     env.addEventListener('blur',()=>close());env.addEventListener('resize',()=>close());
     return {open,close,get visible(){return !menu.hidden;}};
   }
+  // Preserve Worker diagnostics even when an invalid fit has no best camera.
+  function fitProjectionFailures(rows,evaluation){
+    const points=new Map((evaluation?.points||[]).map(p=>[p.id,p]));
+    return rows.flatMap((r,i)=>{
+      if(r.included===false)return [];
+      const p=points.get(r.landmark.id);
+      if(p&&Array.isArray(p.residual)&&p.residual.length===2&&p.residual.every(Number.isFinite))return [];
+      return [{id:r.landmark.id,number:i+1,status:p?.status||"unavailable",reason:p?.reason||(!p?evaluation?.reason:null)||"No finite physical reprojection"}];
+    });
+  }
   const CALIBRATION_STAGES=Object.freeze(["correspondences","calibration","result"]);
   function calibrationStageState(stage,hasFit=false,preferredCamera="best"){
     const current=CALIBRATION_STAGES.includes(stage)?stage:"correspondences";
@@ -726,7 +736,7 @@
     const exportButton=$('ModernCalibrationExportExperiment'),importButton=$('ModernCalibrationImportExperiment'),importFile=$('ModernCalibrationExperimentFile'),exchangeStatus=$('ModernCalibrationExchangeStatus');
     const residualMode=$('ModernCalibrationResidualMode'),residualPanel=$('ModernCalibrationResidualPanel'),
       residualList=$('ModernCalibrationResidualRows'),residualNotice=$('ModernCalibrationResidualNotice');
-    let initialPoints=null,initialProjectionError='',residualData=[],diagnosticResult=null,diagnosticBestPoints=[];
+    let initialPoints=null,initialProjectionError='',residualData=[],diagnosticResult=null,diagnosticBestPoints=[],fitFailures=[];
     const fitRaster=doc.createElement('canvas');let fitWorker=null,fitBest=null,fitSignature=null,viewBest=false,paintedFit=null,lastFitPaint=0;
     const stageButtons=Array.from(workspace.querySelectorAll("[data-calibration-stage]"));
     const stagePanels=Array.from(workspace.querySelectorAll("[data-calibration-stages]"));
@@ -986,11 +996,16 @@
       list.replaceChildren();
       workflow.rows.forEach((r,i)=>{
         const tr=doc.createElement('tr');tr.classList.toggle('is-selected',r.landmark.id===workflow.activePair);
+        const failure=fitFailures.find(p=>p.id===r.landmark.id);tr.classList.toggle('is-fit-failure',!!failure);
         tr.onclick=e=>{if(!e.target.closest('button,input,label'))selectPair(r.landmark.id);};
         for(const [column,t] of [String(i+1),landmarkLabel(r.landmark),r.pixel.map(x=>x.toFixed(2)).join(', '),String(r.weight)].entries()){
           const td=doc.createElement('td');td.textContent=t;if(column===0){td.style.color=COLORS[i%COLORS.length];td.style.fontWeight='bold';}if(column===1)td.title=r.landmark.id;tr.append(td);
         }
         const role=doc.createElement('td');role.append(inclusionControl(r,i));tr.append(role);
+        const diagnostic=doc.createElement('td');diagnostic.textContent=failure?failure.status+' · '+failure.reason:'—';
+        if(failure){const jump=doc.createElement('button');jump.type='button';jump.textContent='Locate';jump.setAttribute('aria-label','Locate failed correspondence '+(i+1));
+          jump.onclick=()=>{setStage('correspondences');selectPair(r.landmark.id);};diagnostic.append(' ',jump);}
+        tr.append(diagnostic);
         const actions=doc.createElement('td');
         const edit=doc.createElement('button');edit.type='button';edit.textContent='Edit';
         edit.onclick=()=>beginPairEdit(r.landmark.id);
@@ -1921,7 +1936,8 @@
     residualMode.onchange=()=>{photoDraw();persist();};
     function invalidateFit(message){
       terminateFit();fitBest=null;fitSignature=null;viewBest=false;paintedFit=null;
-      initialPoints=null;initialProjectionError='';diagnosticResult=null;diagnosticBestPoints=[];
+      initialPoints=null;initialProjectionError='';diagnosticResult=null;diagnosticBestPoints=[];fitFailures=[];
+      for(const tr of list.querySelectorAll('tr.is-fit-failure')){tr.classList.remove('is-fit-failure');const cell=tr.cells[5];if(cell)cell.textContent='—';}
       fitResult.textContent='';fitStatus.textContent=message;syncFitControls();refreshResidualTable();photoDraw();
     }
     function fitSummary(r){
@@ -1977,7 +1993,7 @@
       const input=JSON.parse(JSON.stringify(fitRows(workflow.rows))),physics=JSON.parse(JSON.stringify(scene.physics));
       fitSignature=JSON.stringify(workflow.rows);
       try{
-        const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1&vertex-scale=1&material-fit=1');fitWorker=worker;
+        const worker=new env.Worker('src/calibration/CameraCalibrationWorker.js?camera-fit=1&vertex-scale=1&material-fit=1&fit-diagnostics=1');fitWorker=worker;
         worker.onmessage=event=>{
           if(fitWorker!==worker)return;
           const data=event.data;
@@ -1985,7 +2001,10 @@
             receiveFit(data.result);fitStatus.textContent='Fitting · '+data.result.acceptedSteps+' accepted steps · RMS '+data.result.evaluation.rmsPx.toFixed(2)+' px';
           }else if(data.type==='complete'){
             receiveFit(data.result);terminateFit();
-            fitStatus.textContent=data.result.status+' · '+(data.result.reason||'Complete')+' (local fit; not a uniqueness certificate)';
+            fitFailures=data.result.evaluation?.valid?[]:fitProjectionFailures(workflow.rows,data.result.evaluation);
+            fitStatus.textContent=data.result.status+' · '+(data.result.reason||'Complete')+' (local fit; not a uniqueness certificate)'+
+              (fitFailures.length?' · Failed Fit points: '+fitFailures.map(p=>'#'+p.number+' '+p.status).join(', ')+' · Worker '+(data.revision||'unknown'):'');
+            if(!data.result.evaluation?.valid){env.console?.warn('Calibration Worker returned invalid projection', {revision:data.revision||'unknown',status:data.result.status,evaluation:data.result.evaluation});refreshRows();}
             if(fitBest&&stage==='calibration')setStage('result',{camera:'best',save:false});
             else if(viewBest&&fitBest)paintBest();syncFitControls();persist();
           }else if(data.type==='error'){
@@ -2026,11 +2045,11 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inspectOwner:(x,y)=>inspectOwner([x,y]),viewerState:()=>viewer.snapshot(),viewerCorrespondences:()=>viewer.correspondences(),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),viewerWindow:()=>viewer.windowSnapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),inspectPick:(x,y)=>{const hit=inspectPick([x,y]);return {key:hit.key,ids:hit.candidates.map(p=>p.landmark.id)};},preview:()=>({view:modelView?{...modelView}:null,points:projected.map(p=>({landmark:{...p.landmark},pixel:p.pixel.slice(),worldKey:p.worldKey,objectKey:p.objectKey,painterVisible:p.painterVisible})),valid:previewValid}),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

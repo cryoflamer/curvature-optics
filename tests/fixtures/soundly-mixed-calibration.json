@@ -1,0 +1,453 @@
+{
+  "model": {
+    "rEarth": 6371000,
+    "rFEarth": 10007543,
+    "showModel": 1,
+    "Height": 81.71483549662574,
+    "viewcenterHorizon": 3,
+    "geometryRadius": 6371000,
+    "CameraEast": 25.297166363716016,
+    "CameraNorth": 0.02677680352500519,
+    "Pan": 0.06956533971195081,
+    "Nick": -0.2834781657988486,
+    "Roll": 0,
+    "FocalLengthField": 1502.629601803156,
+    "ObjType": [
+      8,
+      3
+    ],
+    "ObjSideType": [
+      0,
+      0
+    ],
+    "ObjSizeType": [
+      0,
+      0
+    ],
+    "ObjDist": [
+      496,
+      0
+    ],
+    "ObjSidePos": [
+      55.5,
+      0
+    ],
+    "ObjSize": [
+      1,
+      10
+    ],
+    "ObjDeltaDist": [
+      300,
+      100
+    ],
+    "ObjSideVar": [
+      0,
+      0
+    ],
+    "ObjSizeVar": [
+      0,
+      0
+    ],
+    "NObjects": [
+      128,
+      0
+    ]
+  },
+  "observations": [
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1089:v0",
+        "anchor": {
+          "kind": "vertex",
+          "owner": {
+            "kind": "span",
+            "bank": 0,
+            "objectType": 8,
+            "from": {
+              "kind": "object",
+              "bank": 0,
+              "objectType": 8,
+              "stationIndex": 40,
+              "column": 0,
+              "drawn": 87,
+              "total": 128
+            },
+            "to": {
+              "kind": "object",
+              "bank": 0,
+              "objectType": 8,
+              "stationIndex": 39,
+              "column": 0,
+              "drawn": 88,
+              "total": 128
+            },
+            "role": "soundly-road",
+            "side": -1
+          },
+          "primitive": 0,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            0
+          ],
+          "weights": [
+            1
+          ]
+        }
+      },
+      "pixel": [
+        332.78657543324414,
+        262.5537432548909
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "edge",
+      "landmark": {
+        "id": "b0:p1073:v3",
+        "anchor": {
+          "kind": "edge",
+          "owner": {
+            "kind": "span",
+            "bank": 0,
+            "objectType": 8,
+            "from": {
+              "kind": "object",
+              "bank": 0,
+              "objectType": 8,
+              "stationIndex": 40,
+              "column": 0,
+              "drawn": 87,
+              "total": 128
+            },
+            "to": {
+              "kind": "object",
+              "bank": 0,
+              "objectType": 8,
+              "stationIndex": 39,
+              "column": 0,
+              "drawn": 88,
+              "total": 128
+            },
+            "role": "soundly-road",
+            "side": 1
+          },
+          "primitive": 0,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            0,
+            1
+          ],
+          "weights": [
+            0.5194739581137773,
+            0.4805260418862227
+          ]
+        }
+      },
+      "pixel": [
+        544.4828836405626,
+        253.6511385858836
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1129:v4",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1129,
+        "vertex": 4
+      },
+      "pixel": [
+        286.549414769599,
+        314.59624208413203
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1052:v4",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1052,
+        "vertex": 4
+      },
+      "pixel": [
+        238.56600286405623,
+        299.25711802993465
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1204:v4",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1204,
+        "vertex": 4
+      },
+      "pixel": [
+        373.69042867068913,
+        345.80074865608174
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1030:v3",
+        "anchor": {
+          "kind": "vertex",
+          "owner": {
+            "kind": "object",
+            "bank": 0,
+            "objectType": 8,
+            "stationIndex": 43,
+            "column": 0,
+            "drawn": 84,
+            "total": 128
+          },
+          "primitive": 9,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            5
+          ],
+          "weights": [
+            1
+          ]
+        }
+      },
+      "pixel": [
+        415.2643149076943,
+        154.72322373477837
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1279:v4",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1279,
+        "vertex": 4
+      },
+      "pixel": [
+        508.22551890164783,
+        397.3289133725244
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1081:v3",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1081,
+        "vertex": 3
+      },
+      "pixel": [
+        103.63744056351564,
+        341.63699269913184
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1082:v2",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1082,
+        "vertex": 2
+      },
+      "pixel": [
+        766.3313008673249,
+        342.57427284134997
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p901:v2",
+        "anchor": {
+          "kind": "vertex",
+          "owner": {
+            "kind": "object",
+            "bank": 0,
+            "objectType": 8,
+            "stationIndex": 54,
+            "column": 0,
+            "drawn": 73,
+            "total": 128
+          },
+          "primitive": 10,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            4
+          ],
+          "weights": [
+            1
+          ]
+        }
+      },
+      "pixel": [
+        176.29557361599794,
+        280.109239834774
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1032:v1",
+        "anchor": {
+          "kind": "vertex",
+          "owner": {
+            "kind": "object",
+            "bank": 0,
+            "objectType": 8,
+            "stationIndex": 43,
+            "column": 0,
+            "drawn": 84,
+            "total": 128
+          },
+          "primitive": 10,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            3
+          ],
+          "weights": [
+            1
+          ]
+        }
+      },
+      "pixel": [
+        443.4050623477006,
+        217.4901738659271
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "surface",
+      "landmark": {
+        "id": "b0:p836:v2",
+        "anchor": {
+          "kind": "surface",
+          "owner": {
+            "kind": "object",
+            "bank": 0,
+            "objectType": 8,
+            "stationIndex": 60,
+            "column": 0,
+            "drawn": 67,
+            "total": 128
+          },
+          "primitive": 10,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            1,
+            2,
+            4
+          ],
+          "weights": [
+            0.2939754531967615,
+            0.19180455045878841,
+            0.51421999634445
+          ]
+        }
+      },
+      "pixel": [
+        146.5514625724334,
+        279.1167138827259
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "b0:p1101:v0",
+        "bank": 0,
+        "objectType": 8,
+        "primitive": 1101,
+        "vertex": 0
+      },
+      "pixel": [
+        346.4155365707866,
+        324.7665950267569
+      ],
+      "weight": 1,
+      "included": true
+    },
+    {
+      "kind": "vertex",
+      "landmark": {
+        "id": "material-9133359f-5829-46da-87ad-08bc893eec94",
+        "anchor": {
+          "kind": "vertex",
+          "owner": {
+            "kind": "object",
+            "bank": 0,
+            "objectType": 8,
+            "stationIndex": 17,
+            "column": 0,
+            "drawn": 110,
+            "total": 128
+          },
+          "primitive": 31,
+          "signature": "bank-v1:sha256:cfefa210f17890424023fc901fe78d91c12f9907656e32c83127fe28cc41a3a0",
+          "indices": [
+            4
+          ],
+          "weights": [
+            1
+          ]
+        }
+      },
+      "pixel": [
+        742.369188766985,
+        493.71530682207265
+      ],
+      "weight": 1,
+      "included": true
+    }
+  ],
+  "options": {
+    "atmosphere": "vacuum",
+    "temperatureProfile": {
+      "temperatureC": 15,
+      "pressureHpa": 1013.25,
+      "gradientKPerKm": -6.5
+    },
+    "width": 1176,
+    "height": 791,
+    "freeParameters": [
+      "CameraEast",
+      "CameraNorth",
+      "Height",
+      "Pan",
+      "Nick",
+      "Roll",
+      "FocalLengthField"
+    ],
+    "maxIterations": 1,
+    "method": "canvas-direct"
+  }
+}

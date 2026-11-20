@@ -1,3 +1,16 @@
+## 8F.6j fix — Fit failure diagnostics and hidden Compare draws
+
+The reported Soundly experiment (14 mixed legacy/material anchors, vacuum)
+was evaluated with the current physical fit code: initial RMS 314.7555 px;
+one accepted iteration reduced it to 68.3650 px. The reported invalid_initial
+was not reproduced in that isolated run. Failed Worker evaluations now retain
+per-row status/reason, stable row numbers and Locate actions rather than
+silently discarding invalid results. No observations are automatically excluded.
+Worker entry and dependencies use a fresh cache key; failed results log the
+actual Worker revision. Compare skips callbacks for hidden workspaces and
+zero-sized/unready canvases. Browser/CI verification remains pending.
+Next: verify the reported experiment in-browser before 8F.6k.
+
 ## 8F.6j — Nonlinear calibration stages
 
 Correspondences, Calibration and Result have independent visible controls

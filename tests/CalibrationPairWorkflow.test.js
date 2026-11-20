@@ -181,3 +181,10 @@ test('nonlinear stage state keeps editing separate from optical results',()=>{
   }
   assert.equal(calibrationStageState('corrupt',true).stage,'correspondences');
 });
+
+test('failed worker projection diagnostics retain original row numbers and exclude validation',()=>{
+  const {fitProjectionFailures}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  const rows=[row('a'),row('b'),row('c'),row('d')].map((r,i)=>({...r,included:i!==1}));
+  const result=fitProjectionFailures(rows,{reason:'Unavailable camera',points:[{id:'a',status:'out_of_frame',residual:[1,2]},{id:'c',status:'invalid_anchor',reason:'Topology mismatch',residual:null}]});
+  assert.deepEqual(result,[{id:'c',number:3,status:'invalid_anchor',reason:'Topology mismatch'},{id:'d',number:4,status:'unavailable',reason:'Unavailable camera'}]);
+});
