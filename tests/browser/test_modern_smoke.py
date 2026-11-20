@@ -785,6 +785,27 @@ class ModernBrowserSmoke(unittest.TestCase):
         free_state=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
         self.assertEqual(free_state['mode'],'free')
         self.assertGreater(free_state['count'],0)
+        # Dynamic status text must not feed back into the canvas dimensions.
+        stability=viewer.evaluate("""async d => {
+            const canvas=d.querySelector('canvas'),frame=d.querySelector('[data-viewer-frame]');
+            const status=d.querySelector('[data-viewer-correspondence-status]');
+            const size=()=>[frame.clientWidth,frame.clientHeight,canvas.width,canvas.height];
+            const settle=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+            await settle();
+            const before=size(),samples=[],original=status.textContent;
+            for(const text of ['2 / 13 correspondences shown','Hidden: '+('out of view; '.repeat(100)),'',original]){
+                status.textContent=text;await settle();samples.push(size());
+            }
+            for(const deltaY of [-120,-120,120,120]){
+                canvas.dispatchEvent(new WheelEvent('wheel',{deltaY,bubbles:true,cancelable:true}));
+                await settle();samples.push(size());
+            }
+            return {before,samples};
+        }""")
+        for sample in stability['samples']:
+            self.assertEqual(sample,stability['before'])
+        viewer.locator('[data-viewer-reset]').click()
+        free_state=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
         sensitivity=viewer.locator('[data-viewer-sensitivity]')
         viewer.locator('[data-viewer-sensitivity-reset]').click()
         expect(sensitivity).to_have_value('25')

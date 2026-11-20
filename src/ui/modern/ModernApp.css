@@ -1507,6 +1507,13 @@ button{cursor:pointer}
 .modern-photo-calibration .modern-landmark-viewer canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab;margin:0;border:0;background:#eef4f8}
 .modern-landmark-viewer canvas:active{cursor:grabbing}
 .modern-landmark-viewer p{font-size:12px;margin:0}
+/* Dynamic visibility and coordinate text must not resize the observed raster.
+   Keep the full text accessible by scrolling, even when the count changes. */
+.modern-landmark-viewer [data-viewer-status],
+.modern-landmark-viewer [data-viewer-correspondence-status],
+.modern-landmark-viewer [data-viewer-pick-status],
+.modern-landmark-viewer [data-viewer-point-coords]{box-sizing:border-box;line-height:1.4; height:2.8em;min-height:2.8em;max-height:2.8em;flex:0 0 2.8em;overflow:auto;overflow-wrap:anywhere;scrollbar-gutter:stable}
+.modern-landmark-viewer [data-viewer-frame] canvas{position:absolute;inset:0}
 .modern-landmark-viewer footer{display:flex;align-items:flex-end;gap:6px}
 .modern-photo-calibration .modern-landmark-viewer [data-viewer-resize]{flex:0 0 28px;width:28px;height:28px;padding:0;line-height:1;cursor:nwse-resize;touch-action:none;user-select:none}
 .modern-landmark-viewer [data-viewer-titlebar]:focus-visible,.modern-landmark-viewer canvas:focus-visible{outline:2px solid #397bad;outline-offset:-2px}

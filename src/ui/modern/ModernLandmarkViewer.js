@@ -682,6 +682,7 @@
     let mesh=null,paths=null,pickCache=null,opticalCache=null,opticalTransform=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
     let correspondenceRows=[],correspondenceMesh=null,correspondenceCache=[],correspondenceState=[];
     const correspondenceStatus=dialog.querySelector('[data-viewer-correspondence-status]');
+    function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
     function setCorrespondences(rows){
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
       if(crop&&dialog.open)redrawMarkers();
@@ -695,8 +696,8 @@
       });
       if(correspondenceStatus){
         const visible=correspondenceState.filter(r=>['visible','wireframe'].includes(r.visibility)).length;
-        correspondenceStatus.textContent=correspondenceState.length?
-          visible+' / '+correspondenceState.length+' correspondences shown · '+correspondenceState.filter(r=>!['visible','wireframe'].includes(r.visibility)).map(r=>r.label+': '+r.visibility).join('; '):'';
+        setText(correspondenceStatus,correspondenceState.length?
+          visible+' / '+correspondenceState.length+' correspondences shown · '+correspondenceState.filter(r=>!['visible','wireframe'].includes(r.visibility)).map(r=>r.label+': '+r.visibility).join('; '):'');
       }
     }
     function sessionChanged(){if(!restoringSession)onSessionChange();}
@@ -718,10 +719,10 @@
         n.value=h?.kind==='edge'?String(h.weights[1]):String(h?.weights[i]??0);
       }
       for(const n of snaps)n.disabled=!editable||(n.dataset.viewerPointSnap==='midpoint'&&h.kind!=='edge')||(n.dataset.viewerPointSnap==='boundary'&&h.kind!=='surface');
-      if(!h||!geometry?.frame){coords.textContent='';return;}
+      if(!h||!geometry?.frame){setText(coords,'');return;}
       const fmt=p=>p.map(x=>x.toFixed(6)).join(', ');
       const vis=free&&pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):opticalCache?opticalScreen(h).visibility:'not projected';
-      coords.textContent=(editable?'Draft':'Confirmed locally')+' · '+describe(h)+' · '+vis+' · local XYZ (m): '+fmt(h.point)+' · world XYZ (m): '+fmt(worldPoint(geometry.frame,h.point))+' · weights: '+fmt(h.weights);
+      setText(coords,(editable?'Draft':'Confirmed locally')+' · '+describe(h)+' · '+vis+' · local XYZ (m): '+fmt(h.point)+' · world XYZ (m): '+fmt(worldPoint(geometry.frame,h.point))+' · weights: '+fmt(h.weights));
     }
     function opticalScreen(hit){
       const q=opticalMarker(opticalCache,hit),t=opticalTransform;
@@ -872,7 +873,11 @@
       });
     }
     windowPointer(titleBar,'move');windowPointer(grip,'resize');
-    new env.ResizeObserver(()=>{if(dialog.open)render();}).observe(frame);
+    new env.ResizeObserver(()=>{
+      if(!dialog.open||!(frame.clientWidth>0&&frame.clientHeight>0))return;
+      const next=rasterSize(frame.clientWidth,frame.clientHeight,env.devicePixelRatio);
+      if(canvas.width!==next.width||canvas.height!==next.height)render();
+    }).observe(frame);
     env.addEventListener('resize',()=>{if(dialog.open){stopDrags();applyRect(rect);saveRect();render();}});
     function resetScene(){stopDrags();cancelHover();paths=null;pickCache=null;free=false;state=reset();syncMode();render();}
     function enterFree(){

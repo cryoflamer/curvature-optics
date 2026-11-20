@@ -1,3 +1,17 @@
+## 8F.5a.1 — Magnifier raster stability
+
+User reported oscillation at particular wheel zoom increments after 8F.5a.
+Inspection found a possible ResizeObserver feedback loop: dynamic
+visibility text could change flex canvas height, triggering rendering
+which changes visibility again. Reserve fixed scrollable two-line slots
+for view, correspondence, pick and coordinate status, remove intrinsic
+canvas size from flex layout, skip unchanged status writes and ignore
+ResizeObserver notifications if the required backing raster already matches.
+No changes to projection, picking or correspondence geometry. Added
+Chromium regression for short/long/empty status text and wheel increments.
+JS syntax checked; actual browser reproduction and CI pending.
+Next: 8F.5b after stability verification.
+
 ## 8F.5a — Existing correspondence markers in Magnifier
 
 8F.4d.2 CI: architecture and Node passed, Chromium failed on the recurring
