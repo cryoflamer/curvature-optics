@@ -485,9 +485,11 @@
   function drawPickMarker(canvas,hit,camera,color){
     if(!hit)return;
     const p=camera.project(hit.point);if(!p)return;
-    const ctx=canvas.getContext('2d');ctx.save();ctx.lineWidth=2;ctx.strokeStyle=color;ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(...p.pixel,5,0,2*Math.PI);ctx.stroke();
-    ctx.beginPath();ctx.arc(...p.pixel,2,0,2*Math.PI);ctx.fill();ctx.restore();
+    const ctx=canvas.getContext('2d'),r=canvas.getBoundingClientRect(),scale=canvas.width/Math.max(1,r.width);
+    ctx.save();ctx.translate(...p.pixel);ctx.scale(scale,scale);
+    ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();
+    ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();ctx.restore();
   }
   // The actual optical camera, not a ray from the physical Free View.
   function opticalCamera(capture){
@@ -755,7 +757,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null}={}){
     let inlineOpen=false,parkedScene=null;
     const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
@@ -773,6 +775,8 @@
     function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
     let activeCorrespondence=null,hoveredCorrespondence=null;
     const selectionStatus=dialog.querySelector('[data-viewer-selection-status]');
+    const deleteButton=inline?dialog.querySelector('[data-viewer-delete-pair]'):null;
+    if(deleteButton)deleteButton.onclick=()=>{if(activeCorrespondence!==null)onDeleteCorrespondence?.(activeCorrespondence);};
     const tooltip=dialog.querySelector('[data-viewer-marker-tooltip]');
     const localControls=dialog.querySelectorAll('[data-viewer-local-pick]');
     function clearMarkerHover(){hoveredCorrespondence=null;tooltip.hidden=true;canvas.style.cursor=pickActive()?'crosshair':crop&&!free&&!crop.build&&!navigating()?'default':'grab';}
@@ -781,7 +785,7 @@
       return correspondenceAt(correspondenceState,[(css[0]-r.left)*scale[0],(css[1]-r.top)*scale[1]],scale,active);
     }
     function hoverMarker(css){
-      const id=crop&&pickMode.value==='navigate'?markerAtCSS(css):null;
+      const id=crop&&(inline||pickMode.value==='navigate')?markerAtCSS(css):null;
       const changed=id!==hoveredCorrespondence;hoveredCorrespondence=id;
       const row=correspondenceState.find(r=>r.id===id);
       canvas.style.cursor=id!==null?'pointer':crop&&!free&&!crop.build&&!navigating()?'default':'grab';
@@ -803,6 +807,7 @@
     function setCorrespondences(rows,active=null){
       const changed=active!==activeCorrespondence;
       activeCorrespondence=active;
+      if(deleteButton)deleteButton.disabled=active===null;
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
       if(crop&&isOpen()&&(!inline||frame.clientWidth>0&&frame.clientHeight>0)){
         clearMarkerHover();
@@ -819,7 +824,7 @@
       for(const row of correspondenceState.filter(r=>!r.selected).concat(correspondenceState.filter(r=>r.selected)))
         if(row.pixel&&['visible','wireframe'].includes(row.visibility))drawCorrespondence(canvas,row.pixel,row);
       const selected=correspondenceState.find(r=>r.selected);
-      setText(selectionStatus,selected?'Selected correspondence: #'+selected.label+' · '+selected.kind+' · '+selected.visibility:'Navigate: click a numbered correspondence to select it.');
+      setText(selectionStatus,selected?'Selected correspondence: #'+selected.label+' · '+selected.kind+' · '+selected.visibility+(inline?' · Delete to remove':''):(inline?'Click a numbered correspondence to select it.':'Navigate: click a numbered correspondence to select it.'));
       if(correspondenceStatus){
         const visible=correspondenceState.filter(r=>['visible','wireframe'].includes(r.visibility)).length;
         setText(correspondenceStatus,correspondenceState.length?
@@ -882,9 +887,11 @@
           const p=paths.camera.project(state.orbitPivot?.point||[0,0,0])?.pixel;
           if(p&&p[0]>=0&&p[0]<canvas.width&&p[1]>=0&&p[1]<canvas.height){
             const ctx=canvas.getContext('2d'),[x,y]=p;
-            ctx.save();ctx.strokeStyle='#111';ctx.lineWidth=4;
-            ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke();
-            ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
+            const r=canvas.getBoundingClientRect(),scale=canvas.width/Math.max(1,r.width);
+            ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.strokeStyle='#111';ctx.lineWidth=5;
+            ctx.beginPath();ctx.moveTo(-16,0);ctx.lineTo(-6,0);ctx.moveTo(6,0);ctx.lineTo(16,0);
+            ctx.moveTo(0,-16);ctx.lineTo(0,-6);ctx.moveTo(0,6);ctx.lineTo(0,16);ctx.stroke();
+            ctx.strokeStyle='#ffe15a';ctx.lineWidth=2.5;ctx.stroke();ctx.restore();
           }
         }
       }
@@ -923,8 +930,9 @@
     function acceptFastVertex(){
       if(!fastVertex()||!pickAvailable()||staged?.kind!=='vertex')return false;
       const hit=staged;
-      if(!onFastVertex({kind:hit.kind,bank:hit.bank,index:hit.index,vertex:hit.indices[0]}))return false;
-      confirmed=null;clearPick();syncPoint();updatePickStatus('Model vertex selected for pairing.');redrawMarkers();return true;
+      const accepted=onFastVertex({kind:hit.kind,bank:hit.bank,index:hit.index,vertex:hit.indices[0]});
+      if(!accepted)return false;
+      confirmed=accepted==='pending'?hit:null;clearPick();syncPoint();updatePickStatus('Model vertex selected for pairing.');redrawMarkers();return true;
     }
     function stageAt(css){
       cancelHover();const result=query(css);choices=result.candidates;staged=choices[0]||null;
@@ -947,6 +955,8 @@
     sensitivityInput.oninput=()=>setSensitivity(Number(sensitivityInput.value));
     dialog.querySelector('[data-viewer-sensitivity-reset]').onclick=()=>setSensitivity(DEFAULT_SENSITIVITY);
     function syncMode(){
+      if(inline&&navigating())heading.textContent=free?'Model · Free View':crop.title;
+      if(deleteButton){deleteButton.hidden=!crop;deleteButton.disabled=activeCorrespondence===null;}
       sceneControls.style.display=crop?'':'none';
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
       spans.closest('label').style.display=crop?'none':'';
@@ -1078,7 +1088,7 @@
     });
     canvas.addEventListener('pointermove',e=>{
       const css=[e.clientX,e.clientY];
-      if(!drag){if(pickActive())queueHover(css);else hoverMarker(css);return;}
+      if(!drag){if(inline&&markerAtCSS(css)!==null){cancelHover();hoverMarker(css);}else if(pickActive()){if(hoveredCorrespondence!==null){clearMarkerHover();redrawMarkers();}queueHover(css);}else hoverMarker(css);return;}
       if(drag.id!==e.pointerId)return;
       if(!drag.moved&&Math.hypot(...sub(css,drag.start))<3)return;
       drag.moved=true;clearMarkerHover();canvas.style.cursor='grabbing';const delta=sub(css,drag.css);
@@ -1092,12 +1102,12 @@
     canvas.addEventListener('pointerup',e=>{
       if(drag?.id!==e.pointerId)return;const d=drag;drag=null;clearMarkerHover();
       if(d.moved||Math.hypot(e.clientX-d.start[0],e.clientY-d.start[1])>=3||d.pan||d.button!==0){redrawMarkers();return;}
-      if(crop&&pickMode.value==='navigate'){
-        const r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
-        const id=correspondenceAt(correspondenceState,[(e.clientX-r.left)*scale[0],(e.clientY-r.top)*scale[1]],scale,activeCorrespondence);
-        if(id!==null)onSelectCorrespondence(id);
-        hoverMarker([e.clientX,e.clientY]);
-      }else if(pickActive())stageAt([e.clientX,e.clientY]);
+      const css=[e.clientX,e.clientY];
+      if(crop&&(inline||pickMode.value==='navigate')){
+        const id=markerAtCSS(css,activeCorrespondence);
+        if(id!==null){onSelectCorrespondence(id);hoverMarker(css);return;}
+      }
+      if(pickActive())stageAt(css);else hoverMarker(css);
     });
     const end=e=>{if(drag?.id===e.pointerId){drag=null;clearMarkerHover();redrawMarkers();}};
     for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,end);
@@ -1110,7 +1120,11 @@
     },{passive:false});
     // Modeless: scope shortcuts to focus inside the inspector, not the
     // whole workspace. Escape outside still belongs to the workspace.
-    dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else if(inline)resetScene();else close();}e.stopPropagation();});
+    dialog.addEventListener('keydown',e=>{
+      const editable=e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName);
+      if(inline&&!editable&&e.key==='Delete'&&activeCorrespondence!==null&&onDeleteCorrespondence){e.preventDefault();onDeleteCorrespondence(activeCorrespondence);}
+      else if(inline&&!editable&&(e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'&&onUndo){e.preventDefault();onUndo();}
+      else if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else if(inline)resetScene();else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
     env.addEventListener('pagehide',()=>sessionChanged());
     if(!inline)dialog.addEventListener('close',()=>{if(!isOpen()){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
@@ -1126,7 +1140,7 @@
       if(typeof paint!=='function'||buildFree!==null&&typeof buildFree!=='function')throw Error('Invalid optical source');
       const next=opticalGeometry(banks),nextMesh=preparePick(next.items);
       stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=false;state=reset();
-      crop={region:{...full},source:{width,height,full,geometry:next,mesh:nextMesh},paint,build:buildFree,reason:'',optical:true,readOnly:!!readOnly};
+      crop={region:{...full},source:{width,height,full,geometry:next,mesh:nextMesh},paint,build:buildFree,reason:'',optical:true,readOnly:!!readOnly,title};
       heading.textContent=title;show();syncMode();render();sessionChanged();
     },parkScene(){
       if(!navigating()||crop.readOnly)return false;
@@ -1173,7 +1187,7 @@
         sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
       }finally{restoringSession=false;}
       sessionChanged();
-    },close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
+    },clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }

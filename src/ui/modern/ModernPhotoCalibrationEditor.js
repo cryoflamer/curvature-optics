@@ -404,7 +404,9 @@
     inlineHost.querySelector('canvas').setAttribute('aria-label','Integrated calibration model');
     const fastOption=doc.createElement('option');fastOption.value='fast-vertex';fastOption.textContent='Fast Vertex';
     inlineHost.querySelector('[data-viewer-pick-mode]').append(fastOption);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,()=>{},selectPair,{inline:true,onFastVertex:chooseInlineVertex});
+    const inlineDelete=doc.createElement('button');inlineDelete.type='button';inlineDelete.textContent='Delete pair';inlineDelete.disabled=true;inlineDelete.setAttribute('data-viewer-delete-pair','');
+    inlineHost.querySelector('[data-viewer-selection-status]').after(inlineDelete);
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,()=>{},selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
@@ -614,7 +616,7 @@
         for(const r of residualData)drawResidual(ctx,view,r.observed,r[residualMode.value],COLORS[(r.number-1)%COLORS.length],r.id===activePair);
       }
       rows.forEach((r,i)=>marker(ctx,screenPoint(view,photoGhost?.id===r.landmark.id?photoGhost.pixel:r.pixel),pairLabel(r,i),COLORS[i%COLORS.length],r.landmark.id===activePair));
-      if(pending)marker(ctx,screenPoint(view,pending),'+','#009ab3');
+      if(pending){const p=screenPoint(view,pending),scale=photo.width/Math.max(1,photo.getBoundingClientRect().width);ctx.save();ctx.translate(...p);ctx.scale(scale,scale);ctx.beginPath();ctx.arc(0,0,10,0,2*Math.PI);ctx.strokeStyle='#17212d';ctx.lineWidth=6;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#009ab3';ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(0,0,3.5,0,2*Math.PI);ctx.fillStyle='#009ab3';ctx.fill();ctx.restore();}
     }
     function fitPhoto(){
       if(!record)return;
@@ -689,7 +691,7 @@
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
     function updateHint(){
-      const text=globeRoute()&&!legacyShown&&!editing?(activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · use Navigate to select another.':pending?'Photo point selected · choose Fast Vertex in the Model Viewer.':pendingModel?'Model vertex selected · click the matching photo point.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
+      const text=globeRoute()&&!legacyShown&&!editing?(activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · Delete to remove, or click another numbered marker.':pending?'Photo point selected · choose Fast Vertex in the Model Viewer.':pendingModel?'Model vertex selected · click the matching photo point.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
@@ -697,7 +699,7 @@
       $('ModernCalibrationActionHint').textContent=text;
       pickStatus.textContent=text;
     }
-    function resetPending(){editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
+    function resetPending(){if(inlineViewer.isOpen())inlineViewer.clearLocalPoint();editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
     function selectPair(id){
       if(!rows.some(r=>r.landmark.id===id))return;
       activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
@@ -1101,7 +1103,7 @@
       if(!globeRoute()||legacyShown||viewBest||!scene)return false;
       const p=scene.banks[hit.bank]?.[hit.index];
       if(hit.kind!=='vertex'||!Number.isInteger(hit.vertex)||!p?.points[hit.vertex])return false;
-      return chooseModel({landmark:{id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex}});
+      return chooseModel({landmark:{id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex}})?(pendingModel?'pending':'saved'):false;
     }
     function chooseModel(item){
       if(!record){message('Load a photograph first.');return false;}

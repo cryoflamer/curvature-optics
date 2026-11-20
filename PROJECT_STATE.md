@@ -1,3 +1,17 @@
+## Fast Vertex interaction follow-up (8F.5b.4a.1)
+
+Integrated model selection and Delete pair / Delete now use the editor's
+existing delete and Undo operations; Ctrl+Z is forwarded when focus is in
+the viewport, except editable controls. Numbered markers take selection
+priority even in picking modes. Local material markers and the pending
+photo pixel use larger contrasting rings in CSS pixels; the orbit pivot
+uses a distinct yellow broken crosshair. The Free View title follows the
+active representation. Fast Vertex remains distinct from local inspection;
+a model-first selection remains visible until the pair is saved or reset.
+The user reported a failed pairing in local Vertex mode; actual Fast Vertex
+browser behavior still requires verification. Added shortcut/button checks
+and adjusted the Free View fixture's camera framing. CI pending.
+
 ## 8F.5b.4a.1 — Integrated Fast Vertex pairing
 
 8F.5b.3c navigation was manually confirmed by the user. The integrated

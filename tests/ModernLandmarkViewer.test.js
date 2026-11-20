@@ -460,6 +460,7 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
     closest(){return this;},replaceChildren(){},append(){},focus(){},addEventListener(k,fn){this.events[k]=fn;},
     setPointerCapture(){},hasPointerCapture(){return false;},getBoundingClientRect(){return {left:0,top:0,width:800,height:600};}});
   const host=make();
+  const hostKeys=[];host.addEventListener=(k,fn)=>{if(k==='keydown')hostKeys.push(fn);};
   host.hidden=true;host.querySelector=k=>{if(!nodes.has(k))nodes.set(k,make());return nodes.get(k);};
   host.querySelectorAll=()=>[];
   host.ownerDocument={createElement:make,defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
@@ -471,10 +472,10 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
     metadata:{landmarkOwner:owner,landmarkPrimitive:0}}],[]];
   let pivots=0,changes=0,failPivot=true;
   const full={x:0,y:0,width:800,height:600};
-  const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:1,objectZExtend:0,zoom:1,near:.001}};
+  const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[];
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;}});
+  const fastHits=[],deleted=[];let undos=0;
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openScene(sourceContract);
@@ -494,6 +495,13 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const pair=(id,i)=>({id,label:id,color:'#123456',bank:0,index:0,anchor:{kind:'vertex',owner,primitive:0,indices:[i],weights:[1]}});
   const rows=[pair('a',0),pair('b',2)];
   api.setCorrespondences(rows,'a');
+  assert.equal(host.querySelector('h2').textContent,'Model · Free View');
+  
+  // The mock stores only the last listener; invoke the actual button and inspect enabled state.
+  const del=host.querySelector('[data-viewer-delete-pair]');assert.equal(del.disabled,false);del.onclick();assert.deepEqual(deleted,['a']);
+  const key=(key,extra={})=>hostKeys.forEach(fn=>fn({key,target:canvas,preventDefault(){},stopPropagation(){},...extra}));
+  key('Delete');key('z',{ctrlKey:true});assert.deepEqual(deleted,['a','a']);assert.equal(undos,1);
+  key('Delete',{target:{tagName:'INPUT'}});assert.equal(deleted.length,2);
   assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
   canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});
   assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
@@ -504,10 +512,10 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
   api.resetScene();assert.equal(api.snapshot().mode,'scene');assert.deepEqual(api.snapshot().region,full);
   api.setCorrespondences([],null);
+  assert.equal(del.disabled,true);
   assert.equal(api.enterFree(),true);
   const select=host.querySelector('[data-viewer-pick-mode]');
   select.value='fast-vertex';select.onchange();
-  canvas.events.wheel({...event,deltaY:-2000});
   const g=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region:full},source,observer);
   const pixel=viewer.regionCamera(g,api.snapshot().view,800,600).project(g.items[0].points[0]).pixel;
   const click={...event,clientX:pixel[0],clientY:pixel[1]};
