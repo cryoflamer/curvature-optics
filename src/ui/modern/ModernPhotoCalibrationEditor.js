@@ -411,7 +411,7 @@
   }
   // Correspondence lifecycle independent of DOM, camera, picking and storage.
   function createPairWorkflow(){
-    let rows=[],activePair=null,draft=null,undoStack=[];
+    let rows=[],activePair=null,draft=null,undoStack=[],redoStack=[];
     const copy=value=>JSON.parse(JSON.stringify(value));
     const exists=id=>rows.some(r=>r.landmark.id===id);
     const fresh=(explicit=false)=>({mode:'add',id:null,pixel:null,landmark:null,explicit});
@@ -434,32 +434,42 @@
       activePair=id;return true;
     }
     function change(next,selection=activePair,{finish=false}={}){
-      undoStack.push({rows:copy(rows),activePair});if(undoStack.length>50)undoStack.shift();
+      pushHistory(undoStack);redoStack=[];
       rows=next;
       if(finish||draft?.mode==='edit'&&!exists(draft.id))clearDraft();
       activePair=exists(selection)?selection:null;
     }
     function cancel(){activePair=draft?.mode==='edit'?draft.id:null;clearDraft();}
-    function undo(){
-      const old=undoStack.pop();if(!old)return false;
-      rows=old.rows;activePair=exists(old.activePair)?old.activePair:null;clearDraft();return true;
+    function pushHistory(stack){
+      stack.push({rows:copy(rows),activePair});if(stack.length>50)stack.shift();
     }
-    function replaceAll(next=[]){rows=next;activePair=null;clearDraft();undoStack=[];}
+    function travel(from,to){
+      if(!from.length)return false;
+      pushHistory(to);const next=from.pop();rows=next.rows;
+      // History is for durable observations, not a new independent draft.
+      // An explicit edit whose original row disappeared cannot retain its ID.
+      if(draft?.mode==='edit'&&!exists(draft.id))clearDraft();
+      activePair=draft?.mode==='edit'?draft.id:exists(next.activePair)?next.activePair:null;
+      return true;
+    }
+    function undo(){return travel(undoStack,redoStack);}
+    function redo(){return travel(redoStack,undoStack);}
+    function replaceAll(next=[]){rows=next;activePair=null;clearDraft();undoStack=[];redoStack=[];}
     function restoreDraft({editing=null,pending=null,pendingModel=null,activePair:selection=null,explicitAdd=false}){
       clearDraft();activePair=exists(selection)?selection:null;
       if(exists(editing)){
         draft={mode:'edit',id:editing,pixel:copy(pending),landmark:copy(pendingModel)};activePair=editing;
       }else if(pending||pendingModel||explicitAdd)draft={...fresh(explicitAdd),pixel:copy(pending),landmark:copy(pendingModel)};
     }
-    function restoreHistory(entries){undoStack=copy(entries.slice(-50));}
+    function restoreHistory(entries,redo=[]){undoStack=copy(entries.slice(-50));redoStack=copy(redo.slice(-50));}
     return Object.freeze({
       get rows(){return rows;},get activePair(){return activePair;},get mode(){return draft?.mode||'browse';},
       get editing(){return draft?.mode==='edit'?draft.id:null;},get explicitAdd(){return draft?.mode==='add'&&draft.explicit===true;},
       get pending(){return draft?.pixel||null;},get pendingModel(){return draft?.landmark||null;},
-      get undoStack(){return undoStack;},get canCommit(){return !!(draft?.pixel&&draft.landmark);},
+      get undoStack(){return undoStack;},get redoStack(){return redoStack;},get canCommit(){return !!(draft?.pixel&&draft.landmark);},
       beginAdd,beginEdit,select,selectPhoto:p=>point('pixel',p),selectModel:l=>point('landmark',l),
-      clearDraft,cancel,change,undo,replaceAll,restoreDraft,restoreHistory,
-      snapshot(){return copy({mode:draft?.mode||'browse',rows,activePair,draft,undoStack});}
+      clearDraft,cancel,change,undo,redo,replaceAll,restoreDraft,restoreHistory,
+      snapshot(){return copy({mode:draft?.mode||'browse',rows,activePair,draft,undoStack,redoStack});}
     });
   }
   // Presentation is derived from workflow state, not individual viewport controls.
@@ -481,8 +491,70 @@
     return {hint,mode:editing?'Edit pair':draft?'New pair':'Browse',photo,model,
       addDisabled:!ready||readOnly||draft,editDisabled:!ready||readOnly||draft||selected<0,
       commitDisabled:!ready||readOnly||!draft||!photo||!model,cancelDisabled:!draft,
-      deleteDisabled:selected<0||draft,undoDisabled:!workflow.undoStack.length,
+      deleteDisabled:selected<0||draft,undoDisabled:!workflow.undoStack.length,redoDisabled:!workflow.redoStack.length,
       commitLabel:editing?'Update pair':'Create pair'};
+  }
+  // Context actions are targeted by the right-clicked marker, not by a
+  // possibly unrelated selection. The descriptions are pure and testable.
+  function contextActions(workflow,target,side){
+    const action=(id,label,disabled=false)=>({id,label,disabled});
+    if(target.kind==='draft')return [
+      action('link','Link pair',!workflow.canCommit),
+      action('remove-endpoint',side==='photo'?'Remove photo point':'Remove model point'),
+      action('cancel-draft','Cancel draft')
+    ];
+    if(target.kind==='saved'){
+      const row=workflow.rows.find(r=>r.landmark.id===target.id);if(!row)return [];
+      return [action('select','Select pair'),action('pivot','Set model orbit centre'),
+        action('properties','Properties · weight: '+row.weight),
+        action('role',row.included===false?'Use for fit':'Use for validation'),
+        action('delete','Delete pair')];
+    }
+    return [action('undo','Undo',!workflow.undoStack.length),action('redo','Redo',!workflow.redoStack.length),
+      action('cancel-draft','Cancel draft',workflow.mode==='browse'),
+      action('fit-view',side==='photo'?'Fit photograph':'Reset model view'),
+      ...(side==='model'?[action('reset-pivot','Reset orbit centre'),action('wireframe','Toggle wireframe'),
+        action('owner','Inspect owner'),action('automatic','Automatic picking')]:[])];
+  }
+  function createContextMenu(doc,env,workspace){
+    const menu=doc.createElement('div');
+    menu.hidden=true;menu.setAttribute('role','menu');menu.setAttribute('aria-label','Correspondence actions');
+    Object.assign(menu.style,{position:'fixed',zIndex:'10050',minWidth:'190px',maxWidth:'calc(100vw - 12px)',
+      maxHeight:'calc(100vh - 12px)',overflowY:'auto',padding:'4px',background:'#fff',color:'#17212d',
+      border:'1px solid #a8bdcd',borderRadius:'6px',boxShadow:'0 5px 20px #0003'});
+    workspace.append(menu);
+    let origin=null,buttons=[];
+    function close(restoreFocus=false){
+      if(menu.hidden)return;menu.hidden=true;menu.replaceChildren();buttons=[];
+      const old=origin;origin=null;if(restoreFocus)old?.focus?.({preventScroll:true});
+    }
+    function open(point,items,run,source){
+      close();if(!items.length)return false;origin=source;
+      for(const item of items){
+        const b=doc.createElement('button');b.type='button';b.textContent=item.label;b.disabled=item.disabled;
+        b.setAttribute('role','menuitem');Object.assign(b.style,{display:'block',width:'100%',textAlign:'left',padding:'7px 10px'});
+        b.onclick=()=>{if(b.disabled)return;close(true);run(item.id);};menu.append(b);buttons.push(b);
+      }
+      menu.style.left='0px';menu.style.top='0px';menu.hidden=false;
+      const rect=menu.getBoundingClientRect();
+      menu.style.left=Math.max(0,Math.min(point[0],env.innerWidth-rect.width-4))+'px';
+      menu.style.top=Math.max(0,Math.min(point[1],env.innerHeight-rect.height-4))+'px';
+      buttons.find(b=>!b.disabled)?.focus();return true;
+    }
+    menu.addEventListener('keydown',event=>{
+      // Enter/Space activate the focused menu button, not the workspace's
+      // global Enter-to-link or Delete/Undo shortcuts.
+      event.stopPropagation();
+      if(event.key==='Escape'||event.key==='Tab'){close(true);if(event.key==='Escape')event.preventDefault();event.stopPropagation();return;}
+      if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
+      const available=buttons.filter(b=>!b.disabled);if(!available.length)return;
+      const i=available.indexOf(doc.activeElement),n=event.key==='Home'?0:event.key==='End'?available.length-1:
+        (i+(event.key==='ArrowDown'?1:-1)+available.length)%available.length;
+      event.preventDefault();event.stopPropagation();available[n].focus();
+    });
+    doc.addEventListener('pointerdown',event=>{if(!menu.hidden&&!menu.contains(event.target))close();},true);
+    env.addEventListener('blur',()=>close());env.addEventListener('resize',()=>close());
+    return {open,close,get visible(){return !menu.hidden;}};
   }
   let mounted=null;
   function mount(doc){
@@ -525,14 +597,51 @@
     inlineHost.querySelector('[data-viewer-selection-status]').after(ownerInfo,ownerPrimitives);
     const pairAdd=$('ModernCalibrationBeginPair'),pairEdit=$('ModernCalibrationEditPair'),
       pairCancel=$('ModernCalibrationCancelEdit'),pairDelete=$('ModernCalibrationDeleteSelected'),
-      pairUndo=$('ModernCalibrationUndo'),pairPanel=$('ModernCalibrationPairToolbar');
+      pairUndo=$('ModernCalibrationUndo'),pairRedo=$('ModernCalibrationRedo'),pairPanel=$('ModernCalibrationPairToolbar');
     pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial,onGesture:linkGesture,onMoveEndpoint:moveInlineEndpoint});
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onRedo:redo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial,onGesture:a=>viewportGesture(a,'model'),onMoveEndpoint:moveInlineEndpoint});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,physicalSource=null,physicalFraming=null,renderingModel=false,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
     const implicitRoute=()=>globeRoute()&&!legacyShown&&!viewBest;
-    function linkGesture(a){return linkDraftGesture(workflow,a,savePair,!!(record&&implicitRoute()));}
+    const contextMenu=createContextMenu(doc,env,workspace);
+    function viewportGesture(a,side){
+      if(!record||!implicitRoute())return false;
+      if(a.kind!=='context')return linkDraftGesture(workflow,a,savePair);
+      const target=a.target,source=side==='photo'?photo:inlineHost.querySelector('canvas');
+      return contextMenu.open(a.point,contextActions(workflow,target,side),id=>runContext(id,target,side,a.point),source);
+    }
+    function runContext(action,target,side,point){
+      if(!record||!implicitRoute())return;
+      const row=target.kind==='saved'?workflow.rows.find(r=>r.landmark.id===target.id):null;
+      switch(action){
+        case 'link':if(workflow.canCommit)savePair();break;
+        case 'remove-endpoint':
+          if(side==='photo')setPixel(null);
+          else {inlineViewer.clearLocalPoint();workflow.selectModel(null);}
+          refreshRows();updateHint();photoDraw();meshDraw();persist();break;
+        case 'cancel-draft':cancelPairDraft();break;
+        case 'select':if(row)selectPair(target.id);break;
+        case 'pivot':if(row&&!inlineViewer.focusCorrespondence(target.id))message('Model point is not visible in this view.');persist();break;
+        case 'properties':
+          if(row){
+            const value=env.prompt('Correspondence weight (positive number)',String(row.weight));
+            if(value===null)break;
+            const n=Number(value);
+            if(!value.trim()||!Number.isFinite(n)||n<=0){message('Weight must be a positive number.');break;}
+            if(n!==row.weight){workflow.change(workflow.rows.map(r=>r===row?{...r,weight:n}:r));finishEndpointChange();}
+          }break;
+        case 'role':if(row)setIncluded(target.id,row.included===false);break;
+        case 'delete':if(row)deletePair(target.id);break;
+        case 'undo':undo();break;
+        case 'redo':redo();break;
+        case 'fit-view':if(side==='photo')fitPhoto();else inlineViewer.resetScene();persist();break;
+        case 'reset-pivot':inlineViewer.resetPivot();persist();break;
+        case 'wireframe':inlineViewer.toggleWireframe();persist();break;
+        case 'owner':inlineViewer.inspectAt(point);persist();break;
+        case 'automatic':inlineViewer.activateAutomatic();persist();break;
+      }
+    }
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
     const MAGNIFIER_KEY='curvature-calibration-magnifier-v1',INLINE_KEY='curvature-calibration-inline-v2';
@@ -635,7 +744,7 @@
       if(restoring||!scene)return;
       saveInline();
       const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
-        record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,
+        record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,modelView,selected:selected(),magnifierSessionId,legacyShown,undoStack:workflow.undoStack,redoStack:workflow.redoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
       writeQueue=writeQueue.catch(()=>{}).then(async()=>{
@@ -681,16 +790,19 @@
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
           try{restoreFit(validateFitResult(d.fitBest,workflow.rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
-        if(record&&Array.isArray(d.undoStack)){
+        if(record){
+          function checkedHistory(entries){
           const history=[];
-          for(const entry of d.undoStack.slice(-50)){
+          for(const entry of (Array.isArray(entries)?entries:[]).slice(-50)){
             try{
               const prior=observationRows(entry.rows,record.original.width,record.original.height,true,scene.model);
               validateLegacyTopology(prior,scene);
               history.push({rows:prior,activePair:prior.some(r=>r.landmark.id===entry.activePair)?entry.activePair:null});
             }catch(error){/* Discard only invalid history entries. */}
           }
-          workflow.restoreHistory(history);refreshRows();
+          return history;
+          }
+          workflow.restoreHistory(checkedHistory(d.undoStack),checkedHistory(d.redoStack));refreshRows();
         }
         if(d.selectedOwner){const found=[...packages.values()].find(p=>JSON.stringify(p.owner)===JSON.stringify(d.selectedOwner));selectedObjectKey=found?.key??null;refreshObjectSelection();}
         pendingMagnifier=readMagnifier();
@@ -743,7 +855,7 @@
       if(token!==loadToken)return false;
       if(decoded.naturalWidth!==next.original.width||decoded.naturalHeight!==next.original.height)
         throw Error('Reference image decoded dimensions mismatch');
-      photoGestures.cancel();newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
+      contextMenu.close();photoGestures.cancel();newMagnifierSession();record=next;image=decoded;activeSource=source;workflow.replaceAll();resetPending();refreshRows();fitPhoto();renderModel();
       photoDetails(next,source);
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px');
       persist();return true;
@@ -856,7 +968,7 @@
       const legacy=!globeRoute()||legacyShown;
       const state=pairToolbarState(workflow,{ready:!!record,readOnly:viewBest,legacy,legacyModel:legacy&&!!selected(),implicit:implicitRoute()});
       pairAdd.disabled=state.addDisabled;pairEdit.disabled=state.editDisabled;add.disabled=state.commitDisabled;
-      pairCancel.disabled=state.cancelDisabled;pairDelete.disabled=state.deleteDisabled;pairUndo.disabled=state.undoDisabled;
+      pairCancel.disabled=state.cancelDisabled;pairDelete.disabled=state.deleteDisabled;pairUndo.disabled=state.undoDisabled;pairRedo.disabled=state.redoDisabled;
       add.textContent=state.commitLabel;pairCancel.textContent=workflow.editing?'Cancel edit':'Cancel';
       $('ModernCalibrationPairMode').textContent=state.mode;
       $('ModernCalibrationPairPhoto').textContent='Photo: '+(state.photo?'selected':'not selected');
@@ -910,13 +1022,21 @@
       if(wasEditing)resetPending();else updateHint();
       refreshRows();photoDraw();meshDraw();persist();
     }
-    function undo(){
-      if(!workflow.undo())return;
-      inlineViewer.clearLocalPoint();viewer.clearLocalPoint();
-      const saved=inlineSessions.initial?.session;if(saved)Object.assign(saved,{staged:null,stagedMode:null,confirmed:null,choices:[],choice:'',inputs:[]});
-      materialMarkers.clear();resetPending();refreshRows();photoDraw();meshDraw();
-      message('Last correspondence change undone.');persist();
+    function applyHistory(direction){
+      photoGestures.cancel();inlineViewer.cancelGesture();contextMenu.close();
+      if(!workflow[direction]())return;
+      // Keep the existing independent draft and its weight/coordinates.
+      // Only discard obsolete local inspector staging when its draft vanished.
+      if(workflow.mode==='browse'){
+        inlineViewer.clearLocalPoint();viewer.clearLocalPoint();
+        const saved=inlineSessions.initial?.session;if(saved)Object.assign(saved,{staged:null,stagedMode:null,confirmed:null,choices:[],choice:'',inputs:[]});
+        resetPending();
+      }
+      materialMarkers.clear();refreshRows();updateHint();photoDraw();meshDraw();
+      message(direction==='undo'?'Last correspondence change undone.':'Last correspondence change redone.');persist();
     }
+    function undo(){applyHistory('undo');}
+    function redo(){applyHistory('redo');}
     function replacePair(id,landmark,pixel){
       const old=workflow.rows.find(r=>r.landmark.id===id);if(!old)return;
       try{
@@ -1142,7 +1262,7 @@
     }
     viewerButton.onclick=openViewer;
     // The floating window is fixed-position but owned by this workspace.
-    new env.MutationObserver(()=>{if(workspace.hidden){photoGestures.cancel();inlineViewer.cancelGesture();cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
+    new env.MutationObserver(()=>{if(workspace.hidden){contextMenu.close();photoGestures.cancel();inlineViewer.cancelGesture();cancelRegion();pendingMagnifier=null;viewer.close();}else{restoreMagnifier();meshDraw();if(!inlinePanel.hidden){inlineViewer.refresh();refreshMagnifierCorrespondences();}}}).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     function cancelRegion(){const d=regionDrag;regionDrag=null;if(d&&sceneCanvas.hasPointerCapture(d.id))sceneCanvas.releasePointerCapture(d.id);}
     function syncModelRoute(){
       const integrated=globeRoute()&&!legacyShown;
@@ -1186,7 +1306,7 @@
     }
     legacyToggle.onclick=()=>{
       if(!globeRoute())return;
-      legacyShown=!legacyShown;cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;
+      contextMenu.close();legacyShown=!legacyShown;cancelRegion();cancelModelFrame();modelDrag=null;modelGhost=null;
       if(!legacyShown){viewer.close();pickMode.value='vertex';}
       syncModelRoute();clearHover();updateHint();meshDraw();
       if(!legacyShown){inlineViewer.refresh();refreshMagnifierCorrespondences();}
@@ -1415,7 +1535,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;physicalSource=null;physicalFraming=null;selectedObjectKey=null;pickMode.value='vertex';
+      contextMenu.close();cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;physicalSource=null;physicalFraming=null;selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
@@ -1474,7 +1594,7 @@
       },
       onAction(a,event){
         photoGhost=null;const p=canvasPoint(photo,event);
-        if(linkGesture(a))return;
+        if(viewportGesture(a,'photo'))return;
         if(a.kind==='drag'&&a.action==='marker'&&a.target.kind==='draft'){
           const pixel=imagePoint(view,...p,record.original.width,record.original.height);
           if(pixel&&workflow.pending&&workflow.pending.some((n,i)=>n!==pixel[i])){setPixel(pixel);meshDraw();persist();}
@@ -1807,9 +1927,9 @@
       }catch(error){terminateFit();fitStatus.textContent='Cannot start fit: '+error.message;syncFitControls();}
     };
     stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
-    bestView.onclick=()=>{if(!fitBest)return;viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();persist();};
+    bestView.onclick=()=>{if(!fitBest)return;contextMenu.close();viewBest=!viewBest;clearHover();if(viewBest)paintBest();else meshDraw();syncFitControls();persist();};
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();});
-    add.onclick=savePair;
+    add.onclick=savePair;pairRedo.onclick=redo;
     $('ModernCalibrationCancelEdit').onclick=cancelPairDraft;
     $('ModernCalibrationUndo').onclick=undo;
     $('ModernCalibrationDeleteSelected').onclick=()=>{if(workflow.mode==='browse')deletePair(workflow.activePair);};
@@ -1817,7 +1937,7 @@
       if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
       if(e.key==='Escape'&&photoGestures.active){e.preventDefault();photoGestures.cancel();return;}
       if(e.key==='Enter'&&!add.disabled){e.preventDefault();savePair();return;}
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();undo();return;}
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();return;}
       if(magnifierMode()&&e.key==='Escape'){e.preventDefault();cancelRegion();meshDraw();return;}
       if(objectMode()){
         if(e.key==='Escape'&&!viewBest){e.preventDefault();clearHover();selectObject(null);}
@@ -1841,5 +1961,5 @@
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({createPairWorkflow,pairToolbarState,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

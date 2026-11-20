@@ -848,7 +848,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null,onCancelPair=null,onConfirmMaterial=null,onGesture=null,onMoveEndpoint=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onRedo=null,onInspectOwner=null,onCancelPair=null,onConfirmMaterial=null,onGesture=null,onMoveEndpoint=null}={}){
     let inlineOpen=false,parkedScene=null;
     const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
@@ -1271,8 +1271,8 @@
     wire.onchange=()=>{cancelHover();state={...state,wireframe:wire.checked};render();};
     spans.onchange=()=>{state={...state,spans:spans.checked,pan:[0,0],zoom:1};render();};
     dialog.querySelectorAll('[data-viewer-zoom]').forEach(n=>n.onclick=()=>{const factor=Number(n.dataset.viewerZoom);if(navigating()&&!free)changeOpticalRegion(zoomOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,[canvas.width/2,canvas.height/2],factor));else{state=zoom(state,factor);render();}});
-    function gestureTarget(css){
-      if(!crop||ownerMode()||!(inline||pickMode.value==='navigate'))return {kind:'background'};
+    function gestureTarget(css,context=false){
+      if(!crop||!context&&ownerMode()||!(inline||pickMode.value==='navigate'))return {kind:'background'};
       if(crop.physical){
         const h=pendingHit(),p=backing(css),r=canvas.getBoundingClientRect(),scale=[canvas.width/Math.max(1,r.width),canvas.height/Math.max(1,r.height)];
         if(h&&pickCache&&['visible','wireframe'].includes(markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe))){
@@ -1293,8 +1293,8 @@
       if(localMarkers().some(([h])=>h&&['visible','wireframe'].includes(markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe))&&pointerGestures.markerAt([{kind:'draft',pixel:paths.camera.project(h.point)?.pixel}],backing(css),[sx,sy])))return false;
       return frameBackgroundEmpty(cssFrame(sx,sy),p,state.wireframe);
     }
-    function gestureStartTarget(css){
-      const target=gestureTarget(css);
+    function gestureStartTarget(css,event){
+      const target=gestureTarget(css,event?.button===2);
       return crop?.physical&&target.kind==='background'?{...target,empty:emptyPhysicalBackground(css)}:target;
     }
     // All endpoint edits are transient until pointer-up. Use the same
@@ -1394,7 +1394,7 @@
       const editable=e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName);
       if(!editable&&e.key==='Escape'&&gestures.active){e.preventDefault();gestures.cancel();}
       else if(inline&&!editable&&e.key==='Delete'&&activeCorrespondence!==null&&onDeleteCorrespondence){e.preventDefault();onDeleteCorrespondence(activeCorrespondence);}
-      else if(inline&&!editable&&(e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'&&onUndo){e.preventDefault();onUndo();}
+      else if(inline&&!editable&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&(e.shiftKey?onRedo:onUndo)){e.preventDefault();(e.shiftKey?onRedo:onUndo)();}
       else if(e.key==='Escape'&&!editable){e.preventDefault();if(inline){if(draftEditable()){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else onCancelPair?.();}else if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
     env.addEventListener('pagehide',()=>sessionChanged());
@@ -1445,7 +1445,7 @@
       if(!navigating()||free)return false;
       const r=rectangleOptical(crop.region,crop.source.width,crop.source.height,canvas.width,canvas.height,a,b);
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
-    },resetScene,resetPivot,focusCorrespondence,enterFree,sessionSnapshot(){
+    },resetScene,resetPivot,focusCorrespondence,toggleWireframe(){if(!crop?.physical)return false;wire.checked=!state.wireframe;wire.onchange();sessionChanged();return true;},inspectAt(css){if(!crop?.physical||!onInspectOwner)return false;pickMode.value='owner';pickMode.onchange();onInspectOwner(inspectOwnerAt(css));redrawMarkers();sessionChanged();return true;},activateAutomatic(){if(!crop?.physical)return false;pickMode.value='auto';pickMode.onchange();sessionChanged();return true;},enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
       return JSON.parse(JSON.stringify({version:crop.physical?4:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed,...(crop.physical?{frame:geometry.frame,eye:geometry.eye,focal:geometry.focal}: {})}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){

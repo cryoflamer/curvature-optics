@@ -114,3 +114,54 @@ test('saved endpoint moves preserve unrelated draft, order, identity and history
   assert.equal(w.undoStack.length,2);
   assert.equal(w.canCommit,true);
 });
+
+test('undo and redo preserve unfinished draft; a new durable change invalidates redo',()=>{
+  const w=createPairWorkflow(),a=row('a'),b=row('b',3);
+  w.replaceAll([a]);w.change([a,b],'b');
+  w.selectPhoto([50,60]);w.selectModel(row('draft',7).landmark);
+  const draft=w.snapshot().draft;
+  assert.equal(w.undo(),true);assert.deepEqual(w.rows,[a]);assert.deepEqual(w.snapshot().draft,draft);
+  assert.equal(w.redoStack.length,1);assert.equal(w.redo(),true);assert.deepEqual(w.rows,[a,b]);assert.deepEqual(w.snapshot().draft,draft);
+  assert.equal(w.undo(),true);w.selectPhoto([51,61]);assert.equal(w.redoStack.length,1);
+  w.change([{...a,weight:5}]);assert.equal(w.redoStack.length,0);assert.equal(w.redo(),false);
+  const snapshot=w.snapshot(),restored=createPairWorkflow();restored.replaceAll(snapshot.rows);
+  w.undo();restored.replaceAll(w.rows);restored.restoreHistory(w.undoStack,w.redoStack);
+  assert.equal(restored.redo(),true);assert.deepEqual(restored.rows,snapshot.rows);
+  w.replaceAll([a]);w.change([a,b]);w.beginEdit('b');w.undo();assert.equal(w.mode,'browse');
+});
+test('context actions distinguish draft, saved target and viewport background',()=>{
+  const {contextActions,pairToolbarState}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  const w=createPairWorkflow(),a=row('a');w.replaceAll([a]);w.selectPhoto([3,4]);
+  const ids=items=>items.map(x=>x.id),get=(target,side)=>contextActions(w,target,side);
+  assert.equal(get({kind:'draft'},'photo')[0].disabled,true);
+  w.selectModel(a.landmark);assert.equal(get({kind:'draft'},'model')[0].disabled,false);
+  assert.deepEqual(ids(get({kind:'saved',id:'a'},'model')),['select','pivot','properties','role','delete']);
+  assert.deepEqual(get({kind:'saved',id:'missing'},'model'),[]);
+  assert.ok(ids(get({kind:'background'},'model')).includes('wireframe'));
+  assert.ok(!ids(get({kind:'background'},'photo')).includes('wireframe'));
+  w.change([]);w.undo();assert.equal(pairToolbarState(w,{ready:true}).redoDisabled,false);
+  assert.equal(get({kind:'background'},'photo').find(a=>a.id==='redo').disabled,false);
+});
+
+test('context menu clamps, routes activation and dismisses without a workspace action',()=>{
+  const {createContextMenu}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
+  const doc={activeElement:null,events:{},addEventListener(k,fn){this.events[k]=fn;}};
+  const node=()=>({style:{},children:[],events:{},hidden:false,
+    setAttribute(){},append(n){this.children.push(n);},replaceChildren(){this.children=[];},
+    getBoundingClientRect(){return {width:190,height:100};},
+    contains(n){return n===this||this.children.includes(n);},focus(){doc.activeElement=this;},
+    addEventListener(k,fn){this.events[k]=fn;}});
+  doc.createElement=node;
+  const env={innerWidth:300,innerHeight:200,events:{},addEventListener(k,fn){this.events[k]=fn;}};
+  const workspace=node(),source=node(),called=[],menu=createContextMenu(doc,env,workspace),dom=workspace.children[0];
+  const items=[{id:'undo',label:'Undo',disabled:true},{id:'redo',label:'Redo',disabled:false},{id:'cancel',label:'Cancel',disabled:false}];
+  assert.equal(menu.open([290,195],items,id=>called.push(id),source),true);
+  assert.equal(dom.style.left,'106px');assert.equal(dom.style.top,'96px');assert.equal(doc.activeElement,dom.children[1]);
+  dom.children[0].onclick();assert.deepEqual(called,[]);
+  let stopped=false;const key=k=>dom.events.keydown({key:k,preventDefault(){},stopPropagation(){stopped=true;}});
+  key('ArrowDown');assert.equal(doc.activeElement,dom.children[2]);
+  key('Enter');assert.equal(stopped,true);doc.activeElement.onclick();
+  assert.deepEqual(called,['cancel']);assert.equal(menu.visible,false);assert.equal(doc.activeElement,source);
+  menu.open([0,0],items,id=>called.push(id),source);doc.events.pointerdown({target:source});assert.equal(menu.visible,false);
+  menu.open([0,0],items,id=>called.push(id),source);key('Escape');assert.equal(menu.visible,false);assert.equal(doc.activeElement,source);
+});

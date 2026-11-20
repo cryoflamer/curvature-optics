@@ -1,3 +1,19 @@
+## 8F.6i — Context menus and independent Undo/Redo
+
+Integrated physical Globe editor has shared right-click menus on photo/model:
+draft link/remove endpoint/cancel; saved selection, model pivot, weight,
+Fit/Validation role, delete; background history, cancel, photo fit/model
+reset, model pivot reset, wireframe, owner inspection and automatic picking.
+Right drag remains pan. Menu clamps to viewport, closes outside/Escape/blur,
+supports arrow keys. Weight uses the native prompt; explicit edit mode
+remains transitional. Both history stacks persist in the browser draft,
+validate on restore, are limited to 50 entries each and clear on replacement;
+new committed change clears Redo. Undo/Redo keeps unrelated draft, weight,
+camera and pivot; an explicit edit whose target disappears is cancelled.
+Ctrl+Z / Ctrl+Shift+Z and toolbar alternatives remain. Legacy Flat keeps
+its existing picking controls. Next: 8F.6j Correspondences / Calibration /
+Result separation. Full CI/browser pending.
+
 ## 8F.6h — Independent pivot and background reset
 
 Physical Free View now separates row selection/synchronization from

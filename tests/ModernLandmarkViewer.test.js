@@ -475,8 +475,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;const materialHits=[],gestureHits=[],moves=[];let acceptMove=false;
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';},onMoveEndpoint:(target,hit)=>{moves.push({target,hit});return acceptMove;}});
+  const fastHits=[],deleted=[],owners=[];let undos=0,redos=0,cancels=0;const materialHits=[],gestureHits=[],moves=[];let acceptMove=false;
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onRedo:()=>redos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';},onMoveEndpoint:(target,hit)=>{moves.push({target,hit});return acceptMove;}});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openPhysical(banks);
@@ -611,7 +611,7 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   // The mock stores only the last listener; invoke the actual button and inspect enabled state.
   const del=host.querySelector('[data-viewer-delete-pair]');assert.equal(del.disabled,false);del.onclick();assert.deepEqual(deleted,['a']);
   const key=(key,extra={})=>hostKeys.forEach(fn=>fn({key,target:canvas,preventDefault(){},stopPropagation(){},...extra}));
-  key('Delete');key('z',{ctrlKey:true});assert.deepEqual(deleted,['a','a']);assert.equal(undos,1);
+  key('Delete');key('z',{ctrlKey:true});assert.deepEqual(deleted,['a','a']);assert.equal(undos,1);key('z',{ctrlKey:true,shiftKey:true});assert.equal(redos,1);assert.equal(undos,1);
   key('Delete',{target:{tagName:'INPUT'}});assert.equal(deleted.length,2);
   assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
   canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});

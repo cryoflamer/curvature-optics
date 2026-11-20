@@ -81,7 +81,7 @@ Buttons and modes are implementation details, not prerequisites.
 | 8F.6f | Implicit pairing wizard and double-click commit |
 | 8F.6g | Drag draft/saved endpoints independently (implemented) |
 | 8F.6h | Automatic pivot and empty-background reset (implemented) |
-| 8F.6i | Context menus and Undo/Redo |
+| 8F.6i | Context menus and Undo/Redo (implemented) |
 | 8F.6j | Correspondences / Calibration / Result separation |
 | 8F.6k | Minimal UI, persistence, verification, legacy cleanup |
 
