@@ -773,7 +773,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null,onCancelPair=null}={}){
     let inlineOpen=false,parkedScene=null;
     const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
@@ -786,6 +786,7 @@
     const pickControls=dialog.querySelector('[data-viewer-pick-controls]'),pickMode=dialog.querySelector('[data-viewer-pick-mode]'),
       pickChoices=dialog.querySelector('[data-viewer-pick-candidates]'),pickStatus=dialog.querySelector('[data-viewer-pick-status]');
     let mesh=null,paths=null,pickCache=null,opticalCache=null,opticalTransform=null,hover=null,staged=null,confirmed=null,choices=[],hoverFrame=null,queued=null,restoringSession=false;
+    let stagedMode=null,pendingVertex=null,inputKey=null;
     let correspondenceRows=[],correspondenceMesh=null,correspondenceCache=[],correspondenceState=[];
     const correspondenceStatus=dialog.querySelector('[data-viewer-correspondence-status]');
     function setText(node,value){if(node&&node.textContent!==value)node.textContent=value;}
@@ -887,23 +888,39 @@
     const details=dialog.querySelector('[data-viewer-point-details]'),coords=dialog.querySelector('[data-viewer-point-coords]'),parameters=dialog.querySelector('[data-viewer-point-parameters]'),paramInputs=[...dialog.querySelectorAll('[data-viewer-point-weight]')],confirmButton=dialog.querySelector('[data-viewer-point-confirm]'),cancelButton=dialog.querySelector('[data-viewer-point-cancel]');
     const snaps=[...dialog.querySelectorAll('[data-viewer-point-snap]')];
     function cancelHover(){if(hoverFrame!==null)env.cancelAnimationFrame(hoverFrame);hoverFrame=null;queued=null;hover=null;}
-    function clearPick(){cancelHover();staged=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
+    function clearPick(){cancelHover();staged=null;stagedMode=null;inputKey=null;choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;pickStatus.textContent='';}
     function clearGeometryPick(){confirmed=null;clearPick();mesh=null;paths=null;pickCache=null;opticalCache=null;opticalTransform=null;pickMode.value='navigate';syncPoint();}
     function pickAvailable(){return !!crop&&!crop.readOnly&&(free||!!opticalCache);}
     function fastVertex(){return inline&&typeof onFastVertex==='function'&&pickMode.value==='fast-vertex';}
     function pickKind(){return fastVertex()?'vertex':pickMode.value;}
     function pickActive(){return pickAvailable()&&pickMode.value!=='navigate'&&!ownerMode();}
+    function draftEditable(){return !!staged&&pickActive()&&(!inline||stagedMode===pickMode.value);}
+    function pendingHit(){
+      if(!pendingVertex||!mesh)return null;
+      const e=mesh.find(e=>e.item.bank===pendingVertex.bank&&e.item.index===pendingVertex.primitive);
+      const i=pendingVertex.vertex;
+      if(!e?.valid||!Number.isInteger(i)||!e.item.points[i])return null;
+      return pickDescriptor(e,'vertex',[i],[1],e.item.points[i],0,null,0);
+    }
+    function localMarkers(){
+      if(!inline)return pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18']]:[];
+      if(crop?.readOnly)return [];
+      return [[confirmed,'#25834b'],[staged,'#b83d18'],[pendingHit(),'#009ab3']];
+    }
     function describe(h){return h.kind+' · bank '+(h.bank+1)+' · primitive '+h.index+' · indices '+h.indices.join(', ');}
-    function updatePickStatus(message=''){pickStatus.textContent=!pickActive()?'':message||(fastVertex()?(staged?'Choose candidate, then Use vertex.':'Click a visible vertex to pair; drag to navigate.'):'')||(staged?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
+    function updatePickStatus(message=''){pickStatus.textContent=!pickActive()?'':message||(fastVertex()?(draftEditable()?'Choose candidate, then Use vertex.':'Click a visible vertex to pair; drag to navigate.'):'')||(draftEditable()?'Staged: '+describe(staged)+' (not a correspondence)':pickActive()?'Click to stage a point; drag to orbit.':'');}
     function syncPoint(){
-      const h=staged||confirmed,editable=!!staged;
+      const editable=draftEditable(),h=inline?(editable?staged:!fastVertex()&&confirmed?.kind===pickKind()?confirmed:null):staged||confirmed;
       details.style.display=h&&pickActive()?'':'none';confirmButton.disabled=!editable;cancelButton.disabled=!editable;
+      if(inline)pickChoices.disabled=!editable||choices.length<2;
+      const nextInputKey=h?JSON.stringify([h.kind,h.bank,h.index,h.indices,h.weights]):null;
       if(inline)confirmButton.textContent=fastVertex()?'Use vertex':'Confirm point';
       parameters.style.display=editable&&h.kind!=='vertex'?'':'none';
       for(const [i,n] of paramInputs.entries()){
         n.closest('label').style.display=editable&&h.kind==='surface'&&i===1||editable&&h.kind!=='vertex'&&i===0?'':'none';
-        n.value=h?.kind==='edge'?String(h.weights[1]):String(h?.weights[i]??0);
+        if(!inline||nextInputKey!==inputKey&&h)n.value=h?.kind==='edge'?String(h.weights[1]):String(h?.weights[i]??0);
       }
+      if(nextInputKey!==null)inputKey=nextInputKey;
       for(const n of snaps)n.disabled=!editable||(n.dataset.viewerPointSnap==='midpoint'&&h.kind!=='edge')||(n.dataset.viewerPointSnap==='boundary'&&h.kind!=='surface');
       if(!h||!geometry?.frame){setText(coords,'');return;}
       const fmt=p=>p.map(x=>x.toFixed(6)).join(', ');
@@ -923,7 +940,7 @@
       try{
         if(inline&&ownerMode())outlineOwner(opticalCache.entries,p=>[p[0]*t.scale+t.offsetX,p[1]*t.scale+t.offsetY],ctx);
         committedMarkers(opticalScreen);
-        for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18'],[hover,'#008ab1']]:[])){
+        for(const [h,color] of localMarkers().concat(pickActive()?[[hover,'#008ab1']]:[])){
           if(!h)continue;const q=opticalScreen(h);
           if(q.visibility==='visible')drawPickMarker(canvas,h,{project:()=>q},color);
         }
@@ -933,7 +950,7 @@
       if(paths&&crop&&free){
         if(inline&&ownerMode()&&pickCache)outlineOwner(pickCache.entries,p=>p,canvas.getContext('2d'));
         committedMarkers(h=>{const visibility=pickCache?markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe):'visibility unresolved';return {visibility,pixel:paths.camera.project(h.point)?.pixel};});
-        for(const [h,color] of (pickActive()?[[confirmed,'#25834b'],[staged,'#b83d18']]:[])){
+        for(const [h,color] of localMarkers()){
           if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
         }
         if(pickActive())drawPickMarker(canvas,hover,paths.camera,'#008ab1');
@@ -951,18 +968,18 @@
       }
     }
     function changePoint(weights,snap){
-      if(!staged)return;
+      if(!draftEditable())return;
       try{staged=adjustPoint(mesh,staged,weights,snap);selectOrbitPoint(staged);choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;updatePickStatus();syncPoint();redrawMarkers();}
       catch(error){pickStatus.textContent=error.message;}
     }
     dialog.querySelector('[data-viewer-point-apply]').onclick=()=>{
-      if(!staged)return;
+      if(!draftEditable())return;
       const val=n=>n.value.trim()===''?NaN:Number(n.value),a=val(paramInputs[0]),b=val(paramInputs[1]);
       changePoint(staged.kind==='edge'?[1-a,a]:[a,b,1-a-b],'none');
     };
     for(const n of snaps)n.onclick=()=>changePoint(staged.weights,n.dataset.viewerPointSnap);
-    confirmButton.onclick=()=>{if(fastVertex()){acceptFastVertex();return;}if(staged){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
-    cancelButton.onclick=()=>{clearPick();syncPoint();updatePickStatus();redrawMarkers();};
+    confirmButton.onclick=()=>{if(fastVertex()){acceptFastVertex();return;}if(draftEditable()){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
+    cancelButton.onclick=()=>{if(inline&&!draftEditable())return;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     function paintOptical(capture){return navigating()?crop.paint(canvas,capture,{...crop.region}):crop.paint(canvas,capture);}
     function redrawMarkers(){if(crop&&!free){try{paintOptical(false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
     function query(css){
@@ -982,21 +999,23 @@
         updatePickStatus(result.reason||(hover?'Hover: '+describe(hover)+(result.candidates.length>1?' · '+result.candidates.length+' candidates':''):''));});
     }
     function acceptFastVertex(){
-      if(!fastVertex()||!pickAvailable()||staged?.kind!=='vertex')return false;
+      if(!fastVertex()||!draftEditable()||staged?.kind!=='vertex')return false;
       const hit=staged;
       const accepted=onFastVertex({kind:hit.kind,bank:hit.bank,index:hit.index,vertex:hit.indices[0]});
       if(!accepted)return false;
-      confirmed=accepted==='pending'?hit:null;clearPick();syncPoint();updatePickStatus('Model vertex selected for pairing.');redrawMarkers();return true;
+      clearPick();syncPoint();updatePickStatus(accepted==='pending'?'Model vertex selected for pairing.':'Correspondence saved.');redrawMarkers();return true;
     }
     function stageAt(css){
-      cancelHover();const result=query(css);choices=result.candidates;staged=choices[0]||null;
+      cancelHover();const result=query(css);
+      if(inline&&!result.candidates.length){updatePickStatus(result.reason||'No visible point here; existing draft retained.');redrawMarkers();return;}
+      inputKey=null;choices=result.candidates;staged=choices[0]||null;stagedMode=staged?pickMode.value:null;
       pickChoices.replaceChildren();for(const [i,h] of choices.entries()){const option=dialog.ownerDocument.createElement('option');option.value=String(i);option.textContent=describe(h);pickChoices.append(option);}
-      pickChoices.disabled=choices.length<2;selectOrbitPoint(staged);
+      pickChoices.disabled=choices.length<2;pickChoices.value='0';selectOrbitPoint(staged);
       if(fastVertex()&&choices.length===1&&acceptFastVertex())return;
       syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
     }
-    pickMode.onchange=()=>{cancelHover();if(inline&&!ownerMode())clearPick();clearMarkerHover();syncMode();render();};
-    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;selectOrbitPoint(staged);syncPoint();updatePickStatus();redrawMarkers();};
+    pickMode.onchange=()=>{cancelHover();clearMarkerHover();syncMode();render();};
+    pickChoices.onchange=()=>{if(inline&&!draftEditable())return;staged=choices[Number(pickChoices.value)]||null;selectOrbitPoint(staged);syncPoint();updatePickStatus();redrawMarkers();};
     dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
     let sensitivity=DEFAULT_SENSITIVITY;
@@ -1062,7 +1081,7 @@
       if(a)releaseCapture(canvas,a.id);
       if(b)releaseCapture(b.element,b.id);
     }
-    function close(){parkedScene=null;stopDrags();clearMarkerHover();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(inline){inlineOpen=false;dialog.hidden=true;}else if(isOpen())dialog.close();sessionChanged();}
+    function close(){parkedScene=null;pendingVertex=null;stopDrags();clearMarkerHover();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;correspondenceRows=[];correspondenceMesh=undefined;correspondenceCache=[];correspondenceState=[];if(correspondenceStatus)correspondenceStatus.textContent='';if(inline){inlineOpen=false;dialog.hidden=true;}else if(isOpen())dialog.close();sessionChanged();}
     const closeButton=dialog.querySelector('[data-viewer-close]');if(closeButton)closeButton.onclick=close;
     function windowPointer(element,kind){
       element.addEventListener('pointerdown',e=>{
@@ -1119,7 +1138,7 @@
       if(!crop.build||crop.readOnly)return false;
       if(navigating()){
         try{
-          const hit=staged||confirmed||selectedCorrespondenceHit();
+          const hit=staged||pendingHit()||confirmed||selectedCorrespondenceHit();
           const selected=hit?{worldPoint:worldPoint(geometry.frame,hit.point),owner:hit.owner,pixel:opticalMarker(opticalCache,hit).pixel||null}:null;
           const next=crop.build({...crop.region},activeCorrespondence,selected);
           if(!next||next.kind!=='region')throw Error('No visible physical pivot');
@@ -1181,7 +1200,7 @@
       const editable=e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName);
       if(inline&&!editable&&e.key==='Delete'&&activeCorrespondence!==null&&onDeleteCorrespondence){e.preventDefault();onDeleteCorrespondence(activeCorrespondence);}
       else if(inline&&!editable&&(e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'&&onUndo){e.preventDefault();onUndo();}
-      else if(e.key==='Escape'){e.preventDefault();if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else if(inline)resetScene();else close();}e.stopPropagation();});
+      else if(e.key==='Escape'&&!editable){e.preventDefault();if(inline){if(draftEditable()){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else onCancelPair?.();}else if(pickActive()&&(staged||hover)){clearPick();syncPoint();updatePickStatus();redrawMarkers();}else close();}e.stopPropagation();});
     for(const event of ['click','change','input','pointerup','pointercancel','wheel','keydown'])dialog.addEventListener(event,e=>{e.stopPropagation();sessionChanged();});
     env.addEventListener('pagehide',()=>sessionChanged());
     if(!inline)dialog.addEventListener('close',()=>{if(!isOpen()){stopDrags();clearGeometryPick();saveRect();geometry=null;crop=null;free=false;}});
@@ -1202,14 +1221,14 @@
     },parkScene(){
       if(!navigating()||crop.readOnly)return false;
       stopDrags();cancelHover();clearMarkerHover();
-      parkedScene={crop,geometry,mesh,free,state,staged,confirmed,choices,mode:pickMode.value,
+      parkedScene={crop,geometry,mesh,free,state,staged,stagedMode,confirmed,choices,mode:pickMode.value,
         choice:pickChoices.value,inputs:paramInputs.map(n=>n.value),raster:[canvas.width,canvas.height],title:heading.textContent};
       return true;
     },resumeScene(){
       if(!parkedScene)return false;
       const s=parkedScene;parkedScene=null;
       stopDrags();clearGeometryPick();
-      ({crop,geometry,mesh,free,state,staged,confirmed,choices}=s);
+      ({crop,geometry,mesh,free,state,staged,stagedMode,confirmed,choices}=s);
       pickMode.value=s.mode;heading.textContent=s.title;
       for(const [i,h] of choices.entries()){const n=dialog.ownerDocument.createElement('option');n.value=String(i);n.textContent=describe(h);pickChoices.append(n);}
       pickChoices.disabled=choices.length<2;pickChoices.value=s.choice;
@@ -1226,7 +1245,7 @@
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
     },resetScene,enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
-      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
       if(navigating()){
         // Rebuild the original physical frame, not the currently selected pivot.
@@ -1255,14 +1274,16 @@
             next={...next,orbitPivot:{point:p.point.slice(),eye:p.eye.slice()}};
           }
         }
-        const a=restorePoint(m,saved.staged),c=restorePoint(m,saved.confirmed);
+        const a=restorePoint(m,saved.staged),c=restorePoint(m,saved.stagedMode===undefined&&saved.pickMode==='fast-vertex'?null:saved.confirmed);
+        const draftMode=a?(saved.stagedMode||(['vertex','edge','surface','fast-vertex'].includes(saved.pickMode)?saved.pickMode:a.kind)):null;
+        if(a&&(!['vertex','edge','surface','fast-vertex'].includes(draftMode)||a.kind!==(draftMode==='fast-vertex'?'vertex':draftMode)))throw Error('Invalid stored draft mode');
         if(!Array.isArray(saved.choices)||saved.choices.length>2500)throw Error('Invalid stored candidates');
         const candidates=saved.choices.map(h=>restorePoint(m,h));
         if(candidates.some(h=>!h))throw Error('Invalid stored candidate');
         restoringSession=true;
         try{
           stopDrags();clearPick();clearMarkerHover();
-          crop.region={...r};crop.reason='';geometry=g;mesh=m;free=saved.free;staged=a;confirmed=c;choices=candidates;state=next;
+          crop.region={...r};crop.reason='';geometry=g;mesh=m;free=saved.free;staged=a;stagedMode=draftMode;confirmed=c;choices=candidates;state=next;
           paths=null;pickCache=null;opticalCache=null;opticalTransform=null;
           correspondenceMesh=undefined;
           pickMode.value=saved.pickMode;
@@ -1291,6 +1312,13 @@
         sync();if(staged&&Array.isArray(saved.inputs))paramInputs.forEach((n,i)=>{if(typeof saved.inputs[i]==='string'&&saved.inputs[i].length<64)n.value=saved.inputs[i];});updatePickStatus();
       }finally{restoringSession=false;}
       sessionChanged();
+    },setPendingVertex(landmark){
+      const next=landmark?{bank:landmark.bank,primitive:landmark.primitive,vertex:landmark.vertex}:null;
+      if(JSON.stringify(next)===JSON.stringify(pendingVertex))return;
+      pendingVertex=next;if(isOpen())redrawMarkers();
+    },discardPairDraft(){
+      if(stagedMode==='fast-vertex'){clearPick();syncPoint();if(isOpen())redrawMarkers();}
+      if(parkedScene?.stagedMode==='fast-vertex')Object.assign(parkedScene,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});
     },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};

@@ -1,3 +1,20 @@
+## 8F.5b.4a.4 — Draft lifecycle
+
+The editor's pending model vertex is the sole source of truth for a
+Fast Vertex draft; its cyan marker is derived in the viewer independently
+of staged/confirmed local material points. Local staging survives Navigate,
+Owner Inspection and other pick mode switches; only its originating mode
+can confirm it. A new successful pick replaces the single staged point;
+empty clicks retain it. Reset/navigation/Best Camera parking do not cancel
+the pair. Cancel draft pair (or Escape outside local staging) cancels the
+editor draft without resetting the camera or deleting observations.
+Clear point clears only local inspection. Deleting an unrelated pair
+preserves the draft; failed saves retain the draft for retry or cancel.
+Old optional Fast Vertex confirmed markers are not restored as local points.
+Persisted pending vertex and pixel are checked against the current scene
+and photo. Legacy Flat pairing remains supported. Remaining: .5 Functional
+Parity, .4b cleanup, then 8F.5c/d/e.
+
 ## 8F.5b.4a.3 — Integrated Owner Inspection
 
 Owner Inspection in the integrated Globe Pick menu selects the top painted

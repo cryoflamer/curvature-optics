@@ -474,8 +474,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const fastHits=[],deleted=[],owners=[];let undos=0;
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o)});
+  const fastHits=[],deleted=[],owners=[];let undos=0,cancels=0;
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openScene(sourceContract);
@@ -528,6 +528,29 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.deepEqual(owners,[owner]);assert.deepEqual(api.snapshot(),beforeOwner);
   api.setInspectedOwner(owner,'Owner',['P0']);
   assert.equal(host.querySelector('[data-viewer-owner-status]').textContent,'Owner');
+  // Local staging survives navigation and inspection; a Fast Vertex action
+  // cannot consume a local Vertex draft, even though they share a point kind.
+  select.value='vertex';select.onchange();
+  canvas.events.pointerdown(click);canvas.events.pointerup(click);
+  const local=api.snapshot().staged;assert.ok(local);
+  select.value='navigate';select.onchange();assert.deepEqual(api.snapshot().staged,local);
+  select.value='fast-vertex';select.onchange();
+  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,true);
+  host.querySelector('[data-viewer-point-confirm]').onclick();assert.equal(fastHits.length,1);
+  select.value='owner';select.onchange();assert.deepEqual(api.snapshot().staged,local);
+  select.value='vertex';select.onchange();
+  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,false);
+  const draftSession=api.sessionSnapshot();
+  api.restoreSession(draftSession);assert.deepEqual(api.snapshot().staged,local);
+  api.setPendingVertex({bank:0,primitive:0,vertex:2});
+  host.querySelector('[data-viewer-point-confirm]').onclick();
+  assert.equal(api.snapshot().staged,null);assert.deepEqual(api.snapshot().confirmed,local);
+  api.discardPairDraft();assert.deepEqual(api.snapshot().confirmed,local);
+  key('Escape');assert.equal(cancels,1);assert.equal(api.snapshot().mode,'free');
+  api.setPendingVertex(null);
+  host.querySelector('[data-viewer-pick-clear]').onclick();
+  assert.equal(api.snapshot().confirmed,null);
+  select.value='owner';select.onchange();
   api.resetScene();
   canvas.events.wheel({...event,deltaY:-120});
   const beforeBest=api.snapshot();
