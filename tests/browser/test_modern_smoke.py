@@ -589,6 +589,114 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(self.page.evaluate(
             "d=>CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",data))
 
+    def test_calibration_atmosphere_retains_observations_and_changes_worker_projection(self):
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        select=workspace.locator('#ModernCalibrationAtmosphere')
+        profile=workspace.locator('#ModernCalibrationTemperatureProfile')
+        status=workspace.locator('#ModernCalibrationEffectiveRadius')
+        expect(select).to_have_value('vacuum')
+        expect(profile).to_be_hidden()
+        expect(status).to_contain_text('Initial effective R:')
+        read=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        vacuum=read()
+        select.select_option('standard')
+        expect(status).to_contain_text('Initial effective R:')
+        standard=read()
+        self.assertEqual(standard['scene']['physics']['atmosphere'],'standard')
+        self.assertEqual(standard['scene']['model'],vacuum['scene']['model'])
+        self.assertEqual(standard['observations'],vacuum['observations'])
+        self.assertEqual(standard['referenceImage'],vacuum['referenceImage'])
+        select.select_option('temperature-lapse')
+        expect(profile).to_be_visible()
+        gradient=workspace.locator('#ModernCalibrationGradient')
+        gradient.fill('10')
+        gradient.press('Tab')
+        changed=read()
+        self.assertEqual(changed['scene']['physics']['temperatureProfile']['gradientKPerKm'],10)
+        self.assertEqual(changed['observations'],vacuum['observations'])
+        self.assertEqual(changed['scene']['model'],vacuum['scene']['model'])
+        self.assertIsNone(changed['fit']['result'])
+        # Real worker: identical observations, different refraction hypotheses.
+        projections=self.page.evaluate("""async experiments => {
+            const out=[];
+            for(const data of experiments){
+                const worker=new Worker('src/calibration/CameraCalibrationWorker.js');
+                try{
+                    const result=await new Promise((resolve,reject)=>{
+                        const timer=setTimeout(()=>reject(Error('Worker timeout')),30000);
+                        worker.onerror=e=>{clearTimeout(timer);reject(Error(e.message));};
+                        worker.onmessage=e=>{
+                            if(e.data.type==='complete'){clearTimeout(timer);resolve(e.data.result);}
+                            if(e.data.type==='error'){clearTimeout(timer);reject(Error(e.data.message));}
+                        };
+                        worker.postMessage({model:data.scene.model,input:data.observations,
+                            options:{...data.scene.physics,width:1176,height:791,
+                            freeParameters:[],maxIterations:1}});
+                    });
+                    out.push({atmosphere:result.atmosphere,points:result.evaluation.points.map(p=>p.predicted)});
+                }finally{worker.terminate();}
+            }
+            return out;
+        }""",[vacuum,standard,changed])
+        self.assertEqual([p['atmosphere'] for p in projections],['vacuum','standard','temperature-lapse'])
+        self.assertNotEqual(projections[0]['points'],projections[1]['points'])
+        self.assertNotEqual(projections[1]['points'],projections[2]['points'])
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.',timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(select).to_have_value('temperature-lapse',timeout=30000)
+        expect(gradient).to_have_value('10')
+        self.assertEqual(read()['observations'],vacuum['observations'])
+        # Run a genuine UI fit for the edited hypothesis, then apply it.
+        # Free only Height here; the full seven-parameter worker is covered
+        # by the separate numerical Soundly and end-to-end qualifications.
+        for field in ['CameraEast','CameraNorth','Pan','Nick','Roll','FocalLengthField']:
+            workspace.locator('[data-fit-field="'+field+'"]').uncheck()
+        workspace.locator('#ModernCalibrationRunFit').click()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        expect(button).to_be_visible(timeout=90000)
+        expect(button).to_be_enabled(timeout=90000)
+        fitted=read()
+        self.assertEqual(fitted['fit']['result']['atmosphere'],'temperature-lapse')
+        self.assertTrue(fitted['fit']['result']['evaluation']['valid'])
+        self.assertEqual(len(fitted['fit']['result']['evaluation']['points']),14)
+        self.page.once('dialog',lambda prompt:prompt.accept())
+        button.click()
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text('Save Snapshot to keep this Scene',timeout=30000)
+        actual=self.page.evaluate("CurvatureModernApp.getPhotoCalibrationScene()")
+        self.assertEqual(actual['model']['rEarth'],vacuum['scene']['model']['rEarth'])
+        self.assertEqual(actual['physics'],fitted['scene']['physics'])
+        self.assertAlmostEqual(actual['model']['Height'],fitted['fit']['result']['pose']['Height'])
+        archive_before=self.page.evaluate("""async () => {
+            const api=CurvatureModernCalibrationResultArchive;
+            const rows=await api.list(indexedDB);
+            return (await api.get(indexedDB,rows[0].id)).record;
+        }""")
+        self.assertEqual(archive_before['payload']['scene']['physics'],fitted['scene']['physics'])
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(button).to_be_enabled()
+        # Changing the hypothesis after Apply keeps the archive, but drops
+        # the now-stale editable fit and retains all measured points.
+        self.page.once('dialog',lambda prompt:prompt.dismiss())
+        select.select_option('standard')
+        expect(select).to_have_value('temperature-lapse')
+        self.assertEqual(read()['fit']['result'],fitted['fit']['result'])
+        self.page.once('dialog',lambda prompt:prompt.accept())
+        select.select_option('standard')
+        expect(select).to_have_value('standard')
+        self.assertIsNone(read()['fit']['result'])
+        self.assertEqual(read()['observations'],vacuum['observations'])
+        expect(button).to_be_disabled()
+        self.assertEqual(self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationResultArchive.get(indexedDB,id)).record""",
+            archive_before['id']),archive_before)
+        # Returning to Scene without Apply does not change its atmosphere.
+        self.page.locator('#ModernSceneTab').click()
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getPhotoCalibrationScene().physics"),actual['physics'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_apply_button_scene_and_previous(self):
         workspace=self.open_physical_calibration()
         button=workspace.locator('#ModernCalibrationApplyScene')

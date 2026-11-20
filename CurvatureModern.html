@@ -191,6 +191,25 @@
       <p id="ModernCalibrationRoleCount" role="status"></p>
     </div>
 
+    <section data-calibration-stages="calibration result" hidden aria-label="Calibration atmosphere" style="margin:12px 0;padding:10px;border:1px solid #c4d6e4;border-radius:6px">
+      <h3>Physical hypothesis · Canvas Direct</h3>
+      <div class="modern-calibration-toolbar">
+        <label for="ModernCalibrationAtmosphere">Atmosphere</label>
+        <select id="ModernCalibrationAtmosphere">
+          <option value="vacuum">Vacuum</option>
+          <option value="standard">Standard atmosphere</option>
+          <option value="temperature-lapse">Temperature gradient</option>
+        </select>
+      </div>
+      <div class="modern-calibration-toolbar" id="ModernCalibrationTemperatureProfile" hidden>
+        <label>Surface temperature (°C) <input type="number" id="ModernCalibrationTemperatureC" min="-30" max="40" step="any"></label>
+        <label>Surface pressure (hPa) <input type="number" id="ModernCalibrationPressureHpa" min="800" max="1100" step="any"></label>
+        <label>Surface gradient (K/km) <input type="number" id="ModernCalibrationGradient" min="-20" max="20" step="any"></label>
+      </div>
+      <p id="ModernCalibrationEffectiveRadius" role="status" aria-live="polite"></p>
+      <p>Effective curvature is calculated from the local refractive-index gradient at each camera height. Changing atmosphere keeps the physical geometry, original photo and correspondences, but invalidates the current fit. Previously archived results are retained. Apply transfers the physical radius and atmosphere, not the effective radius.</p>
+    </section>
+
     <section data-calibration-stages="calibration" hidden aria-label="Camera fit" style="margin:12px 0;padding:10px;border:1px solid #c4d6e4;border-radius:6px">
       <h3>Camera fit · Canvas Direct</h3>
       <p>Checked parameters are free; unchecked parameters stay at the captured camera values.</p>

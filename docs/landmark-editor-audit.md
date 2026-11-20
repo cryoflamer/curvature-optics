@@ -26,6 +26,37 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.2b.1 — Calibration atmosphere as an explicit fixed hypothesis
+
+The editor now exposes Vacuum, Standard and Temperature gradient with
+surface temperature, pressure and lapse in Calibration/Result. Data remain
+in the existing scene.physics contract and draft/export/archive formats.
+Profile edits keep photo, physical radius, banks, initial camera and all
+material/legacy observations. Repaint the optical preview and invalidate
+the current fit; confirm before discarding an unarchived candidate.
+Previously archived immutable results remain untouched.
+
+Audit of the actual computation: CurvatureCanvasDirectPreview.paint and
+CameraLandmarkProjection.create call the same OpticalEffectiveRadiusPreview
+canvasDirectParameters; CameraPhysicalFit.evaluator calls projection.create
+for each trial pose, and CameraCalibrationWorker passes options unchanged
+apart from method=canvas-direct and progress. Local curvature is
+C_eff = 1/R + n'(H)/n(H); effective R = 1/C_eff, where n and n' use the
+existing profile and current trial height. Report initial and best values,
+never replace the physical R used in the archived hypothesis and Accurate
+Scene. The material resolver authenticates topology at physical R and
+rebinds projection banks by effective radius. This is a local approximation,
+not altitude-varying RK4 nor joint atmospheric parameter fitting.
+
+Current Globe renderer and projection only support strictly positive
+effective curvature, even though signed Flat optical embedding exists.
+Nonpositive Globe curvature is explicitly unavailable; do not map it to
+physical Flat, clamp k or assume a spherical approximation works. A signed
+Globe implementation must preserve physical material identities and
+observer/terrain masking across the zero-curvature limit; separate follow-up.
+Tests cover per-atmosphere prediction changes, trial-height curvature,
+unsupported range and real worker/draft round-trip. Full CI pending.
+
 ## 8F.7b.2b — Explicit Scene Apply
 
 Result has an explicit Apply Best Camera to Scene control. Require a valid

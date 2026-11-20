@@ -280,6 +280,8 @@
       throw Error('Stored fit result does not match material observations or captured scene');
     rows=fitRows(rows);
     const r=jsonCopy(result),v=r?.evaluation;
+    if(r.atmosphere!==undefined&&r.atmosphere!==physics?.atmosphere)
+      throw Error('Stored fit result does not match captured atmosphere');
     if(!v?.valid||!r.pose||CAMERA_FIELDS.some(k=>!Number.isFinite(r.pose[k]))||
       CAMERA_FIELDS.some(k=>!free.includes(k)&&r.pose[k]!==model[k])||
       ![r.initialRmsPx,v.rmsPx,v.weightedRmsPx,v.cost,r.evaluations,r.acceptedSteps].every(n=>Number.isFinite(n)&&n>=0)||
@@ -617,6 +619,74 @@
       sourceLoad=$('ModernCalibrationUsePhoto'),sourceRefresh=$('ModernCalibrationRefreshPhotos'),
       photoInfo=$('ModernCalibrationPhotoInfo');
     let choices=[],demoRecords=[],catalogToken=0,activeSource=null;
+    const atmosphereControl=$('ModernCalibrationAtmosphere'),temperaturePanel=$('ModernCalibrationTemperatureProfile'),
+      radiusStatus=$('ModernCalibrationEffectiveRadius');
+    const temperatureControls={
+      temperatureC:$('ModernCalibrationTemperatureC'),pressureHpa:$('ModernCalibrationPressureHpa'),
+      gradientKPerKm:$('ModernCalibrationGradient')
+    };
+    const atmosphereApi=env.CurvatureOpticalEffectiveRadiusPreview,compareApi=env.CurvatureModernCompareState;
+    function temperatureValues(physics){
+      return {...compareApi.temperatureProfile(),...physics?.temperatureProfile};
+    }
+    function effectiveSupport(pose){
+      if(!scene)return {supported:false,reason:'Capture a Globe scene first'};
+      return atmosphereApi.canvasDirectSupport({...scene.model,...pose},scene.physics);
+    }
+    function syncHypothesis(){
+      if(!atmosphereControl)return;
+      const locked=!scene||restoring||pendingPhotoLoads>0||!!fitWorker||applyBusy;
+      const physics=scene?.physics,profile=temperatureValues(physics);
+      atmosphereControl.value=physics?.atmosphere||'vacuum';
+      atmosphereControl.disabled=locked;
+      temperaturePanel.hidden=atmosphereControl.value!=='temperature-lapse';
+      for(const k of Object.keys(temperatureControls)){
+        temperatureControls[k].value=String(profile[k]);temperatureControls[k].disabled=locked||temperaturePanel.hidden;
+      }
+      if(!scene){radiusStatus.textContent='Capture a Globe scene first.';return;}
+      const initial=effectiveSupport(),best=fitBest?effectiveSupport(fitBest.pose):null;
+      const km=n=>(n/1000).toLocaleString('en-US',{maximumFractionDigits:3});
+      const describe=(label,s)=>s.supported?label+' effective R: '+km(s.parameters.effectiveRadius)+
+        ' km · k = '+Number(s.parameters.k.toPrecision(6)):label+' unsupported: '+s.reason;
+      radiusStatus.textContent='Physical R: '+km(scene.model.rEarth)+' km · '+describe('Initial',initial)+
+        (best?' · '+describe('Best',best):'')+'. Local approximation, not Accurate ray tracing.';
+    }
+    function changeHypothesis(){
+      if(!scene||restoring||pendingPhotoLoads||fitWorker||applyBusy){syncHypothesis();return;}
+      try{
+        const kind=atmosphereControl.value;
+        if(!['vacuum','standard','temperature-lapse'].includes(kind))throw Error('Unsupported calibration atmosphere');
+        const original=scene.physics,profile=temperatureValues(original);
+        if(kind==='temperature-lapse'){
+          // Selecting Temperature gradient enables existing/default values;
+          // individual inputs commit on change, never coerce blank to zero.
+          for(const [k,node] of Object.entries(temperatureControls)){
+            if(!node.value.trim()||!node.validity.valid||!Number.isFinite(node.valueAsNumber))throw Error('Invalid '+k);
+            profile[k]=node.valueAsNumber;
+          }
+        }
+        const nextProfile=compareApi.temperatureProfile(profile);
+        if(kind===original.atmosphere&&
+          (kind!=='temperature-lapse'||JSON.stringify(nextProfile)===JSON.stringify(temperatureValues(original)))){
+          syncHypothesis();return;
+        }
+        if(fitBest&&!env.confirm('Changing the atmosphere invalidates the current best camera. Previously archived results remain available. Export this result first if you want to retain an unarchived fit. Continue?')){
+          syncHypothesis();return;
+        }
+        // Do not replace banks, workflow, initial pose, physical session or photo.
+        // Repaint method-specific geometry and invalidate cached residuals/fit.
+        scene={...scene,physics:{...original,atmosphere:kind,temperatureProfile:nextProfile}};
+        $('ModernCalibrationScene').textContent=(scene.model.DemoText||'Current scene')+' · Globe · '+kind;
+        renderModel();
+        setStage('calibration',{camera:'initial',save:false});
+        fitStatus.textContent='Atmosphere changed. Correspondences retained; run calibration again.';
+        syncFitControls();persist();
+      }catch(error){syncHypothesis();fitStatus.textContent='Atmosphere not changed: '+error.message;}
+    }
+    if(atmosphereControl){
+      atmosphereControl.addEventListener('change',changeHypothesis);
+      for(const node of Object.values(temperatureControls))node.addEventListener('change',changeHypothesis);
+    }
     const fitFields=CAMERA_FIELDS,fitLabels=["East (m)","North (m)","Height (m)","Pan (°)","Nick (°)","Roll (°)","Focal field (mm)"];
     const fitPanel=$('ModernCalibrationFitParameters'),runFit=$('ModernCalibrationRunFit'),stopFit=$('ModernCalibrationStopFit'),bestView=$('ModernCalibrationBestView'),fitStatus=$('ModernCalibrationFitStatus'),fitResult=$('ModernCalibrationFitResult');
     const exportButton=$('ModernCalibrationExportExperiment'),importButton=$('ModernCalibrationImportExperiment'),importFile=$('ModernCalibrationExperimentFile'),exchangeStatus=$('ModernCalibrationExchangeStatus');
@@ -1266,10 +1336,14 @@
       $('ModernCalibrationRoleCount').textContent=count+' Fit · '+(workflow.rows.length-count)+' Validation'+(stage==='calibration'&&(count===0||2*count<free.length)?' · insufficient Fit points for selected free parameters':'');
       exportButton.disabled=!record||!scene;
       importButton.disabled=restoring;
-      runFit.disabled=stage!=="calibration"||!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
+      const initialSupported=!!scene&&effectiveSupport().supported;
+      const bestSupported=!!scene&&!!fitBest?.evaluation?.valid&&effectiveSupport(fitBest.pose).supported;
+      runFit.disabled=stage!=="calibration"||restoring||pendingPhotoLoads>0||applyBusy||
+        !!fitWorker||!record||!scene||!initialSupported||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
       if(applyButton)applyButton.disabled=applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
-        !!fitWorker||!record||!scene||!fitBest?.evaluation?.valid;
+        !!fitWorker||!record||!scene||!bestSupported;
+      syncHypothesis();
 
       for(const field of fitFields){
         const v=scene?.model[field];
@@ -1492,7 +1566,7 @@
     stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
     bestView.onclick=()=>{if(resultStage()&&fitBest)setStage('result',{camera:viewBest?'initial':'best'});};
     function applyCandidate(){
-      if(restoring||pendingPhotoLoads||!resultStage()||fitWorker||!fitBest?.evaluation?.valid)
+      if(restoring||pendingPhotoLoads||!resultStage()||fitWorker||!fitBest?.evaluation?.valid||!effectiveSupport(fitBest.pose).supported)
         throw Error('Show a completed or stopped best camera result before applying');
       return exportExperiment();
     }

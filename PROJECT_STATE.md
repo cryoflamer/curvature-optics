@@ -1,3 +1,30 @@
+## 8F.7b.2b.1 — Calibration atmosphere selection (#9)
+
+CI 44772523033 passed all three jobs, including explicit Apply browser smoke.
+Expanded #9 before final qualification: independent Vacuum, Standard and
+Temperature gradient selector, surface T/P/lapse controls, initial and best
+effective radius and k. Same physical geometry/original/material observations;
+invalidate stale fit on physical hypothesis change (confirm when a candidate
+exists), retain prior archives. Persist existing portable physics, no migration.
+Audit: preview painter and landmark projection both call canvasDirectParameters;
+worker passes same atmosphere/profile, and every trial pose recalculates local
+dn/n at its height. Existing material context binds physical topology to each
+effective radius. Globe currently requires strictly positive effective
+curvature; show unsupported and disable Run/Apply instead of silent fallback.
+Signed nonpositive Globe support needs separate geometry/projection work.
+Added numeric Soundly profile tests and real worker/browser draft,
+edited-atmosphere fit, Apply, archive retention, cancellation and Back to Scene
+checks. Headless execution of the complete production worker dependency
+chain, no mocked optics: all four hypotheses yielded valid 14-point
+projection and accepted one iteration. Initial Height 81.71483549662574 m,
+physical R 6371000 m. Vacuum: R_eff 6371000 m, RMS 314.7555 -> 68.3650;
+Standard: 8507058.497 m, 307.7198 -> 57.3989; lapse -6.5 K/km:
+7782254.511 m, 309.6409 -> 60.6638; lapse +10 K/km:
+8808524.132 m, 307.0204 -> 56.1275 (both T=15 C, P=1013.25 hPa).
+Verified refraction radius changes with trial height and nonpositive
+Globe rejection (R=20e6 m). One iteration is not a fitted-model ranking.
+Full CI pending; next c completes live fit/apply/failure qualification.
+
 ## 8F.7b.2b — Apply button and Scene integration (#9)
 
 Added explicit Apply Best Camera to Scene in Result, disabled without

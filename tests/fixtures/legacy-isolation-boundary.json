@@ -2114,6 +2114,7 @@
         "src/renderers/CurvatureCanvasDirectPreview.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraPhysicalFitSoundly.test.js",
         "tests/ModernCameraDrag1371.test.js",
         "tests/ModernCameraNavigation.test.js",
         "tests/ModernCanvasDirectOrientationParity.test.js",
@@ -2195,6 +2196,7 @@
         "src/optics/OpticalTowerDiagnostics.js"
       ],
       "commonJsTestCallers": [
+        "tests/CameraPhysicalFitSoundly.test.js",
         "tests/CurvatureSurfaceGeometry124.test.js",
         "tests/ForwardRayBundle.test.js",
         "tests/InversePreparedGradient.test.js",
