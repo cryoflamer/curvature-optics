@@ -1,3 +1,34 @@
+## 8F.7d — Calibration Integration in Shared-Camera Compare (#11)
+
+Baseline: 5093867, CI [44799585733](https://github.com/cryoflamer/curvature-optics/actions/runs/44799585733), all three jobs passed. Node 2225 passed, one skipped, zero failed (2226 total); Chromium 47/47. Universal Scene overlay qualification (#10) is complete. The lifecycle fix is validated by the formerly failing immediate reload test; no scientific fit/renderer parity is implied.
+
+The existing ModernCalibrationTransfer.transfer(record,current,target) already implements Scene/A/B mapping, and applicability() already distinguishes association from matching fit inputs. ModernExperimentState v1 already supports one compact calibrationOrigin with target Scene/A/B. ModernCalibrationApply owns protected asynchronous archive/recovery but currently hardcodes Scene, and ModernApp/ModernPhotoCalibrationEditor only expose Scene Apply. CompareState.pair and CompareModel.invariant already enforce one camera/layout and Eye-Lvl aim, with independent side physics and shared visibility. Reuse these contracts rather than introducing a new schema, another fit or renderer.
+
+### Planned bounded commits (reasoning effort)
+
+Three requested effort tiers: Instant (1), Medium (2), High (3). Names are recommendations for the user's three-level selector, not runtime configuration changes. Each stage must have full green CI before the next; use targeted tests first and document limits.
+
+- [ ] **8F.7d.1 — Target-aware protected Apply (High / 3).** Generalize ModernCalibrationApply to explicit Scene/A/B targets while preserving the existing Scene entry point and compatibility. Capture target before any await, validate supported targets and revisions; carry target through commit/present/result. Reuse existing pure transfer, pin exact outgoing History before mutation, reject stale or concurrent operation, rollback partial synchronous commit; distinguish committed render failure. Extend ModernCalibrationResult tests for both sides, invalid/changed target, failed archive/recovery, stale generations and rollback. No visible new UI.
+- [ ] **8F.7d.2 — Shared-camera Compare host integration (High / 3).** Generalize ModernApp Apply host and common commit/rollback; activate target Compare editor, Accurate presentation, force shared Eye-Lvl, invalidate stale render records, confirm both new A/B results (not just selected-side completion) under the current navigation generation. Reuse canonical Scene camera and both banks, retain Scene optical hypothesis and non-target Compare physics; keep common neutral haze behavior of transfer, disclose it and other existing shared-input changes. Check actual clone invariant and selection. No public UI until backend works and Scene path stays green.
+- [ ] **8F.7d.3 — Explicit calibration destination UI (Medium / 2).** Expose Scene / Compare A / Compare B on the Result stage; no implicit target from the active Compare editor tab. Make destination and confirmation explicit: both panels receive fitted camera/layout; only target receives archived physics; shared display defaults/haze and cleared unrelated camera paths/narrative are disclosed. Lock destination while Apply runs, preserve draft, show target-specific result/error and protected recovery. Verify DOM controls, cancellation and unchanged Scene Apply. Do not add photo overlay in Compare.
+- [ ] **8F.7d.4 — Calibrated Scene to Compare and live applicability (High / 3).** Provide explicit A/B transition from a calibrated Scene based on the verified immutable archived result, not stale editor contents. Reuse the protected transaction and confirmed archived baseline; disclose that reapplication restores archived shared fit inputs, protect outgoing edited Scene, reject missing/mismatching archive or stale navigation. Preserve one active historical association (target A or B); do not label the other side independently calibrated even if its parameters match. Show minimal per-side association/applicability with missing/invalid/derived states, without computing live RMS. Test shared camera/layout edits versus side-specific optical edits, navigation/selection, unrelated reset. Missing photo must not be silently substituted; historical archive lookup is distinct from photo verification; any archive-only transition policy must be explicitly tested. Wider provenance/library UX remains #13.
+- [ ] **8F.7d.5 — Compare Apply and persistence qualification (High / 3).** Run live Chromium editor/worker Apply to each side and Scene-to-A/B flow; assert seven camera fields, common Eye-Lvl and object arrays, mixed Globe/Flat and differing atmospheres, unchanged non-target physical inputs except common visibility, target selection, verified compact origin, both fresh render completions. Verify real archive/History failure and stale/concurrent navigation, durable reload/local checkpoint, shared URL/JSON/History round-trips and protected outgoing exact recovery. Preserve earlier Scene/overlay/working-URL tests. No required named photo for generic transfer; Soundly scientific research-cycle acceptance remains milestone-level. Close #11 only on full green CI and record any manual acceptance still needed.
+- [ ] **8F.7d.6 — Qualification record and closure (Instant / 1).** Documentation-only acceptance update with actual commit/run IDs and test totals; close #11 after verified acceptance and set #12 as next. Skip a separate closure commit only if the final qualification commit can already record independently verified CI.
+
+Scope boundaries: keep one shared camera and authored object layout, one active calibration association in the established v1 origin (a later explicit apply replaces it; outgoing History preserves the previous association), no independent A/B cameras, no second independently fitted association, no schema expansion by default, no overlay or photo alignment in #11 (#12), no new fitting/research algorithms. Independent hypothesis fits belong to #18. No claim of live Accurate RMS from historical Canvas Direct metrics. Stage numbering here is the issue-specific implementation plan; the wider provenance roadmap remains #13.
+
+## #10 — Scene Overlay qualification complete (2026-11-20)
+
+Verified CI 44799585733 on 509386748469dac15fe9f6b631dac82fa695aafa:
+all three jobs successful; Node 2225 passed, 1 skipped, 0 failed;
+Chromium 47/47 (145.697 s); architecture and Legacy preservation passed.
+The previously failing immediate reload without history.state is green.
+The universal 32-case browser raster matrix, numerical 48-case matrix,
+live Apply lifecycle, missing archive/original fallback and pure
+History thumbnails are accepted. #10 is complete; this does not
+certify a particular photograph, scientific fit, or cross-renderer parity.
+Next: #11, shared-camera Compare integration per the plan above.
+
 ## 8F.7c.5c — Working Session Lifecycle Fix (#10)
 
 CI 44797546379 on 505a438: Node 2223 passed / one skipped, architecture
@@ -13,8 +44,8 @@ but URL identity is recorded only after successful, observable
 replaceState; rejection or a silently ignored change retains the prior
 identity. Explicit shared-link behavior and the existing browser
 assertions are unchanged. Added deterministic delayed-autosave and
-failed/ignored-publication regressions. Full native Node and Chromium
-CI pending; #10 remains open. No physics or photo registration changes.
+failed/ignored-publication regressions. Full native Node and Chromium CI subsequently passed (44799585733);
+#10 acceptance is complete. No physics or photo registration changes.
 
 ## 8F.7c.5b — Working URL Identity Fix (#10)
 
