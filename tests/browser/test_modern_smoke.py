@@ -554,581 +554,185 @@ class ModernBrowserSmoke(unittest.TestCase):
             for name in archive.namelist()[:3]:
                 self.assertEqual(archive.read(name)[:8], b'\x89PNG\r\n\x1a\n')
 
-    def test_photo_calibration_correspondence_editor(self):
-        import base64
+    def open_physical_calibration(self):
         self.open_modern()
         self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")
-        self.page.locator('#ModernPhotoCalibrationOpen').click()
-        dialog = self.page.locator('#ModernPhotoCalibration')
-        expect(dialog).to_be_visible()
-        expect(self.page.locator('#ModernWorkspace')).to_be_hidden()
-        expect(self.page.locator('#ModernPhotoCalibrationOpen')).to_have_attribute('aria-pressed','true')
-        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','false')
-        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
-        self.assertEqual(self.page.evaluate("CurvatureModernApp.getMode()"),'scene')
-        encoded = self.page.evaluate("""() => {
-            const c=document.createElement('canvas');c.width=100;c.height=80;
-            c.getContext('2d').fillRect(0,0,100,80);return c.toDataURL().split(',')[1];
-        }""")
-        dialog.locator('#ModernCalibrationFile').set_input_files(
-            {'name':'reference.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
-        expect(dialog.locator('#ModernCalibrationStatus')).to_contain_text('100 × 80')
-        toggle=dialog.locator('#ModernCalibrationLegacyToggle')
-        if toggle.is_visible() and toggle.get_attribute('aria-pressed')=='false':
-            toggle.click()
-        dialog.locator('#ModernCalibrationX').fill('25.5')
-        dialog.locator('#ModernCalibrationY').fill('40.25')
-        dialog.locator('#ModernCalibrationAdd').click()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('25.50, 40.25')
-        dialog.get_by_role('button',name='Edit',exact=True).click()
-        dialog.locator('#ModernCalibrationX').fill('33')
-        dialog.locator('#ModernCalibrationAdd').click()
-        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('33.00, 40.25')
-        original_scene = self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().Pan,CurvatureModernApp.getModel().Nick,CurvatureModernApp.getModel().Roll,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])")
-        self.page.locator('#ModernCompareTab').click()
-        expect(dialog).to_be_hidden()
-        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
-        self.page.locator('#ModernPhotoCalibrationOpen').click()
-        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('33.00, 40.25')
-        self.assertEqual(self.page.evaluate("CurvatureModernApp.getMode()"),'compare')
-        self.open_animation()
-        expect(dialog).to_be_hidden()
-        self.page.locator('#ModernPhotoCalibrationOpen').click()
-        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        dialog.locator('#ModernCalibrationClose').click()
-        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
-        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'scene')
-        # Switching workspaces does not change physical Scene parameters.
-        self.assertEqual(self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().Pan,CurvatureModernApp.getModel().Nick,CurvatureModernApp.getModel().Roll,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])"),original_scene)
-        self.page.locator('#ModernPhotoCalibrationOpen').click()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        dialog.get_by_role('button',name='Delete',exact=True).click()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
-        dialog.locator('#ModernCalibrationClose').click()
-
-    def test_photo_calibration_full_scene_picking(self):
-        import base64
-        self.open_modern()
-        self.page.wait_for_function("!document.getElementById('ModernPhotoCalibrationOpen').disabled")
-        self.page.evaluate("""() => {
-            const m=CurvatureModernApp.getModel();
-            Object.assign(m,{Height:12,CameraEast:20,CameraNorth:90,Pan:1.2,Nick:.2,Roll:3,
-                FocalLengthField:110,viewcenterHorizon:3,showModel:1,showGrid:0,
-                ObjType:[3,3],NObjects:[1,0],ObjDist:[1700,0],ObjSidePos:[6,0],ObjSize:[23,64]});
-            m.Update();
-        }""")
+        self.page.evaluate("() => {const m=CurvatureModernApp.getModel();m.showModel=1;m.Update();}")
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         workspace=self.page.locator('#ModernPhotoCalibration')
-        expect(workspace.locator('#ModernCalibrationModelStatus')).to_contain_text('Canvas Direct')
-        encoded=self.page.evaluate("""() => {
-            const c=document.createElement('canvas');c.width=1200;c.height=900;
-            c.getContext('2d').fillRect(0,0,1200,900);return c.toDataURL().split(',')[1];
-        }""")
-        workspace.locator('#ModernCalibrationFile').set_input_files(
-            {'name':'reference.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
-        expect(workspace.locator('#ModernCalibrationStatus')).to_contain_text('1200 × 900')
+        expect(workspace).to_be_visible()
+        return workspace
+
+    def soundly_calibration_experiment(self, observations=None, reference=None):
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        if observations is not None:
+            fixture['observations']=observations
+        return self.page.evaluate("""async ({fixture,reference}) => {
+            const {model,observations,options}=fixture;
+            const scene={model:{...CurvatureModernApp.getPhotoCalibrationScene().model,...model,DemoText:'Soundly regression'},
+              physics:{atmosphere:options.atmosphere,temperatureProfile:options.temperatureProfile}};
+            if(!reference){
+              const c=document.createElement('canvas');c.width=options.width;c.height=options.height;
+              const ctx=c.getContext('2d');ctx.fillStyle='#eee';ctx.fillRect(0,0,c.width,c.height);
+              const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+              reference=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Soundly regression raster.png',{type:'image/png'}),'calibration-regression',window);
+            }
+            return {format:'curvature-photo-calibration',version:3,scene,referenceImage:reference,referenceSource:null,
+              observations,fit:{method:'canvas-direct',maxIterations:80,freeParameters:options.freeParameters,
+                result:null,status:'Regression fixture',running:false}};
+        }""",{'fixture':fixture,'reference':reference})
+
+    def import_calibration_experiment(self, data, replace=False):
+        if replace:
+            self.page.once('dialog',lambda prompt:prompt.accept())
+        self.assertTrue(self.page.evaluate(
+            "d=>CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",data))
+
+    def test_photo_calibration_correspondence_editor(self):
+        workspace=self.open_physical_calibration()
+        scene_before=self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])")
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
+        expect(self.page.locator('#ModernWorkspace')).to_be_hidden()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('14 correspondences')
         inline=workspace.locator('#ModernCalibrationInlineViewer')
-        toggle=workspace.locator('#ModernCalibrationLegacyToggle')
-        expect(inline).to_be_visible()
-        expect(workspace.locator('#ModernCalibrationMesh')).to_be_hidden()
+        canvas=inline.locator('canvas')
         expect(inline.locator('h2')).to_have_text('Model · Free View')
-        manual=workspace.locator('#ModernCalibrationManualPairs')
-        pairs=workspace.locator('#ModernCalibrationPairList')
-        reference=workspace.locator('#ModernCalibrationReferenceTools')
-        expect(manual).not_to_have_attribute('open','')
-        expect(pairs).not_to_have_attribute('open','')
-        expect(reference).not_to_have_attribute('open','')
-        expect(workspace.locator('#ModernCalibrationViewTools')).not_to_have_attribute('open','')
+        expect(canvas).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationMesh')).to_be_hidden()
+        for removed in ['ModernCalibrationViewer','ModernCalibrationLegacyToggle','ModernCalibrationPickMode',
+                        'ModernCalibrationOpenViewer','ModernCalibrationBank']:
+            expect(workspace.locator('#'+removed)).to_have_count(0)
         state=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).inlineViewerState()")
-        initial=state()
-        self.assertEqual(initial['mode'],'free')
-        self.assertEqual(initial['pickMode'],'auto')
-        inline.locator('canvas').hover()
-        self.page.mouse.wheel(0,-300)
-        self.page.wait_for_function("z=>CurvatureModernPhotoCalibrationEditor.mount(document).inlineViewerState().view.zoom>z",arg=initial['view']['zoom'])
-        self.assertEqual(state()['mode'],'free')
-        inline.locator('canvas').click(button='right')
+        rows=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment().observations")
+        workflow=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow()")
+        before=state()
+        self.assertEqual(before['mode'],'free')
+        self.assertEqual(before['pickMode'],'auto')
+        canvas.hover()
+        self.page.mouse.wheel(0,-120)
+        self.page.wait_for_function("z=>CurvatureModernPhotoCalibrationEditor.mount(document).inlineViewerState().view.zoom>z",arg=before['view']['zoom'])
+        canvas.click(button='right',position={'x':5,'y':5})
         workspace.get_by_role('menuitem',name='Reset model view',exact=True).click()
-        self.assertAlmostEqual(state()['view']['zoom'],initial['view']['zoom'])
-        toggle.click()
-        expect(manual).to_have_attribute('open','')
-        expect(pairs).to_have_attribute('open','')
-        expect(workspace.locator('#ModernCalibrationMesh')).to_be_visible()
-        expect(inline).to_be_hidden()
-        before=self.page.evaluate("""() => {
-            const e=CurvatureModernPhotoCalibrationEditor.mount(document),p=e.preview();
-            return {valid:p.valid,count:p.points.length,
-              pose:JSON.stringify([e.snapshot().model.Height,e.snapshot().model.Pan,e.snapshot().model.FocalLengthField])};
+        picked=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document),
+              c=document.querySelector('#ModernCalibrationInlineViewer canvas'),r=c.getBoundingClientRect();
+            const pts=e.inlineViewerCorrespondences().filter(p=>p.pixel&&['visible','wireframe'].includes(p.visibility))
+              .map(p=>({...p,x:p.pixel[0]*r.width/c.width,y:p.pixel[1]*r.height/c.height}));
+            const point=pts.find(p=>p.x>12&&p.y>12&&p.x<r.width-12&&p.y<r.height-12&&
+              pts.every(q=>q.id===p.id||Math.hypot(p.x-q.x,p.y-q.y)>20));
+            if(!point)throw Error('No isolated physical correspondence marker');
+            return {...point,index:e.exportExperiment().observations.findIndex(row=>row.landmark.id===point.id)};
         }""")
-        self.assertTrue(before['valid'])
-        self.assertGreater(before['count'],0)
+        pairs=workspace.locator('#ModernCalibrationPairList')
+        pairs.locator('summary').click()
+        workspace.locator('#ModernCalibrationPairs tr').nth(picked['index']).get_by_role('button',name='Delete',exact=True).click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('13 correspondences')
         photo=workspace.locator('#ModernCalibrationPhoto')
-        photo.click(position={'x':photo.bounding_box()['width']/2,'y':photo.bounding_box()['height']/2})
-        model=workspace.locator('#ModernCalibrationMesh')
-        model.hover()
-        self.page.mouse.wheel(0,-1000)
-        # Actual pointer coordinates are derived from the backing-store viewport,
-        # not from the photo raster or the physical camera parameters.
-        hit=self.page.evaluate("""() => {
-            const e=CurvatureModernPhotoCalibrationEditor.mount(document),p=e.preview();
-            const c=document.getElementById('ModernCalibrationMesh'),r=c.getBoundingClientRect();
-            const a=CurvatureModernPhotoCalibrationEditor;
-            const candidates=p.points.filter(item=>item.painterVisible).map(item=>({item,xy:a.screenPoint(p.view,item.pixel)}))
-              .filter(q=>q.xy[0]>12&&q.xy[0]<c.width-12&&q.xy[1]>12&&q.xy[1]<c.height-12);
-            // Use rounded CSS pointer coordinates, matching actual input.
-            for(const q of candidates){
-              const x=Math.round(q.xy[0]*r.width/c.width),y=Math.round(q.xy[1]*r.height/c.height);
-              const pick=e.inspectPick(x*c.width/r.width,y*c.height/r.height);
-              if(pick.ids.length){
-                if(!pick.ids.every(id=>p.points.find(v=>v.landmark.id===id).objectKey===pick.key))
-                  throw Error('Cross-object pick');
-                return {x,y,ids:pick.ids};
-              }
-            }
-            throw Error('No painter-visible candidate in model viewport');
+        px=photo.evaluate("""c=>{
+          const r=c.getBoundingClientRect(),v=CurvatureModernPhotoCalibrationEditor.fit(1176,791,c.width,c.height);
+          return {x:(v.x+100*v.scale)*r.width/c.width,y:(v.y+80*v.scale)*r.height/c.height};
         }""")
-        # Object selection is navigation, not an implicit correspondence edit.
-        pending_before=workspace.locator('#ModernCalibrationX').input_value(),workspace.locator('#ModernCalibrationY').input_value()
-        mode=workspace.locator('#ModernCalibrationPickMode')
-        mode.select_option('object')
-        model.click(position={'x':hit['x'],'y':hit['y']})
-        selected=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()")
-        self.assertEqual(selected['owner']['bank'],0)
-        self.assertEqual(selected['owner']['stationIndex'],0)
-        expect(workspace.locator('#ModernCalibrationObjectSelection')).to_contain_text('horizontal range')
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
-        self.assertEqual((workspace.locator('#ModernCalibrationX').input_value(),workspace.locator('#ModernCalibrationY').input_value()),pending_before)
-        workspace.locator('#ModernCalibrationClearObject').click()
-        self.assertIsNone(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"))
-        workspace.locator('#ModernCalibrationObjectPicker').select_option(str(selected['key']))
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"),selected)
-        # Isolated viewer does not alter photo correspondence or physical pose.
-        before_viewer=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()")
-        workspace.locator('#ModernCalibrationOpenViewer').click()
-        viewer=workspace.locator('#ModernCalibrationViewer')
-        expect(viewer).to_be_visible()
-        self.assertFalse(viewer.evaluate("(d)=>d.matches(':modal')"))
-        get_rect=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerWindow()")
-        start=get_rect()
-        title=viewer.locator('[data-viewer-titlebar]')
-        title.focus()
-        self.page.keyboard.press('ArrowLeft')
-        moved=get_rect()
-        self.assertEqual(moved['x'],start['x']-8)
-        grip=viewer.locator('[data-viewer-resize]')
-        grip.focus()
-        self.page.keyboard.press('ArrowLeft')
-        smaller=get_rect()
-        self.assertEqual(smaller['width'],moved['width']-8)
-        # Real drag of title and resize grip; stay inside viewport.
-        t=viewer.locator('h2').bounding_box()
-        self.page.mouse.move(t['x']+5,t['y']+5)
-        self.page.mouse.down()
-        self.page.mouse.move(t['x']-15,t['y']+15,steps=4)
-        self.page.mouse.up()
-        dragged=get_rect()
-        self.assertLess(dragged['x'],smaller['x'])
-        g=grip.bounding_box()
-        self.page.mouse.move(g['x']+g['width']/2,g['y']+g['height']/2)
-        self.page.mouse.down()
-        self.page.mouse.move(g['x']+g['width']/2-20,g['y']+g['height']/2-20,steps=4)
-        self.page.mouse.up()
-        final_rect=get_rect()
-        self.assertLess(final_rect['width'],dragged['width'])
-        self.assertLess(final_rect['height'],dragged['height'])
-        # Main workspace is interactive while the modeless window is open.
-        self.assertTrue(photo.evaluate("""(c)=>{const d=document.getElementById('ModernCalibrationViewer');
-          return !d.matches(':modal')&&!c.closest('[inert]');}"""))
-        # Use a real main-photo wheel interaction outside inspector bounds.
-        pr=photo.bounding_box()
-        target=self.page.evaluate("""(r)=>{
-          const d=document.getElementById('ModernCalibrationViewer').getBoundingClientRect();
-          for(const fx of [.1,.3,.5,.7,.9])for(const fy of [.2,.5,.8]){
-            const x=r.x+r.width*fx,y=r.y+r.height*fy;
-            if(x>=0&&y>=0&&x<innerWidth&&y<innerHeight&&!(x>=d.left&&x<=d.right&&y>=d.top&&y<=d.bottom)
-              &&document.elementFromPoint(x,y)?.id==='ModernCalibrationPhoto')return [x,y];
-          }return null;
-        }""",pr)
-        if target is None:
-            photo.scroll_into_view_if_needed()
-            pr=photo.bounding_box()
-            target=self.page.evaluate("""(r)=>{const d=document.getElementById('ModernCalibrationViewer').getBoundingClientRect();
-              const x=r.x+r.width*.1;for(const f of [.2,.5,.8]){const y=r.y+r.height*f;
-              if(y>=0&&y<innerHeight&&x<d.left&&document.elementFromPoint(x,y)?.id==='ModernCalibrationPhoto')return [x,y];}return null;}""",pr)
-        self.assertIsNotNone(target)
-        photo_before=photo.evaluate('(c)=>c.toDataURL()')
-        self.page.mouse.move(*target)
-        self.page.mouse.wheel(0,-150)
-        self.page.wait_for_function("before=>document.getElementById('ModernCalibrationPhoto').toDataURL()!==before",arg=photo_before)
-        expect(viewer).to_be_visible()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('front')
-        canvas=viewer.locator('canvas')
-        original=canvas.evaluate('(c)=>c.toDataURL()')
-        viewer.locator('[data-viewer-view="top"]').click()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('edge-on')
-        self.assertNotEqual(canvas.evaluate('(c)=>c.toDataURL()'),original)
-        viewer.locator('[data-viewer-reset]').click()
-        viewer.locator('[data-viewer-projection]').select_option('perspective')
-        viewer.locator('[data-viewer-wire]').check()
-        viewer.locator('[data-viewer-zoom="1.25"]').click()
-        r=canvas.bounding_box()
-        self.page.mouse.move(r['x']+r['width']/2,r['y']+r['height']/2)
-        self.page.mouse.down()
-        self.page.mouse.move(r['x']+r['width']/2+45,r['y']+r['height']/2+25,steps=4)
-        self.page.mouse.up()
-        state=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertNotEqual(state['yaw'],0)
-        self.assertEqual(state['projection'],'perspective')
-        self.page.keyboard.press('Escape')
-        expect(viewer).to_be_hidden()
-        workspace.locator('#ModernCalibrationOpenViewer').click()
-        expect(viewer).to_be_visible()
-        self.assertEqual(get_rect(),final_rect)
-        viewer.locator('[data-viewer-close]').click()
-        expect(viewer).to_be_hidden()
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()"),before_viewer)
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).objectSelection()"),selected)
-        self.assertEqual(selected['owner']['kind'],'object')
-        self.assertGreater(len(selected['primaryIndices']),0)
-        self.assertEqual(self.page.evaluate("""([x,y])=>{const c=document.getElementById('ModernCalibrationMesh'),r=c.getBoundingClientRect();return CurvatureModernPhotoCalibrationEditor.mount(document).inspectOwner(x*c.width/r.width,y*c.height/r.height)}""",[hit['x'],hit['y']]),selected['key'])
-        # Rectangle crop without requiring an owner hit. Reverse drag, retain camera and pending point.
-        mode.select_option('magnifier')
-        model.scroll_into_view_if_needed()
-        r=model.bounding_box()
-        cx=max(14,min(r['width']-14,hit['x']))
-        cy=max(14,min(r['height']-14,hit['y']))
-        self.page.mouse.move(r['x']+min(r['width']-2,cx+45),r['y']+min(r['height']-2,cy+45))
-        self.page.mouse.down()
-        self.page.mouse.move(r['x']+max(2,cx-45),r['y']+max(2,cy-45),steps=5)
-        self.page.mouse.up()
-        expect(viewer).to_be_visible()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('same optical camera')
-        crop=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertEqual(crop['mode'],'scene')
-        self.assertGreater(crop['region']['width'],0)
-        self.assertGreater(crop['region']['height'],0)
-        expect(viewer.locator('[data-viewer-free]')).to_be_enabled()
-        original=canvas.evaluate('(c)=>c.toDataURL()')
-        viewer.locator('[data-viewer-free]').click()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('geometric view')
-        free_state=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertEqual(free_state['mode'],'free')
-        self.assertGreater(free_state['count'],0)
-        # Dynamic status text must not feed back into the canvas dimensions.
-        stability=viewer.evaluate("""async d => {
-            const canvas=d.querySelector('canvas'),frame=d.querySelector('[data-viewer-frame]');
-            const status=d.querySelector('[data-viewer-correspondence-status]');
-            const size=()=>[frame.clientWidth,frame.clientHeight,canvas.width,canvas.height];
-            const settle=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-            await settle();
-            const before=size(),samples=[],original=status.textContent;
-            for(const text of ['2 / 13 correspondences shown','Hidden: '+('out of view; '.repeat(100)),'',original]){
-                status.textContent=text;await settle();samples.push(size());
-            }
-            for(const deltaY of [-120,-120,120,120]){
-                canvas.dispatchEvent(new WheelEvent('wheel',{deltaY,bubbles:true,cancelable:true}));
-                await settle();samples.push(size());
-            }
-            return {before,samples};
-        }""")
-        for sample in stability['samples']:
-            self.assertEqual(sample,stability['before'])
-        viewer.locator('[data-viewer-reset]').click()
-        free_state=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        sensitivity=viewer.locator('[data-viewer-sensitivity]')
-        viewer.locator('[data-viewer-sensitivity-reset]').click()
-        expect(sensitivity).to_have_value('25')
-        r=canvas.bounding_box()
-        self.page.mouse.move(r['x']+r['width']/2,r['y']+r['height']/2)
-        self.page.mouse.down()
-        self.page.mouse.move(r['x']+r['width']/2+30,r['y']+r['height']/2+20,steps=4)
-        self.page.mouse.up()
-        rotated=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertAlmostEqual(rotated['view']['yaw']-free_state['view']['yaw'],.06,delta=.005)
-        self.assertAlmostEqual(rotated['view']['pitch']-free_state['view']['pitch'],.04,delta=.005)
-        sensitivity.fill('50')
-        expect(viewer.locator('[data-viewer-sensitivity-value]')).to_have_text('50%')
-        self.assertEqual(self.page.evaluate("localStorage.getItem('curvature-landmark-viewer-orbit-sensitivity-v1')"),'50')
-        viewer.locator('[data-viewer-reset]').click()
-        r=canvas.bounding_box()
-        self.page.mouse.move(r['x']+r['width']/2,r['y']+r['height']/2)
-        self.page.mouse.down()
-        self.page.mouse.move(r['x']+r['width']/2+30,r['y']+r['height']/2,steps=4)
-        self.page.mouse.up()
-        fast=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertAlmostEqual(fast['view']['yaw'],.12,delta=.005)
-        viewer.locator('[data-viewer-reset]').click()
-        pick_mode=viewer.locator('[data-viewer-pick-mode]')
-        pick_mode.select_option('vertex')
-        # Find a visible vertex by actual mouse clicks in the rendered crop.
-        # Wireframe permits explicit inspection of hidden authored edges.
-        viewer.locator('[data-viewer-wire]').check()
-        r=canvas.bounding_box()
-        staged=None
-        for fy in [.5,.4,.6,.3,.7]:
-            for fx in [.5,.4,.6,.3,.7]:
-                self.page.mouse.click(r['x']+r['width']*fx,r['y']+r['height']*fy)
-                staged=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().staged")
-                if staged:
-                    break
-            if staged:
-                break
-        # A miss is legitimate on sparse geometry; verify the actual click
-        # does not move the camera even when it cannot stage a point.
-        picked=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertEqual(picked['view']['yaw'],0)
-        if staged:
-            self.assertEqual(staged['kind'],'vertex')
-            self.assertEqual(len(staged['indices']),1)
-            viewer.locator('[data-viewer-point-confirm]').click()
-            confirmed=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().confirmed")
-            self.assertEqual(confirmed['point'],staged['point'])
-            pick_mode.select_option('navigate')
-            viewer.locator('[data-viewer-zoom="1.25"]').click()
-            self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().confirmed"),confirmed)
-            viewer.locator('[data-viewer-scene-reset]').click()
-            viewer.locator('[data-viewer-free]').click()
-            self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().confirmed"),confirmed)
-        pick_mode.select_option('vertex')
-        viewer.locator('[data-viewer-pick-clear]').click()
-        self.assertIsNone(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState().staged"))
-        pick_mode.select_option('navigate')
-        expect(viewer.locator('[data-viewer-pick-candidates]')).to_be_hidden()
-        expect(viewer.locator('[data-viewer-point-details]')).to_be_hidden()
-        expect(viewer.locator('[data-viewer-selection-status]')).to_contain_text('Navigate: click')
-        viewer.locator('[data-viewer-wire]').uncheck()
-        viewer.locator('[data-viewer-projection]').select_option('orthographic')
-        viewer.locator('[data-viewer-view="right"]').click()
-        viewer.locator('[data-viewer-zoom="1.25"]').click()
-        saved=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
-        self.page.reload()
-        expect(viewer).to_be_visible()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('geometric view')
-        restored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()")
-        self.assertEqual(restored['view'],saved['view'])
-        self.assertEqual(restored['region'],saved['region'])
-        self.assertEqual(restored['pickMode'],saved['pickMode'])
-        viewer.locator('[data-viewer-zoom="0.8"]').click()
-        viewer.locator('[data-viewer-scene-reset]').click()
-        expect(viewer.locator('[data-viewer-status]')).to_contain_text('same optical camera')
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).viewerState()"),crop)
-        self.page.wait_for_function("before=>document.querySelector('#ModernCalibrationViewer canvas').toDataURL()===before",arg=original)
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()"),before_viewer)
-        self.assertEqual((workspace.locator('#ModernCalibrationX').input_value(),workspace.locator('#ModernCalibrationY').input_value()),pending_before)
-        viewer.locator('[data-viewer-close]').click()
-        mode.select_option('vertex')
-        model.hover(position={'x':hit['x'],'y':hit['y']})
-        expect(workspace.locator('#ModernCalibrationPickStatus')).to_contain_text('Bank')
-        model.click(position={'x':hit['x'],'y':hit['y']})
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        result=self.page.evaluate("""() => {
-            const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
-            return {id:s.observations[0].landmark.id,pixel:s.observations[0].pixel,
-                pose:JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField])};
-        }""")
-        self.assertIn(result['id'],hit['ids'])
-        self.assertAlmostEqual(result['pixel'][0],600,delta=3)
-        self.assertAlmostEqual(result['pixel'][1],450,delta=3)
-        self.assertEqual(result['pose'],before['pose'])
-        # The modeless-window test above zoomed the photo at an off-centre point.
-        # Restore its framing before addressing the original centre marker.
-        workspace.locator('#ModernCalibrationFit').click()
-        # Drag the existing photo marker, leaving its model ID and weight intact.
-        photo.scroll_into_view_if_needed()
-        r=photo.bounding_box()
-        x,y=r['x']+r['width']/2,r['y']+r['height']/2
-        self.page.mouse.move(x,y)
-        self.page.mouse.down()
-        self.page.mouse.move(x+30,y+20,steps=5)
-        self.page.mouse.up()
-        moved=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0]""")
-        self.assertEqual(moved['landmark']['id'],result['id'])
-        self.assertGreater(moved['pixel'][0],result['pixel'][0]+10)
+        photo.click(position=px)
+        canvas.click(position={'x':picked['x'],'y':picked['y']})
+        self.page.wait_for_function("CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow().pendingModel !== null")
+        self.assertIsNotNone(workflow()['pending'])
+        photo.dblclick(position=px)
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('14 correspondences')
+        after=rows()
+        self.assertIn('anchor',after[-1]['landmark'])
+        self.assertAlmostEqual(after[-1]['pixel'][0],100,delta=3)
+        self.assertAlmostEqual(after[-1]['pixel'][1],80,delta=3)
         self.page.keyboard.press('Control+z')
-        restored=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0].pixel""")
-        self.assertEqual(restored,result['pixel'])
-        workspace.locator('#ModernCalibrationFitModel').click()
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        # Fit a single free angle using the real background worker.
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('13 correspondences')
+        self.page.keyboard.press('Control+Shift+z')
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('14 correspondences')
+        self.assertEqual(rows(),after)
+        self.page.locator('#ModernCompareTab').click()
+        expect(workspace).to_be_hidden()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible()
+        self.assertEqual(rows(),after)
+        self.open_animation()
+        expect(workspace).to_be_hidden()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible()
+        self.assertEqual(rows(),after)
+        workspace.locator('#ModernCalibrationClose').click()
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'scene')
+        self.assertEqual(self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])"),scene_before)
+
+    def test_photo_calibration_full_scene_picking(self):
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
         stage=lambda name: workspace.locator('[data-calibration-stage="'+name+'"]')
         workflow=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow()")
-        # Stage travel must preserve an incomplete pair and committed history.
+        inline=workspace.locator('#ModernCalibrationInlineViewer')
+        expect(inline).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationManualPairs')).not_to_have_attribute('open','')
+        expect(workspace.locator('#ModernCalibrationPairList')).not_to_have_attribute('open','')
+        expect(workspace.locator('#ModernCalibrationViewTools')).not_to_have_attribute('open','')
+        manual=workspace.locator('#ModernCalibrationManualPairs')
+        manual.locator('summary').click()
         workspace.locator('#ModernCalibrationBeginPair').click()
         workspace.locator('#ModernCalibrationX').fill('120')
         workspace.locator('#ModernCalibrationY').fill('130')
         draft=workflow()
         stage('calibration').click()
-        expect(pairs).to_have_attribute('open','')
-        expect(workspace.locator('#ModernCalibrationPairToolbar')).to_be_hidden()
-        expect(workspace.locator('#ModernCalibrationPhoto')).to_be_hidden()
+        expect(inline).to_be_hidden()
+        expect(workspace.locator('#ModernCalibrationPairList')).to_have_attribute('open','')
         stage('result').click()
         expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Initial Camera')
-        expect(workspace.locator('#ModernCalibrationPairToolbar')).to_be_hidden()
         stage('correspondences').click()
-        expect(workspace.locator('#ModernCalibrationPhoto')).to_be_visible()
         self.assertEqual(workflow(),draft)
+        manual.locator('summary').click()
         workspace.locator('#ModernCalibrationCancelEdit').click()
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).snapshot().observations[0].pixel"),result['pixel'])
+        # Actual worker regression with the unchanged fourteen measured points.
         stage('calibration').click()
-        self.page.evaluate("""() => {
-            for(const n of document.querySelectorAll('#ModernCalibrationFitParameters [data-fit-field]')){
-                n.checked=n.dataset.fitField==='Pan';n.dispatchEvent(new Event('change',{bubbles:true}));
-            }
-        }""")
         workspace.locator('#ModernCalibrationRunFit').click()
-        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=30000)
-        expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=30000)
-        fit=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()""")
+        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=60000)
+        expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=60000)
+        fit=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()")
         self.assertTrue(fit['evaluation']['valid'])
-        self.assertLessEqual(fit['evaluation']['rmsPx'],fit['initialRmsPx']+1e-8)
-        # Result owns read-only optical views and keeps separate camera framing.
+        self.assertEqual(len(fit['evaluation']['points']),14)
+        self.assertAlmostEqual(fit['initialRmsPx'],314.7555157775399,delta=.01)
+        self.assertLess(fit['evaluation']['rmsPx'],10)
         expect(stage('result')).to_have_attribute('aria-current','step')
         expect(inline).to_be_hidden()
-        optical=workspace.locator('#ModernCalibrationMesh')
         expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Best Camera')
         workspace.locator('#ModernCalibrationBestView').click()
         expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Initial Camera')
-        result_state=lambda: self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).calibrationStage()")
-        old_scale=result_state()['resultViews']['initial']['scale']
-        optical.hover()
-        self.page.mouse.wheel(0,-200)
-        self.page.wait_for_function("s=>CurvatureModernPhotoCalibrationEditor.mount(document).calibrationStage().resultViews.initial.scale>s",arg=old_scale)
-        zoomed=result_state()['resultViews']['initial']
         workspace.locator('#ModernCalibrationBestView').click()
         expect(workspace.locator('#ModernCalibrationOpticalTitle')).to_have_text('Model · Best Camera')
-        workspace.locator('#ModernCalibrationBestView').click()
-        self.assertEqual(result_state()['resultViews']['initial'],zoomed)
-        workspace.locator('#ModernCalibrationBestView').click()
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
-        # Residuals are the worker's original-image pixel values, not canvas CSS pixels.
-        panel=workspace.locator('#ModernCalibrationResidualPanel')
-        expect(panel).to_be_visible()
-        residual=panel.locator('tbody tr')
-        expect(residual).to_have_count(1)
-        self.assertAlmostEqual(float(residual.locator('[data-residual="error"]').inner_text()),fit['evaluation']['rmsPx'],delta=.006)
-        self.assertAlmostEqual(float(residual.locator('[data-residual="initialError"]').inner_text()),fit['initialRmsPx'],delta=.006)
-        for axis,index in [('dx',0),('dy',1)]:
-            self.assertAlmostEqual(float(residual.locator('[data-residual="'+axis+'"]').inner_text()),fit['evaluation']['points'][0]['residual'][index],delta=.006)
-        select=workspace.locator('#ModernCalibrationResidualMode')
-        expect(select).to_have_value('best')
-        workspace.locator('#ModernCalibrationResidualDetails summary').click()
-        residual.get_by_role('button',name='Select correspondence 1').click()
-        expect(residual.get_by_role('button',name='Select correspondence 1')).to_have_attribute('aria-pressed','true')
-        with_overlay=photo.evaluate('(c)=>c.toDataURL()')
-        select.select_option('off')
-        self.assertNotEqual(photo.evaluate('(c)=>c.toDataURL()'),with_overlay)
-        select.select_option('initial')
-        self.assertNotEqual(photo.evaluate('(c)=>c.toDataURL()'),with_overlay)
-        select.select_option('best')
-        self.assertEqual(self.page.evaluate("""() => {
-            const s=CurvatureModernPhotoCalibrationEditor.mount(document).snapshot();
-            return JSON.stringify([s.model.Height,s.model.Pan,s.model.FocalLengthField]);
-        }"""),before['pose'])
-        stage('correspondences').click()
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        # Navigating objects must not invalidate a completed physical fit.
-        mode.select_option('object')
-        workspace.locator('#ModernCalibrationObjectPicker').select_option(str(selected['key']))
-        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
-        mode.select_option('vertex')
-        # Real exported file, import into the draft, then check the solver input.
+        residuals=workspace.locator('#ModernCalibrationResidualDetails')
+        residuals.locator('summary').click()
+        expect(workspace.locator('#ModernCalibrationResidualRows tr')).to_have_count(14)
+        workspace.locator('#ModernCalibrationResidualRows tr').first.get_by_role('button',name='Select correspondence 1').click()
+        expect(workspace.locator('#ModernCalibrationResidualRows tr').first.get_by_role('button',name='Select correspondence 1')).to_have_attribute('aria-pressed','true')
         with self.page.expect_download() as info:
             workspace.locator('#ModernCalibrationExportExperiment').click()
-        download=info.value
-        with open(download.path(),encoding='utf-8') as stream:
+        with open(info.value.path(),encoding='utf-8') as stream:
             exported=json.load(stream)
-        self.assertEqual(exported['fit']['freeParameters'],['Pan'])
+        self.assertEqual(exported['observations'],data['observations'])
         self.assertEqual(exported['fit']['result'],fit)
-        self.assertEqual(exported['referenceImage']['original']['width'],1200)
-        self.page.once('dialog',lambda dialog:dialog.accept())
-        workspace.locator('#ModernCalibrationExperimentFile').set_input_files(str(download.path()))
-        expect(workspace.locator('#ModernCalibrationExchangeStatus')).to_have_text('Experiment imported.')
-        after=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
-        self.assertEqual(after['observations'],exported['observations'])
-        self.assertEqual(after['scene'],exported['scene'])
-        self.assertEqual(after['fit']['result'],exported['fit']['result'])
-        self.assertEqual(after['referenceImage'],exported['referenceImage'])
-        self.assertEqual(after['fit']['freeParameters'],['Pan'])
-        expect(panel).to_be_visible()
-        expect(residual).to_have_count(1)
-        expect(residual.locator('[data-residual="error"]')).to_have_text(f"{fit['evaluation']['rmsPx']:.2f}")
-        # Invalidation must remove stale vectors and results.
-        stage('calibration').click()
-        workspace.locator('[data-fit-field="Roll"]').check()
-        expect(panel).to_be_hidden()
-        expect(select).to_be_disabled()
-        expect(residual).to_have_count(0)
-        # Holding out the only point disables fitting; role survives export and Undo.
-        role=workspace.locator('#ModernCalibrationPairs').get_by_role('checkbox',name='Use correspondence 1 for fit')
-        role.uncheck()
-        expect(workspace.locator('#ModernCalibrationRunFit')).to_be_disabled()
-        expect(workspace.locator('#ModernCalibrationRoleCount')).to_contain_text('0 Fit · 1 Validation')
-        held=self.page.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
-        self.assertEqual(held['version'],2)
-        self.assertFalse(held['observations'][0]['included'])
-        self.assertIsNone(held['fit']['result'])
-        stage('correspondences').click()
-        if not manual.evaluate('(d)=>d.open'):
-            manual.locator('summary').click()
-        workspace.locator('#ModernCalibrationUndo').click()
-        expect(role).to_be_checked()
-        stage('calibration').click()
-        expect(workspace.locator('#ModernCalibrationRunFit')).to_be_enabled()
-
-        # Material v3 uses the same real editor, worker and draft storage.
-        material=self.page.evaluate("""() => {
-            const e=CurvatureModernPhotoCalibrationEditor.mount(document),data=e.exportExperiment(),
-              m=data.scene.model,{width,height}=data.referenceImage.original,
-              r=CurvatureCameraMaterialAnchorResolver.create(m),
-              ps=CurvatureGeometryEngine.createObjectSequenceScene({...m,Height:0,geometryRadius:m.rEarth},0,true,
-                {opticsNeutral:true,physicalSurface:true,curvature:1/m.rEarth}).primitives,
-              session=CurvatureCameraLandmarkProjection.create(m,CurvatureCameraPhysicalPose.photoCamera(m,width,height),
-                width,height,{...data.scene.physics,method:'canvas-direct'});
-            const rows=[],used=new Set();
-            for(const kind of ['vertex','edge','surface']){
-              for(const p of ps){
-                if(used.has(p))continue;
-                const indices=kind==='vertex'?[0]:kind==='edge'?CurvatureEarClip.authoredEdges(p)[0]:
-                  CurvatureEarClip.indexedTriangles(p).triangles[0];
-                if(!indices)continue;
-                const landmark={id:'material-'+kind,anchor:{kind,owner:p.metadata.landmarkOwner,
-                  primitive:p.metadata.landmarkPrimitive,signature:r.signature(0),indices,
-                  weights:kind==='vertex'?[1]:kind==='edge'?[.4,.6]:[.2,.3,.5]}};
-                const q=session[kind](landmark);
-                if(q.status!=='visible')continue;
-                rows.push(CurvatureModernPhotoCalibrationEditor.pair(landmark,q.pixel,width,height,1,kind!=='surface'));
-                used.add(p);break;
-              }
-            }
-            if(rows.length!==3)throw Error('Expected three visible material kinds');
-            return {...data,version:3,observations:rows,fit:{...data.fit,freeParameters:['Pan'],result:null,running:false}};
-        }""")
-        self.page.once('dialog',lambda dialog:dialog.accept())
-        self.assertTrue(self.page.evaluate("d => CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",material))
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('3 correspondences')
-        expect(workspace.locator('#ModernCalibrationRoleCount')).to_contain_text('2 Fit · 1 Validation')
-        expect(pairs).not_to_have_attribute('open','')
-        expect(workspace.locator('#ModernCalibrationPairs')).to_contain_text('surface')
-        stage('calibration').click()
-        workspace.locator('#ModernCalibrationRunFit').click()
-        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=30000)
-        expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=30000)
-        stored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
-        self.assertEqual(stored['version'],3)
-        self.assertEqual(stored['observations'],material['observations'])
-        self.assertTrue(stored['fit']['result']['materialBinding'])
-        self.assertEqual(len(stored['fit']['result']['evaluation']['points']),2)
+        self.assertEqual(exported['referenceImage']['original']['width'],1176)
+        self.import_calibration_experiment(exported,replace=True)
+        expect(stage('result')).to_have_attribute('aria-current','step')
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
+        error=self.page.evaluate("""async data=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document);
+            data.scene.model.showModel=2;
+            try{await e.importExperiment(data);return 'unexpected success';}catch(err){return err.message;}
+        }""",exported)
+        self.assertIn('Flat calibration experiments are no longer supported',error)
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment().observations"),data['observations'])
         expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
         self.page.reload(wait_until='load')
-        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('3 correspondences')
+        expect(workspace).to_be_visible()
         expect(stage('result')).to_have_attribute('aria-current','step')
-        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled()
-        restored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
-        self.assertEqual(restored['observations'],stored['observations'])
-        self.assertEqual(restored['fit']['result'],stored['fit']['result'])
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult()"),fit)
 
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()
@@ -1160,26 +764,35 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationTab')).to_have_attribute('aria-pressed','true')
 
     def test_photo_calibration_reload_restores_draft(self):
-        import base64
-        self.open_modern()
-        self.page.locator('#ModernPhotoCalibrationOpen').click()
-        dialog=self.page.locator('#ModernPhotoCalibration')
-        encoded=self.page.evaluate("""() => {const c=document.createElement('canvas');c.width=100;c.height=80;return c.toDataURL().split(',')[1];}""")
-        dialog.locator('#ModernCalibrationFile').set_input_files(
-            {'name':'reload.png','mimeType':'image/png','buffer':base64.b64decode(encoded)})
-        expect(dialog.locator('#ModernCalibrationStatus')).to_contain_text('100 × 80')
-        toggle=dialog.locator('#ModernCalibrationLegacyToggle')
-        if toggle.is_visible() and toggle.get_attribute('aria-pressed')=='false':
-            toggle.click()
-        dialog.locator('#ModernCalibrationX').fill('25')
-        dialog.locator('#ModernCalibrationY').fill('35')
-        dialog.locator('#ModernCalibrationAdd').click()
-        expect(dialog.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
-        self.page.reload()
-        expect(dialog).to_be_visible()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        expect(dialog.locator('#ModernCalibrationPairs')).to_contain_text('25.00, 35.00')
-        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
+        workspace=self.open_physical_calibration()
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        data=self.soundly_calibration_experiment(fixture['observations'][:1])
+        self.import_calibration_experiment(data)
+        canvas=workspace.locator('#ModernCalibrationInlineViewer canvas')
+        canvas.hover()
+        self.page.mouse.wheel(0,-150)
+        manual=workspace.locator('#ModernCalibrationManualPairs')
+        manual.locator('summary').click()
+        workspace.locator('#ModernCalibrationBeginPair').click()
+        workspace.locator('#ModernCalibrationX').fill('25')
+        workspace.locator('#ModernCalibrationY').fill('35')
+        saved=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document);
+            return {observations:e.exportExperiment().observations,workflow:e.pairWorkflow(),view:e.inlineViewerState().view};
+        }""")
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
+        self.page.reload(wait_until='load')
+        expect(workspace).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text('1176 × 791')
+        self.page.wait_for_function("CurvatureModernPhotoCalibrationEditor.mount(document).inlineViewerState()?.mode==='free'")
+        restored=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document);
+            return {observations:e.exportExperiment().observations,workflow:e.pairWorkflow(),view:e.inlineViewerState().view};
+        }""")
+        self.assertEqual(restored['observations'],saved['observations'])
+        self.assertEqual(restored['workflow'],saved['workflow'])
+        self.assertAlmostEqual(restored['view']['zoom'],saved['view']['zoom'])
 
     def test_photo_calibration_existing_originals(self):
         self.open_modern()
@@ -1211,15 +824,16 @@ class ModernBrowserSmoke(unittest.TestCase):
         picker.select_option(value=local_key)
         dialog.locator('#ModernCalibrationUsePhoto').click()
         expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
-        toggle=dialog.locator('#ModernCalibrationLegacyToggle')
-        if toggle.is_visible() and toggle.get_attribute('aria-pressed')=='false':
-            toggle.click()
-        dialog.locator('#ModernCalibrationX').fill('25')
-        dialog.locator('#ModernCalibrationY').fill('35')
-        dialog.locator('#ModernCalibrationAdd').click()
         dialog.locator('#ModernCalibrationReferenceTools summary').click()
         dialog.locator('#ModernCalibrationUsePhoto').click()
+        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        observation={**fixture['observations'][0],'pixel':[25,35]}
+        reference=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment().referenceImage")
+        data=self.soundly_calibration_experiment([observation],reference)
+        self.import_calibration_experiment(data,replace=True)
         expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        dialog.locator('#ModernCalibrationReferenceTools summary').click()
         picker.select_option(value=original['key'])
         self.page.once('dialog',lambda prompt: prompt.dismiss())
         dialog.locator('#ModernCalibrationUsePhoto').click()

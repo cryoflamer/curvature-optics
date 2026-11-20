@@ -1,3 +1,33 @@
+# Physical-only correspondence editor (8F.6l)
+
+The integrated physical Free View is the sole correspondence editing route.
+The former modeless Object Viewer / Magnifier, optical picking controls,
+legacy optical-editor switch, viewport ownership picking and window rectangle
+storage have been deleted. The physical viewer maintains its own independent
+camera and orbit pivot; its version-4 stored sessions remain compatible.
+All new picks, including Fast Vertex, pass the complete authored material
+identity to the resolver. Older Globe experiment versions 1/2/3 and legacy
+vertex rows still import and fit without coercion; editing a model endpoint
+uses material identity. A stored Flat draft is not silently converted or
+replaced: replacing it requires confirmation. New Photo Calibration sessions
+require a Globe Scene; Flat capture/import is rejected explicitly. Scene,
+Compare, the standalone fit engine and Flat optics are unchanged.
+
+Correspondences owns one physical viewport, Calibration owns Fit/Validation
+and worker controls, and Result owns independent read-only optical previews.
+The optical painter and its owner pass are retained only for the initial
+Result image and Scene-derived physical framing. The old optical UI crop
+and window geometry APIs are removed. Pure geometry/projection helpers
+covered by mathematical regressions remain independently testable.
+
+Verification: targeted adapter execution of 69 JS regression checks passed;
+real Chromium and the full Node/CI suite remain pending. The browser smoke
+suite now exercises direct physical picking, pair lifecycle, standalone
+workspace switching, saved draft restore, the 14-point Soundly fixture,
+Worker fitting and Globe JSON interchange instead of the deleted UI.
+
+---
+
 # Correspondence editor — direct-manipulation UX contract
 
 Agreed redesign (8F.6c–k). This specification supersedes the earlier

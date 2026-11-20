@@ -1482,24 +1482,17 @@ button{cursor:pointer}
 @media(max-width:760px){.modern-photo-calibration{width:calc(100% - 20px);padding:12px}.modern-calibration-grid{grid-template-columns:1fr}.modern-app.is-photo-calibration .modern-share-actions{display:none}}
 
 /* Full-scene picking, with a separate viewport transform on each canvas. */
-.modern-photo-calibration #ModernCalibrationPickConflict[hidden]{display:none!important}
-.modern-calibration-landmark-menu{padding:8px 0;color:#355b82}
-.modern-calibration-landmark-menu summary{cursor:pointer;font-weight:600}
-.modern-photo-calibration #ModernCalibrationModelStatus,.modern-photo-calibration #ModernCalibrationPickStatus{font-size:12px;color:#516e85;margin:6px 0;min-height:1.4em}
+.modern-photo-calibration #ModernCalibrationModelStatus{font-size:12px;color:#516e85;margin:6px 0;min-height:1.4em}
 .modern-photo-calibration #ModernCalibrationMesh{background:#0b141e}
 
 /* Direct correspondence interaction: no scrolling between the two picks. */
-.modern-calibration-model-wrap{position:relative}
-#ModernCalibrationHoverTip{position:absolute;pointer-events:none;max-width:220px;background:#172534;color:white;border-radius:5px;padding:6px 8px;font-size:12px;z-index:2}
-#ModernCalibrationHoverTip[hidden]{display:none}
 .modern-calibration-actions{margin:12px 0;padding:8px;background:#edf5fc;border-radius:6px}
 #ModernCalibrationActionHint{flex:1;font-size:13px;color:#355b82}
 .modern-photo-calibration tr.is-selected{background:#e3f0fc}
 
 /* Isolated object inspector: independent of the scene canvas viewport. */
-.modern-landmark-viewer{position:fixed;inset:auto;margin:0;z-index:1000;box-sizing:border-box;max-width:none;max-height:none;padding:10px;box-shadow:0 6px 24px #162d4566;overflow:auto}
-.modern-landmark-viewer[open]{display:flex;flex-direction:column;gap:5px}
-.modern-landmark-viewer header{justify-content:space-between;flex-wrap:nowrap;gap:8px;cursor:move;touch-action:none;user-select:none}
+.modern-landmark-viewer{box-sizing:border-box;min-width:0}
+.modern-landmark-viewer header{justify-content:space-between;gap:8px}
 .modern-landmark-viewer h2{font-size:1.1rem;margin:0;overflow-wrap:anywhere}
 .modern-landmark-viewer .modern-calibration-toolbar{gap:5px}
 .modern-landmark-viewer .modern-calibration-toolbar label{margin:0}
@@ -1514,9 +1507,7 @@ button{cursor:pointer}
 .modern-landmark-viewer [data-viewer-pick-status],
 .modern-landmark-viewer [data-viewer-point-coords]{box-sizing:border-box;line-height:1.4; height:2.8em;min-height:2.8em;max-height:2.8em;flex:0 0 2.8em;overflow:auto;overflow-wrap:anywhere;scrollbar-gutter:stable}
 .modern-landmark-viewer [data-viewer-frame] canvas{position:absolute;inset:0}
-.modern-landmark-viewer footer{display:flex;align-items:flex-end;gap:6px}
-.modern-photo-calibration .modern-landmark-viewer [data-viewer-resize]{flex:0 0 28px;width:28px;height:28px;padding:0;line-height:1;cursor:nwse-resize;touch-action:none;user-select:none}
-.modern-landmark-viewer [data-viewer-titlebar]:focus-visible,.modern-landmark-viewer canvas:focus-visible{outline:2px solid #397bad;outline-offset:-2px}
+.modern-landmark-viewer canvas:focus-visible{outline:2px solid #397bad;outline-offset:-2px}
 
 .modern-landmark-viewer [data-viewer-selection-status]{flex:0 0 1.5em;height:1.5em;line-height:1.5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:700}
 .modern-landmark-viewer [data-viewer-marker-tooltip]{position:absolute;z-index:2;pointer-events:none;background:#142e45;color:white;padding:5px 8px;border-radius:4px;font-size:12px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
@@ -1524,7 +1515,6 @@ button{cursor:pointer}
 /* Inline viewport has a stable aspect-ratio frame, not floating geometry. */
 .modern-calibration-grid>section{min-width:0}
 .modern-inline-viewer{position:static;inset:auto;z-index:auto;width:auto;height:auto;max-width:none;max-height:none;padding:0;margin:0;box-shadow:none;overflow:visible;display:flex;flex-direction:column;gap:5px}
-.modern-inline-viewer[hidden],#ModernCalibrationInlinePanel[hidden],#ModernCalibrationLegacyModel[hidden]{display:none}
 .modern-inline-viewer header{cursor:default;touch-action:auto;user-select:auto}
 .modern-inline-viewer [data-viewer-frame]{flex:none;aspect-ratio:800 / 540;width:100%;min-height:80px;box-sizing:border-box}
 .modern-inline-viewer [data-viewer-selection-status]{flex:none}
@@ -1568,3 +1558,5 @@ button{cursor:pointer}
 .modern-photo-calibration .modern-inline-viewer [data-viewer-frame]{aspect-ratio:800 / 540}
 .modern-photo-calibration .modern-calibration-grid{align-items:start}
 .modern-photo-calibration #ModernCalibrationPairList:not(:has(.is-fit-failure)) :is(th,td):nth-child(6){display:none}
+
+.modern-inline-viewer[hidden],#ModernCalibrationInlinePanel[hidden],#ModernCalibrationResultModel[hidden]{display:none!important}

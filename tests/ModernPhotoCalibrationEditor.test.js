@@ -41,38 +41,11 @@ test('photo choices retain project/frame links and isolate built-in IDs from lib
   assert.equal(JSON.stringify([local,projects,demos]),before);
 });
 
-test('preview raster preserves aspect and model snap is independent of viewport zoom/pan',()=>{
-  assert.deepEqual(editor.previewSize(4000,3000),{width:1200,height:900});
-  assert.deepEqual(editor.previewSize(800,1200),{width:800,height:1200});
-  const point=(id,pixel,worldKey)=>({landmark:{id},pixel,worldKey});
-  const points=[point('a',[10,20],'1'),point('duplicate',[10,20],'1'),
-    point('b',[10.2,20],'2'),point('far',[50,20],'3')];
-  const v={x:15,y:25,scale:2};
-  const center=editor.screenPoint(v,[10,20]);
-  assert.deepEqual(editor.snapCandidates(points,v,...center).map(p=>p.landmark.id),['a','b']);
-  const z={x:140,y:-5,scale:20};
-  assert.deepEqual(editor.snapCandidates(points,z,...editor.screenPoint(z,[10,20])).map(p=>p.landmark.id),['a']);
-  assert.deepEqual(editor.snapCandidates(points,v,0,0),[]);
-});
 
-test('marker hit chooses the closest existing pair and leaves empty space for panning',()=>{
- const markers=[{id:'a',pixel:[10,10]},{id:'b',pixel:[15,10]}];
- assert.equal(editor.nearestMarker(markers,[14,10],8).id,'b');
- assert.equal(editor.nearestMarker(markers,[50,50],8),null);
-});
 
-test('raster spatial index preserves exact snap results across zoom and pan',()=>{
-  const points=Array.from({length:8000},(_,i)=>({landmark:{id:String(i)},pixel:[(i*37)%1200,(i*71)%900],worldKey:String(i)}));
-  const index=editor.spatialIndex(points);
-  for(const view of [{x:0,y:0,scale:.4},{x:-200,y:150,scale:3},{x:100,y:-20,scale:16}]){
-    for(const point of points.filter((_,i)=>i%173===0)){
-      const [x,y]=editor.screenPoint(view,point.pixel);
-      const subset=index.query(view,x,y,12);
-      assert.deepEqual(editor.snapCandidates(subset,view,x,y,12,2),editor.snapCandidates(points,view,x,y,12,2));
-    }
-  }
-  assert.ok(index.query({x:0,y:0,scale:1},500,400,10).length<points.length/10);
-});
+
+
+
 
 test('identity mask groups visible pixels by logical object and bank, not primitive',()=>{
   const banks=[[{metadata:{placedObjectIndex:4}},{metadata:{placedObjectIndex:4}}],[{metadata:{placedObjectIndex:4}}]];
@@ -87,20 +60,7 @@ test('identity mask groups visible pixels by logical object and bank, not primit
   assert.equal(spans.size,2);
 });
 
-test('visible object takes priority over overlapping or closer hidden landmarks',()=>{
- const raster=editor.ownershipRaster(new Map([[1,[[0,2,8]]],[2,[[8,2,8]]]]),16,5);
- const view={x:0,y:0,scale:1};
- const pt=(id,key,x,visible=true)=>({landmark:{id},objectKey:key,painterVisible:visible,pixel:[x,2.5],worldKey:id});
- const points=[pt('hidden-near',2,5),pt('right',1,7),pt('self-hidden',1,5,false),pt('other',2,9)];
- const hit=editor.visiblePick(raster,points,view,5,2.5);
- assert.equal(hit.key,1);
- assert.deepEqual(hit.candidates.map(p=>p.landmark.id),['right']);
- assert.equal(editor.visiblePick(raster,points,view,9,2.5).key,2);
- assert.equal(editor.visiblePick(raster,[],view,5,2.5).key,1,'object interior does not require nearby vertices');
- assert.equal(editor.ownerAt(raster,5,1.5,2),1,'small edge gap recovers ownership');
- assert.equal(editor.ownerAt(raster,5,-1,3),null);
- assert.deepEqual(editor.visiblePick(null,points,view,5,2.5).candidates,[],'no unsafe global fallback');
-});
+
 
 test('experiment exchange preserves original pixels, locked fields and result identity',()=>{
  const model={showModel:1,rEarth:6371000,rFEarth:10007543,CameraEast:0,CameraNorth:0,Height:10,Pan:1,Nick:0,Roll:0,FocalLengthField:50};
@@ -201,24 +161,9 @@ test('snapshot object and span owners retain authored indices and endpoint colum
   const truncated=geometry.createObjectSequenceScene({...m,ObjDist:[21000000,1200],ObjDeltaDist:[10000000,300]},0,true,{opticsNeutral:true});
   assert.equal(editor.objectPackages([truncated.primitives,[]]).size,0);
 });
-test('object package selection is independent of nearby correspondence vertices',()=>{
-  const owner={kind:'object',bank:0,objectType:8,stationIndex:0,column:0};
-  const banks=[[{points:[[0,0,0]],metadata:{placedObjectIndex:0,landmarkOwner:owner,landmarkPackage:owner,landmarkPrimitive:0}}],[]];
-  const packages=editor.objectPackages(banks,()=>123);
-  assert.equal(packages.get(1).rangeMetres,123);
-  const raster=editor.ownershipRaster(new Map([[1,[[0,0,20]]]]),20,1);
-  const hit=editor.visiblePick(raster,[],{x:0,y:0,scale:1},10,0.5);
-  assert.equal(hit.candidates.length,0);
-  assert.deepEqual(packages.get(hit.key).owner,owner);
-});
 
-test('magnifier maps reverse drags through a panned and zoomed viewport, clipping to visible raster',()=>{
-  const view={x:-50,y:40,scale:2};
-  assert.deepEqual(editor.magnifierRegion(view,[250,180],[50,80],400,300,500,400),{x:50,y:20,width:100,height:50});
-  assert.deepEqual(editor.magnifierRegion(view,[-20,0],[520,450],400,300,500,400),{x:25,y:0,width:250,height:180});
-  assert.equal(editor.magnifierRegion(view,[10,10],[100,20],400,300,500,400),null);
-  assert.equal(editor.magnifierRegion(view,[40,90],[41,180],400,300,500,400),null);
-});
+
+
 
 test('Globe material edits keep observation ID, role, row order and original data until committed',()=>{
   const m={showModel:1,rEarth:6371000,Height:12,NObjects:[2,0],ObjType:[6,3],ObjDist:[1000,1200],ObjDeltaDist:[100,100],ObjSideType:[0,0],ObjSidePos:[30,40],ObjSideVar:[0,0],ObjSizeType:[0,0],ObjSize:[10,20],ObjSizeVar:[0,0]};
@@ -242,4 +187,9 @@ test('Globe material edits keep observation ID, role, row order and original dat
   assert.deepEqual(editor.observationRows(back,100,80,true,m),back);
   assert.throws(()=>editor.commitGlobePair(rows,material,[100,31],100,80,3,a.landmark.id,m),/Invalid/);
   assert.throws(()=>editor.commitGlobePair(rows,material,[21,31],100,80,3,'missing',m),/no longer exists/);
+});
+
+test('Flat experiment is rejected before reference decoding or state mutation',()=>{
+  const input={format:'curvature-photo-calibration',version:2,scene:{model:{showModel:2}}};
+  assert.throws(()=>editor.validateExperiment(input,()=>{throw Error('unexpected decode');}),/Flat calibration experiments are no longer supported/);
 });

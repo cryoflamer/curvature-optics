@@ -79,26 +79,11 @@ test('exact ownership raster keeps a clicked road separate from its support and 
   assert.equal(roads.length,2);
   const rgb=id=>[id&255,id>>>8,1+(((id&255)*31+(id>>>8)*17)%254),255];
   const spans=editor.identitySpans(new Uint8ClampedArray([...rgb(support.key),...rgb(roads[0].key),...rgb(roads[1].key),0,0,0,255]),4,1);
-  const raster=editor.ownershipRaster(spans,4,1);
-  for(const [x,p] of [support,...roads].entries())assert.deepEqual(owners.get(editor.ownerAt(raster,x+.5,.5)).owner,p.owner);
-  assert.equal(editor.ownerAt(raster,3.5,.5),null);
+  for(const [x,p] of [support,...roads].entries())assert.deepEqual(spans.get(p.key),[[x,0,1]]);
+  assert.equal(spans.size,3);
 });
 
-test('window geometry restores and clamps independently of the viewer camera',()=>{
-  const camera=viewer.reset(),before=JSON.stringify(camera);
-  const a=viewer.windowRect({x:90,y:60,width:620,height:450},1200,800);
-  assert.deepEqual(a,{x:90,y:60,width:620,height:450});
-  assert.deepEqual(viewer.changeWindowRect(a,'move',100,70,1200,800),{x:190,y:130,width:620,height:450});
-  assert.deepEqual(viewer.changeWindowRect(a,'resize',120,80,1200,800),{x:90,y:60,width:740,height:530});
-  const resized=viewer.changeWindowRect(a,'resize',10000,10000,1200,800);
-  assert.equal(resized.x,a.x);assert.equal(resized.y,a.y);
-  assert.equal(resized.x+resized.width,1192);assert.equal(resized.y+resized.height,792);
-  const small=viewer.windowRect(a,280,240);
-  assert.deepEqual(small,{x:8,y:8,width:264,height:224});
-  const invalid=viewer.windowRect({x:NaN,y:12,width:100,height:100},1200,800);
-  assert.ok(invalid.width>=340&&invalid.height>=300);
-  assert.equal(JSON.stringify(camera),before);
-});
+
 test('resized raster matches window aspect and bounds backing store size',()=>{
   assert.deepEqual(viewer.rasterSize(640,400,2),{width:1280,height:800});
   assert.deepEqual(viewer.rasterSize(3000,1500,3),{width:2048,height:1024});
@@ -426,19 +411,7 @@ test('committed marker selection ignores hidden markers and cycles overlapping v
   assert.equal(JSON.stringify(rows),before);
 });
 
-test('optical viewport preserves source pixel under cursor and clamps pan without changing camera',()=>{
-  const r={x:0,y:0,width:1200,height:800},before=JSON.stringify(r),p=[600,300];
-  const t=viewer.opticalViewport(r,1000,600),q=[(p[0]-t.offsetX)/t.scale,(p[1]-t.offsetY)/t.scale];
-  const z=viewer.zoomOptical(r,1200,800,1000,600,p,2),a=viewer.opticalViewport(z,1000,600);
-  assert.ok(Math.hypot(...q.map((x,i)=>x*a.scale+[a.offsetX,a.offsetY][i]-p[i]))<1e-9);
-  assert.deepEqual(viewer.zoomOptical(z,1200,800,1000,600,p,.5),r);
-  assert.equal(viewer.panOptical(z,1200,800,1000,600,1e6,1e6).x,0);
-  assert.equal(viewer.panOptical(z,1200,800,1000,600,-1e6,-1e6).y,400);
-  assert.equal(JSON.stringify(r),before);
-  assert.equal(viewer.rectangleOptical(r,1200,800,1000,600,[0,0],[20,20]),null);
-  const rect=viewer.rectangleOptical(r,1200,800,1000,600,[200,150],[500,450]);
-  assert.deepEqual(rect,{x:200,y:200,width:400,height:400});
-});
+
 test('pivot-independent optical geometry and frame transitions preserve authored material coordinates',()=>{
   const scene=geometry.createObjectSequenceScene(model,0,true,{opticsNeutral:true,physicalSurface:true,curvature:1/model.geometryRadius});
   const g=viewer.opticalGeometry([scene.primitives,[]]),mesh=viewer.preparePick(g.items);
@@ -454,7 +427,7 @@ test('pivot-independent optical geometry and frame transitions preserve authored
   assert.deepEqual(viewer.opticalGeometry([[],[]]).items,[]);
 });
 
-test('inline source lifecycle navigates optical raster without requiring a dialog or orbit pivot',()=>{
+test('physical viewer lifecycle, gestures, independent draft and preserved session',()=>{
   const nodes=new Map(),make=()=>({style:{},dataset:{},value:'',textContent:'',hidden:false,
     clientWidth:800,clientHeight:600,width:800,height:600,events:{},
     closest(){return this;},replaceChildren(){},append(){},focus(){},addEventListener(k,fn){this.events[k]=fn;},
@@ -471,23 +444,19 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const owner={kind:'object',bank:0,objectType:3};
   const banks=[[{type:'polygon',mode:3,style:{},points:[[-1,100,-1],[1,100,-1],[1,100,1],[-1,100,1]],
     metadata:{landmarkOwner:owner,landmarkPrimitive:0}}],[]];
-  let pivots=0,changes=0,failPivot=true;
+  let changes=0;
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:10,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
   const fastHits=[],deleted=[],owners=[];let undos=0,redos=0,cancels=0;const materialHits=[],gestureHits=[],moves=[];let acceptMove=false;
   const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onRedo:()=>redos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);if(api.snapshot()?.pickMode==='auto')api.setPendingVertex({bank:h.bank,primitive:h.index,anchor:{kind:h.kind,indices:h.indices,weights:h.weights}});return true;},onGesture:a=>{gestureHits.push(a);return a.kind==='double-click'&&a.target.kind==='draft';},onMoveEndpoint:(target,hit)=>{moves.push({target,hit});return acceptMove;}});
-  const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
-    buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openPhysical(banks);
   assert.equal(api.snapshot().mode,'free');assert.deepEqual(api.snapshot().pivot,[0,100,0]);
-  assert.equal(host.querySelector('[data-viewer-scene-controls]').style.display,'none');
   assert.equal(api.sessionSnapshot().version,4);
   const physicalSaved=api.sessionSnapshot(),physicalBefore=api.snapshot();
   api.openPhysical(banks);api.restoreSession(physicalSaved);assert.deepEqual(api.snapshot(),physicalBefore);
   assert.equal(api.resetScene(),true);assert.equal(api.snapshot().mode,'free');
-  assert.equal(api.parkScene(),true);api.openScene({...sourceContract,readOnly:true});assert.equal(api.resumeScene(),true);
-  assert.equal(api.snapshot().mode,'free');api.close();
+  assert.equal(api.openCrop,undefined);assert.equal(api.openScene,undefined);assert.equal(api.parkScene,undefined);api.close();
   // Open directly in exactly the previous Scene-derived physical frame.
   const framing={source,observer,spans:new Map([[1,[[400,300,1]]]]),
     packages:new Map([[1,{owner,primaryIndices:[0]}]])};
@@ -588,117 +557,40 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const rotated=api.sessionSnapshot(),rotatedView=api.snapshot();
   api.close();api.openPhysical(banks,framing);api.restoreSession(rotated);assert.deepEqual(api.snapshot(),rotatedView);
   assert.equal(api.resetScene(),true);assert.deepEqual(api.snapshot().view,framed.view);
-  api.close();
-  api.openScene(sourceContract);
-  assert.equal(api.isOpen(),true);assert.equal(host.hidden,false);assert.equal(api.windowSnapshot(),null);
-  assert.deepEqual(api.snapshot().region,full);
-  const event={preventDefault(){},clientX:400,clientY:300,pointerId:1,button:0,shiftKey:false};
-  canvas.events.wheel({...event,deltaY:-400});
-  assert.equal(api.snapshot().mode,'scene');assert.ok(api.snapshot().region.width<800);
-  const zoomed=api.snapshot().region;
-  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});
-  assert.ok(api.snapshot().region.x<zoomed.x);assert.equal(pivots,0);
-  assert.equal(api.enterFree(),false);assert.equal(api.snapshot().mode,'scene');assert.equal(pivots,1);
-  assert.ok(host.querySelector('[data-viewer-status]').textContent.includes('No visible physical pivot'));
-  api.resetScene();assert.deepEqual(api.snapshot().region,full);
-  assert.equal(api.zoomRectangle([200,150],[600,450]),true);
-  failPivot=false;assert.equal(api.enterFree(),true);assert.equal(api.snapshot().mode,'free');
+  // Advanced physical modes and keyboard alternatives remain accessible.
+  api.setPendingVertex(null);api.clearLocalPoint();
   const pair=(id,i)=>({id,label:id,color:'#123456',bank:0,index:0,anchor:{kind:'vertex',owner,primitive:0,indices:[i],weights:[1]}});
-  const rows=[pair('a',0),pair('b',2)];
-  api.setCorrespondences(rows,'a');
-  assert.equal(host.querySelector('h2').textContent,'Model · Free View');
-  
-  // The mock stores only the last listener; invoke the actual button and inspect enabled state.
+  const rows=[pair('a',0),pair('b',2)];api.setCorrespondences(rows,'a');
   const del=host.querySelector('[data-viewer-delete-pair]');assert.equal(del.disabled,false);del.onclick();assert.deepEqual(deleted,['a']);
   const key=(key,extra={})=>hostKeys.forEach(fn=>fn({key,target:canvas,preventDefault(){},stopPropagation(){},...extra}));
-  key('Delete');key('z',{ctrlKey:true});assert.deepEqual(deleted,['a','a']);assert.equal(undos,1);key('z',{ctrlKey:true,shiftKey:true});assert.equal(redos,1);assert.equal(undos,1);
+  key('Delete');key('z',{ctrlKey:true});key('z',{ctrlKey:true,shiftKey:true});
+  assert.deepEqual(deleted,['a','a']);assert.equal(undos,1);assert.equal(redos,1);
   key('Delete',{target:{tagName:'INPUT'}});assert.equal(deleted.length,2);
-  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
-  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});
-  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
-  api.setCorrespondences(rows,'b');
-  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
-  api.resetScene();
-  assert.equal(api.enterFree(),true);
-  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
-  api.resetScene();assert.equal(api.snapshot().mode,'scene');assert.deepEqual(api.snapshot().region,full);
-  api.setCorrespondences([],null);
-  assert.equal(del.disabled,true);
-  assert.equal(api.enterFree(),true);
-  const select=host.querySelector('[data-viewer-pick-mode]');
-  select.value='fast-vertex';select.onchange();
-  const g=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region:full},source,observer);
-  const pixel=viewer.regionCamera(g,api.snapshot().view,800,600).project(g.items[0].points[0]).pixel;
+  api.setCorrespondences([],null);assert.equal(del.disabled,true);
+  const select=host.querySelector('[data-viewer-pick-mode]'),event=eventForFraming();
+  api.resetScene();select.value='fast-vertex';select.onchange();
+  const pixel=viewer.regionCamera(expectedGeometry,api.snapshot().view,800,600).project(expectedGeometry.items[0].points[0]).pixel;
   const click={...event,clientX:pixel[0],clientY:pixel[1]};
   canvas.events.pointerdown(click);canvas.events.pointerup(click);
-  assert.deepEqual(fastHits,[{kind:'vertex',bank:0,index:0,vertex:0}]);
+  assert.equal(fastHits.length,1);assert.equal(fastHits[0].kind,'vertex');assert.deepEqual(fastHits[0].indices,[0]);assert.equal(fastHits[0].vertex,0);
   assert.equal(api.snapshot().staged,null);
-  select.value='owner';select.onchange();
-  const beforeOwner=api.snapshot();
-  const middle={...event,clientX:400,clientY:300};canvas.events.pointerdown(middle);canvas.events.pointerup(middle);
+  select.value='owner';select.onchange();const beforeOwner=api.snapshot();
+  canvas.events.pointerdown(event);canvas.events.pointerup(event);
   assert.deepEqual(owners,[owner]);assert.deepEqual(api.snapshot(),beforeOwner);
-  api.setInspectedOwner(owner,'Owner',['P0']);
-  assert.equal(host.querySelector('[data-viewer-owner-status]').textContent,'Owner');
-  // Local staging survives navigation and inspection; a Fast Vertex action
-  // cannot consume a local Vertex draft, even though they share a point kind.
-  select.value='vertex';select.onchange();
-  canvas.events.pointerdown(click);canvas.events.pointerup(click);
+  api.setInspectedOwner(owner,'Owner',['P0']);assert.equal(host.querySelector('[data-viewer-owner-status]').textContent,'Owner');
+  select.value='vertex';select.onchange();canvas.events.pointerdown(click);canvas.events.pointerup(click);
   const local=api.snapshot().staged;assert.ok(local);
   select.value='navigate';select.onchange();assert.deepEqual(api.snapshot().staged,local);
-  select.value='fast-vertex';select.onchange();
-  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,true);
-  host.querySelector('[data-viewer-point-confirm]').onclick();assert.equal(fastHits.length,1);
-  select.value='owner';select.onchange();assert.deepEqual(api.snapshot().staged,local);
-  select.value='vertex';select.onchange();
-  assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,false);
-  const draftSession=api.sessionSnapshot();
-  api.restoreSession(draftSession);assert.deepEqual(api.snapshot().staged,local);
-  api.setPendingVertex({bank:0,primitive:0,vertex:2});
-  host.querySelector('[data-viewer-point-confirm]').onclick();
-  assert.equal(api.snapshot().staged,null);assert.deepEqual(api.snapshot().confirmed,local);assert.deepEqual(materialHits,[local]);
-  api.discardPairDraft();assert.deepEqual(api.snapshot().confirmed,local);
-  // Undo clears local overlays even when Initial/Free View is parked.
-  assert.equal(api.parkScene(),true);api.openScene({...sourceContract,readOnly:true});
-  api.clearLocalPoint();assert.equal(api.resumeScene(),true);
-  assert.equal(api.snapshot().confirmed,null);assert.equal(api.snapshot().staged,null);
-  assert.equal(api.snapshot().mode,'free');
-  key('Escape');assert.equal(cancels,1);assert.equal(api.snapshot().mode,'free');
-  api.setPendingVertex(null);
-  host.querySelector('[data-viewer-pick-clear]').onclick();
-  assert.equal(api.snapshot().confirmed,null);
-  select.value='owner';select.onchange();
-  api.resetScene();
-  canvas.events.wheel({...event,deltaY:-120});
-  const beforeBest=api.snapshot();
-  assert.equal(api.parkScene(),true);
-  api.openScene({...sourceContract,readOnly:true,title:'Best Camera'});
-  assert.equal(api.enterFree(),false);assert.equal(host.querySelector('[data-viewer-free]').disabled,true);
-  canvas.events.wheel({...event,deltaY:-120});assert.ok(api.snapshot().region.width<800);
-  const bestRegion=api.snapshot().region;
-  assert.equal(api.updateScenePaint(sourceContract.paint),true);
-  assert.deepEqual(api.snapshot().region,bestRegion);
-  assert.equal(api.resumeScene(),true);
-  assert.deepEqual(api.snapshot(),beforeBest);
-  assert.equal(api.resumeScene(),false);
-  assert.equal(api.sessionSnapshot().version,2);assert.ok(changes>0);
-  // A new mount/source must reconstruct the same original frame and rebased pivot.
-  api.resetScene();api.setCorrespondences(rows,'a');assert.equal(api.enterFree(),true);
-  api.setCorrespondences(rows,'b');
-  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:423,clientY:315});canvas.events.pointerup({...event,clientX:423,clientY:315});
+  select.value='fast-vertex';select.onchange();assert.equal(host.querySelector('[data-viewer-point-confirm]').disabled,true);
+  select.value='vertex';select.onchange();const draft=api.sessionSnapshot();
+  api.restoreSession(draft);assert.deepEqual(api.snapshot().staged,local);
+  host.querySelector('[data-viewer-point-confirm]').onclick();assert.equal(api.snapshot().staged,null);
+  api.clearLocalPoint();key('Escape');assert.equal(cancels,1);
   const saved=api.sessionSnapshot(),expected=api.snapshot();
-  api.close();api.openScene(sourceContract);api.restoreSession(JSON.parse(JSON.stringify(saved)));
-  const restored=api.snapshot();
-  assert.equal(restored.mode,'free');assert.deepEqual(restored.view,expected.view);
-  assert.ok(Math.hypot(...restored.pivot.map((x,i)=>x-expected.pivot[i]))<1e-6);
-  assert.deepEqual(restored.region,expected.region);assert.equal(restored.pickMode,expected.pickMode);
-  assert.throws(()=>api.restoreSession({...saved,base:{...saved.base,worldPoint:[0,0,0]}}),/pivot|frame|camera/i);
-  api.resetScene();canvas.events.wheel({...event,deltaY:-120});
-  const optical=api.sessionSnapshot();api.close();api.openScene(sourceContract);
-  api.restoreSession(optical);assert.deepEqual(api.snapshot().region,optical.region);
-  api.openScene({...sourceContract,readOnly:true,title:'Best Camera'});
-  canvas.events.wheel({...event,deltaY:-120});const best=api.sessionSnapshot();
-  api.close();api.openScene({...sourceContract,readOnly:true,title:'Best Camera'});api.restoreSession(best);
-  assert.deepEqual(api.snapshot().region,best.region);assert.throws(()=>api.restoreSession(saved),/Invalid integrated/);
+  api.close();api.openPhysical(banks,framing);api.restoreSession(saved);assert.deepEqual(api.snapshot(),expected);
+  assert.throws(()=>api.restoreSession({...saved,version:2}),/Invalid integrated/);
+  assert.throws(()=>api.restoreSession({...saved,base:{...saved.base,worldPoint:[0,0,0]}}),/frame/);
+  assert.ok(changes>0);
   api.close();assert.equal(host.hidden,true);assert.equal(api.snapshot(),null);
 });
 

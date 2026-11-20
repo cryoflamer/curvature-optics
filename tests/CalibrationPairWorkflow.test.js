@@ -41,7 +41,7 @@ test('Legacy Flat edit may use selector instead of draft material point',()=>{
   w.change([{...a,pixel:[4,5]}],'a',{finish:true});assert.equal(w.mode,'browse');
 });
 
-test('Shared toolbar reflects explicit add, edit, read-only and legacy readiness',()=>{
+test('Shared toolbar requires both endpoints and respects read-only state',()=>{
   const {pairToolbarState}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
   const w=createPairWorkflow(),a=row('a'),ready={ready:true};
   assert.equal(pairToolbarState(w).addDisabled,true);
@@ -49,7 +49,6 @@ test('Shared toolbar reflects explicit add, edit, read-only and legacy readiness
   w.beginAdd();w.selectModel(null);assert.equal(w.mode,'add');assert.equal(w.explicitAdd,true);
   let t=pairToolbarState(w,ready);assert.equal(t.cancelDisabled,false);assert.equal(t.commitDisabled,true);
   w.selectPhoto([2,3]);assert.equal(pairToolbarState(w,ready).commitDisabled,true);
-  assert.equal(pairToolbarState(w,{...ready,legacy:true,legacyModel:true}).commitDisabled,false);
   w.selectModel(a.landmark);assert.equal(pairToolbarState(w,ready).commitDisabled,false);
   assert.equal(pairToolbarState(w,{...ready,readOnly:true}).commitDisabled,true);
   w.cancel();w.replaceAll([a]);w.select('a');assert.equal(pairToolbarState(w,ready).editDisabled,false);
@@ -191,8 +190,7 @@ test('failed worker projection diagnostics retain original row numbers and exclu
 
 test('calibration disclosures default to mouse-first physical editor, not manual controls',()=>{
   const {calibrationDisclosures}=require('../src/ui/modern/ModernPhotoCalibrationEditor');
-  assert.deepEqual(calibrationDisclosures('correspondences',true),{route:'physical',manual:false,pairs:false});
-  assert.deepEqual(calibrationDisclosures('correspondences',false),{route:'manual',manual:true,pairs:true});
+  assert.deepEqual(calibrationDisclosures('correspondences'),{route:'correspondences',manual:false,pairs:false});
   assert.deepEqual(calibrationDisclosures('calibration',true),{route:'calibration',manual:false,pairs:true});
   assert.deepEqual(calibrationDisclosures('result',true),{route:'result',manual:false,pairs:false});
 });

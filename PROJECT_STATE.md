@@ -1,3 +1,27 @@
+## 8F.6l — Physical-only editor and legacy removal
+
+The user explicitly retired both the old modeless Free View / Magnifier and
+Flat correspondence editor. Removed their HTML, CSS, editor handlers,
+picking/ownership raster APIs, window positioning and storage, crop panning
+and zoom, old optical-viewer mount/open/park/resume paths. The integrated
+physical viewer is the only correspondence editor. Kept the mathematical
+geometry helpers, original pose/solver and physical scene/Compare rendering.
+New Fast Vertex observations use full material anchors; old Globe vertex
+rows and existing v1/v2/v3 Globe exports remain supported. Physical viewer
+session schema v4 is retained; obsolete window/crop states are ignored.
+Retired Flat captures/imports are rejected; replacing a stored Flat draft
+requires explicit confirmation. Flat optics outside Photo Calibration were
+not changed. Result now draws initial markers from original-pixel physical
+projections and caches against the actual scene and rows.
+
+Targeted adapter execution: 69/69 regression checks passed (physical viewer,
+photo editor, pair workflow and pointer gestures). Updated Chromium smoke
+coverage, including the original 14-point Soundly numeric fixture and
+manual-to-physical workflow replacement. Real browser and complete CI
+qualification remain pending. Next: verify live direct editing, restored
+physical view and Result on the user's experiment; investigate regressions
+before declaring 8F.6 qualified.
+
 ## 8F.6k — Viewports-first UI and compatibility cleanup
 
 The user confirmed a working real-browser Soundly fit after 8F.6j-fix:
