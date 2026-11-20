@@ -433,8 +433,9 @@
     const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(pending&&pendingModel&&!viewBest)savePair();};
     const inlineEdit=doc.createElement('button');inlineEdit.type='button';inlineEdit.textContent='Edit pair';inlineEdit.disabled=true;inlineEdit.onclick=()=>beginPairEdit(activePair);
     const inlineDraftStatus=doc.createElement('p');inlineDraftStatus.setAttribute('role','status');
+    const inlineUndo=doc.createElement('button');inlineUndo.type='button';inlineUndo.textContent='Undo';inlineUndo.title='Undo last correspondence change (Ctrl+Z)';inlineUndo.disabled=true;inlineUndo.onclick=undo;
     const pairActions=doc.createElement('div');pairActions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
-    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineEdit,inlineCancel,inlineDelete);pairActions.after(inlineDraftStatus);
+    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineEdit,inlineCancel,inlineDelete,inlineUndo);pairActions.after(inlineDraftStatus);
     const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
@@ -755,7 +756,7 @@
       });
       $('ModernCalibrationCount').textContent=rows.length+' correspondences';
       $('ModernCalibrationInlineCount').textContent=rows.length+' correspondences';
-      $('ModernCalibrationUndo').disabled=!undoStack.length;
+      $('ModernCalibrationUndo').disabled=inlineUndo.disabled=!undoStack.length;
       $('ModernCalibrationDeleteSelected').disabled=!activePair;
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
@@ -790,7 +791,7 @@
       activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
     }
     function rememberUndo(){
-      undoStack.push({rows,activePair});if(undoStack.length>50)undoStack.shift();
+      undoStack.push({rows:jsonCopy(rows),activePair});if(undoStack.length>50)undoStack.shift();
     }
     function deletePair(id){
       if(!rows.some(r=>r.landmark.id===id))return;
@@ -801,7 +802,11 @@
     }
     function undo(){
       const old=undoStack.pop();if(!old)return;
-      rows=old.rows;activePair=old.activePair;resetPending();refreshRows();photoDraw();meshDraw();persist();
+      rows=old.rows;activePair=old.activePair;
+      inlineViewer.clearLocalPoint();viewer.clearLocalPoint();
+      const saved=inlineSessions.initial?.session;if(saved)Object.assign(saved,{staged:null,stagedMode:null,confirmed:null,choices:[],choice:'',inputs:[]});
+      materialMarkers.clear();resetPending();refreshRows();photoDraw();meshDraw();
+      message('Last correspondence change undone.');persist();
     }
     function replacePair(id,landmark,pixel){
       const old=rows.find(r=>r.landmark.id===id);if(!old)return;
@@ -1667,6 +1672,7 @@
     $('ModernCalibrationDeleteSelected').onclick=()=>deletePair(activePair);
     doc.addEventListener('keydown',e=>{
       if(workspace.hidden||e.target?.closest?.('#ModernCalibrationViewer, #ModernCalibrationInlineViewer')||e.target?.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(e.target?.tagName))return;
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();undo();return;}
       if(magnifierMode()&&e.key==='Escape'){e.preventDefault();cancelRegion();meshDraw();return;}
       if(objectMode()){
         if(e.key==='Escape'&&!viewBest){e.preventDefault();clearHover();selectObject(null);}
@@ -1680,8 +1686,6 @@
         e.preventDefault();cancelPairDraft();clearHover();
       }else if(e.key==='Delete'&&activePair){
         e.preventDefault();deletePair(activePair);
-      }else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){
-        e.preventDefault();undo();
       }
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());

@@ -546,6 +546,11 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   host.querySelector('[data-viewer-point-confirm]').onclick();
   assert.equal(api.snapshot().staged,null);assert.deepEqual(api.snapshot().confirmed,local);assert.deepEqual(materialHits,[local]);
   api.discardPairDraft();assert.deepEqual(api.snapshot().confirmed,local);
+  // Undo clears local overlays even when Initial/Free View is parked.
+  assert.equal(api.parkScene(),true);api.openScene({...sourceContract,readOnly:true});
+  api.clearLocalPoint();assert.equal(api.resumeScene(),true);
+  assert.equal(api.snapshot().confirmed,null);assert.equal(api.snapshot().staged,null);
+  assert.equal(api.snapshot().mode,'free');
   key('Escape');assert.equal(cancels,1);assert.equal(api.snapshot().mode,'free');
   api.setPendingVertex(null);
   host.querySelector('[data-viewer-pick-clear]').onclick();

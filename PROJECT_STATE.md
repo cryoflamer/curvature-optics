@@ -1,3 +1,7 @@
+## 8F.5d.1 — Undo consistency
+
+User confirmed model-side editing works but reported Undo failure. Added inline Undo, moved workspace Ctrl+Z before legacy mode guards, made history snapshots independent, cleared current and parked local overlays and material marker cache on undo. Existing correspondence cache is already rebuilt on setCorrespondences; no change to geometry rendering. Browser reproduction and full CI remain pending.
+
 ## 8F.5d — Integrated correspondence editing
 
 The integrated pair action row includes Edit pair. Existing observations are

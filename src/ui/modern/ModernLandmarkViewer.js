@@ -1320,7 +1320,7 @@
     },discardPairDraft(){
       if(stagedMode==='fast-vertex'){clearPick();syncPoint();if(isOpen())redrawMarkers();}
       if(parkedScene?.stagedMode==='fast-vertex')Object.assign(parkedScene,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});
-    },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
+    },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},clearLocalPoint(){confirmed=null;clearPick();if(parkedScene)Object.assign(parkedScene,{staged:null,stagedMode:null,confirmed:null,choices:[],choice:'',inputs:[]});syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
