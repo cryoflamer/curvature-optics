@@ -923,10 +923,15 @@
         {...source.options,canvasDirectOptions:{...source.options.canvasDirectOptions,capturePicking:capture}},
         source.width,source.height,region);
     }
-    function buildInlineFree(source,region){
-      const api=env.CurvatureModernLandmarkViewer,seed=api.regionSeed(ownerSpans,region),owner=seed&&packages.get(seed.key);
+    function buildInlineFree(source,region,selected){
+      const api=env.CurvatureModernLandmarkViewer,m=source.model,t=env.CurvatureCameraTranslation;
+      const basis=t.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,1/m.rEarth);
+      if(selected){
+        try{return api.regionGeometry(scene.banks,{...selected,region},source,basis);}
+        catch(error){/* Unavailable selected geometry: retain the visible-owner fallback. */}
+      }
+      const seed=api.regionSeed(ownerSpans,region),owner=seed&&packages.get(seed.key);
       if(!owner)return null;
-      const m=source.model,t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,1/m.rEarth);
       return api.regionGeometry(scene.banks,{owner:owner.owner,primaryIndices:owner.primaryIndices,pixel:seed.pixel,region},source,basis);
     }
     function syncInline(){
@@ -944,7 +949,7 @@
           inlineSource=source;refreshMagnifierCorrespondences();return true;
         }
         inlineViewer.openScene({width:source.width,height:source.height,banks:scene.banks,paint:inlinePaint(source),
-          buildFree:best?null:region=>buildInlineFree(source,region),readOnly:best,
+          buildFree:best?null:(region,active,selected)=>buildInlineFree(source,region,selected),readOnly:best,
           title:best?'Model · Best Camera':'Model · Initial Camera'});
         inlineSource=source;refreshMagnifierCorrespondences();return true;
       }catch(error){

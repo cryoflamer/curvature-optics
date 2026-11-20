@@ -475,7 +475,7 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
   const api=viewer.mount(host,()=>changes++,()=>{},{inline:true});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
-    buildFree:region=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
+    buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openScene(sourceContract);
   assert.equal(api.isOpen(),true);assert.equal(host.hidden,false);assert.equal(api.windowSnapshot(),null);
   assert.deepEqual(api.snapshot().region,full);
@@ -490,6 +490,17 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   api.resetScene();assert.deepEqual(api.snapshot().region,full);
   assert.equal(api.zoomRectangle([200,150],[600,450]),true);
   failPivot=false;assert.equal(api.enterFree(),true);assert.equal(api.snapshot().mode,'free');
+  const pair=(id,i)=>({id,label:id,color:'#123456',bank:0,index:0,anchor:{kind:'vertex',owner,primitive:0,indices:[i],weights:[1]}});
+  const rows=[pair('a',0),pair('b',2)];
+  api.setCorrespondences(rows,'a');
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
+  canvas.events.pointerdown(event);canvas.events.pointermove({...event,clientX:440});canvas.events.pointerup({...event,clientX:440});
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[0]);
+  api.setCorrespondences(rows,'b');
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
+  api.resetScene();
+  assert.equal(api.enterFree(),true);
+  assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
   api.resetScene();assert.equal(api.snapshot().mode,'scene');assert.deepEqual(api.snapshot().region,full);
   canvas.events.wheel({...event,deltaY:-120});
   const beforeBest=api.snapshot();
@@ -505,4 +516,22 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.equal(api.resumeScene(),false);
   assert.equal(api.sessionSnapshot().version,2);assert.ok(changes>0);
   api.close();assert.equal(host.hidden,true);assert.equal(api.snapshot(),null);
+});
+
+
+test('rebasing a physical orbit pivot preserves projection, zoom, rays and subsequent orbit in both projections',()=>{
+  const g={eye:[3,-4,100],focal:600,near:.001,region:{x:10,y:20,width:800,height:600},seed:[380,290]};
+  const near=(a,b)=>assert.ok(Math.hypot(...a.map((x,i)=>x-b[i]))<1e-8);
+  const points=[[3,5,5],[-4,3,-12],[0,0,0]],p=points[0];
+  for(const projection of ['perspective','orthographic'])for(const yaw of [0,.6,-.4])for(const pitch of [0,.3,-.2]){
+    const s={...viewer.reset(),projection,yaw,pitch,zoom:1.7,pan:[22,-43]},before=JSON.stringify(s);
+    const a=viewer.regionCamera(g,s,1024,768),n=viewer.rebaseRegionPivot(g,s,p,1024,768),b=viewer.regionCamera(g,n,1024,768);
+    assert.equal(n.zoom,s.zoom);assert.deepEqual(n.pan,s.pan);assert.equal(JSON.stringify(s),before);
+    for(const q of points){near(a.project(q).pixel,b.project(q).pixel);const ray=b.ray(b.project(q).pixel);near(ray.origin.map((x,i)=>x+ray.direction[i]*b.project(q).depth),q);}
+    for(const delta of [[.3,0],[0,-.4],[.2,.2]])near(viewer.regionCamera(g,{...n,yaw:yaw+delta[0],pitch:pitch+delta[1]},1024,768).project(p).pixel,b.project(p).pixel);
+    const moved=viewer.pan(n,10,-20),c=viewer.regionCamera(g,moved,1024,768);
+    near(c.project(p).pixel,b.project(p).pixel.map((x,i)=>x+[10,-20][i]));
+    const n2=viewer.rebaseRegionPivot(g,viewer.orbit(n,40,30),points[1],1024,768);
+    near(viewer.regionCamera(g,n2,1024,768).project(points[2]).pixel,viewer.regionCamera(g,viewer.orbit(n,40,30),1024,768).project(points[2]).pixel);
+  }
 });

@@ -1,3 +1,17 @@
+## 8F.5b.3c — Selected physical point orbit pivot
+
+Integrated Globe Free View uses the staged/confirmed material point or selected
+correspondence on entry, otherwise the existing visible-owner seed. Selecting
+another material point or correspondence in Free View rebases the orbit without
+moving the current camera, changing its zoom, or changing calibration data.
+The crosshair marks the pivot; the last valid pivot remains until a new point
+is selected or the optical view is reset. Invalid/behind-camera pivots cannot
+replace a valid pivot. Canvas Direct and the effective-radius optics are
+unchanged. Initial/Best parking retains the orbit in memory. The old floating
+crop session contract remains unchanged; durable integrated session restoration
+is still 8F.5b.4a. Added math and DOM lifecycle regressions; full CI and manual
+Soundly validation are required before 8F.5b.4a.
+
 ## 8F.5b.3b — Integrated Globe model viewer
 
 The Globe route now defaults to the integrated Model Viewer beside the
@@ -403,6 +417,7 @@ current CSS or backing canvas dimensions.
 | --- | --- |
 | 8F.5b.3a | Host-neutral viewport contract and optical navigation. Inline-capable lifecycle without changing currently shipping host. Full-frame and cropped source transform, anchored wheel zoom, pan, rectangle/reset; explicit Free View transition and pivot failure. Source/capture and physical geometry independence tests. |
 | 8F.5b.3b | Mount one inline Globe viewport beside photo. Route initial and fitted camera source through it, preserve read-only Best and fit completion behavior; stable layout and selection including hidden/out-of-crop markers. Keep temporary legacy fallback route until migration gates pass. |
+| 8F.5b.3c | Selected physical point orbit pivot; manual Soundly navigation gate. |
 | 8F.5b.4a | Migrate fast vertex, manual fallback, owner/span inspection and draft/viewport session restoration. Test existing v1/v2/v3, old crop sessions, hidden workspace, reset/import/photo replacement, source changes and active fit. Keep Flat legacy route as compatibility boundary. |
 | 8F.5b.4b | Remove superseded Globe Main Model event handlers, duplicate raster/index/hit/marker paths and obsolete window chrome/storage after parity. Rework browser tests from window position to inline viewport semantics. Measure Soundly; no alpha release with two visible model editors. |
 | 8F.5c | Explicit Use in calibration for confirmed material point in inline model viewer; both creation orders, pending state, stable ID and no duplicate commit. |

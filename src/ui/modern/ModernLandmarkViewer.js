@@ -157,7 +157,7 @@
     return best;
   }
   function regionGeometry(banks,selection,source,observer){
-    if(!selection?.owner||!finite3(observer.origin))throw Error('No visible owner in this rectangle');
+    if((!selection?.owner&&!finite3(selection?.worldPoint))||!finite3(observer.origin))throw Error('No visible owner in this rectangle');
     const camera=source.camera,back=unit(sub(camera.pos,camera.center)),right=unit(cross(unit(camera.up),back)),up=cross(back,right);
     const focal=source.height/camera.sceneSize*(Math.hypot(...sub(camera.center,camera.pos))-camera.objectZExtend)*camera.zoom;
     const near=camera.near||.001;
@@ -176,40 +176,51 @@
       items.push({bank,index,primitive:p.metadata.landmarkPrimitive,primary:true,type:p.type,mode:p.mode,style:{...p.style},
         owner:JSON.parse(JSON.stringify(p.metadata.landmarkOwner)),points:p.points.map(toCamera)});
     }
-    const indices=new Set(selection.primaryIndices),candidates=items.filter(p=>p.bank===selection.owner.bank&&indices.has(p.index));
-    const hit=regionPivot(candidates,selection.pixel,source.width,source.height,focal,near),pivot=hit.point;
+    const explicit=finite3(selection.worldPoint);
+    const indices=new Set(selection.primaryIndices||[]),candidates=items.filter(p=>p.bank===selection.owner?.bank&&indices.has(p.index));
+    const hit=explicit?{point:toCamera(selection.worldPoint),distance:0}:regionPivot(candidates,selection.pixel,source.width,source.height,focal,near),pivot=hit.point;
+    if(!finite3(pivot)||-pivot[2]<near)throw Error('Selected physical pivot is behind the camera');
+    const seed=selection.pixel||[source.width/2-focal*pivot[0]/pivot[2],source.height/2+focal*pivot[1]/pivot[2]];
     const worldAxis=a=>[0,1,2].map(i=>a.reduce((sum,v,j)=>sum+v*observerAxes[j][i],0));
     const axes=[right,up,back].map(worldAxis);
     const origin=add(add(observer.origin,worldAxis(camera.pos)),axes.reduce((p,a,i)=>add(p,mul(a,pivot[i])),[0,0,0]));
     const frame={origin,x:axes[0],y:axes[1],z:axes[2]};
     return {kind:'region',frame,items:items.map(p=>({...p,points:p.points.map(q=>sub(q,pivot))})),
-      eye:pivot.map(x=>x===0?0:-x),focal,near,region:{...selection.region},seed:selection.pixel.slice(),pivotError:hit.distance,
+      eye:pivot.map(x=>x===0?0:-x),focal,near,region:{...selection.region},seed:seed.slice(),pivotError:hit.distance,
       owner:JSON.parse(JSON.stringify(selection.owner))};
   }
   function regionCamera(geometry,state,width,height){
     const a=state.yaw,p=state.pitch,ca=Math.cos(a),sa=Math.sin(a),cp=Math.cos(p),sp=Math.sin(p);
-    const right=[ca,0,-sa],up=[-sa*sp,cp,-ca*sp],toward=[sa*cp,sp,ca*cp],eye=geometry.eye;
+    const right=[ca,0,-sa],up=[-sa*sp,cp,-ca*sp],toward=[sa*cp,sp,ca*cp];
+    const pivot=state.orbitPivot?.point||[0,0,0],eye=state.orbitPivot?.eye||geometry.eye;
     const r=geometry.region,scale=Math.min(width/r.width,height/r.height),focal=geometry.focal*scale*state.zoom;
-    const origin=[width/2+(geometry.seed[0]-r.x-r.width/2)*scale+state.pan[0],
-      height/2+(geometry.seed[1]-r.y-r.height/2)*scale+state.pan[1]];
-    // Rotate the original off-axis eye and its rolled basis together around
-    // the physical pivot. At zero orbit the physical direction is unchanged.
-    const near=Math.max(geometry.near,eye[2]*1e-7);
-    function coordinates(q){return [dot(q,right)-eye[0],dot(q,up)-eye[1],eye[2]-dot(q,toward)];}
+    const perspective=state.projection==='perspective',orthoDepth=geometry.eye[2];
+    // The principal point and orthographic scale do not depend on the pivot.
+    const principal=[width/2+(geometry.seed[0]-r.x-r.width/2)*scale+state.pan[0]+focal*geometry.eye[0]/geometry.eye[2],
+      height/2+(geometry.seed[1]-r.y-r.height/2)*scale+state.pan[1]-focal*geometry.eye[1]/geometry.eye[2]];
+    const near=Math.max(geometry.near,geometry.eye[2]*1e-7);
+    function coordinates(q){const d=sub(q,pivot);return [dot(d,right)-eye[0],dot(d,up)-eye[1],eye[2]-dot(d,toward)];}
     function screen(q){
-      const z=state.projection==='perspective'?q[2]:eye[2];
-      return [origin[0]+focal*(q[0]/z+eye[0]/eye[2]),origin[1]-focal*(q[1]/z+eye[1]/eye[2])];
+      const z=perspective?q[2]:orthoDepth;
+      return [principal[0]+focal*q[0]/z,principal[1]-focal*q[1]/z];
     }
     function ray(pixel){
-      const u=(pixel[0]-origin[0])/focal-eye[0]/eye[2],v=(origin[1]-pixel[1])/focal-eye[1]/eye[2];
-      const perspective=state.projection==='perspective';
-      const start=add(add(mul(right,eye[0]+(perspective?0:u*eye[2])),mul(up,eye[1]+(perspective?0:v*eye[2]))),mul(toward,eye[2]));
+      const u=(pixel[0]-principal[0])/focal,v=(principal[1]-pixel[1])/focal;
+      const start=add(pivot,add(add(mul(right,eye[0]+(perspective?0:u*orthoDepth)),mul(up,eye[1]+(perspective?0:v*orthoDepth))),mul(toward,eye[2])));
       const direction=perspective?add(add(mul(right,u),mul(up,v)),mul(toward,-1)):mul(toward,-1);
-      // Parameter t is forward camera depth, not Euclidean range.
       return {origin:start,direction,near};
     }
-    return {coordinates,screen,ray,near,origin,right,up,toward,perspective:state.projection==='perspective',
+    const origin=screen([-eye[0],-eye[1],eye[2]]);
+    return {coordinates,screen,ray,near,origin,right,up,toward,perspective,
       project(q){const v=coordinates(q);return v[2]>=near?{pixel:screen(v),depth:v[2]}:null;}};
+  }
+  function rebaseRegionPivot(geometry,state,point,width,height){
+    if(!finite3(point))return state;
+    const c=regionCamera(geometry,state,width,height),q=c.coordinates(point);
+    if(!finite3(q)||q[2]<c.near)return state;
+    // Express the unchanged eye in the current basis relative to the new
+    // physical point. Future orbit rotates this offset about that point.
+    return {...state,orbitPivot:{point:point.slice(),eye:[-q[0],-q[1],q[2]]}};
   }
   // Picking uses the canonical physical authored geometry, not rendered
   // pixels, synthetic thickness, clipped vertices, or EarClip ordinals.
@@ -780,10 +791,23 @@
         tooltip.style.top=Math.max(0,Math.min(css[1]-r.top+16,frame.clientHeight-tooltip.offsetHeight-4))+'px';}
       if(changed)redrawMarkers();
     }
+    function selectedCorrespondenceHit(){
+      return mesh&&activeCorrespondence!==null?correspondenceHits(mesh,correspondenceRows.filter(r=>r.id===activeCorrespondence))[0]?.hit:null;
+    }
+    function selectOrbitPoint(hit){
+      if(!navigating()||!free||!hit)return false;
+      const next=rebaseRegionPivot(geometry,state,hit.point,canvas.width,canvas.height);
+      if(next===state)return false;
+      state=next;render();return true;
+    }
     function setCorrespondences(rows,active=null){
+      const changed=active!==activeCorrespondence;
       activeCorrespondence=active;
       correspondenceRows=rows.slice();correspondenceMesh=undefined;
-      if(crop&&isOpen()&&(!inline||frame.clientWidth>0&&frame.clientHeight>0)){clearMarkerHover();redrawMarkers();}
+      if(crop&&isOpen()&&(!inline||frame.clientWidth>0&&frame.clientHeight>0)){
+        clearMarkerHover();
+        if(!(changed&&selectOrbitPoint(selectedCorrespondenceHit())))redrawMarkers();
+      }
     }
     function committedMarkers(project){
       if(correspondenceMesh!==mesh){correspondenceMesh=mesh;correspondenceCache=mesh?correspondenceHits(mesh,correspondenceRows):correspondenceRows.map(r=>({...r,hit:null}));}
@@ -851,11 +875,20 @@
           if(h&&pickCache){const vis=markerVisibility(pickCache,h,canvas.width,canvas.height,state.wireframe);if(vis==='visible'||vis==='wireframe')drawPickMarker(canvas,h,paths.camera,color);}
         }
         if(pickActive())drawPickMarker(canvas,hover,paths.camera,'#008ab1');
+        if(navigating()){
+          const p=paths.camera.project(state.orbitPivot?.point||[0,0,0])?.pixel;
+          if(p&&p[0]>=0&&p[0]<canvas.width&&p[1]>=0&&p[1]<canvas.height){
+            const ctx=canvas.getContext('2d'),[x,y]=p;
+            ctx.save();ctx.strokeStyle='#111';ctx.lineWidth=4;
+            ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke();
+            ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
+          }
+        }
       }
     }
     function changePoint(weights,snap){
       if(!staged)return;
-      try{staged=adjustPoint(mesh,staged,weights,snap);choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;updatePickStatus();syncPoint();redrawMarkers();}
+      try{staged=adjustPoint(mesh,staged,weights,snap);selectOrbitPoint(staged);choices=[];pickChoices.replaceChildren();pickChoices.disabled=true;updatePickStatus();syncPoint();redrawMarkers();}
       catch(error){pickStatus.textContent=error.message;}
     }
     dialog.querySelector('[data-viewer-point-apply]').onclick=()=>{
@@ -887,10 +920,10 @@
     function stageAt(css){
       cancelHover();const result=query(css);choices=result.candidates;staged=choices[0]||null;
       pickChoices.replaceChildren();for(const [i,h] of choices.entries()){const option=dialog.ownerDocument.createElement('option');option.value=String(i);option.textContent=describe(h);pickChoices.append(option);}
-      pickChoices.disabled=choices.length<2;syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
+      pickChoices.disabled=choices.length<2;selectOrbitPoint(staged);syncPoint();updatePickStatus(result.reason||(choices.length>1?'Staged: '+describe(staged)+' · choose among '+choices.length+' candidates (not a correspondence)':''));redrawMarkers();
     }
     pickMode.onchange=()=>{cancelHover();clearMarkerHover();syncMode();render();};
-    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;syncPoint();updatePickStatus();redrawMarkers();};
+    pickChoices.onchange=()=>{staged=choices[Number(pickChoices.value)]||null;selectOrbitPoint(staged);syncPoint();updatePickStatus();redrawMarkers();};
     dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
     let sensitivity=DEFAULT_SENSITIVITY;
@@ -1008,7 +1041,13 @@
       if(!crop||free)return !!geometry;
       if(!crop.build||crop.readOnly)return false;
       if(navigating()){
-        try{const next=crop.build({...crop.region},activeCorrespondence);if(!next||next.kind!=='region')throw Error('No visible physical pivot');switchGeometry(next,preparePick(next.items));free=true;state={...reset(),projection:'perspective',spans:true};crop.reason='';syncMode();sync();return true;}
+        try{
+          const hit=staged||confirmed||selectedCorrespondenceHit();
+          const selected=hit?{worldPoint:worldPoint(geometry.frame,hit.point),owner:hit.owner,pixel:opticalMarker(opticalCache,hit).pixel||null}:null;
+          const next=crop.build({...crop.region},activeCorrespondence,selected);
+          if(!next||next.kind!=='region')throw Error('No visible physical pivot');
+          switchGeometry(next,preparePick(next.items));free=true;state={...reset(),projection:'perspective',spans:true};crop.reason='';syncMode();sync();return true;
+        }
         catch(error){crop.reason='Free View unavailable: '+error.message;syncMode();render();return false;}
       }
       try{if(!geometry)geometry=crop.build();if(!mesh)mesh=preparePick(geometry.items);free=true;state={...reset(),projection:'perspective',spans:true};syncMode();sync();return true;}
@@ -1016,7 +1055,7 @@
     }
     freeButton.onclick=enterFree;
     dialog.querySelector('[data-viewer-scene-reset]').onclick=resetScene;
-    dialog.querySelector('[data-viewer-reset]').onclick=()=>{if(crop){state={...reset(),projection:'perspective',spans:true};}else state=initialView();sync();};
+    dialog.querySelector('[data-viewer-reset]').onclick=()=>{if(crop){const pivot=state.orbitPivot;state={...reset(),projection:'perspective',spans:true,...(pivot?{orbitPivot:pivot}:{})};}else state=initialView();sync();};
     dialog.querySelectorAll('[data-viewer-view]').forEach(n=>n.onclick=()=>{state=standardView(state,n.dataset.viewerView);render();});
     projection.onchange=()=>{state={...state,projection:projection.value};render();};
     wire.onchange=()=>{cancelHover();state={...state,wireframe:wire.checked};render();};
@@ -1124,8 +1163,8 @@
       }finally{restoringSession=false;}
       sessionChanged();
     },close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,isCrop:()=>!!crop,
-      snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:geometry.frame.origin.slice(),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
+      snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));

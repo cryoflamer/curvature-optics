@@ -1,3 +1,17 @@
+## 8F.5b.3c — Selected physical point orbit pivot
+
+Integrated Globe Free View uses the staged/confirmed material point or selected
+correspondence on entry, otherwise the existing visible-owner seed. Selecting
+another material point or correspondence in Free View rebases the orbit without
+moving the current camera, changing its zoom, or changing calibration data.
+The crosshair marks the pivot; the last valid pivot remains until a new point
+is selected or the optical view is reset. Invalid/behind-camera pivots cannot
+replace a valid pivot. Canvas Direct and the effective-radius optics are
+unchanged. Initial/Best parking retains the orbit in memory. The old floating
+crop session contract remains unchanged; durable integrated session restoration
+is still 8F.5b.4a. Added math and DOM lifecycle regressions; full CI and manual
+Soundly validation are required before 8F.5b.4a.
+
 ## 8F.5b.3b — Integrated Globe model viewer
 
 The Globe route now defaults to the integrated Model Viewer beside the
@@ -560,6 +574,7 @@ added for CI.
 | 8F.5b.2 | Architecture audit: replace separate Main Model and Magnifier with one integrated Globe model viewport. See [integrated viewer audit](landmark-editor-audit.md#integrated-calibration-model-viewer--architecture-audit). |
 | 8F.5b.3a | Host-neutral viewport and optical zoom/pan/reset, explicit physical Free View. |
 | 8F.5b.3b | Inline Globe viewport with Initial/Best optical sources and shared selection. |
+| 8F.5b.3c | Selected physical point orbit pivot; manual Soundly navigation gate. |
 | 8F.5b.4a | Fast Vertex, owner inspection, fallback and draft/session migration. |
 | 8F.5b.4b | Retire duplicated Globe model paths after parity; browser and performance qualification. |
 | 8F.5c | Add explicit Use in calibration for a locally confirmed anchor in the integrated model viewport; reuse pending-pair flow in both click orders, prevent duplicate commits, preserve fast vertex workflow. Test creation, cancellation, missing-side states and persistence. |
