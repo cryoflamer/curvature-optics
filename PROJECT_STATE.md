@@ -1,3 +1,15 @@
+## 8F.7b.1g.1 — Durable session qualification correction (#8)
+
+CI 44763446233: Node and architecture passed; Chromium 40/41 passed.
+New end-to-end test reached post-reload session read but normalize rejected
+checkpoint. All preceding fit/archive/transfer/History/Studio checks passed.
+Suspected asynchronous wait_for_function predicate race; test now waits
+for durable save acknowledgement and directly awaits IDB checkpoint, polls
+for newer Scene checkpoint, explicitly checks identity and mode before
+navigation, removes URL/local-storage fallback to exercise durable restore,
+then reloads. No production changes or weakened assertions. Full CI pending.
+Keep #8 open; next #9 8F.7b.2 after green (high reasoning effort).
+
 ## 8F.7b.1g — Integration and Qualification (#8)
 
 Previous CI 44752200956 passed all three jobs. Added browser foundation

@@ -974,12 +974,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertAlmostEqual(prepared['initial'], 314.7555157775399, places=5)
         self.page.goto(prepared['link'], wait_until='load')
         expect(self.page.locator('#ModernPreset')).to_have_value('custom', timeout=30000)
+        # wait_for_function polls synchronous predicates; an async predicate
+        # can return a truthy Promise before its IDB read has completed.
+        # Wait for the application's durable completion acknowledgement, then
+        # directly await/read the checkpoint and assert its contents.
+        status = self.page.locator('#ModernPersistenceStatus')
         self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        expect(status).to_have_text('Working session saved', timeout=30000)
+        compare_saved = self.page.evaluate("""async () => {
+            return await CurvatureModernSessionAutosave.read(indexedDB);
+        }""")
+        self.assertIsNotNone(compare_saved)
+        self.assertEqual(compare_saved['experiment']['display']['mode'], 'compare')
+        self.assertEqual(compare_saved['experiment']['calibrationOrigin']['resultId'], prepared['id'])
         self.page.locator('#ModernSceneTab').click()
-        self.page.wait_for_function("""async id => {
-            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
-            return saved?.experiment?.display.mode==='scene'&&saved.experiment.calibrationOrigin?.resultId===id;
-        }""", arg=prepared['id'], timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed', 'true')
+        # Poll the resolved value in Python, not a JavaScript Promise. Require
+        # a newer durable Scene checkpoint, not the earlier Compare checkpoint.
+        import time
+        deadline = time.monotonic() + 30
+        checkpoint = None
+        while time.monotonic() < deadline:
+            checkpoint = self.page.evaluate("""async () => {
+                return await CurvatureModernSessionAutosave.read(indexedDB);
+            }""")
+            if (checkpoint and checkpoint['savedAt'] > compare_saved['savedAt']
+                    and checkpoint['experiment']['display']['mode'] == 'scene'):
+                break
+            self.page.wait_for_timeout(100)
+        self.assertIsNotNone(checkpoint, 'No durable Scene checkpoint')
+        self.assertGreater(checkpoint['savedAt'], compare_saved['savedAt'])
+        self.assertEqual(checkpoint['experiment']['display']['mode'], 'scene')
+        self.assertEqual(checkpoint['experiment']['calibrationOrigin']['resultId'], prepared['id'])
+        # Remove the URL fallback and synchronous local checkpoint so startup
+        # must restore the durable IndexedDB record. A subsequent true reload
+        # also verifies the ordinary working-session path.
+        self.page.evaluate("""() => {
+            localStorage.removeItem(CurvatureModernExperimentState.STORAGE_KEY);
+            localStorage.removeItem(CurvatureModernSessionAutosave.META_KEY);
+        }""")
+        self.page.goto(self.base_url, wait_until='load')
+        expect(self.page.locator('#ModernPreset')).to_have_value('custom', timeout=30000)
         self.page.reload(wait_until='load')
         expect(self.page.locator('#ModernPreset')).to_have_value('custom', timeout=30000)
         restored = self.page.evaluate("""async prepared => {
