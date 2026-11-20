@@ -470,7 +470,7 @@ test('protected Apply awaits durable original/result then protected History befo
   assert.deepEqual(h.trace,['archive','protect','commit','present']);
   assert.deepEqual(h.current,transfer.transfer(record,before,'Scene'));
   assert.deepEqual(h.draft,draft);assert.equal(applied.resultId,record.id);
-  assert.equal(applied.recoveryId,17);assert.equal(controller.isBusy(),false);
+  assert.equal(applied.recoveryId,17);assert.equal(applied.target,'Scene');assert.equal(controller.isBusy(),false);
 });
 test('protected Apply fails closed on archive or History failure and requires a pinned matching checkpoint',async()=>{
   const record=await archive.create(input(),env());
@@ -528,4 +528,113 @@ test('running or absent fit cannot start archive; rollback failure remains visib
   h.host.commit=()=>{throw Error('commit failed');};
   h.host.rollback=()=>{throw Error('rollback failed');};
   await assert.rejects(applyApi.create(h.host).apply(),e=>e.phase==='commit'&&e.rollbackError==='rollback failed');
+});
+
+test('target-aware protected Apply commits exact A/B transfer and reports the original destination',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['Scene','A','B']){
+    const h=applyHost(record),before=copy(h.current),draft=copy(h.draft);
+    const events=[],commit=h.host.commit,present=h.host.present,protect=h.host.protect;
+    h.host.target=()=>target;
+    h.host.protect=async previous=>{
+      assert.deepEqual(previous,before);assert.deepEqual(h.current,before);
+      return protect(previous);
+    };
+    h.host.commit=(next,actual)=>{
+      events.push(['commit',actual]);assert.equal(actual,target);
+      assert.deepEqual(next,transfer.transfer(record,before,target));commit(next);
+    };
+    h.host.present=async info=>{events.push(['present',info.target]);assert.equal(info.target,target);await present(info);};
+    const controller=applyApi.create(h.host),result=await controller.apply(target);
+    assert.deepEqual(h.trace,['archive','protect','commit','present']);
+    assert.deepEqual(events,[['commit',target],['present',target]]);
+    assert.equal(result.target,target);assert.equal(result.resultId,record.id);
+    assert.equal(result.recoveryId,17);assert.equal(result.photoId,'soundly');
+    assert.ok(Object.isFrozen(result));assert.deepEqual(h.draft,draft);
+    assert.equal(h.current.calibrationOrigin.target,target);
+    if(target!=='Scene'){
+      assert.equal(h.current.display.mode,'compare');assert.equal(h.current.compare.selected,target);
+      const other=target==='A'?'B':'A';
+      assert.deepEqual(h.current.compare[other],{...before.compare[other],visibility:{enabled:false,rangeKm:60}});
+    }
+    assert.equal(controller.isBusy(),false);
+  }
+});
+
+test('invalid explicit Apply destinations and mismatching selectors fail before archival',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of [null,'','compare','a','C',0,{},['A']]){
+    const h=applyHost(record),before=copy(h.current),controller=applyApi.create(h.host);
+    await assert.rejects(controller.apply(target),e=>e.phase==='prepare'&&!e.committed&&/target/.test(e.message));
+    assert.deepEqual(h.trace,[]);assert.deepEqual(h.current,before);assert.equal(controller.isBusy(),false);
+    assert.equal((await controller.apply('B')).target,'B','invalid request must not lock the controller');
+  }
+  const h=applyHost(record);
+  h.host.target=()=> 'B';
+  await assert.rejects(applyApi.create(h.host).apply('A'),e=>e.phase==='prepare'&&e.target==='A'&&!e.committed);
+  assert.deepEqual(h.trace,[]);
+  assert.throws(()=>applyApi.create({...h.host,target:'A'}),/host target/);
+});
+
+test('Compare Apply cannot be redirected during either durable await or by a competing target',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['A','B'])for(const step of ['archive','protect']){
+    for(const edit of ['selector','selector-aba','draft','scene','navigation']){
+      const h=applyHost(record);let selected=target,release,entered;
+      const other=target==='A'?'B':'A';
+      h.host.target=()=>selected;
+      const pending=new Promise(resolve=>{release=resolve;});
+      const ready=new Promise(resolve=>{entered=resolve;});
+      const original=h.host[step];
+      h.host[step]=async arg=>{entered();await pending;return original(arg);};
+      const controller=applyApi.create(h.host),applying=controller.apply(target);
+      await ready;
+      await assert.rejects(controller.apply(other),e=>e.phase==='busy'&&e.target===other&&!e.committed);
+      if(edit==='selector')selected=other;
+      else if(edit==='selector-aba'){selected=other;h.navigate();selected=target;h.navigate();}
+      else if(edit==='draft')h.changeDraft();
+      else if(edit==='scene')h.changeScene();
+      else h.navigate();
+      const latest=copy(h.current);release();
+      await assert.rejects(applying,e=>e.phase==='stale'&&e.target===target&&!e.committed);
+      assert.deepEqual(h.current,latest);assert.ok(!h.trace.includes('commit'));
+      assert.ok(!h.trace.includes('present'));assert.equal(controller.isBusy(),false);
+    }
+  }
+});
+
+test('Compare Apply failure boundaries preserve outgoing state and report the attempted target',async()=>{
+  const record=await archive.create(input(),env());
+  for(const target of ['A','B'])for(const mode of ['archive','missing-photo','history','unpinned','wrong-backup','commit','rollback','present']){
+    const h=applyHost(record),before=copy(h.current),actual=transfer.transfer(record,before,target);
+    let rollbackTarget=null;
+    if(mode==='archive')h.host.archive=async()=>{throw Error('storage denied');};
+    if(mode==='missing-photo')h.host.archive=async()=>({row:{id:record.id,record}});
+    if(mode==='history')h.host.protect=async()=>{throw Error('History denied');};
+    if(mode==='unpinned')h.host.protect=async previous=>({entry:{id:1,pinned:false,experiment:previous}});
+    if(mode==='wrong-backup')h.host.protect=async previous=>({entry:{id:1,pinned:true,experiment:{...previous,
+      scene:{...previous.scene,camera:{...previous.scene.camera,Height:9}}}}});
+    if(['commit','rollback'].includes(mode)){
+      h.host.commit=(next,side)=>{assert.equal(side,target);h.setLive(next);throw Error('commit failed');};
+      const restore=h.host.rollback;
+      h.host.rollback=(previous,side)=>{
+        rollbackTarget=side;if(mode==='rollback')throw Error('rollback failed');restore(previous);
+      };
+    }
+    if(mode==='present')h.host.present=async info=>{assert.equal(info.target,target);throw Error('render failed');};
+    const phase=['archive','missing-photo'].includes(mode)?'archive':
+      ['history','unpinned','wrong-backup'].includes(mode)?'recovery':
+      mode==='present'?'present':'commit';
+    const controller=applyApi.create(h.host);
+    await assert.rejects(controller.apply(target),e=>{
+      assert.equal(e.phase,phase);assert.equal(e.target,target);
+      assert.equal(e.committed,mode==='present');
+      assert.equal(e.rollbackError,mode==='rollback'?'rollback failed':null);
+      if(mode==='present'){assert.equal(e.recoveryId,17);assert.equal(e.resultId,record.id);}
+      return true;
+    });
+    assert.deepEqual(h.current,['present','rollback'].includes(mode)?actual:before);
+    assert.equal(rollbackTarget,['commit','rollback'].includes(mode)?target:null);
+    assert.equal(controller.isBusy(),false);
+  }
 });

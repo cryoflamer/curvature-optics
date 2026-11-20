@@ -1,3 +1,24 @@
+## 8F.7d.1 — Target-aware protected Apply (#11)
+
+Previous documentation baseline 7a6eff5 passed CI 44801043995.
+ModernCalibrationApply now accepts apply(target), with no argument
+retaining the existing Scene behavior. A/B are explicit; unsupported
+destinations fail before archival. The target is fixed before any await
+and returned in success and valid-target error metadata; commit/rollback
+receive the attempted target and presentation receives it in its context.
+Optional host.target() guards a mutable destination selector; host.revision()
+must also advance on changes (including A-B-A). Existing draft, snapshot,
+revision, durable archive and pinned exact recovery guards are retained.
+No changes to ModernApp, editor UI, pure transfer, schema or optics.
+
+Added four Node regression groups in ModernCalibrationResult.test.js:
+Scene/A/B success, invalid target and selector mismatch, stale/concurrent
+requests across archive and recovery, and archive/History/commit/rollback/
+presentation failure boundaries on both sides. Syntax checked; the actual
+controller and four new test groups passed an isolated JS harness with
+synthetic state/archive/transfer adapters (406 assertions). Native Node
+and Chromium CI pending; do not start 8F.7d.2 until green.
+
 ## 8F.7d — Calibration Integration in Shared-Camera Compare (#11)
 
 Baseline: 5093867, CI [44799585733](https://github.com/cryoflamer/curvature-optics/actions/runs/44799585733), all three jobs passed. Node 2225 passed, one skipped, zero failed (2226 total); Chromium 47/47. Universal Scene overlay qualification (#10) is complete. The lifecycle fix is validated by the formerly failing immediate reload test; no scientific fit/renderer parity is implied.
