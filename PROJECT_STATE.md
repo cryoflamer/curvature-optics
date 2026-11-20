@@ -1,3 +1,21 @@
+## 8F.7b.1c — Calibration Result Persistence (#8)
+
+Previous 8F.7b.1b CI 44748473687 passed all three jobs. Added
+ModernCalibrationResultArchive, a separate append-only IndexedDB v1
+results store. Archive original through Reference Image Library first,
+then commit validated result with atomic lookup/collision/add and quota
+checks. Success only on transaction completion. Same scientific content
+reuses first record and attribution; changed content gets new ID.
+Failure after image commit leaves reusable original, no draft or Scene
+mutation. Historical get/list work independently of original availability;
+save requires a verified existing original. No automatic deletion or
+eviction, 256 results / 64 Mi serialized characters. No Apply UI or
+History link yet. Added five Node tests and real Chromium concurrent
+archive/reload regression; architecture inventory updated. Five new Node
+scenarios passed with exact production dependencies in a headless harness
+(simulated image digest/decoder, Node APIs and IndexedDB). Full CI pending.
+Next #8 8F.7b.1d — Experiment Origin Contract (high reasoning effort).
+
 ## 8F.7b.1b — Immutable Calibration Result (#8)
 
 Previous 8F.7b.1a.1 CI 44746716072 passed all three jobs. Added pure

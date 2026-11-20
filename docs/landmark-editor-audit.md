@@ -26,6 +26,36 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.1c — Durable immutable result archive
+
+`ModernCalibrationResultArchive` owns IndexedDB
+`curvature-modern-calibration-results` v1 / `results`, keyed by canonical
+result ID. Each row contains id, creation timestamp and the immutable
+validated record. `archiveExperiment(db, portable, env, options)` captures
+the input, validates the result and verifies/durably reuses the original in
+the existing image library before committing the result. It returns
+`{row, reused, photoId, photoReused}`. No image data in the result.
+`save(db, record, env)` imports a validated result only if its exact original
+is already durably verified. Both paths use the same append-only transaction:
+read the existing key, validate it, compare full canonical scientific payload
+for collision safety, preserve first provenance/time on idempotent reuse,
+or check bounds and add the new row. Success means IDB transaction complete,
+not request success. No public update/delete or automatic eviction.
+Limits: 256 records, 64 Mi serialized UTF-16 code units; real browser quota
+can fail earlier. Old draft and image databases require no schema migration.
+
+The image and result databases are separate, not atomically committed
+together. If the result write fails, retain the already committed original and
+retry safely; do not apply a camera or attach a link on failure.
+`get(db, id)` returns a validated frozen row or null; `list(db)` returns
+historical summaries with creation times. Both reject corrupt data and remain
+independent of photo availability. Later link/overlay code resolves the photo
+separately by verified identity. Do not infer calibrated status from archive
+availability. No runtime draft changes, Scene mutation, History wiring or
+auto-archival until explicit Apply is implemented. The archive assumes the
+existing image deletion guard; external site-data clearing can remove either
+resource independently.
+
 ## 8F.7b.1b — Immutable result contract
 
 `CurvatureModernCalibrationResult.create(portable, env, {projectId})` verifies

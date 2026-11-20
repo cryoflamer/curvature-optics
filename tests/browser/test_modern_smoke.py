@@ -881,6 +881,64 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual((result['identity']['width'], result['identity']['height']), (3, 2))
         self.assertRegex(result['identity']['sha256'], r'^[0-9a-f]{64}$')
 
+    def test_calibration_result_archive_roundtrip(self):
+        self.page.goto(self.base_url)
+        self.page.wait_for_function('!!window.CurvatureModernCalibrationResultArchive')
+        fixture = json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        result = self.page.evaluate("""async fixture => {
+            const storage=CurvatureModernCalibrationResultArchive, editor=CurvatureModernPhotoCalibrationEditor;
+            const canvas=document.createElement('canvas'); canvas.width=1176; canvas.height=791;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#ecaf41';ctx.fillRect(0,0,1176,791);
+            const image={version:1,id:'archive_original',title:'Synthetic archive fixture',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:1176,height:791}};
+            const model=fixture.model,physics={atmosphere:'vacuum',temperatureProfile:fixture.options.temperatureProfile};
+            const observations=fixture.observations.slice(0,1),freeParameters=fixture.options.freeParameters;
+            const row=observations[0],points=[{id:row.landmark.id,status:'visible',observed:row.pixel,
+                predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight}];
+            const fit={status:'stalled',pose:{...model,Height:42.8},initialRmsPx:10,evaluations:2,
+                acceptedSteps:1,method:'canvas-direct',atmosphere:'vacuum',freeParameters,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:25*row.weight/2,points},
+                materialBinding:editor.fitBinding(observations,freeParameters,model,physics,1176,791)};
+            const data={format:'curvature-photo-calibration',version:3,scene:{model,physics},
+                referenceImage:image,referenceSource:null,observations,
+                fit:{method:'canvas-direct',maxIterations:80,freeParameters,result:fit,running:false}};
+            const saved=await Promise.all([
+                storage.archiveExperiment(indexedDB,data,window,{projectId:'first'}),
+                storage.archiveExperiment(indexedDB,{...data,referenceImage:{...image,id:'archive_alias',
+                    title:'Alias'}},window,{projectId:'second'})
+            ]);
+            const list=await storage.list(indexedDB);
+            return {id:saved[0].row.id,photoId:saved[0].photoId,
+                same:saved[0].row.id===saved[1].row.id&&saved[0].photoId===saved[1].photoId,
+                newCount:saved.filter(x=>!x.reused).length,photoCount:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length,
+                total:list.length,projectId:saved[0].row.record.provenance.projectId,
+                sameProvenance:saved[0].row.record.provenance.projectId===saved[1].row.record.provenance.projectId};
+        }""", fixture)
+        self.assertTrue(result['same'])
+        self.assertTrue(result['sameProvenance'])
+        self.assertEqual(result['newCount'], 1)
+        self.assertEqual(result['photoCount'], 1)
+        self.assertEqual(result['total'], 1)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function('!!window.CurvatureModernCalibrationResultArchive')
+        restored = self.page.evaluate("""async ids => {
+            const storage=CurvatureModernCalibrationResultArchive;
+            const row=await storage.get(indexedDB,ids.id);
+            const asset=await CurvatureModernReferenceImageLibrary.get(indexedDB,ids.photoId);
+            const identity=await CurvatureModernReferenceImageImport.identify(asset.record,window);
+            return {id:row.id,projectId:row.record.provenance.projectId,
+                samePhoto:identity.sha256===row.record.payload.photo.sha256,
+                hasBytes:JSON.stringify(row).includes('data:image/'),
+                frozen:Object.isFrozen(row.record.payload.observations),
+                total:(await storage.list(indexedDB)).length};
+        }""", result)
+        self.assertEqual(restored['id'], result['id'])
+        self.assertEqual(restored['projectId'], result['projectId'])
+        self.assertTrue(restored['samePhoto'])
+        self.assertTrue(restored['frozen'])
+        self.assertFalse(restored['hasBytes'])
+        self.assertEqual(restored['total'], 1)
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')

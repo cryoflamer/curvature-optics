@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 127,
-      "uniqueScripts": 125,
+      "scriptTags": 128,
+      "uniqueScripts": 126,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -244,6 +244,7 @@
         "src/ui/modern/ModernLandmarkViewer.js",
         "src/ui/modern/ModernPhotoCalibrationEditor.js",
         "src/ui/modern/ModernCalibrationResult.js",
+        "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernAnimationPreviewGraph.js",
         "src/ui/modern/ModernApp.js",
@@ -429,6 +430,7 @@
       "src/ui/modern/ModernAtmosphericPresentation.js",
       "src/ui/modern/ModernAtmosphericShimmer.js",
       "src/ui/modern/ModernCalibrationResult.js",
+      "src/ui/modern/ModernCalibrationResultArchive.js",
       "src/ui/modern/ModernCameraDirectMotion.js",
       "src/ui/modern/ModernCameraDragPreview.js",
       "src/ui/modern/ModernCameraHud.js",
@@ -491,7 +493,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 219,
+  "sourceJsCount": 220,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -1142,6 +1144,7 @@
         "src/animation/ModernAnimationPresentationCompositor.js",
         "src/animation/ModernReferenceImageLibrary.js",
         "src/ui/modern/ModernCalibrationResult.js",
+        "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernReferenceImageImport.js"
       ],
       "commonJsTestCallers": [
@@ -1156,9 +1159,11 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/animation/ModernDemoCatalog.js"
+        "src/animation/ModernDemoCatalog.js",
+        "src/ui/modern/ModernCalibrationResultArchive.js"
       ],
       "commonJsTestCallers": [
+        "tests/ModernCalibrationResult.test.js",
         "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
@@ -3043,6 +3048,18 @@
       "directHtmlLoads": [
         "modern"
       ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationResultArchive.js"
+      ],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationResult.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernCalibrationResultArchive.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernCalibrationResult.test.js"
@@ -3507,7 +3524,8 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/ui/modern/ModernCalibrationResult.js"
+        "src/ui/modern/ModernCalibrationResult.js",
+        "src/ui/modern/ModernCalibrationResultArchive.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernReferenceImageLibrary.test.js"

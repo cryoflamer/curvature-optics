@@ -116,3 +116,139 @@ test('snapshot is isolated across asynchronous decode/hash and malformed provena
   assert.notEqual(a.payload.observations[0].pixel[0],1);
   const x=copy(a);x.provenance.attribution.sourceUrl='javascript:alert(1)';assert.throws(()=>archive.validate(x),/URL/);
 });
+
+const storage=require('../src/ui/modern/ModernCalibrationResultArchive');
+const library=require('../src/animation/ModernReferenceImageLibrary');
+// A two-database transactional double with staged writes, request success
+// followed by commit/abort, and a fault injected at the commit boundary.
+// Real transaction serialization is qualified separately in Chromium.
+function memoryStorage(){
+  const databases=new Map(),faults={abortNextArchive:false,failOpen:false,failImage:false};
+  return {databases,faults,open(name,version){
+    if(faults.failOpen)throw Error('Storage denied');
+    assert.equal(version,1);
+    const request={result:null,error:null};
+    queueMicrotask(()=>{
+      const fresh=!databases.has(name);
+      if(fresh)databases.set(name,new Map());
+      const records=databases.get(name);
+      request.result={close(){},createObjectStore(store,opts){
+        assert.equal(store,name===storage.DATABASE?storage.STORE:library.STORE);
+        assert.equal(opts.keyPath,'id');
+      },transaction(store,mode){
+        const staged=new Map();let pending=0,done=false;
+        const tx={error:null,abort(){
+          if(done)return;done=true;queueMicrotask(()=>tx.onabort?.());
+        },objectStore(){
+          function op(fn){
+            const req={};pending++;
+            queueMicrotask(()=>{
+              if(done)return;
+              try{req.result=fn();req.onsuccess?.();}
+              catch(error){tx.error=error;tx.abort();return;}
+              if(--pending===0&&!done)queueMicrotask(()=>{
+                if(done||pending)return;
+                if(mode==='readwrite'&&name===storage.DATABASE&&faults.abortNextArchive){
+                  faults.abortNextArchive=false;tx.error=Error('Injected archive quota failure');tx.abort();return;
+                }
+                if(mode==='readwrite'&&name===library.DATABASE&&faults.failImage){
+                  tx.error=Error('Injected image failure');tx.abort();return;
+                }
+                for(const [id,row] of staged)records.set(id,row);
+                done=true;tx.oncomplete?.();
+              });
+            });
+            return req;
+          }
+          return {get:id=>op(()=>records.has(id)?copy(records.get(id)):undefined),
+            getAll:()=>op(()=>[...records.values()].map(copy)),
+            add:row=>op(()=>{assert.equal(mode,'readwrite');
+              if(records.has(row.id)||staged.has(row.id))throw Error('Constraint');
+              staged.set(row.id,copy(row));
+            })};
+        }};
+        return tx;
+      }};
+      if(fresh)request.onupgradeneeded?.();
+      request.onsuccess?.();
+    });
+    return request;
+  }};
+}
+test('durable archival commits original then result, reuses exact scientific content and preserves first provenance',async()=>{
+  const db=memoryStorage(),raw=input();
+  const first=await storage.archiveExperiment(db,raw,env(),{projectId:'first'});
+  assert.equal(first.reused,false);assert.equal(first.photoReused,false);
+  assert.equal(first.row.record.provenance.projectId,'first');
+  assert.equal((await library.get(db,first.photoId)).record.original.dataUrl,raw.referenceImage.original.dataUrl);
+  assert.equal(JSON.stringify(first.row).includes('data:image/'),false);
+  raw.referenceImage.title='Renamed';raw.referenceImage.id='alias';
+  const second=await storage.archiveExperiment(db,raw,env(),{projectId:'second'});
+  assert.equal(second.reused,true);assert.equal(second.photoReused,true);
+  assert.deepEqual(second.row,first.row);assert.equal(second.photoId,first.photoId);
+  assert.deepEqual(await storage.get(db,first.row.id),first.row);
+  assert.ok(Object.isFrozen((await storage.get(db,first.row.id)).record.payload));
+  const list=await storage.list(db);
+  assert.equal(list.length,1);assert.equal(list[0].id,first.row.id);
+  assert.equal(list[0].fitCount,13);assert.equal(list[0].payload,undefined);
+  assert.equal(list[0].createdAt,first.row.createdAt);
+  assert.equal((await library.list(db)).length,1);
+  raw.fit.result.pose.Height+=1;
+  const changed=await storage.archiveExperiment(db,raw,env());
+  assert.notEqual(changed.row.id,first.row.id);assert.equal((await storage.list(db)).length,2);
+  assert.equal((await library.list(db)).length,1);
+});
+test('portable result requires verified original; historical lookup is independent of missing photo',async()=>{
+  const db=memoryStorage(),raw=input(),result=await archive.create(raw,env());
+  assert.equal(await storage.get(db,result.id),null);
+  await assert.rejects(storage.save(db,result,env()),/original photo is unavailable/);
+  assert.deepEqual(await storage.list(db),[]);
+  await library.create(db,raw.referenceImage);
+  const saved=await storage.save(db,result,env());assert.equal(saved.reused,false);
+  db.databases.get(library.DATABASE).clear(); // external site-data removal
+  assert.deepEqual(await storage.get(db,result.id),saved.row);
+  assert.equal((await storage.list(db)).length,1);
+  await assert.rejects(storage.save(db,result,env()),/original photo is unavailable/);
+  await assert.rejects(storage.get(db,'invalid'),/Invalid calibration result ID/);
+});
+test('aborted archive commit never reports success; original retained and retry is idempotent',async()=>{
+  const db=memoryStorage(),raw=input();
+  db.faults.abortNextArchive=true;
+  await assert.rejects(storage.archiveExperiment(db,raw,env()),/Injected archive quota failure/);
+  assert.equal((await library.list(db)).length,1);assert.deepEqual(await storage.list(db),[]);
+  const recovered=await storage.archiveExperiment(db,raw,env());
+  assert.equal(recovered.reused,false);assert.equal(recovered.photoReused,true);
+  assert.equal((await storage.archiveExperiment(db,raw,env())).reused,true);
+  assert.equal((await storage.list(db)).length,1);
+});
+test('invalid fit, image failure, corrupt stored rows and denied storage fail closed',async()=>{
+  const db=memoryStorage(),raw=input(),invalid=copy(raw);invalid.fit.running=true;
+  await assert.rejects(storage.archiveExperiment(db,invalid,env()),/Stop/);
+  assert.equal((await library.list(db)).length,0);
+  db.faults.failImage=true;
+  await assert.rejects(storage.archiveExperiment(db,raw,env()),/Injected image failure/);
+  db.faults.failImage=false;
+  assert.deepEqual(await storage.list(db),[]);assert.equal((await library.list(db)).length,0);
+  const saved=await storage.archiveExperiment(db,raw,env());
+  const corrupt=db.databases.get(storage.DATABASE).get(saved.row.id);corrupt.record.payload.fit.result.pose.Height+=1;
+  await assert.rejects(storage.get(db,saved.row.id),/digest mismatch/);
+  await assert.rejects(storage.archiveExperiment(db,raw,env()),/digest mismatch/);
+  assert.equal(corrupt.record.payload.fit.result.pose.Height,saved.row.record.payload.fit.result.pose.Height+1);
+  db.faults.failOpen=true;
+  await assert.rejects(storage.get(db,saved.row.id),/Storage denied/);
+  await assert.rejects(storage.list(undefined));
+});
+test('archive bounds reject overflow without eviction; input snapshot survives asynchronous decode',async()=>{
+  assert.throws(()=>storage.quota(Array(storage.MAX_ITEMS+1).fill({})),/limit/);
+  assert.throws(()=>storage.quota([{data:'x'.repeat(storage.MAX_CHARS)}]),/size limit/);
+  const db=memoryStorage(),raw=input(),e=env();let release,first=true;
+  e.Image=class{constructor(){this.naturalWidth=1176;this.naturalHeight=791;}
+    decode(){if(first){first=false;return new Promise(r=>release=r);}return Promise.resolve();}
+  };
+  const pending=storage.archiveExperiment(db,raw,e);
+  raw.referenceImage.title='Later';raw.referenceImage.id='later';raw.fit.result.pose.Height=99;release();
+  const result=await pending;
+  assert.equal(result.row.record.payload.fit.result.pose.Height,42.8);
+  assert.equal(result.row.record.provenance.attribution.title,'Soundly');
+  assert.equal(result.photoId,'soundly');
+});
