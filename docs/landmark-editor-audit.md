@@ -1,3 +1,18 @@
+## 8F.5b.4a.1 — Integrated Fast Vertex pairing
+
+8F.5b.3c navigation was manually confirmed by the user. The integrated
+Globe viewer now offers Fast Vertex separately from local Vertex/Edge/Surface
+inspection. A unique visible vertex enters the existing legacy vertex identity
+and chooseModel/savePair path; ambiguous candidates require Use vertex.
+Photo-first and model-first pairing use the same observations, Undo and
+draft storage. Best Camera remains read-only on the model side. The existing
+floating viewer and Flat workflow remain unchanged. Added Free View pairing
+callback regression to the DOM fixture; CI and manual validation pending.
+
+Remaining migration: 8F.5b.4a.2 Owner Inspection; .3 Draft Lifecycle;
+.4 Session Persistence (including pivot); .5 Functional Parity; then .4b
+legacy Globe cleanup and 8F.5c/d/e.
+
 ## 8F.5b.3c — Selected physical point orbit pivot
 
 Integrated Globe Free View uses the staged/confirmed material point or selected

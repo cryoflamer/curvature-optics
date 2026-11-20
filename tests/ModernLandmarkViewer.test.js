@@ -457,12 +457,12 @@ test('pivot-independent optical geometry and frame transitions preserve authored
 test('inline source lifecycle navigates optical raster without requiring a dialog or orbit pivot',()=>{
   const nodes=new Map(),make=()=>({style:{},dataset:{},value:'',textContent:'',hidden:false,
     clientWidth:800,clientHeight:600,width:800,height:600,events:{},
-    closest(){return this;},replaceChildren(){},focus(){},addEventListener(k,fn){this.events[k]=fn;},
+    closest(){return this;},replaceChildren(){},append(){},focus(){},addEventListener(k,fn){this.events[k]=fn;},
     setPointerCapture(){},hasPointerCapture(){return false;},getBoundingClientRect(){return {left:0,top:0,width:800,height:600};}});
   const host=make();
   host.hidden=true;host.querySelector=k=>{if(!nodes.has(k))nodes.set(k,make());return nodes.get(k);};
   host.querySelectorAll=()=>[];
-  host.ownerDocument={defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
+  host.ownerDocument={createElement:make,defaultView:{devicePixelRatio:1,localStorage:{getItem(){return null;},setItem(){}},
     ResizeObserver:class{observe(){}},addEventListener(){},cancelAnimationFrame(){}}};
   const canvas=host.querySelector('canvas'),ctx=new Proxy({},{get:(o,k)=>o[k]??(()=>{})});
   canvas.getContext=()=>ctx;
@@ -473,7 +473,8 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const full={x:0,y:0,width:800,height:600};
   const source={width:800,height:600,camera:{pos:[0,0,0],center:[0,100,0],up:[0,0,1],sceneSize:1,objectZExtend:0,zoom:1,near:.001}};
   const observer={origin:[0,0,0],right:[1,0,0],forward:[0,1,0],up:[0,0,1]};
-  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true});
+  const fastHits=[];
+  const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;}});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
   api.openScene(sourceContract);
@@ -502,6 +503,18 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   assert.equal(api.enterFree(),true);
   assert.deepEqual(api.snapshot().pivot,banks[0][0].points[2]);
   api.resetScene();assert.equal(api.snapshot().mode,'scene');assert.deepEqual(api.snapshot().region,full);
+  api.setCorrespondences([],null);
+  assert.equal(api.enterFree(),true);
+  const select=host.querySelector('[data-viewer-pick-mode]');
+  select.value='fast-vertex';select.onchange();
+  canvas.events.wheel({...event,deltaY:-2000});
+  const g=viewer.regionGeometry(banks,{owner,primaryIndices:[0],pixel:[400,300],region:full},source,observer);
+  const pixel=viewer.regionCamera(g,api.snapshot().view,800,600).project(g.items[0].points[0]).pixel;
+  const click={...event,clientX:pixel[0],clientY:pixel[1]};
+  canvas.events.pointerdown(click);canvas.events.pointerup(click);
+  assert.deepEqual(fastHits,[{kind:'vertex',bank:0,index:0,vertex:0}]);
+  assert.equal(api.snapshot().staged,null);
+  api.resetScene();
   canvas.events.wheel({...event,deltaY:-120});
   const beforeBest=api.snapshot();
   assert.equal(api.parkScene(),true);

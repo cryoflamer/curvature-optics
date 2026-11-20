@@ -402,7 +402,9 @@
     inlineHeader.querySelector('h2').removeAttribute('id');
     inlineHost.querySelector('[data-viewer-close]').remove();inlineHost.querySelector('footer').remove();
     inlineHost.querySelector('canvas').setAttribute('aria-label','Integrated calibration model');
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,()=>{},selectPair,{inline:true});
+    const fastOption=doc.createElement('option');fastOption.value='fast-vertex';fastOption.textContent='Fast Vertex';
+    inlineHost.querySelector('[data-viewer-pick-mode]').append(fastOption);
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,()=>{},selectPair,{inline:true,onFastVertex:chooseInlineVertex});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
@@ -687,7 +689,7 @@
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
     function updateHint(){
-      const text=globeRoute()&&!legacyShown&&!editing?(activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · use Navigate to select another.':pending?'Photo point selected · use the manual menu or legacy tools to complete a pair for now.':'Wheel to zoom; drag to pan. Free View to orbit. Manual menu or legacy tools create pairs for now.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
+      const text=globeRoute()&&!legacyShown&&!editing?(activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · use Navigate to select another.':pending?'Photo point selected · choose Fast Vertex in the Model Viewer.':pendingModel?'Model vertex selected · click the matching photo point.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
@@ -1092,16 +1094,22 @@
         if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
         const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
         rememberUndo();rows=next;activePair=null;
-        resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();
-      }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;}
+        resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();return true;
+      }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;return false;}
+    }
+    function chooseInlineVertex(hit){
+      if(!globeRoute()||legacyShown||viewBest||!scene)return false;
+      const p=scene.banks[hit.bank]?.[hit.index];
+      if(hit.kind!=='vertex'||!Number.isInteger(hit.vertex)||!p?.points[hit.vertex])return false;
+      return chooseModel({landmark:{id:'b'+hit.bank+':p'+hit.index+':v'+hit.vertex,bank:hit.bank,objectType:scene.model.ObjType[hit.bank],primitive:hit.index,vertex:hit.vertex}});
     }
     function chooseModel(item){
-      if(!record){message('Load a photograph first.');return;}
-      if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return;}
-      if(!selectLandmark(item.landmark))return;
+      if(!record){message('Load a photograph first.');return false;}
+      if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return false;}
+      if(!selectLandmark(item.landmark))return false;
       clearAmbiguity();pendingModel=item.landmark;activePair=null;
-      if(pending)savePair();
-      else {refreshRows();updateHint();meshDraw();persist();}
+      if(pending)return savePair();
+      refreshRows();updateHint();meshDraw();persist();return true;
     }
     function choosePhoto(p){
       if(!p)return;
