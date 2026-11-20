@@ -1,3 +1,28 @@
+## 8F.7p.3 — Explicit idempotent legacy migration and recovery (#14)
+
+Baseline 41d997ec, CI 44824348072 and 44824338033 green.
+New ModernCalibrationProjectMigration is an explicitly invoked, non-startup
+one-time adoption path. It supports complete V2 draft checkpoints, bounded
+V1-to-V2 normalization (including explicit Fit roles and legacy session ID),
+matching local inline view and verified photo staging before any project write.
+The existing original-bearing draft/active row is never modified or deleted.
+ModernCalibrationProjectStore now checks the unchanged source inside one
+serialized IndexedDB transaction, writing project, compact summary and
+migration marker atomically, so competing tabs cannot adopt twice. Marker
+survives user deletion and blocks resurrection. Missing/unsupported/malformed
+drafts, bad photos, storage quota and transaction errors remain raw-recoverable;
+rawRecovery() gives an exact JSON export of the legacy browser record.
+Committed rows are read back and fully hydrated/validated before success is
+reported. This is a migration API, not an automatic startup action or UI;
+the current v1 editor database connection must be closed before invoking it.
+No changes to physical rendering, History, legacy autosave, Apply or optics.
+Next stage 8F.7p.4: project-bound persistence coordinator; 8F.7p.5
+is responsible for startup migration gating and safe activation.
+
+Team workflow: before each future commit, recommend one of the three
+reasoning levels (1 / 2 / 3) to the user. This stage: High / 3.
+CI for this new commit remains to be verified before the next stage.
+
 ## 8F.7p.2b — Overview checkpoint test fixture isolation (#14)
 
 CI 44822308945 (c47c5367): Chromium and architecture checks passed;

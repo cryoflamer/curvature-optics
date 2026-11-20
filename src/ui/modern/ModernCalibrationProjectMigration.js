@@ -1,0 +1,115 @@
+/* One-time, explicitly invoked legacy Calibration Project adoption.
+ * Verified assets are staged before the atomic project+marker transaction.
+ * Existing single-draft startup and editor state are left untouched.
+ */
+(function(root,factory){
+  const node=typeof module==='object'&&module.exports;
+  const api=factory(
+    node?require('./ModernCalibrationProject'):root.CurvatureModernCalibrationProject,
+    node?require('./ModernCalibrationProjectStore'):root.CurvatureModernCalibrationProjectStore,
+    node?require('./ModernCalibrationProjectCheckpoint'):root.CurvatureModernCalibrationProjectCheckpoint);
+  if(node)module.exports=api;
+  root.CurvatureModernCalibrationProjectMigration=api;
+}(typeof globalThis!=='undefined'?globalThis:this,function(model,store,checkpoint){
+  'use strict';
+  const INLINE_KEY='curvature-calibration-inline-v2';
+  const V1_FIELDS=new Set([...checkpoint.DRAFT_FIELDS,'magnifierSessionId']);
+  function clone(v){return JSON.parse(JSON.stringify(v));}
+  function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
+  function normalizeLegacy(raw){
+    if(!object(raw)||![1,2].includes(raw.version))
+      throw Error('Unsupported legacy calibration draft; raw recovery is available');
+    if(raw.version===2){
+      const saved=clone(raw);
+      checkpoint.validateDraft(saved,null);
+      return saved;
+    }
+    if(Object.keys(raw).some(k=>!V1_FIELDS.has(k))||!object(raw.scene)||
+       !Array.isArray(raw.rows)||raw.rows.some(r=>!object(r)))
+      throw Error('Unknown legacy V1 calibration fields; raw recovery is required');
+    const session=raw.physicalSessionId??raw.magnifierSessionId;
+    if(typeof session!=='string'||!session)
+      throw Error('Legacy calibration has no recoverable physical session identity');
+    const rows=items=>items.map(r=>({included:true,...clone(r)}));
+    const history=items=>items.map(entry=>{
+      if(!object(entry)||!Array.isArray(entry.rows))throw Error('Invalid legacy calibration edit history');
+      return {...clone(entry),rows:rows(entry.rows)};
+    });
+    const draft={version:2,scene:clone(raw.scene),
+      record:clone(raw.record??null),activeSource:clone(raw.activeSource??null),
+      rows:rows(raw.rows),pending:clone(raw.pending??null),
+      pendingModel:clone(raw.pendingModel??null),activePair:raw.activePair??null,
+      editing:raw.editing??null,explicitAdd:raw.explicitAdd===true,
+      view:clone(raw.view??null),physicalSessionId:session,
+      undoStack:history(raw.undoStack??[]),redoStack:history(raw.redoStack??[]),
+      selectedOwner:clone(raw.selectedOwner??null),weight:String(raw.weight??'1'),
+      freeParameters:clone(raw.freeParameters??[]),fitBest:clone(raw.fitBest??null),
+      fitStatus:raw.fitStatus??'Not yet fitted',viewBest:raw.viewBest===true,
+      stage:raw.stage??'correspondences',
+      resultCamera:raw.resultCamera??'best',
+      resultViews:clone(raw.resultViews??{initial:null,best:null}),
+      residualMode:raw.residualMode??'off'};
+    // Unsupported shapes are *not* silently pruned or changed. A bad old
+    // fit/history is a recovery case, not a reason to lose observations.
+    checkpoint.validateDraft(draft,null);
+    return draft;
+  }
+  function matchingInline(storage,draft){
+    if(!storage||typeof storage.getItem!=='function')return null;
+    const text=storage.getItem(INLINE_KEY);
+    if(text===null||text===undefined)return null;
+    let saved;
+    try{saved=JSON.parse(text);}
+    catch(error){throw Error('Legacy inline session is corrupt; raw recovery is required');}
+    if(!object(saved))throw Error('Legacy inline session is invalid; raw recovery is required');
+    if(saved.id!==draft.physicalSessionId||saved.photo!==(draft.record?.id||null))
+      return null; // Another session's local view must not be cross-bound.
+    checkpoint.validateDraft(draft,saved);
+    return clone(saved);
+  }
+  async function rawRecovery(db){
+    // Raw browser draft (including original bytes). Not a portable project
+    // format, and intentionally never deleted by migration or Project remove.
+    const raw=await store.legacy(db);
+    return raw===null?null:JSON.stringify(raw);
+  }
+  async function checkedExisting(env,existing,adapter,decoder){
+    if(existing.status==='already-removed')
+      return {status:'already-removed',marker:existing.marker,project:null};
+    const record=existing.project||await store.get(env.indexedDB,existing.projectId);
+    if(!record)throw Error('Migration marker points to a missing project; preserve legacy raw recovery');
+    await checkpoint.prepare(record,env,adapter,decoder);
+    return {status:'already',marker:existing.marker||null,project:record};
+  }
+  async function migrate(env,{adapter,decoder,now=Date.now()}={}){
+    if(!env?.indexedDB||!env?.crypto)
+      throw Error('Calibration migration requires IndexedDB and crypto');
+    // This module is not an editor startup hook. Call only when no old v1
+    // IndexedDB connection can block the version-2 project-store upgrade.
+    const previous=await store.migrationMarker(env.indexedDB);
+    if(previous)return checkedExisting(env,{status:'already',projectId:previous.projectId,
+      marker:previous},adapter,decoder);
+    const raw=await store.legacy(env.indexedDB);
+    if(raw===null)return {status:'empty',marker:null,project:null};
+    const draft=normalizeLegacy(raw);
+    const inline=matchingInline(env.localStorage,draft);
+    const parts=await checkpoint.captureVerified(draft,inline,env,adapter,decoder);
+    const id=model.createId(env.crypto);
+    const title=(draft.record?.title||'Recovered calibration').trim();
+    const project=model.fresh({id,title,now,...parts});
+    const outcome=await store.adoptLegacy(env.indexedDB,raw,project);
+    if(outcome.status!=='migrated')return checkedExisting(env,outcome,adapter,decoder);
+    // Read back both committed stores, then verify and hydrate the real
+    // original. No editor switch/activation happens, even on failure.
+    const durable=await store.get(env.indexedDB,project.id);
+    const marker=await store.migrationMarker(env.indexedDB);
+    if(!durable||marker?.projectId!==project.id)
+      throw Error('Calibration migration commit could not be verified; old draft retained');
+    const prepared=await checkpoint.prepare(durable,env,adapter,decoder);
+    if(JSON.stringify(prepared.draft)!==JSON.stringify(draft)||
+       JSON.stringify(prepared.inline)!==JSON.stringify(inline))
+      throw Error('Calibration migration round-trip changed saved work; old draft retained');
+    return {status:'migrated',marker,project:durable};
+  }
+  return Object.freeze({INLINE_KEY,normalizeLegacy,matchingInline,rawRecovery,migrate});
+}));
