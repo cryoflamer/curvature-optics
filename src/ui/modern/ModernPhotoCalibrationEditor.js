@@ -1,10 +1,12 @@
 /* Locally persisted photo correspondence editor. No solver or scene mutation. */
 (function(root,factory){
-  const api=factory(root);
+  const api=factory(root,
+    root.CurvatureCameraMaterialAnchor||require('../../calibration/CameraMaterialAnchor'),
+    root.CurvatureCameraMaterialAnchorResolver||require('../../calibration/CameraMaterialAnchorResolver'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   else {root.CurvatureModernPhotoCalibrationEditor=api;
     root.document.addEventListener('DOMContentLoaded',()=>api.mount(root.document));}
-}(typeof globalThis!=='undefined'?globalThis:this,function(env){
+}(typeof globalThis!=='undefined'?globalThis:this,function(env,materialAnchor,materialResolver){
   'use strict';
   function fit(width,height,w,h){
     const scale=Math.min(w/width,h/height);
@@ -29,17 +31,24 @@
     const width=Math.min(rasterWidth-x,(hi[0]-lo[0])/view.scale),height=Math.min(rasterHeight-y,(hi[1]-lo[1])/view.scale);
     return width>0&&height>0?{x,y,width,height}:null;
   }
+  const isMaterial=l=>!!l&&Object.prototype.hasOwnProperty.call(l,'anchor');
+  const hasMaterial=rows=>rows.some(r=>isMaterial(r.landmark));
   function pair(landmark,pixel,width,height,weight=1,included=true){
     if(!landmark||typeof landmark.id!=='string'||!landmark.id||
       !Array.isArray(pixel)||pixel.length!==2||!pixel.every(Number.isFinite)||
       pixel[0]<0||pixel[0]>=width||pixel[1]<0||pixel[1]>=height||
       !Number.isFinite(weight)||weight<=0||typeof included!=='boolean')throw RangeError('Invalid correspondence');
+    if(isMaterial(landmark)){
+      const kind=landmark.anchor?.kind;
+      return {kind,landmark:materialAnchor.normalizeLandmark(kind,landmark),pixel:pixel.slice(),weight,included};
+    }
     if(![0,1].includes(landmark.bank)||![landmark.objectType,landmark.primitive,landmark.vertex].every(Number.isInteger)||
        landmark.primitive<0||landmark.vertex<0)throw RangeError('Invalid authored vertex');
     return {kind:'vertex',landmark:{...landmark},pixel:pixel.slice(),weight,included};
   }
   function upsert(rows,value,replaceId=null){
-    if(rows.some(r=>r.landmark.id===value.landmark.id&&r.landmark.id!==replaceId))
+    if(rows.some(r=>r.landmark.id!==replaceId&&(r.landmark.id===value.landmark.id||
+       isMaterial(r.landmark)&&isMaterial(value.landmark)&&materialAnchor.anchorKey(r.landmark.anchor)===materialAnchor.anchorKey(value.landmark.anchor))))
       throw Error('This model vertex is already paired; edit its existing row');
     if(replaceId!==null&&!rows.some(r=>r.landmark.id===replaceId))throw Error('Correspondence no longer exists');
     return replaceId===null?[...rows,value]:rows.map(r=>r.landmark.id===replaceId?value:r);
@@ -273,15 +282,54 @@
     }
     return choices;
   }
-  const CAMERA_FIELDS=Object.freeze(["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"]), EXPERIMENT_FORMAT='curvature-photo-calibration', EXPERIMENT_VERSION=2;
+  const CAMERA_FIELDS=Object.freeze(["CameraEast","CameraNorth","Height","Pan","Nick","Roll","FocalLengthField"]), EXPERIMENT_FORMAT='curvature-photo-calibration', EXPERIMENT_VERSION=3;
+  const experimentVersion=rows=>hasMaterial(rows)?EXPERIMENT_VERSION:2;
+  function observationRows(input,width,height,allowMaterial,model){
+    if(!Array.isArray(input)||input.length>10000)throw Error('Invalid observations');
+    const rows=input.map(r=>{
+      if(!r||!['vertex','edge','surface'].includes(r.kind)||(!allowMaterial&&(r.kind!=='vertex'||isMaterial(r.landmark))))
+        throw Error('Expected authored vertex observation or material format version 3');
+      const value=pair(r.landmark,r.pixel,width,height,r.weight,r.included);
+      if(value.kind!==r.kind)throw Error('Observation and anchor kind mismatch');
+      return value;
+    });
+    if(new Set(rows.map(r=>r.landmark.id)).size!==rows.length)throw Error('Duplicate landmark ID');
+    if(hasMaterial(rows)){
+      const resolver=materialResolver.create(model),keys=new Set();
+      for(const row of rows.filter(r=>isMaterial(r.landmark))){
+        const q=resolver.resolveLandmark(row.kind,row.landmark),key=materialAnchor.anchorKey(q.anchor);
+        if(keys.has(key))throw Error('Duplicate material anchor');
+        keys.add(key);
+      }
+    }
+    return rows;
+  }
+  function validateLegacyTopology(rows,scene){
+    for(const {landmark:l} of rows){
+      if(isMaterial(l))continue;
+      if(l.objectType!==scene.model.ObjType[l.bank]||!scene.banks[l.bank]?.[l.primitive]?.points[l.vertex]||
+        l.id!=='b'+l.bank+':p'+l.primitive+':v'+l.vertex)throw Error('Landmark topology mismatch: '+l.id);
+    }
+  }
+  // Equality guard for saved candidates, not a security signature.
+  function fitBinding(rows,free,model,physics,width,height){
+    return JSON.stringify(['material-fit-v1',model.showModel,model.rEarth,model.rFEarth,
+      materialResolver.LAYOUT.map(k=>model[k]),CAMERA_FIELDS.map(k=>model[k]),free,physics?.atmosphere,
+      physics?.temperatureProfile?['temperatureC','pressureHpa','gradientKPerKm'].map(k=>physics.temperatureProfile[k]):null,
+      width,height,rows.map(r=>[r.kind,isMaterial(r.landmark)?
+        materialAnchor.normalizeLandmark(r.kind,r.landmark):[r.landmark.id,r.landmark.bank,r.landmark.objectType,r.landmark.primitive,r.landmark.vertex],
+        r.pixel,r.weight,r.included!==false])]);
+  }
   const jsonCopy=value=>JSON.parse(JSON.stringify(value));
   function validatedFreeFields(free){
     if(!Array.isArray(free)||new Set(free).size!==free.length||free.some(k=>!CAMERA_FIELDS.includes(k)))
       throw Error('Invalid free camera parameters');
     return CAMERA_FIELDS.filter(k=>free.includes(k));
   }
-  function validateFitResult(result,rows,free,model){
+  function validateFitResult(result,rows,free,model,physics,width,height){
     if(result===null||result===undefined)return null;
+    if((hasMaterial(rows)||result.materialBinding!==undefined)&&result.materialBinding!==fitBinding(rows,free,model,physics,width,height))
+      throw Error('Stored fit result does not match material observations or captured scene');
     rows=fitRows(rows);
     const r=jsonCopy(result),v=r?.evaluation;
     if(!v?.valid||!r.pose||CAMERA_FIELDS.some(k=>!Number.isFinite(r.pose[k]))||
@@ -299,7 +347,7 @@
     return r;
   }
   function validateExperiment(input,validateReference){
-    if(!input||input.format!==EXPERIMENT_FORMAT||![1,EXPERIMENT_VERSION].includes(input.version))
+    if(!input||input.format!==EXPERIMENT_FORMAT||![1,2,EXPERIMENT_VERSION].includes(input.version))
       throw Error('Unsupported calibration experiment format/version');
     const m=input.scene?.model,physics=input.scene?.physics;
     if(!m||![1,2].includes(m.showModel)||!Number.isFinite(m.rEarth)||m.rEarth<=0||
@@ -311,21 +359,16 @@
     }
     if(m.NObjects.some(n=>!Number.isInteger(n)||n<0||n>10000))throw Error('Invalid object count');
     const record=validateReference(input.referenceImage);
-    if(!Array.isArray(input.observations)||input.observations.length>10000)throw Error('Invalid observations');
-    const observations=input.observations.map(r=>{
-      if(r.kind!=='vertex')throw Error('Expected authored vertex observation');
-      if(input.version===1&&r.included===false)throw Error('Validation roles require experiment version 2');
-      return pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included);
-    });
-    if(new Set(observations.map(r=>r.landmark.id)).size!==observations.length)throw Error('Duplicate landmark ID');
+    const observations=observationRows(input.observations,record.original.width,record.original.height,input.version===3,m);
+    if(input.version===1&&observations.some(r=>r.included===false))throw Error('Validation roles require experiment version 2');
     const freeParameters=validatedFreeFields(input.fit?.freeParameters);
     if(input.fit.method!=='canvas-direct'||input.fit.maxIterations!==80)throw Error('Unsupported fit configuration');
-    const result=validateFitResult(input.fit.result,observations,freeParameters,m);
+    const result=validateFitResult(input.fit.result,observations,freeParameters,m,physics,record.original.width,record.original.height);
     const referenceSource=input.referenceSource&&typeof input.referenceSource==='object'?
       jsonCopy(input.referenceSource):null;
     if(referenceSource&&(!Array.isArray(referenceSource.links)||referenceSource.links.some(x=>typeof x!=='string')))
       throw Error('Invalid photo provenance');
-    return {format:EXPERIMENT_FORMAT,version:EXPERIMENT_VERSION,scene:jsonCopy(input.scene),
+    return {format:EXPERIMENT_FORMAT,version:experimentVersion(observations),scene:jsonCopy(input.scene),
       referenceImage:record,referenceSource,observations,fit:{method:'canvas-direct',maxIterations:80,freeParameters,
         result,status:typeof input.fit.status==='string'?input.fit.status.slice(0,1000):'Imported fit',
         running:input.fit.running===true}};
@@ -384,6 +427,7 @@
     }
     const cropRenderer=env.CurvatureCanvasDirectPreview.create();
     let modelView=null,projected=[],byLandmark=new Map(),hover=[],ambiguous=[],previewValid=false;
+    let markerProjection=null,markerResolver=null,materialMarkers=new Map();
     let pendingModel=null,activePair=null,undoStack=[],hoverIndex=0,photoGhost=null,modelGhost=null;
     let index=spatialIndex([]),modelFrame=null,queuedPointer=null;
     const identityRaster=doc.createElement('canvas'),highlightRaster=doc.createElement('canvas');
@@ -422,7 +466,7 @@
     }
     function persist(){
       if(restoring||!scene)return;
-      const data=JSON.parse(JSON.stringify({version:1,scene:{model:scene.model,physics:scene.physics},
+      const data=JSON.parse(JSON.stringify({version:2,scene:{model:scene.model,physics:scene.physics},
         record,activeSource,rows,pending,pendingModel,activePair,editing,view,modelView,selected:selected(),magnifierSessionId,
         weight:weight.value,showLandmarks:showLandmarks.checked,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,residualMode:residualMode.value}));
@@ -441,12 +485,13 @@
       restoring=true;
       try{
         const d=await readDraft();
-        if(!d||d.version!==1)return;
+        if(!d||![1,2].includes(d.version))return;
         const next=prepareScene(d.scene);
         if(d.record){
           const decoded=new env.Image();decoded.src=d.record.original.dataUrl;await decoded.decode();
           if(decoded.naturalWidth!==d.record.original.width||decoded.naturalHeight!==d.record.original.height)throw Error('Stored image dimensions mismatch');
-          rows=d.rows.map(r=>pair(r.landmark,r.pixel,d.record.original.width,d.record.original.height,r.weight,r.included));
+          const checked=observationRows(d.rows,d.record.original.width,d.record.original.height,d.version===2,next.model);
+          validateLegacyTopology(checked,next);rows=checked;
           record=d.record;image=decoded;activeSource=d.activeSource;
         }
         showScene(next);
@@ -456,12 +501,16 @@
         if(d.modelView&&previewValid)modelView=d.modelView;
         showLandmarks.checked=!!d.showLandmarks;
         if(d.selected)selectLandmark(d.selected);
-        editing=d.editing;pendingModel=d.pendingModel||null;activePair=d.activePair||null;weight.value=d.weight||'1';setPixel(d.pending||null);
+        editing=rows.some(r=>r.landmark.id===d.editing)?d.editing:null;
+        const editRow=rows.find(r=>r.landmark.id===editing);
+        pendingModel=isMaterial(editRow?.landmark)?editRow.landmark:isMaterial(d.pendingModel)?null:d.pendingModel||null;
+        activePair=rows.some(r=>r.landmark.id===d.activePair)?d.activePair:null;
+        weight.value=d.weight||'1';setPixel(d.pending||null);
         add.textContent=editing?'Update pair':'Add pair';
         refreshRows();photoDraw();meshDraw();
         if(['best','initial','off'].includes(d.residualMode))residualMode.value=d.residualMode;
         if(d.freeParameters){applyFreeFields(validatedFreeFields(d.freeParameters));
-          try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model),d.fitStatus,!!d.viewBest);}
+          try{restoreFit(validateFitResult(d.fitBest,rows,freeFields(),scene.model,scene.physics,record?.original.width,record?.original.height),d.fitStatus,!!d.viewBest);}
           catch(error){fitStatus.textContent='Stored fit discarded: '+error.message;}}
         pendingMagnifier=readMagnifier();
         message('Calibration draft restored.');
@@ -540,7 +589,8 @@
         const o=doc.createElement('option');o.value=String(value);o.textContent=label;return o;
       }));
     }
-    function selected(){return vertices[Number(vertex.value)]||null;}
+    function materialEdit(){const r=rows.find(r=>r.landmark.id===editing);return isMaterial(r?.landmark)?r.landmark:null;}
+    function selected(){return materialEdit()||vertices[Number(vertex.value)]||null;}
     function photoDraw(){
       ctx.clearRect(0,0,photo.width,photo.height);
       if(!image||!view)return;
@@ -586,7 +636,9 @@
         const actions=doc.createElement('td');
         const edit=doc.createElement('button');edit.type='button';edit.textContent='Edit';
         edit.onclick=()=>{
-          resetPending();activePair=r.landmark.id;editing=r.landmark.id;selectLandmark(r.landmark);weight.value=String(r.weight);
+          resetPending();activePair=r.landmark.id;editing=r.landmark.id;
+          if(isMaterial(r.landmark))pendingModel=r.landmark;else selectLandmark(r.landmark);
+          weight.value=String(r.weight);
           setPixel(r.pixel.slice());meshDraw();add.textContent='Update pair';
         };
         const del=doc.createElement('button');del.type='button';del.textContent='Delete';
@@ -637,8 +689,26 @@
       return nearestMarker(items,p,10*ratio);
     }
     function photoMarker(p){return markerHit(photo,p,rows.map(r=>({id:r.landmark.id,pixel:screenPoint(view,r.pixel)})));}
+    function committedMarker(r){
+      if(!isMaterial(r.landmark))return byLandmark.get(r.landmark.id);
+      if(!markerProjection)return null;
+      const l=r.landmark,key=materialAnchor.anchorKey(l.anchor);
+      if(!materialMarkers.has(key)){
+        let item=null;
+        try{
+          const q=markerProjection[r.kind](l);
+          if(q.status==='visible'&&q.pixel){
+            if(!markerResolver)markerResolver=materialResolver.create(scene.model);
+            const physical=markerResolver.resolveLandmark(r.kind,l);
+            item={pixel:q.pixel,objectKey:objectKey({bank:physical.bank,primitive:physical.index},scene.banks)};
+          }
+        }catch(error){/* Invalid or unavailable material projection: no marker. */}
+        materialMarkers.set(key,item);
+      }
+      return materialMarkers.get(key);
+    }
     function modelMarker(p){return markerHit(sceneCanvas,p,rows.flatMap(r=>{
-      const item=byLandmark.get(r.landmark.id);return item?[{id:r.landmark.id,pixel:screenPoint(modelView,item.pixel)}]:[];
+      const item=committedMarker(r);return item?[{id:r.landmark.id,pixel:screenPoint(modelView,item.pixel)}]:[];
     }));}
     function updateObjects(){
       groups=[];vertices=[];
@@ -663,12 +733,13 @@
       meshDraw();add.disabled=!pending||!selected();
     }
     function landmarkLabel(v){
+      if(isMaterial(v)){const a=v.anchor,o=a.owner;return 'Bank '+(o.bank+1)+' · '+(o.kind==='span'?o.role+' '+(o.from.stationIndex+1)+'–'+(o.to.stationIndex+1):'Station '+(o.stationIndex+1))+' · '+a.kind+' · P'+a.primitive+' / '+a.indices.join(',');}
       const p=scene?.banks[v.bank]?.[v.primitive];
       const number=(p?.metadata?.placedObjectIndex??0)+1;
       return 'Bank '+(v.bank+1)+' · Object '+number+' (far-to-near) · P'+v.primitive+' / V'+v.vertex;
     }
     function selectLandmark(v){
-      if(!v)return false;
+      if(!v||isMaterial(v))return false;
       bank.value=String(v.bank);updateObjects();
       const g=groups.findIndex(g=>g.items.some(p=>p.index===v.primitive));
       if(g<0)return false;
@@ -686,6 +757,7 @@
       if(viewer.isCrop())viewer.close();cropSource=null;cancelRegion();
       invalidateFit('Add correspondences or run calibration from the captured camera.');
       cancelModelFrame();modelGhost=null;projected=[];index=spatialIndex([]);byLandmark=new Map();previewValid=false;modelView=null;
+      markerProjection=null;markerResolver=null;materialMarkers=new Map();
       visibleSpans=new Map();ownerSpans=new Map();highlightKey=null;ownership=null;exactOwnership=null;hoverObject=null;visibleByObject=new Map();
       hover=[];hoverIndex=0;$('ModernCalibrationHoverTip').hidden=true;clearAmbiguity();modelStatus.textContent='Rendering Canvas Direct…';
       try{
@@ -724,6 +796,7 @@
         }catch(error){ownerSpans=new Map();console.warn('Calibration owner picking unavailable:',error);}
         const projection=env.CurvatureCameraLandmarkProjection.create(m,camera,size.width,size.height,
           {...scene.physics,method:'canvas-direct'});
+        markerProjection=projection;
         for(let b=0;b<2;b++){
           for(const [index,p] of scene.banks[b].entries()){
             if(p.points.length<2)continue;
@@ -747,7 +820,7 @@
           ' terrain-eligible vertices · '+projected.filter(p=>p.painterVisible).length+' painter-visible pick candidates'+
           (ownership?' · approximate painter visibility':' · identity unavailable; use manual menu');
       }catch(e){
-        projected=[];byLandmark.clear();modelView=null;meshDraw();
+        projected=[];byLandmark.clear();markerProjection=null;materialMarkers.clear();modelView=null;meshDraw();
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
       }
       refreshObjectSelection();
@@ -825,6 +898,7 @@
       if(objectMode())return hoverObject??selectedObjectKey;
       if(hoverObject!==null||modelGhost)return hoverObject;
       const landmark=pendingModel||rows.find(r=>r.landmark.id===activePair)?.landmark;
+      if(isMaterial(landmark))return committedMarker({kind:landmark.anchor.kind,landmark})?.objectKey??null;
       return landmark&&scene?objectKey(landmark,scene.banks):null;
     }
     function drawObjectHighlight(){
@@ -859,11 +933,12 @@
       }
       rows.forEach((r,i)=>{
         const ghost=modelGhost?.id===r.landmark.id?modelGhost:null;
-        const item=byLandmark.get(r.landmark.id);
+        const item=committedMarker(r);
         const pixel=ghost?ghost.pixel:item?screenPoint(modelView,item.pixel):null;
         if(pixel)marker(mesh,pixel,pairLabel(r,i),COLORS[i%COLORS.length],!!ghost||r.landmark.id===activePair);
       });
-      const item=byLandmark.get(pendingModel?.id||(editing?selected()?.id:null));
+      const pendingLandmark=pendingModel||(editing?selected():null);
+      const item=pendingLandmark?committedMarker({kind:pendingLandmark.anchor?.kind||'vertex',landmark:pendingLandmark}):null;
       if(item)marker(mesh,screenPoint(modelView,item.pixel),'+','#009ab3');
       if(regionDrag){
         const a=regionDrag.start,b=regionDrag.last,x=Math.min(a[0],b[0]),y=Math.min(a[1],b[1]),w=Math.abs(a[0]-b[0]),h=Math.abs(a[1]-b[1]);
@@ -919,7 +994,7 @@
     }
     function savePair(){
       try{
-        const landmark=pendingModel||selected();
+        const landmark=materialEdit()||pendingModel||selected();
         if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
         const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
         rememberUndo();rows=next;activePair=null;
@@ -928,6 +1003,7 @@
     }
     function chooseModel(item){
       if(!record){message('Load a photograph first.');return;}
+      if(materialEdit()){message('Finish photo-side edit or cancel; material model editing will use Magnifier.');return;}
       if(!selectLandmark(item.landmark))return;
       clearAmbiguity();pendingModel=item.landmark;activePair=null;
       if(pending)savePair();
@@ -1119,7 +1195,8 @@
       if(action.marker){
         if(action.moved){
           hoverAt(p,false);const item=hover[hoverIndex],row=rows.find(r=>r.landmark.id===action.marker);
-          if(row&&item)replacePair(action.marker,item.landmark,row.pixel);
+          if(isMaterial(row?.landmark))message('Material model editing will use Magnifier; correspondence unchanged.');
+          else if(row&&item)replacePair(action.marker,item.landmark,row.pixel);
           else message('No eligible vertex at drop; correspondence unchanged.');
         }else selectPair(action.marker);
       }else if(!action.moved)pickAt(p);
@@ -1153,7 +1230,7 @@
     }
     function exportExperiment(){
       if(!scene||!record)throw Error('Load a photograph first');
-      return jsonCopy({format:EXPERIMENT_FORMAT,version:EXPERIMENT_VERSION,
+      return jsonCopy({format:EXPERIMENT_FORMAT,version:experimentVersion(rows),
         scene:{model:scene.model,physics:scene.physics},referenceImage:record,referenceSource:activeSource,
         observations:rows,fit:{method:'canvas-direct',maxIterations:80,freeParameters:freeFields(),
           result:fitBest,status:fitStatus.textContent,running:!!fitWorker}});
@@ -1168,11 +1245,7 @@
       // All decoding and topology checks precede replacement of the existing draft.
       const data=validateExperiment(input,env.CurvatureModernReferenceImage.validate);
       const next=prepareScene(data.scene);
-      for(const row of data.observations){
-        const l=row.landmark;
-        if(l.objectType!==next.model.ObjType[l.bank]||!next.banks[l.bank]?.[l.primitive]?.points[l.vertex]||
-          l.id!=='b'+l.bank+':p'+l.primitive+':v'+l.vertex)throw Error('Landmark topology mismatch: '+l.id);
-      }
+      validateLegacyTopology(data.observations,next);
       const width=data.referenceImage.original.width,height=data.referenceImage.original.height;
       env.CurvatureCameraPhysicalPose.photoCamera({...next.model,viewcenterHorizon:3},width,height);
       if(data.fit.result)env.CurvatureCameraPhysicalPose.photoCamera({...next.model,...data.fit.result.pose,viewcenterHorizon:3},width,height);
@@ -1319,6 +1392,7 @@
     }
     function receiveFit(r){
       if(!r.evaluation?.valid)return;
+      if(hasMaterial(rows))r={...r,materialBinding:fitBinding(rows,freeFields(),scene.model,scene.physics,record.original.width,record.original.height)};
       if(!fitBest||r.evaluation.cost<=fitBest.evaluation.cost){fitBest=r;fitSummary(r);}
       syncFitControls();
       if(viewBest&&Date.now()-lastFitPaint>=500)paintBest();
@@ -1383,5 +1457,5 @@
       observations:rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({fit,imagePoint,zoomAt,magnifierRegion,previewSize,screenPoint,snapCandidates,spatialIndex,objectKey,objectPackages,ownerSelections,identitySpans,ownershipRaster,ownerAt,visiblePick,nearestMarker,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));

@@ -1,6 +1,6 @@
 # 8F — 3D Landmark Editor
 
-Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection and 8F.4d.1 numerical integration implemented; next 8F.4d.2. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
+Status: 8F.0–8F.3d.2 implemented; Globe optical picking reported working by the user and CI passed. 8F.4.0 architecture approved; 8F.4a structural anchor module and 8F.4b physical resolver and 8F.4c optical projection and 8F.4d.1 numerical integration and 8F.4d.2 persistence implemented; next 8F.5a. See [architecture audit](landmark-editor-audit.md) for previous contracts and bounded checks. Tracking: [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related to [#6](https://github.com/cryoflamer/curvature-optics/issues/6).
 Priority: begin before robust loss and multistart. Existing stage identifiers
 remain unchanged. This is an authoring improvement, not a new estimator.
 
@@ -422,6 +422,19 @@ browser CI pending. Previous CI passed Node and architecture, but the
 known Scene workspace restoration timeout recurred in Chromium.
 8F.4d.2 will enable the editor's read paths and versioned persistence,
 including stale result validation before portable import/draft restore.
+
+#### 8F.4d.2 — Persistence and editor read paths (implemented)
+
+Portable v3 emitted only with canonical anchors; vertex-only remains v2.
+Draft payload v2 reads v1 and uses the same normalization and physical
+topology guard. Material result binding is a canonical JSON equality guard,
+not an authenticity certificate. Model markers are independent of legacy
+quick-pick candidates. Photo-side edit, weight, role and residuals remain
+available; material authoring and model-side editing deferred to 8F.5.
+Visibility is the existing terrain projector contract until painter
+markers are qualified. No silent remapping. Four new and sixteen existing
+headless editor tests passed; v3 import/worker/draft browser scenario
+added for CI.
 
 | Commit | Scope and acceptance gate |
 | --- | --- |

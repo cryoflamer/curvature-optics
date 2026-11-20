@@ -111,7 +111,8 @@ test('experiment exchange preserves original pixels, locked fields and result id
  fit:{method:'canvas-direct',maxIterations:80,freeParameters:['Pan'],result:null}};
  const check=x=>editor.validateExperiment(x,r=>r);
  const out=check(input);assert.deepEqual(out.observations,input.observations);assert.deepEqual(out.fit.freeParameters,['Pan']);
- assert.throws(()=>check({...input,version:3}),/format/);
+ assert.throws(()=>check({...input,version:4}),/format/);
+ assert.equal(check({...input,version:3}).version,2);
  assert.throws(()=>check({...input,observations:[observation,observation]}),/Duplicate/);
  assert.throws(()=>check({...input,fit:{...input.fit,freeParameters:['Height','Height']}}),/free camera/);
  assert.throws(()=>check({...input,fit:{...input.fit,result:{evaluation:{valid:true}}}}),/stored fit/);

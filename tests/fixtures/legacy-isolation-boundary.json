@@ -1355,7 +1355,8 @@
       ],
       "commonJsSourceCallers": [
         "src/calibration/CameraMaterialAnchorResolver.js",
-        "src/calibration/CameraPhysicalFit.js"
+        "src/calibration/CameraPhysicalFit.js",
+        "src/ui/modern/ModernPhotoCalibrationEditor.js"
       ],
       "commonJsTestCallers": [
         "tests/CameraMaterialAnchor.test.js"
@@ -1367,10 +1368,12 @@
         "modern"
       ],
       "commonJsSourceCallers": [
-        "src/calibration/CameraLandmarkProjection.js"
+        "src/calibration/CameraLandmarkProjection.js",
+        "src/ui/modern/ModernPhotoCalibrationEditor.js"
       ],
       "commonJsTestCallers": [
         "tests/CameraMaterialAnchorFit.test.js",
+        "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js"
       ],
@@ -1753,6 +1756,7 @@
       ],
       "commonJsTestCallers": [
         "tests/CameraMaterialAnchorFit.test.js",
+        "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureEarClip.test.js",
@@ -1781,6 +1785,7 @@
         "tests/CameraCalibration.test.js",
         "tests/CameraLandmarkProjection.test.js",
         "tests/CameraMaterialAnchorFit.test.js",
+        "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/CameraMaterialAnchorProjection.test.js",
         "tests/CameraMaterialAnchorResolver.test.js",
         "tests/CurvatureBedford.test.js",
@@ -3451,6 +3456,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/CameraMaterialAnchorFit.test.js",
+        "tests/CameraMaterialAnchorPersistence.test.js",
         "tests/ModernLandmarkViewer.test.js",
         "tests/ModernPhotoCalibrationEditor.test.js"
       ],

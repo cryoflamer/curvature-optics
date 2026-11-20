@@ -977,6 +977,54 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(role).to_be_checked()
         expect(workspace.locator('#ModernCalibrationRunFit')).to_be_enabled()
 
+        # Material v3 uses the same real editor, worker and draft storage.
+        material=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document),data=e.exportExperiment(),
+              m=data.scene.model,{width,height}=data.referenceImage.original,
+              r=CurvatureCameraMaterialAnchorResolver.create(m),
+              ps=CurvatureGeometryEngine.createObjectSequenceScene({...m,Height:0,geometryRadius:m.rEarth},0,true,
+                {opticsNeutral:true,physicalSurface:true,curvature:1/m.rEarth}).primitives,
+              session=CurvatureCameraLandmarkProjection.create(m,CurvatureCameraPhysicalPose.photoCamera(m,width,height),
+                width,height,{...data.scene.physics,method:'canvas-direct'});
+            const rows=[],used=new Set();
+            for(const kind of ['vertex','edge','surface']){
+              for(const p of ps){
+                if(used.has(p))continue;
+                const indices=kind==='vertex'?[0]:kind==='edge'?CurvatureEarClip.authoredEdges(p)[0]:
+                  CurvatureEarClip.indexedTriangles(p).triangles[0];
+                if(!indices)continue;
+                const landmark={id:'material-'+kind,anchor:{kind,owner:p.metadata.landmarkOwner,
+                  primitive:p.metadata.landmarkPrimitive,signature:r.signature(0),indices,
+                  weights:kind==='vertex'?[1]:kind==='edge'?[.4,.6]:[.2,.3,.5]}};
+                const q=session[kind](landmark);
+                if(q.status!=='visible')continue;
+                rows.push(CurvatureModernPhotoCalibrationEditor.pair(landmark,q.pixel,width,height,1,kind!=='surface'));
+                used.add(p);break;
+              }
+            }
+            if(rows.length!==3)throw Error('Expected three visible material kinds');
+            return {...data,version:3,observations:rows,fit:{...data.fit,freeParameters:['Pan'],result:null,running:false}};
+        }""")
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.assertTrue(self.page.evaluate("d => CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",material))
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('3 correspondences')
+        expect(workspace.locator('#ModernCalibrationRoleCount')).to_contain_text('2 Fit · 1 Validation')
+        expect(workspace.locator('#ModernCalibrationPairs')).to_contain_text('surface')
+        workspace.locator('#ModernCalibrationRunFit').click()
+        expect(workspace.locator('#ModernCalibrationBestView')).to_be_enabled(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationStopFit')).to_be_disabled(timeout=30000)
+        stored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        self.assertEqual(stored['version'],3)
+        self.assertEqual(stored['observations'],material['observations'])
+        self.assertTrue(stored['fit']['result']['materialBinding'])
+        self.assertEqual(len(stored['fit']['result']['evaluation']['points']),2)
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft saved in this browser.')
+        self.page.reload(wait_until='load')
+        expect(workspace.locator('#ModernCalibrationStorage')).to_have_text('Draft restored from this browser.')
+        restored=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()")
+        self.assertEqual(restored['observations'],stored['observations'])
+        self.assertEqual(restored['fit']['result'],stored['fit']['result'])
+
     def test_all_workspace_tabs_restore_through_same_preference(self):
         self.open_modern()
         tabs={'scene':'ModernSceneTab','compare':'ModernCompareTab',

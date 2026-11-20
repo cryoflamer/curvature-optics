@@ -1,3 +1,24 @@
+## 8F.4d.2 — Material observation persistence and editor read paths
+
+Portable v3 supports mixed canonical material and legacy vertex observations;
+vertex-only export remains v2 and v1/v2 import is preserved. Draft payload
+v2 accepts canonical observations, still reads v1. Normalize material rows
+and validate actual Globe topology before replacing an imported session.
+Reject stale/duplicate descriptors, kind mismatches and non-Globe material
+data. Material fit candidates carry a canonical binding to rows, roles,
+weights, captured camera/layout, atmosphere, raster and free fields;
+reject stale stored results even when observation IDs are unchanged.
+Existing legacy result validation is retained. Main Model committed
+markers use the material projector (terrain eligibility, not certified
+painter visibility) separately from fast vertex candidates. Photo-side
+edits, role, weight, deletion and residuals work for imported material
+rows; material model-side authoring/editing is deliberately deferred to
+8F.5. Draft restores committed observations rather than inventing vertices.
+Four new focused persistence tests and sixteen existing editor tests
+passed in a headless JS assertion harness with real geometry/resolver
+modules. Added a browser v3 import, worker fit and draft reload scenario;
+not executed locally. Full Node/browser CI pending. Next: 8F.5a existing correspondence markers in Magnifier.
+
 ## 8F.4d.1 — Material anchors in the physical calibration objective
 
 8F.4c CI 44640312556: Node regressions and architecture/Legacy passed;
