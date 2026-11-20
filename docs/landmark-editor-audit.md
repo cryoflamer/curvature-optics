@@ -1,3 +1,220 @@
+## 8F.7a — Calibration to Scene: transfer architecture audit
+
+Baseline: 5c33675b21d7ecad8f1110c5f02c3ff9153d6967; GitHub Actions run
+44683469032 completed successfully. The user confirmed the fresh Soundly fit
+and approved returning its calibrated camera to the ordinary Scene, then
+saving a deliberate History snapshot. This is an audit, not an implementation.
+The physical solver, existing workspaces, Legacy and on-disk schemas are unchanged.
+
+### Existing implementation and reuse points
+
+- `src/ui/modern/ModernPhotoCalibrationEditor.js`: `prepareScene` (1125),
+  `exportExperiment` (1263), `validateFitResult` (277), `paintBest` (1401),
+  `receiveFit` (1432), worker lifecycle and `persist` (672). A calibration
+  owns an independent captured model, physics, original photograph, rows and
+  best candidate. Reopening it does not recapture the live Scene. Imports
+  and restored drafts can be from another scene entirely. Never merge a pose
+  blindly into the currently visible physical model. Never take a camera
+  from the physical Free View or from Result pan/zoom.
+- `src/ui/modern/ModernApp.js`: `getPhotoCalibrationScene` (7523),
+  `experimentSnapshot` (1034), `applyExperiment` (4704),
+  `restoreHistorySnapshot` (4381), protected preset switch (7190 onward),
+  `setMode` (6905), `redraw` (6792). The canonical Modern experiment codec
+  already provides prevalidated whole-scene restoration; the existing
+  protected History transaction and preset stale-state/rollback pattern are
+  the appropriate reusable primitives. Do not call the existing
+  camera-only `applyCameraPose` as the transfer operation.
+- `ModernExperimentHistory.record(current,'recovery',thumbnail)` commits
+  a pinned non-automatic checkpoint, including promotion/deduplication of
+  an existing exact match. A thumbnail is optional when the hidden physical
+  canvas is not current. Wait for commit before changing live state.
+- Use the existing `setMode('scene',true)`, control synchronization,
+  autosave and History save action, not a second Scene creation or snapshot
+  path. `redraw` deliberately ignores a hidden calibration workspace, so
+  activate Scene before requesting the authoritative visible render.
+
+### Blocker A: exact framing is not yet transferable
+
+`CameraPhysicalFit.poseOf` includes the seven finite camera parameters plus
+`viewcenterHorizon:3` (Eye-Lvl) and `deviceRatio:width/height`.
+`CameraPhysicalPose.photoCamera` constructs a centered full-raster physical
+camera using the original image dimensions and the 43.2 mm diagonal field
+convention. The legacy-compatible physical camera has an aspect-dependent
+sceneSize rule for ratios wider than 1.5. The raster ratio is not an optional
+cosmetic setting. Result preview uses its own raster dimensions, which may
+be rounded after downscaling; equivalence must be based on the original
+photo raster, not a CSS box, Free View, or preview zoom.
+
+Soundly fixture `tests/fixtures/soundly-mixed-calibration.json`:
+1176 x 791, exact ratio 1176/791 (approximately 1.4867269). Scene's
+`ModernExperimentState.validate` accepts only 1.5, 2/3, 16/9, 9/16
+for the active and saved camera. `ModernSceneState.setDeviceRatio`
+also restricts to these four. The canonical graph is authored at 100% width
+and 66.67% height, and `CurvatureMainCanvasRenderer.configureCamera`
+captures the actual GraphX3DX viewport transform after setting its viewport
+and camera. Changing just the model ratio is not proof of image conformity.
+A regular viewport can letterbox the calibrated image rectangle; the
+actual projection, not the outer canvas dimension, must match.
+
+Proposed contract: transfer exact original dimensions/ratio and Eye-Lvl;
+support finite custom ratio within the already bounded camera domain
+[0.1,10] (reject out-of-domain inputs rather than round or crop silently).
+Inventory consumers of the aspect contract before implementation:
+experiment capture/validate, saved positions, camera sequences and
+interpolation, Scene/Compare graph sizing and coordinate transforms,
+History/session/URL transport, Studio and exports (including fixed output
+sizes), thumbnails, interaction and guides. Keep the four existing presets
+and old saved experiments working unchanged. A calibrated image rectangle
+can be fitted inside a differently sized output; cropping or stretching
+must be explicit. No global Legacy aspect-policy change. A separate unused
+"photo aspect" metadata field does not fix projection. Test both a
+nonstandard ratio and a supported ratio, portrait/landscape and resize/HiDPI.
+
+### Blocker B: physical hypothesis and renderer are different concerns
+
+The captured calibration model holds both object banks, surface radius,
+initial camera, and authored scene fields. `getPhotoCalibrationScene`
+currently captures only atmosphere and temperatureProfile from physics,
+not the whole canonical Modern experiment. Calibration supports only
+Globe with vacuum, standard or temperature-lapse. The solver optimizes
+Canvas Direct (local effective-radius approximation), NOT the Accurate
+RK4 physical renderer. `paintBest` likewise calls Canvas Direct directly,
+with thin outlines; normal Scene `draw` calls
+`CurvatureMainCanvasRenderer.renderPhysical` with live visualization and
+quality settings. Canvas Direct uses the captured graph transform on this
+route, unlike the independent centered photo raster.
+
+Build the destination as an allowlisted canonical Modern experiment, not
+an Object.assign of imported model properties into CurveApp. Map the
+captured object bank arrays, Globe radius, supported atmosphere and
+temperature profile; validate both source and destination. Force
+viewcenterHorizon=3 and the exact photo ratio. Recalculate derived camera
+and geometry state through model.Update; do not transfer stale derived
+fields (camViewAngle, geometryRadius, etc.). rFEarth is not serialized by
+the normal Modern codec (default 10007543); it is inactive for the Globe
+Eye-Lvl aim but imported noncanonical values must be checked for any other
+downstream effect rather than silently claiming arbitrary-model parity.
+Calibration's larger allowed object count (up to 10000) is not a promise
+that the normal codec (up to 200 per bank) accepts it. Fail before mutation
+on unsupported values, including ranges for object and camera fields.
+
+Preserve the captured scene title/description and use a custom scene
+selection for the fitted state; reset preset should be well-defined
+(captured preset for new complete captures, explicit safe policy for old
+imports, never falsely label the result as an unmodified preset).
+For future captures add a validated canonical context or equivalent
+allowlisted extension. Old calibration v1/v2/v3 only contain the available
+model + atmosphere/temperatureProfile; retain import compatibility and
+document the deterministic defaults for uncaptured controls. Do not
+substitute live unrelated visibility/refraction settings. Visibility is a
+display effect; use neutral visibility for equivalence to calibration
+unless captured/explicitly selected. Compare config should be initialized
+from the transferred Scene, not silently inherited from an unrelated
+experiment. Treat camera positions and sequences from the old Scene as
+protected with the old experiment; do not carry unrelated paths over.
+Ordinary UI preferences (layout/theme etc.) are not calibration data.
+
+First validate with the same Canvas Direct method at original dimensions,
+neutral decorations and exact framing. Then render the ordinary Accurate
+Scene for the user. Report any reprojection delta between methods in
+original photo pixels separately from the fit residual; never claim
+Accurate reproduces a Canvas Direct fit exactly, or change fitted
+parameters silently. In Vacuum projection parity is a strong regression
+target, but must be measured. Standard and lapse need explicit measured
+method differences; no universal error bound is established by this audit.
+History thumbnails are currently eligible only when effective quality is
+'accurate', a render is complete and history view keys match. Preserve this
+guard. Do not save a Canvas Direct result image as an Accurate Scene
+thumbnail or insert an automatic final snapshot to work around it.
+
+### Proposed transaction / UI contract (8F.7b)
+
+Result action: Apply Best Camera to Scene; ordinary Back to Scene remains
+navigation only. Enable only for a validated retained best candidate,
+matching current captured context, committed rows and free fields; no
+worker running or unfinished correspondence draft. Stopped/stalled fits
+with valid best results are allowed with an explicit status/RMS, not a
+claim of convergence. Invalid initial fits, stale results, failed previews
+or unsupported target values must not mutate the Scene. Revalidate old
+imported results (legacy binding rules are weaker); never trust the fit
+status label or serialized metrics as proof of numerical parity.
+
+1. Produce a detached, validated transfer request from the editor, with
+   captured source, best pose, photo dimensions, candidate identity and
+   fit metadata. No live state mutation.
+2. Build/validate destination, show what will be replaced and confirm
+   applying the calibrated experiment; preserve the completed draft.
+3. In the app, guard against overlapping apply/preset/History operations.
+   Stop pending camera edits/playback and save a protected exact recovery
+   checkpoint using History. If storage/validation fails, retain Scene and
+   draft. Guard against newer live state, navigation and candidate changes
+   during the asynchronous transaction, as in preset-switch signature
+   check; never overwrite a newer edit.
+4. Apply the canonical target via applyExperiment, sync all UI state,
+   invalidate obsolete render keys and select Scene. If synchronous
+   application fails, restore pre-apply state and workspace. Distinguish
+   committed state from later render/History-refresh failure; report
+   those failures without pretending a backup failed. Link the previous
+   protected entry via existing Previous/History navigation. Ensure the
+   autosave reflects the applied experiment and not a stale queued write.
+5. Render an authoritative Scene (Accurate for normal Snapshot), expose
+   status and let the user intentionally save via the existing Save
+   Snapshot control. Preserve the calibration project for later editing.
+   No automatic final manual snapshot. Camera-only changes do not affect
+   physicalSignature, so do not assume idle auto-history will save it.
+
+### Provenance (8F.7d, design only)
+
+The existing experiment codec is strict/allowlisted, and History entries
+derive the exact signature and features from that codec. There is no
+calibration metadata field today. ReferenceImage IDs are local and shipped
+IDs can collide; the calibration export embeds the original. Do not
+insert large data URLs or full residual tables into every experiment/URL.
+Propose compact, versioned optional provenance, validated and explicitly
+carried by session/History export/import, with reference title, original
+dimensions, stable content identity (e.g. SHA-256, to implement), optional
+source URL, fit method/status, initial/final and weighted RMS, Fit and
+Validation counts and metrics kept separate, fitted pose, free fields and
+context identity. Retain full portable calibration JSON separately;
+local IDs alone cannot identify originals across browsers. Decide whether
+to link/import the original into the image library in a separate step;
+never silently upload it. Distinguish historical calibration provenance
+from current fit validity after subsequent edits (camera/framing/geometry/
+atmosphere changes); do not present old residuals as the new state's
+measurements. Specify deduplication behavior explicitly: two identical
+physical states may have different provenance. Do not change physical
+fingerprints/auto-history semantics accidentally.
+
+### Implementation sequence and acceptance
+
+- 8F.7b.1 — exact photo framing across canonical state and Scene viewport;
+  compatibility audit and tests before any destructive transfer action.
+- 8F.7b.2 — pure validated transfer mapping, captured context/default
+  policy, candidate validity and preflight; unit tests with cloned/imported
+  data, arbitrary live Scene and rejection cases.
+- 8F.7b.3 — UI and protected recovery transaction; test storage failure,
+  duplicate/reentrant apply, stale async completion, rollback, Previous,
+  reload, preserved draft and Back to Scene remaining navigation-only.
+- 8F.7c — projection/renderer equivalence: Soundly 14 points (1176x791),
+  compare original-pixel predictions in calibration vs matching Canvas
+  Direct Scene at the same image rectangle (propose <=0.05 px per point
+  initially for deterministic numeric parity; verify feasibility before
+  adopting); then measure/report Accurate delta and its RMS independently.
+  Test viewport resizing, both nonstandard and standard ratios, translations,
+  roll and non-vacuum profiles. Include actual Chromium and a manually
+  saved/restored calibrated History snapshot without stale thumbnails.
+- 8F.7d — compact calibration provenance with portable persistence,
+  reference identity, edit validity and duplicate policy.
+- 8F.7e — complete Node/Chromium/architecture CI, manual Soundly workflow
+  and documentation; tag only a verified stable revision.
+
+No production tests were run during this read-only source audit. Existing
+CI was verified against the baseline. The aspect, snapshot transport and
+projection contracts must be implemented and tested before claiming fit
+equivalence. Runtime and format changes are deferred to the following stages.
+
+---
+
 ## 8F.5d — Integrated correspondence editing
 
 The integrated pair action row includes Edit pair. Existing observations are

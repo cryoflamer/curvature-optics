@@ -1,3 +1,22 @@
+## 8F.7a — Calibration to Scene architecture audit
+
+User confirmed the 8F.6 tests passed and approved completing the original
+workflow: apply the fitted calibration to ordinary Scene, then deliberately
+Save Snapshot. Verified baseline 5c33675 GitHub Actions run 44683469032 success.
+See docs/landmark-editor-audit.md (8F.7a) for the source audit, transaction
+contract, provenance and staged acceptance criteria. Major blockers:
+Soundly is 1176x791, not an accepted fixed Scene aspect; Scene uses a graph
+viewport transform instead of the centered calibration raster; Canvas
+Direct fit is not identical by definition to Accurate rendering; old
+calibration captures only atmosphere/temperatureProfile plus model.
+Reuse canonical experiment validation/apply and protected History recovery
+rather than copying the seven camera values into the live Scene. Exact
+framing + Eye-Lvl, captured geometry/physics, asynchronous stale-state
+guards, explicit recovery, preserved calibration draft and manual Snapshot
+are required. No runtime or schema changes in the audit. Next: 8F.7b.1
+exact framing and serialization/viewport compatibility before adding
+the apply action. Full tests required for implementation stages.
+
 ## 8F.6 closure — final Compare harness correction
 
 CI on a7e8d84 (2026-11-20): Node 2168/2169, Chromium 37/37; five architecture gates passed, representative regressions 135/136. Both failing jobs shared the same new Compare integration fixture, not a separate product regression. Reproduced the actual error with the full failing test callback and real ModernApp/CompareModel/playback modules in an isolated JS harness: the ready DOM canvas reaches drawCompareHorizon, but ModernHorizonStatusA was absent from the test DOM. Added both horizon readouts, Canvas context methods and error forwarding; verified the original callback fails and the corrected callback passes, including the expected horizon fallback readout. Production code unchanged. Native full Node/Chromium CI rerun remains required before tagging.
