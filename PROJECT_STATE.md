@@ -1,3 +1,7 @@
+## 8F.6 closure — final Compare harness correction
+
+CI on a7e8d84 (2026-11-20): Node 2168/2169, Chromium 37/37; five architecture gates passed, representative regressions 135/136. Both failing jobs shared the same new Compare integration fixture, not a separate product regression. Reproduced the actual error with the full failing test callback and real ModernApp/CompareModel/playback modules in an isolated JS harness: the ready DOM canvas reaches drawCompareHorizon, but ModernHorizonStatusA was absent from the test DOM. Added both horizon readouts, Canvas context methods and error forwarding; verified the original callback fails and the corrected callback passes, including the expected horizon fallback readout. Production code unchanged. Native full Node/Chromium CI rerun remains required before tagging.
+
 ## 8F.6 closure — CI regression correction
 
 CI on c7284d8 (2026-11-20): all 37 Chromium tests passed; Node 2144 passed / 25 failed. Two Node failures and the architecture gate concerned the stale isolation inventory; 23 concerned Compare rendering. Reviewed the inventory against the current source tree and literal require references, including CalibrationPointerGestures and Soundly fixture tests. Corrected Compare readiness so actual DOM canvases require a valid layout and legacy transform while renderer adapters retain their original contract. Extended the existing Compare integration test to cover unready and ready DOM callbacks. No physics or calibration changes. Full CI rerun remains required before tagging.

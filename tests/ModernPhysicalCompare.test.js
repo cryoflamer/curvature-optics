@@ -83,7 +83,7 @@ test('132: each Compare viewport invokes Physical renderer separately with share
     'ModernGrid','ModernCurvature','ModernEarth','ModernRender','ModernRoll','ModernViewAngle',
     'ModernRadiusKm','ModernFlat','ModernPreset','ModernResetPreset','ModernObjectFields0',
     'ModernObjectFields1','ModernSceneTitle','ModernSceneDescription','ModernCompareLabelA',
-    'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB'];
+    'ModernCompareLabelB','ModernCompareStatusA','ModernCompareStatusB','ModernHorizonStatusA','ModernHorizonStatusB'];
   const nodes=new Map(names.map(id=>[id,{id,value:'',min:'',max:'',checked:true,hidden:false,
     textContent:'',listeners:{},classList:{toggle(){}},
     addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(){},
@@ -96,7 +96,7 @@ test('132: each Compare viewport invokes Physical renderer separately with share
       return {drawn:28,fillTriangles:11,unresolved:0,cacheReused:false,timings:{totalMs:5}};}},
     CurvaturePhysicalCurvature:{modelStep(){return 164;},label(){return 'Earth';}},
     NewGraphX3D(params){return {Redraw(){params.DrawFunc({id:'Scene'});}};},
-    xOnLoad(fn){callbacks.push(fn);},console:{error(e){throw e;}}},
+    xOnLoad(fn){callbacks.push(fn);},console:{error(message,error){throw error||Error(message);}}},
     document:{getElementById(id){assert.ok(nodes.has(id),'missing '+id);return nodes.get(id);}},
     requestAnimationFrame(fn){fn();return 1;},cancelAnimationFrame(){},
     setTimeout(fn){fn();return 1;},clearTimeout(){},console};
@@ -125,7 +125,8 @@ test('132: each Compare viewport invokes Physical renderer separately with share
   assert.match(nodes.get('ModernCompareStatusB').textContent,/28 contours/);
   // A queued callback from an unready real DOM canvas must not render,
   // while a ready DOM graph and non-DOM graph adapters remain supported.
-  const canvas={nodeType:1,width:800,height:540,clientWidth:800,clientHeight:540};
+  const context={save(){},restore(){},setTransform(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillText(){}};
+  const canvas={nodeType:1,width:800,height:540,clientWidth:800,clientHeight:540,getContext(){return context;}};
   const win={ScaleX:1,ScaleY:1,OffsetX:0,OffsetY:0};
   app.drawCompare('A',{Canvas:canvas,ContextScale:1});
   app.drawCompare('A',{Canvas:{...canvas,clientWidth:0},ContextScale:1,WinTrans:win});
@@ -133,6 +134,7 @@ test('132: each Compare viewport invokes Physical renderer separately with share
   assert.equal(renders.length,3,'unready DOM graphs must skip physical rendering');
   app.drawCompare('A',{Canvas:canvas,ContextScale:1,WinTrans:win});
   assert.equal(renders.length,4,'ready DOM graph still renders');
+  assert.equal(nodes.get('ModernHorizonStatusA').textContent,'Horizon: tracer unavailable');
   nodes.get('ModernBackToScene').listeners.click();
   assert.equal(app.getMode(),'scene');
   assert.equal(renders.length,5);
