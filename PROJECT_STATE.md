@@ -1,3 +1,22 @@
+## 8F.7b.1a — Canonical reference photo identity (#8)
+
+Added opt-in original-byte SHA-256 identity (version, digest, decoded
+orientation-aware width/height), real browser decoder verification,
+content-based lookup and atomic reuse in the existing Reference Image
+Library. Old records and Studio imports unchanged. No schema upgrade,
+no new dependency edges, no auto-ingestion of existing drafts. Existing
+metadata stays intact; returned source record retains original attribution
+for later result archive. Hash/decode outside IDB transactions, recheck
+original set in write transaction, bounded retry, collision and quota
+failure. Requires secure-context Web Crypto; no insecure fallback.
+Focused headless harness and Node/Chromium regressions; full CI pending.
+Next #8 8F.7b.1b — Immutable Calibration Result (high reasoning effort).
+
+Planned #8 sequence: a photo identity, b immutable result, c result
+persistence, d experiment origin, e pure Scene/Compare transfer,
+f applicability, g integration/qualification. High reasoning effort
+recommended for each. Compare invariant: shared physical camera.
+
 ## Active roadmap — Photo-based Physical Research (2026-11-20)
 
 User approved prioritized GitHub Issues #8–#18 and #20 and explicit calibration

@@ -34,18 +34,29 @@
     var chunks=[];for(var i=0;i<bytes.length;i+=32768)chunks.push(String.fromCharCode.apply(null,bytes.subarray(i,i+32768)));
     return 'data:image/'+type+';base64,'+btoa(chunks.join(''));
   }
-  async function verify(record,env){
+  async function verifyRaster(raster,env){
+    var raw=atob(raster.dataUrl.split(',')[1]),bytes=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
+    var header=inspect(bytes),image=new env.Image();
+    if(!raster.dataUrl.startsWith('data:image/'+header.type+';'))throw Error('Image MIME mismatch');
+    if(!((raster.width===header.width&&raster.height===header.height)||(raster.width===header.height&&raster.height===header.width)))
+      throw Error('Reference image header dimensions mismatch');
+    image.src=raster.dataUrl;await image.decode();
+    if(image.naturalWidth!==raster.width||image.naturalHeight!==raster.height)throw Error('Reference image decoded dimensions mismatch');
+  }
+  async function verifyOriginal(record,env){
     record=images.validate(record);
-    for(var raster of [record.original,record.thumbnail].filter(Boolean)){
-      var raw=atob(raster.dataUrl.split(',')[1]),bytes=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
-      var header=inspect(bytes),image=new env.Image();
-      if(!raster.dataUrl.startsWith('data:image/'+header.type+';'))throw Error('Image MIME mismatch');
-      if(!((raster.width===header.width&&raster.height===header.height)||(raster.width===header.height&&raster.height===header.width)))
-        throw Error('Reference image header dimensions mismatch');
-      image.src=raster.dataUrl;await image.decode();
-      if(image.naturalWidth!==raster.width||image.naturalHeight!==raster.height)throw Error('Reference image decoded dimensions mismatch');
-    }
+    await verifyRaster(record.original,env);
     return record;
+  }
+  async function verify(record,env){
+    record=await verifyOriginal(record,env);
+    if(record.thumbnail)await verifyRaster(record.thumbnail,env);
+    return record;
+  }
+  async function identify(record,env){
+    record=await verifyOriginal(record,env);
+    return images.validateIdentity({version:1,sha256:await images.originalDigest(record,env.crypto),
+      width:record.original.width,height:record.original.height});
   }
   async function ingest(file,id,env){
     if(!file||!Number.isSafeInteger(file.size)||file.size<=0||file.size>images.MAX_ORIGINAL_BYTES)
@@ -67,5 +78,5 @@
       original:{dataUrl:url,width:w,height:h},thumbnail:{dataUrl:thumbnail,width:canvas.width,height:canvas.height}});
     canvas.width=canvas.height=0;return record;
   }
-  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest,verify:verify});
+  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest,verify:verify,verifyOriginal:verifyOriginal,identify:identify});
 }));

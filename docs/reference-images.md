@@ -262,3 +262,27 @@ bridge scene must be verified before inclusion in shipped assets. No photos
 are added in 7C.1. Final images need not correspond to existing Legacy camera
 waypoints: explanatory frames and calibrated observational frames serve
 separate purposes.
+
+## Canonical calibration photo identity
+
+The existing library records remain version 1; their local IDs are aliases.
+For calibration, `ModernReferenceImageImport.identify(record, env)` verifies
+the original raster through the browser decoder (orientation-aware dimensions)
+and returns a frozen `{version: 1, sha256, width, height}` identity. SHA-256 is
+over the decoded base64 file bytes, not pixels, title, thumbnail, or local ID.
+Use secure-context Web Crypto (including localhost); fail explicitly otherwise.
+
+`ModernReferenceImageLibrary.ensureOriginal(db, record, crypto, verifyOriginal)`
+verifies input, reuses a byte-identical original regardless of alias/metadata,
+or allocates a new ID if needed. Pass the real decoder callback
+`record => ModernReferenceImageImport.verifyOriginal(record, window)`.
+It returns identity, durable row, original source record (retain its attribution
+in the future archive), and reuse flag. `findOriginal(db, identity, crypto,
+verifyOriginal)` resolves a verified identity, returning null if absent.
+Multiple identical aliases resolve deterministically by ID. Hash collisions or
+inconsistent dimensions fail closed. No metadata replacement or automatic
+merging/deletion. Digests are computed outside the write transaction and the
+original set is rechecked atomically; concurrent changes trigger bounded retry.
+Existing quota and portable Studio import semantics are unchanged. Scans are
+bounded by existing library limits; no persistent digest index or schema migration
+is introduced. This API is not yet called by an Apply UI.

@@ -168,3 +168,75 @@ test('portable raster verification checks headers, actual decode and original di
   await assert.rejects(importer.verify(record(),fakeEnv(2,1)),/decoded dimensions/);
   await assert.rejects(importer.verify(record(),fakeEnv(1,1,true)),/Decode failed/);
 });
+
+const identityApi=require('../src/animation/ModernReferenceImage');
+const {webcrypto,createHash}=require('node:crypto');
+const identityEnv=()=>({...fakeEnv(),crypto:webcrypto});
+const verifyOriginal=r=>importer.verifyOriginal(r,identityEnv());
+test('canonical photo identity hashes original bytes, ignores aliases, title and thumbnail',async()=>{
+  const a=await importer.identify(record(),identityEnv());
+  assert.deepEqual(a,{version:1,sha256:createHash('sha256').update(bytes()).digest('hex'),width:1,height:1});
+  assert.ok(Object.isFrozen(a));
+  const renamed={...record('alias'),title:'Another title',author:'Source author'};delete renamed.thumbnail;
+  assert.deepEqual(await importer.identify(renamed,identityEnv()),a);
+  assert.deepEqual(identityApi.validateIdentity(JSON.parse(JSON.stringify(a))),a);
+  assert.throws(()=>identityApi.validateIdentity({...a,sha256:'x'.repeat(64)}),/identity/);
+  assert.throws(()=>identityApi.validateIdentity({...a,width:0}),/dimensions/);
+  await assert.rejects(importer.identify(record(),{...identityEnv(),crypto:undefined}),/secure context/);
+  await assert.rejects(importer.identify(record(),{...fakeEnv(1,1,true),crypto:webcrypto}),/Decode failed/);
+  await assert.rejects(importer.identify({...record(),original:{...raster,width:2}},identityEnv()),/header dimensions/);
+});
+test('calibration ingestion reuses existing bytes across aliases with provenance intact',async()=>{
+  const db=memoryIndexedDB();await library.create(db,{...record('original'),author:'Original author'});
+  const source={...record('demo_alias'),author:'Different attribution'};
+  const out=await library.ensureOriginal(db,source,webcrypto,verifyOriginal);
+  assert.equal(out.reused,true);assert.equal(out.row.id,'original');
+  assert.equal(out.row.record.author,'Original author');assert.equal(out.source.author,'Different attribution');
+  assert.equal((await library.findOriginal(db,out.identity,webcrypto,verifyOriginal)).id,'original');
+  await library.update(db,'original',1,{title:'Renamed'});
+  assert.deepEqual((await library.ensureOriginal(db,source,webcrypto,verifyOriginal)).identity,out.identity);
+  assert.equal((await library.list(db)).length,1);
+});
+test('calibration ingestion allocates conflicting aliases and retains different encoded bytes',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record());
+  const other={...record(),original:{...raster,dataUrl:'data:image/png;base64,'+
+    Buffer.concat([Buffer.from(bytes()),Buffer.from([1])]).toString('base64')}};
+  const out=await library.ensureOriginal(db,other,webcrypto,verifyOriginal);
+  assert.equal(out.reused,false);assert.notEqual(out.row.id,'one');
+  assert.deepEqual(out.row.record.original,other.original);
+  assert.deepEqual((await library.get(db,'one')).record,record());
+  assert.equal((await library.ensureOriginal(db,other,webcrypto,verifyOriginal)).row.id,out.row.id);
+  assert.equal(await library.findOriginal(db,{...out.identity,sha256:'0'.repeat(64)},webcrypto,verifyOriginal),null);
+});
+test('identity collision, inconsistent dimensions and decoder failure leave library untouched',async()=>{
+  const db=memoryIndexedDB(),source=record();
+  const fakeCrypto={subtle:{digest:async()=>new Uint8Array(32).buffer}};
+  await library.create(db,{...record('bad'),original:{...raster,dataUrl:'data:image/png;base64,'+
+    Buffer.concat([Buffer.from(bytes()),Buffer.from([1])]).toString('base64')}});
+  await assert.rejects(library.ensureOriginal(db,source,fakeCrypto,verifyOriginal),/collision/);
+  await assert.rejects(library.ensureOriginal(db,source,webcrypto,async()=>{throw Error('Decode failed');}),/Decode failed/);
+  await assert.rejects(library.findOriginal(db,{...(await importer.identify(record('bad'),identityEnv())),
+    sha256:'0'.repeat(64),width:2},fakeCrypto,verifyOriginal),/inconsistent raster/);
+  assert.equal((await library.list(db)).length,1);
+});
+test('calibration ingestion rechecks changed originals and retries without duplicate insertion',async()=>{
+  const db=memoryIndexedDB(),source=record('new');
+  let inserted=false;
+  const crypto={subtle:{digest:async(...args)=>{
+    if(!inserted){inserted=true;await library.create(db,record('concurrent'));}
+    return webcrypto.subtle.digest(...args);
+  }}};
+  // Introduce the other row after a snapshot has been taken, while hashing a
+  // pre-existing unrelated original. The initial source hash must not insert it.
+  const different={...record('different'),original:{...raster,dataUrl:'data:image/png;base64,'+
+    Buffer.concat([Buffer.from(bytes()),Buffer.from([1])]).toString('base64')}};
+  await library.create(db,different);
+  let calls=0;inserted=false;
+  crypto.subtle.digest=async(...args)=>{
+    if(++calls===2){inserted=true;await library.create(db,record('concurrent'));}
+    return webcrypto.subtle.digest(...args);
+  };
+  const out=await library.ensureOriginal(db,source,crypto,verifyOriginal);
+  assert.ok(inserted);assert.equal(out.reused,true);assert.equal(out.row.id,'concurrent');
+  assert.equal((await library.list(db)).length,2);
+});

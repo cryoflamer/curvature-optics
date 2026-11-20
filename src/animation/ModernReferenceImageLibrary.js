@@ -82,6 +82,80 @@
       quota(rows);added.forEach(function(row){store.add(row);});finish(mapping);
     });});
   }
+  function originals(db){
+    return transaction(db,'readonly',function(store,read,finish){
+      read(store.getAll(),function(rows){finish(rows.map(normalize));});
+    });
+  }
+  function sameOriginal(a,b){
+    return a.dataUrl===b.dataUrl&&a.width===b.width&&a.height===b.height;
+  }
+  function sameOriginalSet(before,after){
+    if(before.length!==after.length)return false;
+    var byId=new Map(after.map(function(row){return [row.id,row.record.original];}));
+    return before.every(function(row){
+      var current=byId.get(row.id);
+      return current&&sameOriginal(row.record.original,current);
+    });
+  }
+  async function matchingOriginal(rows,identity,crypto,verifyOriginal,expected){
+    var matches=[];
+    // Sequential digests bound memory usage; no crypto/decode while an IDB
+    // transaction is open. Existing rows are not trusted as identity claims.
+    for(var row of rows){
+      if(await images.originalDigest(row.record,crypto)!==identity.sha256)continue;
+      var original=row.record.original;
+      if(original.width!==identity.width||original.height!==identity.height||
+        (expected&&!sameOriginal(expected,original))||
+        (matches.length&&!sameOriginal(matches[0].record.original,original)))
+        throw Error('Reference photo identity collision or inconsistent raster');
+      matches.push(row);
+    }
+    matches.sort(function(a,b){return a.id<b.id?-1:a.id>b.id?1:0;});
+    if(!matches.length)return null;
+    await verifyOriginal(matches[0].record);
+    return matches[0];
+  }
+  // The caller supplies the existing real browser decoder, not a header-only
+  // check: record => ModernReferenceImageImport.verifyOriginal(record, env).
+  async function findOriginal(db,identity,crypto,verifyOriginal){
+    identity=images.validateIdentity(identity);
+    return matchingOriginal(await originals(db),identity,crypto,verifyOriginal);
+  }
+  // A distinct calibration ingestion path, not a change to Studio's portable
+  // import rules. Metadata/attribution on existing rows is never overwritten.
+  // Return the original source record as well so callers can preserve its
+  // separate provenance when archiving a calibration.
+  async function ensureOriginal(db,record,crypto,verifyOriginal){
+    var source=images.validate(record);
+    await verifyOriginal(source);
+    var original=source.original;
+    var identity=images.validateIdentity({version:1,sha256:await images.originalDigest(source,crypto),
+      width:original.width,height:original.height});
+    for(var attempt=0;attempt<3;attempt++){
+      var snapshot=await originals(db);
+      var match=await matchingOriginal(snapshot,identity,crypto,verifyOriginal,original);
+      var result=await transaction(db,'readwrite',function(store,read,finish){read(store.getAll(),function(raw){
+        var rows=raw.map(normalize);
+        // Allow concurrent metadata edits; retry on any original/ID change.
+        if(!sameOriginalSet(snapshot,rows)){finish(null);return;}
+        if(match){
+          finish({identity:identity,row:rows.find(function(row){return row.id===match.id;}),
+            source:source,reused:true});return;
+        }
+        var ids=new Set(rows.map(function(row){return row.id;})),id=source.id;
+        if(ids.has(id)){
+          var attempts=0;do{if(++attempts>100)throw Error('Cannot allocate reference image ID');id=makeId(crypto);}
+          while(ids.has(id));
+        }
+        var row=normalize({id:id,revision:1,record:Object.assign({},source,{id:id})});
+        quota(rows.concat([row]));store.add(row);
+        finish({identity:identity,row:row,source:source,reused:false});
+      });});
+      if(result)return result;
+    }
+    throw Error('Reference Image Library changed during verification; retry');
+  }
   function edited(record,metadata){
     if(!metadata||typeof metadata!=='object'||Array.isArray(metadata)||
       Object.keys(metadata).some(function(k){return !editable.includes(k);}))throw RangeError('Only observation metadata can be edited');
@@ -112,5 +186,5 @@
     return images.validId('reference_'+token);
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,importAssets:importAssets,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota});
+    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota});
 }));

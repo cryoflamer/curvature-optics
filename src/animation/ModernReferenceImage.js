@@ -128,6 +128,27 @@
       seen.add(record.id);return record;
     }));
   }
-  return Object.freeze({VERSION:VERSION,MAX_ORIGINAL_BYTES:MAX_ORIGINAL_BYTES,
+  // Identity is independent of local record IDs and editable provenance.
+  // Dimensions refer to the decoder's orientation-aware original raster.
+  function validateIdentity(value){
+    fields(value,['version','sha256','width','height'],[]);
+    if(value.version!==1||typeof value.sha256!=='string'||!/^[0-9a-f]{64}$/.test(value.sha256))
+      throw RangeError('Invalid reference photo identity');
+    dimensions(value,MAX_DIMENSION,MAX_PIXELS);
+    return Object.freeze({version:1,sha256:value.sha256,width:value.width,height:value.height});
+  }
+  // This hashes structurally valid bytes only. A durable identity must also
+  // pass the ingestion decoder; hashing itself does not certify a raster.
+  async function originalDigest(record,crypto){
+    var original=validate(record).original;
+    if(!crypto||!crypto.subtle||typeof crypto.subtle.digest!=='function')
+      throw Error('SHA-256 requires Web Crypto in a secure context');
+    var raw=atob(original.dataUrl.slice(original.dataUrl.indexOf(',')+1));
+    var bytes=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
+    var digest=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+    if(digest.length!==32)throw Error('Invalid SHA-256 digest');
+    return Array.from(digest,function(b){return b.toString(16).padStart(2,'0');}).join('');
+  }
+  return Object.freeze({VERSION:VERSION,validateIdentity:validateIdentity,originalDigest:originalDigest,MAX_ORIGINAL_BYTES:MAX_ORIGINAL_BYTES,
     MAX_THUMBNAIL_BYTES:MAX_THUMBNAIL_BYTES,validate:validate,validateCollection:validateCollection,validId:id});
 }));
