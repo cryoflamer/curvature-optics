@@ -1,3 +1,22 @@
+## 8F.6c — Independent physical Free View
+
+The agreed mouse-first implicit wizard roadmap is recorded in
+docs/landmark-editor.md and supersedes the previous 8F.6c–g plan.
+Globe correspondence editing now opens directly in physical Free View
+with both authored banks, deterministic world east/up/south axes and
+a bounding-box centre; no optical owner seed, visible region or
+initial camera is required. The existing physical painter, picker,
+anchor identities and solver are reused. Reset stays physical.
+Physical session v3 validates its stable frame; old optical editor
+view snapshots are intentionally discarded on source mismatch (saved
+observations and draft endpoints retain the existing storage format).
+Best Camera still temporarily parks the physical editor pending 8F.6j;
+legacy Flat and optical magnifier remain available. Optical preview
+is still calculated for legacy/fit, but failure no longer forces
+the physical editor out. Transitional buttons and pick modes unchanged.
+Next 8F.6d: unified gesture and marker hit-test contract.
+Browser/full CI verification pending.
+
 ## 8F.6b — Shared correspondence toolbar
 
 One workspace-level toolbar above both viewports replaces the integrated

@@ -447,7 +447,7 @@
     const editing=workflow.mode==='edit',draft=workflow.mode!=='browse';
     const selected=workflow.rows.findIndex(r=>r.landmark.id===workflow.activePair);
     const photo=!!workflow.pending,model=!!workflow.pendingModel||(legacy&&legacyModel&&photo);
-    let hint=!ready?'Load a photograph to start.':readOnly?'Best camera is read-only for model picking. Return to Initial Camera to add or edit a pair.':
+    let hint=!ready?'Load a photograph to start.':readOnly?'Best camera is read-only for model picking. Return to Free View to add or edit a pair.':
       editing?'Editing pair #'+(workflow.rows.findIndex(r=>r.landmark.id===workflow.editing)+1)+' · choose a replacement point, then Update pair.':
       draft?photo&&model?'Both points selected · Create pair.':photo?'Photo point selected · choose its matching model point.':model?'Model point selected · choose its matching photo point.':'Choose a point on either the photograph or model.':
       selected>=0?'Pair #'+(selected+1)+' selected · Edit or Delete pair.':'Add pair, or select a numbered marker.';
@@ -500,7 +500,7 @@
     pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
     const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
-    let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
+    let legacyShown=false,inlineSource=null,physicalSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
     const objectMode=()=>pickMode.value==='object',magnifierMode=()=>pickMode.value==='magnifier';
     let cropSource=null,regionDrag=null,magnifierSessionId=null,pendingMagnifier=null;
@@ -1034,7 +1034,7 @@
       }catch(e){
         projected=[];byLandmark.clear();markerProjection=null;materialMarkers.clear();modelView=null;meshDraw();
         modelStatus.textContent='Model preview unavailable: '+e.message+'; the landmark menu remains available.';
-        if(globeRoute()&&!cropSource){legacyShown=true;syncModelRoute();}
+        // Physical editor remains available even if the optical preview fails.
       }
       refreshObjectSelection();meshDraw();
     }
@@ -1112,26 +1112,15 @@
         {...source.options,canvasDirectOptions:{...source.options.canvasDirectOptions,capturePicking:capture}},
         source.width,source.height,region);
     }
-    function buildInlineFree(source,region,selected){
-      const api=env.CurvatureModernLandmarkViewer,m=source.model,t=env.CurvatureCameraTranslation;
-      const basis=t.frame(m.CameraEast||0,m.CameraNorth||0,m.Height,1/m.rEarth);
-      if(selected){
-        try{return api.regionGeometry(scene.banks,{...selected,region},source,basis);}
-        catch(error){/* Unavailable selected geometry: retain the visible-owner fallback. */}
-      }
-      const seed=api.regionSeed(ownerSpans,region),owner=seed&&packages.get(seed.key);
-      if(!owner)return null;
-      return api.regionGeometry(scene.banks,{owner:owner.owner,primaryIndices:owner.primaryIndices,pixel:seed.pixel,region},source,basis);
-    }
     function syncInline(){
       if(!syncModelRoute()||workspace.hidden)return false;
-      const best=!!(viewBest&&fitBest&&paintedFit&&bestCropSource),source=best?bestCropSource:cropSource;
+      const best=!!(viewBest&&fitBest&&paintedFit&&bestCropSource),source=best?bestCropSource:physicalSource;
       if(!source)return true;
       if(inlineSource===source&&inlineViewer.isOpen())return true;
       const role=best?'best':'initial';
       captureInline();switchingInline=true;
       try{
-        if(best&&inlineSource===cropSource)initialParked=inlineViewer.parkScene();
+        if(best&&inlineSource===physicalSource)initialParked=inlineViewer.parkScene();
         if(!best&&initialParked){
           initialParked=false;
           if(inlineViewer.resumeScene()){inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();syncInlineOwner();return true;}
@@ -1139,9 +1128,9 @@
         if(best&&inlineRole==='best'&&inlineSource&&inlineSource.width===source.width&&inlineSource.height===source.height&&inlineViewer.updateScenePaint(inlinePaint(source))){
           inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();return true;
         }
-        inlineViewer.openScene({width:source.width,height:source.height,banks:scene.banks,paint:inlinePaint(source),
-          buildFree:best?null:(region,active,selected)=>buildInlineFree(source,region,selected),readOnly:best,
-          title:best?'Model · Best Camera':'Model · Initial Camera'});
+        if(best)inlineViewer.openScene({width:source.width,height:source.height,banks:scene.banks,paint:inlinePaint(source),
+          readOnly:true,title:'Model · Best Camera'});
+        else inlineViewer.openPhysical(scene.banks);
         inlineSource=source;inlineRole=role;refreshMagnifierCorrespondences();
         if(!restoring)restoreInlineRole(role,source);
         syncInlineOwner();return true;
@@ -1296,7 +1285,7 @@
       }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;return false;}
     }
     function confirmInlineMaterial(hit){
-      if(!record||!globeRoute()||legacyShown||viewBest){message('Load a photo and return to Initial Camera or Free View.');return false;}
+      if(!record||!globeRoute()||legacyShown||viewBest){message('Load a photo and return to Free View.');return false;}
       try{
         const resolver=materialResolver.create(scene.model);
         const id=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
@@ -1359,7 +1348,7 @@
       return {...snapshot,banks};
     }
     function showScene(next){
-      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;selectedObjectKey=null;pickMode.value='vertex';
+      cancelRegion();viewer.close();inlineViewer.close();inlineSource=null;inlineRole=null;initialParked=false;bestCropSource=null;legacyShown=false;if(!restoring)newMagnifierSession();scene=next;physicalSource={kind:'physical-v1',model:next.model};selectedObjectKey=null;pickMode.value='vertex';
       const m=scene.model,globe=m.showModel===1;
       let rangeOf=()=>null;
       try{const t=env.CurvatureCameraTranslation,basis=t.frame(m.CameraEast,m.CameraNorth,m.Height,globe?1/m.rEarth:0);
@@ -1536,7 +1525,7 @@
         const v=scene?.model[field];
         fitPanel.querySelector('[data-fit-value="'+field+'"]').textContent=Number.isFinite(v)?'('+Number(v.toPrecision(6))+')':'';
       }
-      bestView.textContent=viewBest?'Return to initial camera':'Show best camera';
+      bestView.textContent=viewBest?'Return to Free View / initial camera':'Show best camera';
       $('ModernCalibrationFitNotice').hidden=!viewBest;
       residualMode.disabled=!fitBest;refreshObjectSelection();
     }

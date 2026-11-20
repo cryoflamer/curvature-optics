@@ -1,3 +1,98 @@
+# Correspondence editor — direct-manipulation UX contract
+
+Agreed redesign (8F.6c–k). This specification supersedes the earlier
+button/mode-based roadmap; 8F.6a/b remain transitional implementation.
+The target is a mouse-first, non-modal wizard: all normal pair creation,
+correction and deletion can be performed inside the two viewports.
+Buttons and modes are implementation details, not prerequisites.
+
+## Workflow and gesture contract
+
+- One unfinished pair at a time; either endpoint may be picked first.
+  A new valid click in the same viewport replaces its draft endpoint.
+  An existing numbered marker selects its pair without replacing the draft.
+  Both draft endpoints use an identical distinctive marker; double-click
+  either draft endpoint when both are present links the pair atomically.
+  After linking, the editor is ready for the next pair. Double-clicking an
+  existing pair must not generate a duplicate; invalid linking retains draft.
+- Left click selects a point; left drag starting on a marker moves that
+  endpoint; left drag elsewhere pans the photo or orbits the model.
+  Right drag pans both viewports; right click without a drag opens a local
+  context menu. Wheel zooms. Classify intent at pointer-down, in CSS
+  pixels, with a roughly 4–5 px movement threshold; arbitrate click and
+  double-click so their preceding clicks are harmless. Handle pointer
+  capture, cancellation, loss of capture and release outside viewport.
+  No browser context menu within the viewports; elsewhere unchanged.
+- Model hover previews the actual candidate. Automatic snapping priority
+  Vertex > authored Edge > Surface; visible geometry only, CSS-pixel
+  tolerance (initially ~8 px), hysteresis against boundary flicker.
+  Internal triangulation diagonals are not authored edges. Alt may bypass
+  snapping for precise surface picks. Physical point/anchor identity and
+  resolver validation remain authoritative. Preserve geometry and solver.
+- Dragging draft markers changes only the draft. Dragging saved markers
+  is an independent transaction: keep ID, opposite endpoint, weight,
+  Fit/Validation role and row order; commit once on valid release, one
+  Undo entry. Invalid/outside release or cancellation rolls back, with
+  clear feedback during drag. Editing another saved pair never consumes,
+  replaces or cancels the unfinished pair. Retry after a rejected duplicate
+  anchor without losing context. A transient drag is not the global Edit
+  mode. Clear/recompute fit only for actual saved observation changes.
+- Independent state: durable rows, draft endpoints, selected pair, current
+  drag transaction, hover candidate, and camera/pivot. Selecting a model
+  point repivots without changing projection; finish drag before repivoting.
+  Commit/cancel/delete must not reset camera or unexpectedly move geometry.
+  Double-click truly empty model background restores the stable default
+  physical centre without changing orientation, zoom, pan, or draft.
+  Keep an independent pivot after linking or deletion.
+- Visual feedback: ghost hover, unlinked marker, matching numbered/colored
+  saved pair, active outline on both views, invalid drag feedback, pointer
+  cursors, one next-action hint. Context menus: draft link/remove/cancel;
+  saved pair properties, centre/pivot, fit role, delete; background
+  Undo/Redo, cancel draft, fit/reset view, display settings, owner inspection.
+  Escape cancels draft, Ctrl+Z / Ctrl+Shift+Z are optional shortcuts.
+  Mouse equivalents must exist. History must not discard unrelated draft
+  context; a new committed edit invalidates Redo. Persist durable state and
+  validated draft/view, never a transient gesture or hover.
+- Correspondence editor uses a physical Free View only; optical initial
+  and best cameras belong to Result, not picking. Default centre is stable
+  for the captured physical scene. Full-scene geometry from both banks,
+  independent of optical visibility/refraction. Preserve legacy Flat and
+  optical inspection until parity is established.
+- Overall nonlinear wizard: Reference photograph -> Correspondences ->
+  Calibration -> Result, with safe return to prior steps. Do not run
+  optimization automatically at a count threshold; rank/conditioning
+  matters. Two large viewports, optional resizable divider, one contextual
+  hint and pair count; collapse tables, settings and Inspector. Expose
+  advanced properties only on demand. Retain keyboard/accessibility
+  alternatives. No regressions in import/export, fit, residuals, persistence,
+  physical anchors, or navigation.
+
+## Roadmap
+
+| Stage | Scope |
+| --- | --- |
+| 8F.6a | Central pair workflow (implemented) |
+| 8F.6b | Shared controls (implemented, transitional) |
+| 8F.6c | Independent physical Free View and stable default centre |
+| 8F.6d | Unified gesture recognition and marker hit testing |
+| 8F.6e | Automatic picking/snapping and hover preview |
+| 8F.6f | Implicit pairing wizard and double-click commit |
+| 8F.6g | Drag draft/saved endpoints independently |
+| 8F.6h | Automatic pivot and empty-background reset |
+| 8F.6i | Context menus and Undo/Redo |
+| 8F.6j | Correspondences / Calibration / Result separation |
+| 8F.6k | Minimal UI, persistence, verification, legacy cleanup |
+
+Acceptance: create, modify and delete 20 pairs without leaving the two
+viewports; preserve a partially complete draft while correcting another
+pair, and continue it afterwards. Test both endpoint orders, overlap,
+misses, drag vs click, double-click vs orbit, cancel/undo/redo, resize,
+restore, and consistent world anchors across view orientations.
+
+---
+
+## Historical implementation notes
+
 ## 8F.5d — Integrated correspondence editing
 
 The integrated pair action row includes Edit pair. Existing observations are

@@ -478,6 +478,15 @@ test('inline source lifecycle navigates optical raster without requiring a dialo
   const api=viewer.mount(host,()=>changes++,()=>{},{inline:true,onFastVertex:hit=>{fastHits.push(hit);return true;},onDeleteCorrespondence:id=>deleted.push(id),onUndo:()=>undos++,onInspectOwner:o=>owners.push(o),onCancelPair:()=>cancels++,onConfirmMaterial:h=>{materialHits.push(h);return true;}});
   const sourceContract={width:800,height:600,banks,paint:(c,capture,region)=>({transform:viewer.opticalViewport(region,c.width,c.height),stats:{}}),
     buildFree:(region,active,selected)=>{pivots++;if(failPivot)return null;return viewer.regionGeometry(banks,selected?{...selected,region}:{owner,primaryIndices:[0],pixel:[400,300],region},source,observer);}};
+  api.openPhysical(banks);
+  assert.equal(api.snapshot().mode,'free');assert.deepEqual(api.snapshot().pivot,[0,100,0]);
+  assert.equal(host.querySelector('[data-viewer-scene-controls]').style.display,'none');
+  assert.equal(api.sessionSnapshot().version,3);
+  const physicalSaved=api.sessionSnapshot(),physicalBefore=api.snapshot();
+  api.openPhysical(banks);api.restoreSession(physicalSaved);assert.deepEqual(api.snapshot(),physicalBefore);
+  assert.equal(api.resetScene(),true);assert.equal(api.snapshot().mode,'free');
+  assert.equal(api.parkScene(),true);api.openScene({...sourceContract,readOnly:true});assert.equal(api.resumeScene(),true);
+  assert.equal(api.snapshot().mode,'free');api.close();
   api.openScene(sourceContract);
   assert.equal(api.isOpen(),true);assert.equal(host.hidden,false);assert.equal(api.windowSnapshot(),null);
   assert.deepEqual(api.snapshot().region,full);
@@ -620,4 +629,23 @@ test('owner inspection follows painted coverage including masks, lines and trans
   assert.equal(viewer.ownerAtFrame({entries:[back,entry(span,{alpha:.5})]},[10,5]),null);
   assert.deepEqual(viewer.ownerAtFrame({entries:[back,entry(span,{alpha:0})]},[10,5]),owner);
   assert.equal(viewer.ownerAtFrame({entries:[back]},[40,40]),null);
+});
+
+
+test('independent physical frame includes both banks and fits a stable world centre',()=>{
+  const owner={kind:'object',bank:0,objectType:3};
+  const p=(bank,points)=>({type:'polygon',mode:3,style:{},points,metadata:{landmarkOwner:{...owner,bank},landmarkPrimitive:0}});
+  const banks=[[p(0,[[100,200,5],[110,200,5],[110,200,15]])],[p(1,[[190,300,5],[200,300,5],[200,300,15]])]];
+  const g=viewer.physicalGeometry(banks),s=viewer.physicalView(),c=viewer.regionCamera(g,s,800,600);
+  assert.deepEqual(g.frame.origin,[150,250,10]);assert.equal(g.items.length,2);
+  assert.deepEqual(g.items.map(x=>x.bank),[0,1]);
+  for(const item of g.items)for(const [i,point] of item.points.entries()){
+    assert.deepEqual(viewer.worldPoint(g.frame,point),banks[item.bank][item.index].points[i]);
+    const q=c.project(point);assert.ok(q&&q.pixel[0]>=0&&q.pixel[0]<=800&&q.pixel[1]>=0&&q.pixel[1]<=600);
+  }
+  const point=g.items[1].points[2],next=viewer.rebaseRegionPivot(g,s,point,800,600);
+  const d=viewer.regionCamera(g,next,800,600);
+  for(const item of g.items)for(const p of item.points)assert.ok(Math.hypot(...c.project(p).pixel.map((x,i)=>x-d.project(p).pixel[i]))<1e-8);
+  assert.deepEqual(viewer.physicalGeometry(banks),g);
+  assert.throws(()=>viewer.physicalGeometry([[],[]]),/No visible geometry/);
 });

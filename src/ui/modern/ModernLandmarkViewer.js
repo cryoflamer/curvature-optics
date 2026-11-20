@@ -189,6 +189,19 @@
       eye:pivot.map(x=>x===0?0:-x),focal,near,region:{...selection.region},seed:seed.slice(),pivotError:hit.distance,
       owner:JSON.parse(JSON.stringify(selection.owner))};
   }
+  // A stable, camera-independent physical frame for the correspondence editor.
+  // World east / up / south form a right-handed basis. The full authored
+  // bounding box supplies a deterministic centre, independent of visibility.
+  function physicalGeometry(banks){
+    const source=opticalGeometry(banks),b=bounds(source.items),origin=b.center;
+    const frame={origin,x:[1,0,0],y:[0,0,1],z:[0,-1,0]};
+    const local=p=>{const d=sub(p,origin);return [dot(d,frame.x),dot(d,frame.y),dot(d,frame.z)];};
+    const extent=1000,distance=4*b.radius;
+    return {kind:'region',physical:true,frame,items:source.items.map(p=>({...p,points:p.points.map(local)})),
+      eye:[0,0,distance],focal:extent*.40*distance/b.radius,near:Math.max(.000001,distance*1e-7),
+      region:{x:0,y:0,width:extent,height:extent},seed:[extent/2,extent/2],pivotError:0,owner:null};
+  }
+  const physicalView=()=>({...reset(),yaw:-Math.PI/5,pitch:Math.PI/12,projection:'perspective',spans:true});
   function regionCamera(geometry,state,width,height){
     const a=state.yaw,p=state.pitch,ca=Math.cos(a),sa=Math.sin(a),cp=Math.cos(p),sp=Math.sin(p);
     const right=[ca,0,-sa],up=[-sa*sp,cp,-ca*sp],toward=[sa*cp,sp,ca*cp];
@@ -1033,7 +1046,7 @@
       if(ownerStatus)ownerStatus.hidden=!ownerMode();
       if(ownerList)ownerList.hidden=!ownerMode();
       if(deleteButton){deleteButton.hidden=!crop;deleteButton.disabled=activeCorrespondence===null;}
-      sceneControls.style.display=crop?'':'none';
+      sceneControls.style.display=crop&&!crop.physical?'':'none';
       for(const el of freeControls)el.style.display=crop&&!free?'none':'';
       spans.closest('label').style.display=crop?'none':'';
       freeButton.disabled=!crop||free||!crop.build||!!crop.readOnly;freeButton.title=crop?.reason||'';
@@ -1069,7 +1082,7 @@
         }catch(error){status.textContent='Magnifier unavailable: '+error.message;opticalCache=null;committedMarkers(()=>({visibility:'optical geometry unavailable'}));}
         syncMode();syncPoint();updatePickStatus();return;
       }
-      if(crop&&free){cancelHover();opticalCache=null;opticalTransform=null;paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction) · Reset View restores optical crop';return;}
+      if(crop&&free){cancelHover();opticalCache=null;opticalTransform=null;paths=regionPaths(geometry,state,canvas.width,canvas.height);pickCache=mesh?pickFrame(mesh,paths):null;const r=drawRegion(canvas,geometry,state,paths);markers();syncPoint();status.textContent='Free View · '+r.visible+' / '+r.count+' primitives · geometric view (no atmospheric refraction)'+(crop.physical?'':' · Reset View restores optical crop');return;}
       const r=draw(canvas,geometry,state);
       status.textContent=r.count+' primitives · '+r.size.map(v=>v.toFixed(2)).join(' × ')+' m (X/Y/Z) · '+r.face+
         (geometry.ownerKind==='span'?' · orientation relative to support plane':r.face==='edge-on'?' · planar surfaces viewed edge-on':'')+' · inspection only';
@@ -1121,6 +1134,7 @@
     }
     function resetScene(){
       stopDrags();cancelHover();
+      if(crop?.physical){state=physicalView();paths=null;pickCache=null;syncMode();sync();return true;}
       if(navigating()){
         if(free)try{switchGeometry(crop.source.geometry,crop.source.mesh);}catch(error){setText(status,error.message);return false;}
         crop.region={...crop.source.full};crop.reason='';
@@ -1128,7 +1142,7 @@
       paths=null;pickCache=null;free=false;state=reset();syncMode();render();return true;
     }
     function changeOpticalRegion(next){
-      if(!navigating()||free||!next)return false;
+      if(!navigating()||crop.physical||free||!next)return false;
       crop.region=opticalRegion(next,crop.source.width,crop.source.height);crop.reason='';render();return true;
     }
     function backing(css){
@@ -1219,6 +1233,12 @@
       stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=false;state=reset();
       crop={region:{...full},source:{width,height,full,geometry:next,mesh:nextMesh},paint,build:buildFree,reason:'',optical:true,readOnly:!!readOnly,title};
       heading.textContent=title;show();syncMode();render();sessionChanged();
+    },openPhysical(banks){
+      const next=physicalGeometry(banks),nextMesh=preparePick(next.items),full={...next.region};
+      stopDrags();clearGeometryPick();geometry=next;mesh=nextMesh;free=true;state=physicalView();
+      crop={physical:true,region:{...full},source:{width:full.width,height:full.height,full,geometry:next,mesh:nextMesh},
+        build:null,reason:'',readOnly:false,title:'Model · Free View'};
+      heading.textContent=crop.title;show();syncMode();sync();sessionChanged();
     },parkScene(){
       if(!navigating()||crop.readOnly)return false;
       stopDrags();cancelHover();clearMarkerHover();
@@ -1246,13 +1266,13 @@
       if(!changeOpticalRegion(r))return false;sessionChanged();return true;
     },resetScene,enterFree,sessionSnapshot(){
       if(!isOpen()||!crop)return null;
-      return JSON.parse(JSON.stringify({version:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
+      return JSON.parse(JSON.stringify({version:crop.physical?3:navigating()?2:1,region:crop.region,free,view:state,...(navigating()?{readOnly:crop.readOnly,base:free?{worldPoint:geometry.frame.origin,owner:geometry.owner,pixel:geometry.seed}:null}:{}),raster:[canvas.width,canvas.height],pickMode:pickMode.value,staged,...(navigating()?{stagedMode}:{}),confirmed,choices,choice:pickChoices.value,inputs:paramInputs.map(n=>n.value)}));
     },restoreSession(saved){
       if(navigating()){
         // Rebuild the original physical frame, not the currently selected pivot.
         // The local camera/pivot coordinates are meaningful only in that frame.
         const r=saved?.region,b=saved?.base;
-        if(saved?.version!==2||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||
+        if(saved?.version!==(crop.physical?3:2)||saved.readOnly!==crop.readOnly||typeof saved.free!=='boolean'||(crop.physical&&!saved.free)||
           !['navigate','vertex','edge','surface','fast-vertex','owner'].includes(saved.pickMode)||
           (crop.readOnly&&(saved.free||saved.pickMode!=='navigate'))||
           !r||![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.x<0||r.y<0||r.width<=0||r.height<=0||
@@ -1261,6 +1281,11 @@
           throw Error('Invalid integrated viewer session');
         let next=restoreView(saved.view),g=crop.source.geometry,m=crop.source.mesh;
         if(saved.free){
+          if(crop.physical){
+            if(!finite3(b?.worldPoint)||Math.hypot(...sub(g.frame.origin,b.worldPoint))>1e-6||
+              JSON.stringify(r)!==JSON.stringify(g.region)||JSON.stringify(b.pixel)!==JSON.stringify(g.seed)||b.owner!==null)
+              throw Error('Stored physical frame changed');
+          }else{
           if(!crop.build||!finite3(b?.worldPoint)||!b.owner||!Array.isArray(b.pixel)||b.pixel.length!==2||!b.pixel.every(Number.isFinite))
             throw Error('Invalid stored physical frame');
           g=crop.build({...r},null,b);
@@ -1268,6 +1293,7 @@
             Math.hypot(...sub(g.seed,b.pixel))>1e-6||JSON.stringify(g.owner)!==JSON.stringify(b.owner))
             throw Error('Stored physical frame changed');
           m=preparePick(g.items);
+          }
           const p=saved.view.orbitPivot;
           if(p!==undefined){
             if(!finite3(p?.point)||!finite3(p.eye)||p.eye[2]<=g.near||[...p.point,...p.eye].some(x=>Math.abs(x)>1e9))
@@ -1324,5 +1350,5 @@
       snapshot:()=>isOpen()?crop?free?{mode:'free',region:{...crop.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:{mode:'scene',region:{...crop.region},pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:JSON.parse(JSON.stringify(state)):null,
       windowSnapshot:()=>!inline&&isOpen()?{...rect}:null};
   }
-  return Object.freeze({localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
+  return Object.freeze({physicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalRegion,opticalViewport,zoomOptical,panOptical,rectangleOptical,opticalGeometry,reframePoint,windowRect,changeWindowRect,rasterSize,mount});
 }));
