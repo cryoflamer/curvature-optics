@@ -589,6 +589,55 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(self.page.evaluate(
             "d=>CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",data))
 
+    def test_calibration_apply_button_scene_and_previous(self):
+        workspace=self.open_physical_calibration()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        data=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(data)
+        workspace.locator('[data-calibration-stage="result"]').click()
+        expect(button).to_be_disabled()
+        # Imported stable candidate; full numerical worker qualification
+        # remains in test_soundly_calibration_foundation_end_to_end.
+        data=self.page.evaluate("""data => {
+            const {model,physics}=data.scene, rows=data.observations;
+            const freeParameters=data.fit.freeParameters, points=rows.map(row=>({
+                id:row.landmark.id,status:'visible',observed:row.pixel,
+                predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight
+            }));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(rows,freeParameters,model,physics,1176,791)};
+            return data;
+        }""",data)
+        self.import_calibration_experiment(data,replace=True)
+        expect(button).to_be_enabled()
+        outgoing=self.page.evaluate("CurvatureModernApp.getModel().Height")
+        self.page.once('dialog',lambda prompt:prompt.dismiss())
+        button.click()
+        expect(workspace).to_be_visible()
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),outgoing)
+        self.page.once('dialog',lambda prompt:prompt.accept())
+        button.click()
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true',timeout=30000)
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text('Save Snapshot to keep this Scene',timeout=30000)
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),42.8)
+        saved=self.page.evaluate("""async () => {
+            const records=await CurvatureModernCalibrationResultArchive.list(indexedDB);
+            const history=await CurvatureModernApp.getHistoryStore().list();
+            return {count:records.length,backup:history.some(r=>r.pinned&&r.source==='recovery'&&r.experiment.scene.camera.Height!==42.8)};
+        }""")
+        self.assertEqual(saved,{'count':1,'backup':True})
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible()
+        expect(button).to_be_enabled()
+        self.assertEqual(self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).fitResult().pose.Height"),42.8)
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(self.page.locator('#ModernPreset')).to_have_value('pontchartrain',timeout=30000)
+        self.assertAlmostEqual(self.page.evaluate("CurvatureModernApp.getModel().Height"),outgoing)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_photo_calibration_correspondence_editor(self):
         workspace=self.open_physical_calibration()
         scene_before=self.page.evaluate("JSON.stringify([CurvatureModernApp.getModel().Height,CurvatureModernApp.getModel().CameraEast,CurvatureModernApp.getModel().CameraNorth,CurvatureModernApp.getModel().FocalLengthField,CurvatureModernApp.getModel().ObjType,CurvatureModernApp.getModel().NObjects,CurvatureModernApp.getPhotoCalibrationScene().physics])")

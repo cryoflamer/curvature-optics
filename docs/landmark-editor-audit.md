@@ -26,6 +26,30 @@ A calibration may be applied to Scene, Compare A or Compare B. Design compact or
 
 Compare overlay supports A, B or both with common baseline angular registration and synchronized opacity, mapped into each panel's actual completed viewport transform. No separate fitting, stretching, or tracking of live camera changes; different panel sizes are presentation only. Compare must always use one shared physical camera for A and B as a permanent experimental invariant. Independent hypothesis fits (#18) are separate calibration experiments, each of which may produce a separate Compare with one shared camera. Independent cameras within Compare are out of scope; #19 is not planned. Scene-to-Compare side selection is explicit. Test transitions, reload, History, mixed hypotheses and missing assets. Milestone 1 closes only after the Soundly shared-camera research cycle and full CI/manual acceptance; no mandatory renderer equivalence.
 
+## 8F.7b.2b — Explicit Scene Apply
+
+Result has an explicit Apply Best Camera to Scene control. Require a valid
+stable fit and no load/restore/worker or concurrent Apply; confirm the
+replacement and explain the historical RMS. Candidate getter exports the
+portable draft including original; await draft durability independently of
+archive. Editor generation tracks stage, fit invalidation, restore and
+photo loads. The host checks workspace navigation, canonical experiment
+revision, exact candidate and snapshot through archive and protected
+History awaits. Existing preset/restore/reset operations are guarded
+while Apply runs; navigation can instead invalidate the operation.
+
+Commit/rollback reuse applyExperiment and normal control synchronization.
+Successful commit retains recovery id for Previous, activates ordinary
+Accurate Scene and persists the new working session; does not save a
+manual snapshot, discard the draft, fit again or show a photo overlay.
+After scheduled redraw, report completion only if the live Scene render
+succeeded; a failed/superseded render does not undo the committed physical
+state. The UI reports precommit failures in Result and committed
+presentation failures in Scene status. Existing quality preferences can
+be changed again by the user; Apply explicitly selects Accurate as the
+default post-calibration renderer. Initial imported-candidate browser
+smoke added; full live worker and failure qualification in step c.
+
 ## 8F.7b.2a — Protected Apply transaction
 
 #8 qualified by green CI 44765474650. #9 is deliberately staged:

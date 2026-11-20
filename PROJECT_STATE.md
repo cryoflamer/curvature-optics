@@ -1,3 +1,25 @@
+## 8F.7b.2b — Apply button and Scene integration (#9)
+
+Added explicit Apply Best Camera to Scene in Result, disabled without
+stable candidate, during fit/load/restore or Apply. Confirmation explains
+replacement/recovery. App host awaits draft save, original/result archive,
+validated transfer and protected History before canonical apply. Guard
+workspace generation, scene save/apply revision and editor revision/load
+token plus exact snapshots. Roll back synchronous application failure,
+distinguish committed render errors; switch to Accurate Scene, retain
+draft, preserve Previous recovery, refresh History and checkpoint session.
+No automatic manual snapshot, no overlay or Compare Apply. Browser
+smoke covers disabled, cancel, successful imported candidate, recovery and
+retained draft. Also exercised History restore's Apply-busy gate in the
+existing navigation harness. 46 focused headless assertions passed with
+the actual staged host and Apply controller using injected storage,
+transfer and renderer; new browser test awaits CI. Prior CI 44770999213
+passed Node and architecture, Chromium 40/41 with timeout on existing
+workspace-tab reload (scene); requested retry of failed job. No assertion
+removed or production change targeted at that unrelated timeout.
+New commit requires all three jobs green. Next c real worker UI
+qualification and failure cases (high reasoning effort).
+
 ## 8F.7b.2a — Protected calibration Apply operation (#9)
 
 Foundation #8 CI 44765474650 passed all three jobs; all acceptance

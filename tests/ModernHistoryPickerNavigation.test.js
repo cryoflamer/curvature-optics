@@ -207,7 +207,7 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
     ['ModernHistoryClose',{hidden:true}],
     ['ModernReturnToAnimation',{hidden:true}]]);
   const ctx={
-    Promise,JSON,Error,RangeError,historyRestoreBusy:false,presetSwitchBusy:false,
+    Promise,JSON,Error,RangeError,historyRestoreBusy:false,presetSwitchBusy:false,calibrationApplyBusy:false,
     previousExperimentHistoryId:null,updatePresetNavigation(){},
     historyOpenedFromPicker:true,historyFocusFromPickerId:'42',
     historyWizardReferenceChoosing:false,
@@ -237,6 +237,10 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
   vm.runInContext(source.slice(syncStart,syncEnd)+'\n'+source.slice(a,b),ctx);
   assert.equal(ctx.animationReturnAfterRestore,false,
     'merely navigating to History did not prepare a return-from-Restore action');
+  ctx.calibrationApplyBusy=true;
+  await assert.rejects(ctx.restoreHistorySnapshot(42),/pending experiment change/);
+  assert.equal(recoveries,0);
+  ctx.calibrationApplyBusy=false;
   await ctx.restoreHistorySnapshot(42);
   assert.equal(physics,target);
   assert.deepEqual(changedModes,['scene']);

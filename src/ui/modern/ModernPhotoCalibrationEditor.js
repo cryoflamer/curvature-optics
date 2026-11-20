@@ -503,6 +503,15 @@
     let stage="correspondences",resultCamera="best",resultViews={initial:null,best:null};
     const editingStage=()=>stage==="correspondences",resultStage=()=>stage==="result";
     let scene=null,record=null,image=null,view=null,loadToken=0;
+    let applyBusy=false,applyRevision=0,pendingPhotoLoads=0;
+    const applyButton=$('ModernCalibrationApplyScene'),applyStatus=$('ModernCalibrationApplyStatus');
+    function applyMessage(value,error=false){
+      if(!applyStatus)return;
+      if(env.CurvatureModernStatusMessage?.set)env.CurvatureModernStatusMessage.set(applyStatus,value,error?'error':'info');
+      else applyStatus.textContent=value;
+    }
+    function beginPhotoLoad(){pendingPhotoLoads++;applyRevision++;syncFitControls();}
+    function endPhotoLoad(){pendingPhotoLoads--;syncFitControls();}
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
       modelStatus=$('ModernCalibrationModelStatus');
     let packages=new Map(),selectedObjectKey=null;
@@ -641,6 +650,7 @@
         contextMenu.close();photoGestures.cancel();resultGestures.cancel();inlineViewer.cancelGesture();
         photoGhost=null;captureInline();
       }
+      if(target.stage!==stage)applyRevision++;
       stage=target.stage;resultCamera=camera==="initial"?"initial":"best";viewBest=target.best;
       syncStageUI();if(!render)return;
       if(viewBest&&paintedFit!==fitBest)paintBest();else meshDraw();
@@ -676,7 +686,7 @@
         record,activeSource,rows:workflow.rows,pending:workflow.pending,pendingModel:workflow.pendingModel,activePair:workflow.activePair,editing:workflow.editing,explicitAdd:workflow.explicitAdd,view,physicalSessionId,undoStack:workflow.undoStack,redoStack:workflow.redoStack,
         selectedOwner:packages.get(selectedObjectKey)?.owner||null,weight:weight.value,freeParameters:freeFields(),
         fitBest,fitStatus:fitStatus.textContent,viewBest,stage,resultCamera,resultViews,residualMode:residualMode.value}));
-      writeQueue=writeQueue.catch(()=>{}).then(async()=>{
+      const saved=writeQueue.catch(()=>{}).then(async()=>{
         const db=await database();
         await new Promise((resolve,reject)=>{
           const tx=db.transaction('draft','readwrite');
@@ -684,8 +694,12 @@
           tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Draft write failed'));
         });
         $('ModernCalibrationStorage').textContent='Draft saved in this browser.';
-      }).catch(e=>{$('ModernCalibrationStorage').textContent='Draft not saved: '+e.message;});
+      });
+      // Existing callers may fire-and-forget; the explicit Apply operation
+      // also awaits the original rejecting promise before mutating Scene.
+      writeQueue=saved.catch(e=>{$('ModernCalibrationStorage').textContent='Draft not saved: '+e.message;});
       $('ModernCalibrationStorage').textContent='Saving draft…';
+      return saved;
     }
     async function restoreDraft(){
       restoring=true;
@@ -801,7 +815,7 @@
       if(!choice)return;
       if(activeSource?.key===choice.key&&record){message('This photograph is already loaded.');return;}
       if(!confirmReplacement())return;
-      const token=++loadToken;message('Loading original photograph…');
+      const token=++loadToken;beginPhotoLoad();message('Loading original photograph…');
       try{
         let next;
         if(choice.source==='library'){
@@ -813,6 +827,7 @@
         if(!next)throw Error('Original photograph no longer available; refresh the list.');
         await acceptPhoto(next,choice,token);
       }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
+      finally{endPhotoLoad();}
     };
     function message(s){status.textContent=s;}
     function photoDraw(){
@@ -1167,12 +1182,12 @@
     file.onchange=async()=>{
       const f=file.files[0];if(!f)return;
       if(!confirmReplacement()){file.value='';return;}
-      const token=++loadToken;message('Loading photograph…');
+      const token=++loadToken;beginPhotoLoad();message('Loading photograph…');
       try{
         const next=await env.CurvatureModernReferenceImageImport.ingest(f,'calibration-photo',env);
         await acceptPhoto(next,null,token);
       }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
-      finally{if(token===loadToken)file.value='';}
+      finally{if(token===loadToken)file.value='';endPhotoLoad();}
     };
     const photoGestures=pointerGestures.mount(photo,{
       enabled:()=>!!(record&&view&&(editingStage()||resultStage())),
@@ -1253,6 +1268,9 @@
       importButton.disabled=restoring;
       runFit.disabled=stage!=="calibration"||!!fitWorker||!record||!scene||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
+      if(applyButton)applyButton.disabled=applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
+        !!fitWorker||!record||!scene||!fitBest?.evaluation?.valid;
+
       for(const field of fitFields){
         const v=scene?.model[field];
         fitPanel.querySelector('[data-fit-value="'+field+'"]').textContent=Number.isFinite(v)?'('+Number(v.toPrecision(6))+')':'';
@@ -1268,6 +1286,7 @@
           result:fitBest,status:fitStatus.textContent,running:!!fitWorker}});
     }
     function restoreFit(result,status){
+      applyRevision++;
       fitBest=result;fitSignature=result?JSON.stringify(workflow.rows):null;viewBest=false;
       if(result)fitSummary(result);
       if(typeof status==='string'&&status)fitStatus.textContent=status;
@@ -1281,7 +1300,8 @@
       const width=data.referenceImage.original.width,height=data.referenceImage.original.height;
       env.CurvatureCameraPhysicalPose.photoCamera({...next.model,viewcenterHorizon:3},width,height);
       if(data.fit.result)env.CurvatureCameraPhysicalPose.photoCamera({...next.model,...data.fit.result.pose,viewcenterHorizon:3},width,height);
-      const token=++loadToken,decoded=new env.Image();
+      const token=++loadToken,decoded=new env.Image();beginPhotoLoad();
+      try{
       decoded.src=data.referenceImage.original.dataUrl;await decoded.decode();
       if(token!==loadToken)throw Error('Import superseded');
       if(decoded.naturalWidth!==width||decoded.naturalHeight!==height)throw Error('Embedded photo dimensions mismatch');
@@ -1296,6 +1316,7 @@
       restoreFit(data.fit.result,data.fit.running?'Imported interrupted fit · best saved candidate only':data.fit.status);
       setStage(data.fit.result?'result':'correspondences',{camera:'best',save:false});
       message('Calibration experiment imported.');persist();return true;
+      }finally{endPhotoLoad();}
     }
     exportButton.onclick=()=>{
       try{
@@ -1309,12 +1330,13 @@
     importButton.onclick=()=>importFile.click();
     importFile.onchange=async()=>{
       const f=importFile.files[0];if(!f)return;
+      beginPhotoLoad();
       try{
         if(f.size>40*1024*1024)throw Error('Experiment file exceeds 40 MiB');
         const ok=await importExperiment(JSON.parse(await f.text()));
         exchangeStatus.textContent=ok?'Experiment imported.':'Import cancelled.';
       }catch(error){exchangeStatus.textContent='Import failed: '+error.message;}
-      finally{importFile.value='';}
+      finally{importFile.value='';endPhotoLoad();}
     };
     function terminateFit(){
       if(fitWorker){fitWorker.terminate();fitWorker=null;}
@@ -1386,6 +1408,7 @@
     }
     residualMode.onchange=()=>{photoDraw();persist();};
     function invalidateFit(message){
+      applyRevision++;applyMessage('');
       terminateFit();fitBest=null;fitSignature=null;viewBest=false;paintedFit=null;
       initialPoints=null;initialProjectionError='';diagnosticResult=null;diagnosticBestPoints=[];fitFailures=[];
       for(const tr of list.querySelectorAll('tr.is-fit-failure')){tr.classList.remove('is-fit-failure');const cell=tr.cells[5];if(cell)cell.textContent='—';}
@@ -1468,6 +1491,26 @@
     };
     stopFit.onclick=()=>{terminateFit();fitStatus.textContent='Stopped · best valid camera retained if available.';if(viewBest&&fitBest)paintBest();syncFitControls();persist();};
     bestView.onclick=()=>{if(resultStage()&&fitBest)setStage('result',{camera:viewBest?'initial':'best'});};
+    function applyCandidate(){
+      if(restoring||pendingPhotoLoads||!resultStage()||fitWorker||!fitBest?.evaluation?.valid)
+        throw Error('Show a completed or stopped best camera result before applying');
+      return exportExperiment();
+    }
+    if(applyButton)applyButton.onclick=async()=>{
+      if(applyButton.disabled||applyBusy)return;
+      if(!env.confirm('Apply the best fitted camera and captured scene to Scene? The previous experiment will be protected in History. The calibration draft will be kept.'))return;
+      applyBusy=true;syncFitControls();applyMessage('Saving calibration and protecting the previous experiment…');
+      try{
+        await env.CurvatureModernApp.applyCalibrationToScene({
+          candidate:applyCandidate,revision:()=>applyRevision+':'+loadToken,
+          saveDraft:()=>persist()
+        });
+        applyMessage('Applied to Scene. Calibration draft retained.');
+      }catch(error){
+        applyMessage(error.committed?'Applied to Scene, but presentation failed: '+error.message:
+          'Apply failed: '+error.message+(error.rollbackError?' · Recovery failed: '+error.rollbackError:''),true);
+      }finally{applyBusy=false;syncFitControls();}
+    };
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();persist();});
     add.onclick=savePair;pairRedo.onclick=redo;
     $('ModernCalibrationCancelEdit').onclick=cancelPairDraft;

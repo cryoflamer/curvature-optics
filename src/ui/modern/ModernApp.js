@@ -745,7 +745,7 @@
   var animationWorkspaceOpen=false,photoCalibrationWorkspaceOpen=false;
   var workspaceTabs={scene:'ModernSceneTab',compare:'ModernCompareTab',animation:'ModernAnimationTab',
     calibration:'ModernPhotoCalibrationOpen',demos:'ModernDemosTab'};
-  var workspaceNavigationVersion=0;
+  var workspaceNavigationVersion=0,calibrationSceneRevision=0,calibrationApplyBusy=false;
   function currentWorkspaceMode(){
     return photoCalibrationWorkspaceOpen?'calibration':animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;
   }
@@ -1125,6 +1125,7 @@
   }
   function scheduleExperimentSave(){
     if(!persistence.ready||!experiments||!root.location)return;
+    calibrationSceneRevision++;
     updateSnapshotSaveAction();
     persistence.dirty=true;
     if(persistence.timer!==null)clearTimeout(persistence.timer);
@@ -4380,7 +4381,7 @@
   }
   var historyRestoreBusy=false;
   function restoreHistorySnapshot(id){
-    if(presetSwitchBusy)return Promise.reject(Error('Finish the pending preset change first'));
+    if(presetSwitchBusy||calibrationApplyBusy)return Promise.reject(Error('Finish the pending experiment change first'));
     if(historyRestoreBusy)return Promise.resolve();
     if(!id)return Promise.reject(RangeError('Select a history snapshot to restore'));
     historyRestoreBusy=true;
@@ -4703,6 +4704,7 @@
     });
   }
   function applyExperiment(experiment){
+    calibrationSceneRevision++;
     stopCameraTransition(false,'Transition interrupted by experiment load',false);
     var data=experiments.validate(experiment),scene=data.scene;
     // All values are prevalidated as one transaction before touching CurveApp.
@@ -4734,6 +4736,75 @@
     var select=el('ModernPreset');if(select)select.value=scene.preset;
     initialCamera=captureCameraPose();
     renderCameraPositions('');renderCameraSequenceKeyframes(-1);
+  }
+  // The editor provides a candidate getter and draft generation, not direct
+  // access to the live CurveApp. Durable archive/recovery precede mutation.
+  async function applyCalibrationToScene(editor){
+    if(calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy)
+      throw Error('Finish the pending experiment change first');
+    if(!photoCalibrationWorkspaceOpen||!persistence.ready||!experimentHistory||historyLoadError||
+       !root.CurvatureModernCalibrationApply||!root.CurvatureModernCalibrationResultArchive||!root.indexedDB)
+      throw Error('Calibration Apply requires the active editor and available History storage');
+    calibrationApplyBusy=true;updatePresetNavigation();
+    try{
+      const controller=root.CurvatureModernCalibrationApply.create({
+        candidate:editor.candidate,
+        snapshot:experimentSnapshot,
+        revision:()=>[workspaceNavigationVersion,calibrationSceneRevision,currentWorkspaceMode(),editor.revision()].join('|'),
+        async archive(candidate){
+          // Keep the editable original draft durable independently of archive.
+          await editor.saveDraft();
+          return root.CurvatureModernCalibrationResultArchive.archiveExperiment(root.indexedDB,candidate,root);
+        },
+        protect:previous=>experimentHistory.record(previous,'recovery',historyThumbnail(previous)),
+        commit(next){
+          cancelEdits();cancelPending();cancelHistoryAuto();
+          applyExperiment(next);syncNumericInputs();syncCompareEditor();
+          resetHistoryBaseline();
+        },
+        rollback(previous){
+          applyExperiment(previous);syncNumericInputs();syncCompareEditor();
+          resetHistoryBaseline();
+        },
+        async present(info){
+          previousExperimentHistoryId=info.recoveryId;
+          updatePresetNavigation('Calibration applied. Previous experiment protected in History.');
+          // The ordinary Scene starts in Accurate mode; a later explicit
+          // quality choice is still available. No cross-renderer RMS claim.
+          state.opticalQuality='accurate';
+          const quality=geometryUi('ModernOpticalQuality');if(quality)quality.value='accurate';
+          saveApplicationPreferences();updateOpticalQualityStatus();
+          state.last=null;
+          try{
+            if(setMode('scene',true)===false)throw Error('Scene activation failed');
+          }finally{
+            scheduleExperimentSave();flushWorkingSession();
+          }
+          const viewRevision=workspaceNavigationVersion;
+          // setMode enqueues the normal Scene redraw on the preceding frame.
+          // draw() catches renderer exceptions and clears state.last.
+          await new Promise((resolve,reject)=>{
+            const timeout=root.setTimeout(()=>reject(Error('Scene render not confirmed')),30000);
+            root.requestAnimationFrame(()=>{
+              root.clearTimeout(timeout);
+              if(currentWorkspaceMode()!=='scene'||workspaceNavigationVersion!==viewRevision)
+                reject(Error('Scene presentation superseded by navigation'));
+              else if(!state.last)reject(Error('Scene renderer did not complete; see render status'));
+              else resolve();
+            });
+          });
+          updatePresetNavigation('Calibration applied. Previous experiment protected in History. Save Snapshot to keep this Scene.');
+          refreshHistoryList().catch(error=>historyStatus('History refresh failed: '+error.message,true));
+        }
+      });
+      return await controller.apply();
+    }catch(error){
+      if(error.committed)updatePresetNavigation('Calibration applied, but presentation failed: '+error.message,true);
+      else if(error.rollbackError)updatePresetNavigation('Calibration Apply and rollback failed: '+error.rollbackError,true);
+      throw error;
+    }finally{
+      calibrationApplyBusy=false;updatePresetNavigation();
+    }
   }
   function isExplicitSharedExperiment(){
     if(!experiments||!root.location)return false;
@@ -4801,6 +4872,7 @@
     }catch(error){persistenceStatus('Cannot share experiment: '+error.message,true);}
   }
   function resetExperiment(){
+    if(calibrationApplyBusy){persistenceStatus('Finish calibration Apply before resetting the session',true);return;}
     cancelEdits();cancelPending();
     persistence.dirty=false;
     if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
@@ -7174,9 +7246,9 @@
   function updatePresetNavigation(message,error){
     var select=el('ModernPreset'),reset=el('ModernResetPreset');
     var previous=newUiEl('ModernPreviousExperiment');
-    if(select){select.disabled=presetSwitchBusy;select.value=state.scenePresetSelection;}
-    if(reset)reset.disabled=presetSwitchBusy;
-    if(previous)previous.disabled=presetSwitchBusy||!previousExperimentHistoryId;
+    if(select){select.disabled=presetSwitchBusy||calibrationApplyBusy;select.value=state.scenePresetSelection;}
+    if(reset)reset.disabled=presetSwitchBusy||calibrationApplyBusy;
+    if(previous)previous.disabled=presetSwitchBusy||calibrationApplyBusy||!previousExperimentHistoryId;
     if(message!==undefined)modernStatus(newUiEl('ModernPresetSwitchStatus'),message,error?'error':'info');
   }
   // The selector chooses a starting configuration; it is NOT a list of live
@@ -7185,7 +7257,7 @@
   // leaves the entire current experiment unchanged.
   function selectPreset(id){
     updatePresetNavigation(); // Restore the outgoing selector before capturing.
-    if(presetSwitchBusy||historyRestoreBusy)return Promise.resolve(false);
+    if(presetSwitchBusy||historyRestoreBusy||calibrationApplyBusy)return Promise.resolve(false);
     if(!adapter||!adapter.PRESETS[id]){
       updatePresetNavigation('Unknown scene preset; current experiment was kept.',true);
       return Promise.resolve(false);
@@ -7546,6 +7618,7 @@
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     getCameraHudVisible:function(){return cameraHudVisible;},
     getHistoryStore:function(){return experimentHistory;},
+    applyCalibrationToScene:applyCalibrationToScene,
     getBuiltInDemo:function(){return studioActiveDemo?studioActiveDemo.id:null;},
     getStudioPlayback:function(){return studioPlayback?studioPlayback.status():null;},
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?

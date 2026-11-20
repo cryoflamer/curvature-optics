@@ -212,6 +212,11 @@
     <section data-calibration-stages="result" hidden aria-label="Camera result">
       <div class="modern-calibration-toolbar"><button type="button" id="ModernCalibrationBestView" disabled>Show best camera</button><strong id="ModernCalibrationResultCamera">Initial camera</strong></div>
       <p id="ModernCalibrationFitResult"></p>
+      <div class="modern-calibration-toolbar">
+        <button type="button" id="ModernCalibrationApplyScene" disabled>Apply Best Camera to Scene</button>
+      </div>
+      <p>Applies the best fitted camera, captured objects and physical hypothesis to Scene. The outgoing experiment is protected in History; your calibration draft is retained. Save Snapshot remains a separate action. Canvas Direct Fit RMS is historical, not the Accurate Scene error.</p>
+      <p id="ModernCalibrationApplyStatus" role="status" aria-live="polite"></p>
       <p id="ModernCalibrationFitNotice">Optical preview is read-only. Return to Correspondences to edit points. Drag model to pan, wheel to zoom, double-click to reset framing. This preview does not change Scene.</p>
     </section>
     <section data-calibration-stages="correspondences" id="ModernCalibrationPairToolbar" aria-label="Correspondence controls" data-mode="browse">
