@@ -773,7 +773,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null,onCancelPair=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=false,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onInspectOwner=null,onCancelPair=null,onConfirmMaterial=null}={}){
     let inlineOpen=false,parkedScene=null;
     const isOpen=()=>inline?inlineOpen:dialog.open;
     const canvas=dialog.querySelector('canvas'),status=dialog.querySelector('[data-viewer-status]'),heading=dialog.querySelector('h2');
@@ -898,6 +898,7 @@
     function pendingHit(){
       if(!pendingVertex||!mesh)return null;
       const e=mesh.find(e=>e.item.bank===pendingVertex.bank&&e.item.index===pendingVertex.primitive);
+      if(pendingVertex.anchor){const a=pendingVertex.anchor;if(!e?.valid||!a.indices.every(i=>e.item.points[i]))return null;const point=a.indices.reduce((p,i,j)=>add(p,mul(e.item.points[i],a.weights[j])),[0,0,0]);return pickDescriptor(e,a.kind,a.indices,a.weights,point,0,null,0);}
       const i=pendingVertex.vertex;
       if(!e?.valid||!Number.isInteger(i)||!e.item.points[i])return null;
       return pickDescriptor(e,'vertex',[i],[1],e.item.points[i],0,null,0);
@@ -978,7 +979,7 @@
       changePoint(staged.kind==='edge'?[1-a,a]:[a,b,1-a-b],'none');
     };
     for(const n of snaps)n.onclick=()=>changePoint(staged.weights,n.dataset.viewerPointSnap);
-    confirmButton.onclick=()=>{if(fastVertex()){acceptFastVertex();return;}if(draftEditable()){confirmed=staged;clearPick();syncPoint();updatePickStatus('Point confirmed locally (not a correspondence).');redrawMarkers();}};
+    confirmButton.onclick=()=>{if(fastVertex()){acceptFastVertex();return;}if(draftEditable()){if(inline&&onConfirmMaterial&&!onConfirmMaterial(staged))return;confirmed=staged;clearPick();syncPoint();updatePickStatus(inline&&onConfirmMaterial?'Model point confirmed · Create pair when the photo point is selected.':'Point confirmed locally (not a correspondence).');redrawMarkers();}};
     cancelButton.onclick=()=>{if(inline&&!draftEditable())return;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     function paintOptical(capture){return navigating()?crop.paint(canvas,capture,{...crop.region}):crop.paint(canvas,capture);}
     function redrawMarkers(){if(crop&&!free){try{paintOptical(false);opticalMarkers();}catch(error){status.textContent='Magnifier unavailable: '+error.message;}return;}if(!paths)return;drawRegion(canvas,geometry,state,paths);markers();}
@@ -1313,7 +1314,7 @@
       }finally{restoringSession=false;}
       sessionChanged();
     },setPendingVertex(landmark){
-      const next=landmark?{bank:landmark.bank,primitive:landmark.primitive,vertex:landmark.vertex}:null;
+      const next=landmark?{bank:landmark.bank,primitive:landmark.primitive,vertex:landmark.vertex,anchor:landmark.anchor}:null;
       if(JSON.stringify(next)===JSON.stringify(pendingVertex))return;
       pendingVertex=next;if(isOpen())redrawMarkers();
     },discardPairDraft(){

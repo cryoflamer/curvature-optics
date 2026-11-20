@@ -414,7 +414,10 @@
     const inlineCancel=doc.createElement('button');inlineCancel.type='button';inlineCancel.textContent='Cancel draft pair';inlineCancel.disabled=true;
     inlineHost.querySelector('[data-viewer-selection-status]').after(inlineCancel);
     inlineCancel.onclick=cancelPairDraft;
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft});
+    const inlineCreate=doc.createElement('button');inlineCreate.type='button';inlineCreate.textContent='Create pair';inlineCreate.disabled=true;inlineCreate.onclick=()=>{if(pending&&pendingModel&&!viewBest)savePair();};
+    const pairActions=doc.createElement('div');pairActions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+    inlineHost.querySelector('[data-viewer-selection-status]').after(pairActions);pairActions.append(inlineCreate,inlineCancel,inlineDelete);
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial});
     const inlineRenderer=env.CurvatureCanvasDirectPreview.create();
     let legacyShown=false,inlineSource=null,initialParked=false,bestCropSource=null;
     const globeRoute=()=>scene?.model.showModel===1;
@@ -557,7 +560,7 @@
         editing=rows.some(r=>r.landmark.id===d.editing)?d.editing:null;
         const editRow=rows.find(r=>r.landmark.id===editing);
         pendingModel=isMaterial(editRow?.landmark)?editRow.landmark:null;
-        if(record&&d.pendingModel&&!isMaterial(d.pendingModel))try{validateLegacyTopology([{landmark:d.pendingModel}],scene);pendingModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
+        if(record&&d.pendingModel)try{if(isMaterial(d.pendingModel))materialResolver.create(scene.model).resolveLandmark(d.pendingModel.anchor.kind,d.pendingModel);else validateLegacyTopology([{landmark:d.pendingModel}],scene);pendingModel=d.pendingModel;}catch(error){/* Invalid optional pending vertex. */}
         activePair=rows.some(r=>r.landmark.id===d.activePair)?d.activePair:null;
         weight.value=d.weight||'1';setPixel(record&&Array.isArray(d.pending)&&d.pending.length===2&&imagePoint({scale:1,x:0,y:0},...d.pending,record.original.width,record.original.height)?d.pending:null);
         add.textContent=editing?'Update pair':'Add pair';
@@ -744,7 +747,7 @@
       refreshResidualTable();refreshMagnifierCorrespondences();
     }
     function updateHint(){
-      const text=globeRoute()&&!legacyShown&&!editing?(pending&&pendingModel?'Both draft points selected · Add pair to retry or Cancel draft pair.':pending?'Photo point selected · choose Fast Vertex in the Model Viewer.':pendingModel?'Model vertex selected · click the matching photo point.':activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
+      const text=globeRoute()&&!legacyShown&&!editing?(pending&&pendingModel?'Both draft points selected · Create pair or Cancel draft pair.':pending?'Photo point selected · confirm a model point or use Fast Vertex.':pendingModel?'Model point selected · click the matching photo point.':activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · Delete to remove, or click another numbered marker.':'Wheel to zoom; drag to pan. Free View to orbit. Fast Vertex pairs photo and model points.'):magnifierMode()?'Drag a rectangle on the model to magnify the same optical view.':objectMode()?'Select an object independently of correspondences. Switch to Vertex to edit pairs.':editing?'Editing pair '+(rows.findIndex(r=>r.landmark.id===editing)+1)+' · drag a marker or use manual controls.':
         pending?'Photo point selected. Click a model vertex.':
         pendingModel?'Model vertex selected. Click a photo point.':
         activePair?'Pair '+(rows.findIndex(r=>r.landmark.id===activePair)+1)+' selected · drag either marker or click a new point.':
@@ -755,7 +758,7 @@
     function resetPending(){inlineViewer.discardPairDraft();
       const parked=inlineSessions.initial?.session;if(parked?.stagedMode==='fast-vertex'||parked?.stagedMode===undefined&&parked?.pickMode==='fast-vertex'){Object.assign(parked,{staged:null,stagedMode:null,choices:[],choice:'',inputs:[]});if(parked.confirmed&&parked.pickMode==='fast-vertex')parked.confirmed=null;}
       editing=null;pendingModel=null;weight.value='1';add.textContent='Add pair';setPixel(null);clearAmbiguity();updateHint();meshDraw();}
-    function cancelPairDraft(){activePair=null;resetPending();refreshRows();photoDraw();meshDraw();persist();}
+    function cancelPairDraft(){inlineViewer.clearLocalPoint();activePair=null;resetPending();refreshRows();photoDraw();meshDraw();persist();}
     function selectPair(id){
       if(!rows.some(r=>r.landmark.id===id))return;
       activePair=id;refreshRows();updateHint();photoDraw();meshDraw();persist();
@@ -1090,7 +1093,13 @@
     }
     function meshDraw(){
       inlineCancel.disabled=!(pending||pendingModel||editing);
-      if(syncInline()){inlineViewer.setPendingVertex(pendingModel&&!isMaterial(pendingModel)?pendingModel:null);return;}
+      inlineCreate.disabled=!(record&&pending&&pendingModel&&!viewBest);
+      inlineCreate.textContent=editing?'Update pair':'Create pair';
+      if(syncInline()){
+        let marker=pendingModel;
+        if(isMaterial(marker))try{const q=materialResolver.create(scene.model).resolveLandmark(marker.anchor.kind,marker);marker={bank:q.bank,primitive:q.index,anchor:q.anchor};}catch(error){marker=null;}
+        inlineViewer.setPendingVertex(marker);return;
+      }
       if(viewBest&&fitBest&&paintedFit){drawFitPreview();return;}
       mesh.clearRect(0,0,sceneCanvas.width,sceneCanvas.height);
       if(!modelView||!previewValid)return;
@@ -1172,10 +1181,24 @@
       try{
         const landmark=materialEdit()||pendingModel||selected();
         if(!record||!pending||!landmark)throw Error('Select both a photo pixel and a model vertex');
+        if(globeRoute()){
+          const resolver=materialResolver.create(scene.model),key=materialAnchor.anchorKey(resolver.resolveLandmark(isMaterial(landmark)?landmark.anchor.kind:'vertex',landmark).anchor);
+          if(rows.some(r=>r.landmark.id!==editing&&materialAnchor.anchorKey(resolver.resolveLandmark(r.kind,r.landmark).anchor)===key))throw Error('This material point is already paired; edit its existing row');
+        }
         const next=upsert(rows,pair(landmark,pending,record.original.width,record.original.height,Number(weight.value),rows.find(r=>r.landmark.id===editing)?.included),editing);
         rememberUndo();rows=next;activePair=null;
-        resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();return true;
+        inlineViewer.clearLocalPoint();resetPending();refreshRows();photoDraw();meshDraw();message('Correspondence saved.');persist();return true;
       }catch(e){message(e.message);$('ModernCalibrationActionHint').textContent=e.message;return false;}
+    }
+    function confirmInlineMaterial(hit){
+      if(!record||!globeRoute()||legacyShown||viewBest||editing){message('Load a photo and finish any existing edit first.');return false;}
+      try{
+        const resolver=materialResolver.create(scene.model);
+        const id=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+        const landmark=resolver.fromPick(hit,'material-'+id);
+        pendingModel=landmark;activePair=null;
+        refreshRows();updateHint();meshDraw();persist();return true;
+      }catch(error){message(error.message);return false;}
     }
     function chooseInlineVertex(hit){
       if(!globeRoute()||legacyShown||viewBest||!scene)return false;
@@ -1194,7 +1217,7 @@
     function choosePhoto(p){
       if(!p)return;
       activePair=null;setPixel(p);refreshRows();
-      if(pendingModel){if(!savePair()){meshDraw();persist();}}
+      if(pendingModel&&!isMaterial(pendingModel)){if(!savePair()){meshDraw();persist();}}
       else {photoDraw();meshDraw();persist();}
     }
     function pickAt(p){

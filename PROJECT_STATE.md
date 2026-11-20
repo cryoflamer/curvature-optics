@@ -1,3 +1,7 @@
+## 8F.5c — Explicit material pairing (before parity)
+
+Integrated Vertex, Edge and Surface confirmation now supplies a validated material landmark via CameraMaterialAnchorResolver. Create pair explicitly commits a selected photo and material point; Fast Vertex retains automatic pairing. Pending material anchors survive draft restoration, and duplicate canonical anchors (including legacy vertices) are rejected. Pair actions share a compact row. Functional parity and full editing remain subsequent work. Browser and full CI validation pending.
+
 ## 8F.5b.4a.4 — Draft lifecycle
 
 The editor's pending model vertex is the sole source of truth for a
