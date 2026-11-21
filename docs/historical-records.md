@@ -30,7 +30,7 @@ engineered-ray, fused-gradient qualification, Legacy reference/animation,
 WebGL2 renderer and camera-interaction documents are likewise retained where
 there is a specific technical or testing reason.
 
-`PROJECT_STATE.md` was reduced for #28 to a **short live handoff**, not an alternative roadmap. Its pre-migration 6,965-line journal remains accessible at [the previous revision](https://github.com/cryoflamer/curvature-optics/blob/aa8b2b1a94fa72432648f2ffcec8929a90601b04/PROJECT_STATE.md). Old instructions do not authorize reviving CPU/WebGPU research.
+`PROJECT_STATE.md` was reduced for #28 and later retired to avoid stale duplicate status. Its pre-migration 6,965-line journal remains accessible at [the previous revision](https://github.com/cryoflamer/curvature-optics/blob/aa8b2b1a94fa72432648f2ffcec8929a90601b04/PROJECT_STATE.md). Old instructions do not authorize reviving CPU/WebGPU research.
 
 ## Recover a retired document from Git
 
