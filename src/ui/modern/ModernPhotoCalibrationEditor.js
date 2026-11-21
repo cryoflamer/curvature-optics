@@ -2234,8 +2234,9 @@
       if(applyButton.disabled||applyBusy)return;
       const info=applyDestination(selectedApplyTarget);
       if(!env.confirm(info.confirmation))return;
-      const previousInert=workspace.inert;
-      applyBusy=true;workspace.inert=true;syncFitControls();
+      // Navigation remains possible: the Apply host revision/generation
+      // rejects an archived completion after Scene -> editor ABA changes.
+      applyBusy=true;syncFitControls();
       applyMessage('Saving calibration and protecting the previous experiment for '+info.label+'…');
       try{
         await env.CurvatureModernApp.applyCalibrationToTarget({
@@ -2246,7 +2247,7 @@
       }catch(error){
         applyMessage(error.committed?'Applied to '+info.label+', but presentation failed: '+error.message:
           'Apply failed: '+error.message+(error.rollbackError?' · Recovery failed: '+error.rollbackError:''),true);
-      }finally{applyBusy=false;workspace.inert=previousInert;syncFitControls();}
+      }finally{applyBusy=false;syncFitControls();}
     };
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();persist();});
     add.onclick=savePair;pairRedo.onclick=redo;
