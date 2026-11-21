@@ -765,6 +765,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(panel).to_be_hidden(timeout=30000)
             button=workspace.locator('#ModernCalibrationApplyScene')
             expect(button).to_be_enabled(timeout=30000)
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()?.projectId"""),
+                selected)
             self.page.once('dialog',lambda dialog:dialog.accept())
             button.click()
             expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(

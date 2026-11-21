@@ -961,3 +961,14 @@ test('simultaneous result links from stale tabs fork rather than overwrite anoth
   assert.deepEqual((await store.get(db,two.project.id)).resultIds,[alternate]);
   assert.equal(two.project.forkOf,A);
 });
+
+test('Apply caller forwards its guarded project identity and result linker to ModernApp',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const editor=fs.readFileSync(path.join(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,
+    '../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(editor,/applyCalibrationToTarget\(\{[\s\S]*?saveDraft:\(\)=>persist\(\),\s*projectBinding,linkArchivedResult\s*\},info\.target\)/);
+  assert.match(app,/archivedProjectBinding=editor\.projectBinding\?\.\(\)\|\|null/);
+  assert.match(app,/await editor\.linkArchivedResult\(saved\.row\.id,archivedProjectBinding\)/);
+});

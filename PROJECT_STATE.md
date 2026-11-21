@@ -1,3 +1,15 @@
+## 8F.7p.8f — Apply caller project-link bridge corrected (#14)
+
+Full Chromium qualification exposed a successful physical Apply whose
+Calibration Project had zero result IDs. Although the mounted editor
+implemented projectBinding and linkArchivedResult, its call into
+ModernApp.applyCalibrationToTarget forwarded only candidate/target/revision
+and saveDraft. The App therefore treated the operation as legacy-unbound.
+Both callbacks are now forwarded. Node verifies the exact bridge, and
+Chromium asserts each selected project's bound ID before Apply, plus both
+durable result links after Apply. This is a production wiring fix, not a
+test-title adjustment. The existing guard/stale navigation contracts remain.
+
 ## 8F.7p.8 — Verified photo selection and per-project Apply/archive binding (#14)
 
 Reference photo selection verifies and commits an original in the
