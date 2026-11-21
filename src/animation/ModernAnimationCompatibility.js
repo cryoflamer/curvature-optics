@@ -62,6 +62,18 @@
     }
     return result;
   }
+  // A compact Camera/Physical project renders every frame against its
+  // immutable baseExperiment. A History frame contributes only the channel
+  // being animated; its local presentation settings, grid toggle and
+  // calibration attribution cannot become per-frame renderer state.
+  // Do not mistake these values for unsupported animated transitions.
+  // Preserve display.mode: switching Scene/Compare changes the renderer.
+  function motionComparable(frame){
+    var scene=Object.assign({},frame.scene);
+    delete scene.showGrid;
+    return {mode:frame.mode,camera:frame.camera,scene:scene,
+      compare:frame.compare};
+  }
   function changed(a,b,path,paths){
     if(Object.is(a,b))return;
     if(Array.isArray(a)&&Array.isArray(b)&&a.length===b.length){
@@ -105,7 +117,8 @@
     options=options||{};
     if(!Array.isArray(experiments)||experiments.length<2||experiments.length>200)
       throw RangeError('Animation needs 2–200 snapshots');
-    var frames=experiments.map(effective),base=frames[0],paths=new Set();
+    var frames=experiments.map(function(e){return motionComparable(effective(e));}),
+      base=frames[0],paths=new Set();
     for(var i=1;i<frames.length;i++)changed(base,frames[i],'',paths);
     var differences=Array.from(paths).sort();
     var dynamicCamera=differences.filter(function(p){return CAMERA_FIELDS.some(function(k){return p==='camera.'+k;});});

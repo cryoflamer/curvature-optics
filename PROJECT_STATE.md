@@ -1,3 +1,26 @@
+## Animation Studio Camera Motion candidate compatibility (#25 review)
+
+The compact animation contract now compares only persisted physics/objects,
+shared Scene-vs-Compare mode and the actual animated camera channel. Presentation
+options (eye-level, horizon guides, GPU probe, temperature-column overlay,
+captions), the grid visibility toggle and History calibration attribution are
+not per-keyframe channels: the renderer keeps the named project's immutable
+baseExperiment for all of them. Candidate differences in those fields no
+longer cause false "Incompatible" results. Active Compare A/B optics,
+visibility, objects, display mode and unsupported camera fields
+(viewcenterHorizon and deviceRatio) remain strict. No project schema or
+automated History entries were changed. Existing display signatures remain
+available for read-only inspection even when presentation differences do not
+block insertion.
+
+Regression tests use the actual shipped Soundly Compare Camera project,
+insert a History-style candidate with mismatched guide/probe settings,
+verify that the inserted keyframe inherits the base presentation, and reject
+real Compare B physics changes. Attribution tests confirm provenance stays
+anchored to the base experiment. Browser verification is still needed to
+confirm the user's specific local History records; no private IndexedDB
+content was inspected.
+
 ## Full CI contract and browser smoke reconciliation (#14, #24)
 
 The supplied Full CI log archive was inspected for five failures.

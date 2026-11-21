@@ -166,7 +166,7 @@ test('Two physical channels are forbidden even if changed on separate segments',
   assert.equal(forced.issues[0].code,'multiple-physical-channels');
 });
 
-test('View and object changes are blockers, not animation channels',()=>{
+test('Presentation and grid settings inherit the base frame, while real scene and unsupported camera changes remain blockers',()=>{
   const a=experiment(),b=clone(a);
   b.scene.objects.ObjDist[0]+=1;
   b.display.horizon=!b.display.horizon;
@@ -174,7 +174,7 @@ test('View and object changes are blockers, not animation channels',()=>{
   const check=compat.inspect([a,b],{mode:'camera'});
   assert.equal(check.compatible,false);
   assert.deepEqual(check.issues.map(i=>i.path),
-    ['camera.viewcenterHorizon','display.horizon','scene.objects.ObjDist.0']);
+    ['camera.viewcenterHorizon','scene.objects.ObjDist.0']);
   assert.throws(()=>project([a,b],{mode:'camera'}));
 });
 
@@ -270,7 +270,7 @@ function originFixture(target='Scene',digit='a'){
       rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
 }
 
-test('compact Studio project retains common calibration origin across derived camera frames and rejects mixed origins',()=>{
+test('compact Studio project retains base calibration provenance across derived camera frames',()=>{
   const a=experiment(),b=clone(a);a.calibrationOrigin=originFixture();b.calibrationOrigin=originFixture();
   b.scene.camera.Height+=10;
   const p=project([a,b]);
@@ -278,8 +278,40 @@ test('compact Studio project retains common calibration origin across derived ca
   assert.deepEqual(animation.sampleAt(p,2500).calibrationOrigin,codec.validateCalibrationOrigin(a.calibrationOrigin));
   assert.deepEqual(animation.validate(clone(p)),p);
   delete b.calibrationOrigin;
-  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,false);
-  assert.throws(()=>project([a,b]),/Incompatible/);
+  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,true,
+    'History attribution is not a keyframe channel');
+  const inherited=project([a,b],{mode:'camera'});
+  assert.deepEqual(animation.frameExperiment(inherited,1).calibrationOrigin,
+    codec.validateCalibrationOrigin(a.calibrationOrigin));
   b.calibrationOrigin=originFixture('Scene','c');
-  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,false);
+  assert.equal(compat.inspect([a,b],{mode:'camera'}).compatible,true);
+  assert.deepEqual(animation.frameExperiment(project([a,b],{mode:'camera'}),1).calibrationOrigin,
+    codec.validateCalibrationOrigin(a.calibrationOrigin),
+    'only the immutable base experiment supplies compact-frame attribution');
+});
+
+test('Presentation-only History differences do not block Camera or Physical projects',()=>{
+  const base=experiment('compare'),candidate=clone(base);
+  candidate.scene.camera.Height=80;
+  candidate.display.eyeLevel=!base.display.eyeLevel;
+  candidate.display.horizon=!base.display.horizon;
+  candidate.display.gpuProbe=true;
+  candidate.display.probeTargets=512;
+  candidate.display.showTemperatureProfile=true;
+  candidate.display.temperaturePlacement='inside-left';
+  candidate.display.captionMode='off';
+  candidate.scene.showGrid=!base.scene.showGrid;
+  const verdict=compat.inspect([base,candidate],{mode:'camera'});
+  assert.equal(verdict.compatible,true);
+  assert.deepEqual(verdict.changedPaths,['camera.Height']);
+  const p=project([base,candidate],{mode:'camera'});
+  const final=animation.frameExperiment(p,1);
+  assert.equal(final.scene.camera.Height,80);
+  assert.deepEqual(final.display,base.display);
+  assert.equal(final.scene.showGrid,base.scene.showGrid);
+  const invalid=clone(candidate);
+  invalid.compare.B.atmosphere='standard';
+  assert.equal(compat.inspect([base,invalid],{mode:'camera'}).compatible,false);
+  assert.ok(compat.inspect([base,invalid],{mode:'camera'}).issues
+    .some(issue=>issue.path==='compare.B.atmosphere'));
 });

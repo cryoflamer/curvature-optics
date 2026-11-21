@@ -243,3 +243,41 @@ test('read-only catalog accepts complete observation bundles and exports their o
   assert.deepEqual(exported.animations[0].project.keyframes[0].referenceImageIds,['photo']);
   assert.equal(exported.animations[0].keyframeThumbnails,undefined);
 });
+
+test('Soundly Compare Camera contract accepts same physics with different History presentation',()=>{
+  const compat=require('../src/animation/ModernAnimationCompatibility');
+  const contracts=require('../src/animation/ModernAnimationContract');
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const demo=catalog.load().find(item=>item.id==='soundly');
+  const base=projects.frameExperiment(demo.project,4);
+  const candidate=structuredClone(base);
+  candidate.scene.camera.Height=4.17;
+  candidate.scene.camera.Pan=.96;
+  candidate.scene.camera.Nick=-.08;
+  candidate.display.eyeLevel=!base.display.eyeLevel;
+  candidate.display.horizon=!base.display.horizon;
+  candidate.scene.showGrid=!base.scene.showGrid;
+  candidate.display.gpuProbe=true;
+  candidate.display.probeTargets=512;
+  candidate.display.showTemperatureProfile=true;
+  const contract=demo.project.contract;
+  assert.equal(contract.mode,'camera');
+  assert.equal(contract.referenceExperiment.display.mode,'compare');
+  assert.equal(contracts.inspectCandidate(contract,candidate).allowed,true);
+  assert.equal(compat.inspect([contract.referenceExperiment,candidate],{mode:'camera'}).compatible,true);
+  const draft=studio.fromProject(demo.project);
+  const withFrame=studio.insertSnapshots(draft,[222],
+    [{id:222,name:'Manual Compare from History',experiment:candidate}],draft.frames.length);
+  assert.equal(withFrame.frames.length,draft.frames.length+1);
+  const rebuilt=studio.build(withFrame,'soundly_camera_test');
+  const frame=projects.frameExperiment(rebuilt,rebuilt.keyframes.length-1);
+  assert.equal(frame.scene.camera.Height,4.17);
+  assert.deepEqual(frame.display,base.display);
+  assert.equal(frame.scene.showGrid,base.scene.showGrid);
+  const wrongPhysics=structuredClone(candidate);
+  wrongPhysics.compare.B.atmosphere='standard';
+  assert.equal(contracts.inspectCandidate(contract,wrongPhysics).allowed,false);
+  assert.throws(()=>studio.insertSnapshots(draft,[223],
+    [{id:223,name:'Different optics',experiment:wrongPhysics}],draft.frames.length),
+    /project contract/);
+});
