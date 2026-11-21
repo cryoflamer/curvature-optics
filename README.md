@@ -5,7 +5,7 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
-**Legacy versus native Modern:** The original nine fast illustrated storyboards remain in the isolated Demos runtime (80 states / 71 transitions). Partial native physical Scene/Compare adaptations are not equivalent to their complete Legacy animations. See [native scenario compatibility](docs/native-scenario-compatibility.md) and the [built-in Studio demo catalog](docs/demo-catalog.md). The first Soundly project is a read-only built-in, with explicit editable copies. Presentation, Storyboard, saved projects, reference photographs, PNG/video exports and atmosphere variants share the documented [Animation contracts](docs/modern-animation-contract.md) and [reference image ownership](docs/reference-images.md). This is **not yet photo-calibrated scientific Soundly content**; source verification and final authoring are tracked by [#37](https://github.com/cryoflamer/curvature-optics/issues/37). New work and acceptance gates belong in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues), not a second roadmap. The short [handoff](PROJECT_STATE.md) links to the current milestones.
+**Legacy versus native Modern:** The original nine fast illustrated storyboards remain in the isolated Demos runtime (80 states / 71 transitions). Partial native physical Scene/Compare adaptations are not equivalent to their complete Legacy animations. See [native scenario compatibility](docs/native-scenario-compatibility.md) and the [built-in Studio demo catalog](docs/demo-catalog.md). The first Soundly project is a read-only built-in, with explicit editable copies. Presentation, Storyboard, saved projects, reference photographs, PNG/video exports and atmosphere variants share the documented [Animation contracts](docs/modern-animation-contract.md) and [reference image ownership](docs/reference-images.md). This is **not yet photo-calibrated scientific Soundly content**; source verification and final authoring are tracked by [#37](https://github.com/cryoflamer/curvature-optics/issues/37). New work and acceptance gates belong in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues), not a second roadmap. Check [GitHub Project #1](https://github.com/users/cryoflamer/projects/1) and [Milestones](https://github.com/cryoflamer/curvature-optics/milestones) for live status.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
 of the two illustrative samples. It is a *starting configuration*, not a
@@ -174,8 +174,8 @@ Bare `CurvatureApp.html` and older `?ui=modern` bookmarks redirect to `Curvature
 For first-time use, start with the [user guide](docs/user-guide.md). **Modern Accurate may take appreciably longer to recalculate** because it numerically traces refracted rays; it is not intended to animate every Legacy storyboard frame.
 
 **Agent and Git workflow:** [AGENTS.md](AGENTS.md) defines the single-`main`,
-no-PR, issue-first, selective-test rules for this repository. The short
-[PROJECT_STATE.md](PROJECT_STATE.md) is a handoff, not a second task tracker.
+no-PR, issue-first, selective-test rules for this repository. Check GitHub
+Issues, Project #1, relevant commits and Actions to recover live progress.
 A fast push check is not full browser or physics acceptance.
 
 ## Current project map
@@ -200,7 +200,7 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.
 - [Historical documentation](docs/historical-records.md) — superseded migration/patch notes and Git recovery instructions.
 
-Superseded migration and patch-by-patch documents were retired from the active tree in #140.12.76 and further consolidated for #28. See [historical records and recovery](docs/historical-records.md) for the removal inventory and Git commands to read them. `PROJECT_STATE.md` is now a short live handoff and GitHub Issues are the authoritative backlog. Focused scientific evidence and regression-backed documents remain tracked.
+Superseded migration and patch-by-patch documents were retired from the active tree in #140.12.76 and further consolidated for #28. See [historical records and recovery](docs/historical-records.md) for the removal inventory and Git commands to read them. GitHub Issues remain the authoritative backlog; Project #1 and Actions provide live status and verification. Focused scientific evidence and regression-backed documents remain tracked.
 
 The [current work queue](https://github.com/cryoflamer/curvature-optics/issues) is organized by [GitHub Milestones](https://github.com/cryoflamer/curvature-optics/milestones). Deferred and scientific investigations are Issues too; a closed implementation commit does not replace an Opera/scientific acceptance record.
 
