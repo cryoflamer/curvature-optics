@@ -299,9 +299,18 @@
       a.libraryRevision===b.libraryRevision;}
     function fork(id,saved){
       var copy=checkpoint(Object.assign({},saved,{libraryId:null,libraryRevision:null}),saved.savedAt);
-      var forkId=makeWorkspaceId(crypto);
-      while(latest.has(forkId)||deletions.has(forkId))forkId=makeWorkspaceId(crypto);
-      latest.set(forkId,copy);
+      // Replaying an old tab checkpoint on every F5 must not mint another
+      // independent draft when the exact recovery copy is already durable.
+      // Compare the entire normalized checkpoint (not just its visible name
+      // or timestamp), so genuinely different unsent edits remain recoverable.
+      var existing=Array.from(latest).find(function(entry){
+        return entry[0].indexOf('draft_')===0&&equal(entry[1],copy);
+      });
+      var forkId=existing?existing[0]:makeWorkspaceId(crypto);
+      if(!existing){
+        while(latest.has(forkId)||deletions.has(forkId))forkId=makeWorkspaceId(crypto);
+        latest.set(forkId,copy);
+      }
       conflicts.push({id:id,forkId:forkId});
       return forkId;
     }
