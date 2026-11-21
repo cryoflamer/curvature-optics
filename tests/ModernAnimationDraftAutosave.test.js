@@ -528,3 +528,35 @@ test('F5 reuses the tab recovery slot instead of creating a new independent draf
     durable=recovered;
   }
 });
+
+test('restricted sessionStorage uses the same browsing-context identity across F5',()=>{
+  const restricted={getItem(){throw Error('sessionStorage denied');},
+    setItem(){throw Error('sessionStorage denied');}};
+  const tab={name:''},anotherTab={name:''};
+  let number=0;
+  const crypto={randomUUID:()=>String(++number).padStart(32,'0')};
+  const first=autosave.workspaceSessionId(restricted,crypto,tab);
+  assert.equal(autosave.workspaceSessionId(restricted,crypto,tab),first);
+  assert.equal(number,1);
+  assert.notEqual(autosave.workspaceSessionId(restricted,crypto,anotherTab),first);
+});
+
+test('durable backup absorbs older page checkpoints even with changed save metadata',()=>{
+  const map=new Map(),storage={
+    get length(){return map.size;},key:i=>[...map.keys()][i]||null,
+    getItem:key=>map.get(key)||null,
+    setItem:(key,value)=>map.set(key,String(value)),
+    removeItem:key=>map.delete(key)};
+  const make=(name,when,positionMs)=>autosave.checkpoint({
+    draft:studio.edit(studio.blank(),'name',name),selectedKey:null,
+    quality:'auto',prepared:false,positionMs},when);
+  const durable=autosave.collection('draft_first',make('Unchanged work',600,2000),601);
+  autosave.writeSessionLocal(storage,autosave.collection('draft_first',
+    make('Unchanged work',150,0),151),'tab_old_reload');
+  autosave.writeSessionLocal(storage,autosave.collection('draft_first',
+    make('Distinct unsent edits',160,0),161),'tab_other_tab');
+  assert.equal(autosave.pruneSessionLocals(storage,durable,'tab_current'),1);
+  const backups=autosave.readSessionLocals(storage);
+  assert.equal(backups.length,1);
+  assert.equal(backups[0].workspaces[0].checkpoint.draft.name,'Distinct unsent edits');
+});
