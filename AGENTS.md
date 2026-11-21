@@ -18,6 +18,34 @@ scientific documentation (`docs/`).
    browser/Legacy boundaries and research results belong in `docs/`.
    Implementation history belongs in Git, not `PROJECT_STATE.md`.
 
+## Reasoning level before implementation
+
+Before starting **any implementation that changes code or repository files**,
+briefly recommend the ChatGPT reasoning level in the user's language:
+
+- **Миттєве (Instant):** straightforward localized edits, small documentation
+  changes, obvious corrections with well-understood scope.
+- **Середній (Medium):** ordinary feature work, focused refactoring, UI and
+  tests, GitHub Issue implementation with moderate dependencies.
+- **Високий (High):** architecture decisions, numerical/physical algorithms,
+  optics rendering, difficult debugging, broad cross-component changes.
+
+Use this format before implementing:
+
+**Рекомендований рівень: Миттєве / Середній / Високий.**
+**Причина:** one or two sentences explaining the complexity and risk.
+
+The recommendation is advisory: the user controls the model/effort setting.
+Do not claim to have switched it yourself. If the task needs a higher level
+than the currently selected one, when that setting is known, recommend
+switching and **wait for the user's confirmation before implementation**.
+If the current setting is not visible, do not pretend to know it; provide
+the recommendation and proceed unless the user asks to pause.
+
+Routine discussion, exploratory analysis and simple answers do not require
+a pre-implementation recommendation. The level should reflect task risk,
+not merely its size or the presence of an Issue number.
+
 ## Git policy — one permanent branch, no PRs
 
 - **`main` is the only permanent development branch.** Normal authorized
