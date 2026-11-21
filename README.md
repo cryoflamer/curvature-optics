@@ -5,72 +5,7 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
-**Legacy locations → native Modern (active migration tracker):** All nine
-original demonstrations remain in the isolated Demos tab. Eight geographic
-scenarios now have **partial native adaptations**: Pontchartrain Transmission
-Line, Bedford, Chicago (near and distant), Canigou (two views), Grace,
-Pontchartrain Causeway, Tensas and Soundly. `single`/`rows` remain samples.
-Object geometry types `0–9` are supported, but **none** of the complete Legacy
-storyboards, composite overlays or narrated transitions is certified as
-reproduced. The read-only [storyboard readiness audit](docs/modern-location-migration.md)
-accounts for all **80 source states / 71 transitions** and their native preset
-anchors; the [location checklist](docs/modern-location-migration.md) tracks
-numerical, visual, animation and browser acceptance gates. The agreed next
-implementation path is the [Modern built-in demo catalog roadmap](docs/modern-demo-catalog.md):
-immutable Studio projects, editable copies, synchronized Compare playback and
-presentation mode. The first Soundly portable JSON and read-only catalog now
-ship with Modern; open Soundly from the Built-in Demos card gallery
-in Animation Library, then play or close it with the existing controls. Each
-demo card offers direct copy and portable export. My Projects retains independent
-backup selection and shows inherited covers before thumbnails. Personal cover
-editing is implemented. Soundly plays synchronized Globe/Flat vacuum Compare
-with Canvas Direct by default; the original Scene JSON is preserved.
-Click a compatible keyframe to pause and jump to its exact arrival time,
-without starting Play; a laid-out preview paints immediately. A horizontal
-Storyboard below playback is available, with a collapsible detailed editor.
-Explicit jumps lazily capture matching Scene/Compare keyframe thumbnails in a
-bounded IndexedDB cache; Capture thumbnail refreshes the selected view.
-Matching images survive reload and are shared across copies; portable exports
-include available keyframe images. **Presentation** opens a viewer-focused
-layout with the same player, Storyboard, HUD and optional fullscreen. **Open Studio**
-returns to editing without resetting playback. The optional **Frame explanation**
-field in Keyframe Editor follows the rendered clock in Presentation Mode, stays
-visible during outgoing travel, and survives draft recovery and project export.
-**Capture all keyframes** fills missing Storyboard images on isolated canvases;
-**Regenerate all thumbnails** refreshes them. **Export with thumbnails** creates
-complete portable JSON for the current prepared project; **Export without
-thumbnails** omits the keyframe images. Progress/cancel are independent of the
-visible playhead. Built-in portable assets can include ready-made thumbnails.
-Library backups still include available cached images. Storyboard batch export
-and filenames have been accepted in Opera. The runtime atmosphere variant
-engine now derives Vacuum/Standard eligibility from the project contract and
-active refraction, without editing the original or adding schema fields. No
-extra author flag is needed. Eligible prepared projects expose the shared
-**Atmosphere** selector in Studio and Presentation; it preserves playback time
-and uses separate exact-state thumbnails. The choice is runtime-only. Storyboard
-exports the current atmosphere as standalone portable JSON, including matching
-images when requested; PNG and video use the atmosphere selected at export
-start (Accurate RK4). Save and Library backups retain authored physics. Fixed
-Vacuum/Standard single-project filenames include the corresponding suffix.
-Atmosphere export was accepted in Opera. The independent [reference image
-foundation](docs/reference-images.md) now validates original/thumbnail bytes
-and provenance without coupling observations to simulation physics. The local
-Reference Image Library now imports, stores and edits photographs independently.
-Open its collapsed panel in Animation Studio; keep external original backups.
-7C.3 accepted in Opera. A selected keyframe can now attach, reorder or unlink
-local observation IDs through the thumbnail gallery in **Reference photographs**.
-Linked thumbnails open original details. Studio and Presentation show the real
-photograph at painted keyframe holds in Side by side, Below or Hidden layouts,
-with a resizable divider and ordered photo navigation. Photo deletion is
-temporarily disabled to protect references across projects and drafts. JSON
-exports now include all linked originals and metadata once per bundle, including
-compact Storyboard exports. Unlinked observations are not exported. Conflicting
-IDs are safely remapped on import. Presentation titles, chapter navigation and explanation visibility are available (7D.1). The viewer-only interface groups view settings and collapsible Storyboard, hiding author actions (7D.1.1); reference layout precedes physical viewport measurement and resize tracks painted widths (7D.1.2). The standalone full-presentation compositor (7D.2.1) now plans fixed/dynamic layouts and composes exact-size Accurate RK4 views with uncropped original photographs and narrative. Full presentation PNG export (7D.2.2) now supports current-frame Accurate RK4 preview/save and whole-frame PNG ZIPs with original photos, narrative and provenance. PNG export regression fix (7D.2.2.1) aligns project-validator cache keys across page/workers, verifies their field revision before rendering, and preflights sequence frame limits without restricting single-frame preview. Single-frame Opera export is confirmed. Streaming PNG export (7D.2.2.2) writes ordered ZIP32 entries to disk with bounded render buffering; memory download remains available. Next: confirm streaming in Opera, refine presentation layout (7D.2.2.3), then 7D.2.3 video integration and 7E generic demo finalization. [Camera calibration](docs/camera-calibration.md) is
-a planned separate research and development stage after infrastructure; final
-Causeway observation frames and other demo migration follow it. See the
-[updated roadmap](docs/modern-demo-catalog.md) and `PROJECT_STATE.md` to resume. Deferred improvements are tracked in the
-[living technical debt backlog](docs/technical-debt.md).
-Original Legacy Demos remain available.
+**Legacy versus native Modern:** The original nine fast illustrated storyboards remain in the isolated Demos runtime (80 states / 71 transitions). Partial native physical Scene/Compare adaptations are not equivalent to their complete Legacy animations. See [native scenario compatibility](docs/native-scenario-compatibility.md) and the [built-in Studio demo catalog](docs/demo-catalog.md). The first Soundly project is a read-only built-in, with explicit editable copies. Presentation, Storyboard, saved projects, reference photographs, PNG/video exports and atmosphere variants share the documented [Animation contracts](docs/modern-animation-contract.md) and [reference image ownership](docs/reference-images.md). This is **not yet photo-calibrated scientific Soundly content**; source verification and final authoring are tracked by [#37](https://github.com/cryoflamer/curvature-optics/issues/37). New work and acceptance gates belong in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues), not a second roadmap. The short [handoff](PROJECT_STATE.md) links to the current milestones.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one
 of the two illustrative samples. It is a *starting configuration*, not a
@@ -260,7 +195,9 @@ The modules are **not** partitioned purely by directory: for example, `src/legac
 - [Research archive](docs/research-archive.md) — CPU/WebGPU research removed from the active tree and Git worktree recovery.
 - [Historical documentation](docs/historical-records.md) — superseded migration/patch notes and Git recovery instructions.
 
-Superseded migration and patch-by-patch documents were retired from the active tree in #140.12.76. See [historical records and recovery](docs/historical-records.md) for the removal inventory and Git commands to read them. `PROJECT_STATE.md` remains a historical journal, not the current project specification. Focused technical evidence and documents used by regression tests were retained.
+Superseded migration and patch-by-patch documents were retired from the active tree in #140.12.76 and further consolidated for #28. See [historical records and recovery](docs/historical-records.md) for the removal inventory and Git commands to read them. `PROJECT_STATE.md` is now a short live handoff and GitHub Issues are the authoritative backlog. Focused scientific evidence and regression-backed documents remain tracked.
+
+The [current work queue](https://github.com/cryoflamer/curvature-optics/issues) is organized by [GitHub Milestones](https://github.com/cryoflamer/curvature-optics/milestones). Deferred and scientific investigations are Issues too; a closed implementation commit does not replace an Opera/scientific acceptance record.
 
 ## Quick verification
 

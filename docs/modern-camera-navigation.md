@@ -55,7 +55,7 @@ qualify for the local-gradient approximation, including refracting Flat
 surfaces. Invalid/unrepresentable input retains the available Fast/CSS
 fallback. Wheel, keyboard and Camera Animation use the same direct scheduler
 when supported. Wheel settles after 220 ms of inactivity. See
-[`interactive-rendering-migration.md`](interactive-rendering-migration.md)
+[interactive-rendering.md](interactive-rendering.md)
 for current acceptance gates and limitations.
 
 The signed observer position is displayed in **Camera** settings and saved

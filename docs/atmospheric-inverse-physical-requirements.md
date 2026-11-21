@@ -96,24 +96,11 @@ After establishing the dry reference calculation, adopt an appropriate **optical
 
 For the Lake Pontchartrain comparison, define the height interval actually sampled by the optical rays and the horizontal extent over which the proposed profile must persist. An extreme local lapse rate at one location is not equivalent to a coherent refractive field across the full scene. Compare predicted atmospheric conditions with independent measurements where available.
 
-## Proposed visualization (future patch; not implemented)
+## Conditional scientific diagnostic (not implemented)
 
-- For a model with an atmosphere, show a vertical colour strip or side plot of **required `T(h)` and/or local `dT/dh`**, computed from the selected `R_ref`, reference conditions, and the chosen thermodynamic assumptions.
-- Clearly mark `Γ_d ≈ 9.8 K/km`, the ratio `Γ_req/Γ_d`, and intervals where `N² < 0` or the assumed physical solution becomes invalid.
-- Show assumptions, units, altitude range, wavelength, and whether the result is a *required inverse profile* or a *forward-predicted atmosphere*.
-- **Vacuum:** no temperature, pressure, humidity, or stability plot; do not invent thermodynamic quantities for an absent atmosphere.
-- Scene/Compare display semantics should remain consistent; geometry radius and atmospheric refraction scale radius must remain independent.
-- Defer dynamical evolution/mixing animations until an explicit, tested dynamics model exists.
+A temperature/gradient and Brunt–Väisälä stability visualization requires an independently verified hydrostatic inverse, explicit dry/humid optical refractivity, units and height domain. Required lapse rate, local convective instability and actual mixing/evolution time are distinct assertions. Vacuum has no thermodynamic plot; an engineered optical radius is not a weather observation. [#35](https://github.com/cryoflamer/curvature-optics/issues/35) carries the complete future work and verification gates; [the historical proposal](https://github.com/cryoflamer/curvature-optics/blob/aa8b2b1a94fa72432648f2ffcec8929a90601b04/docs/atmospheric-inverse-physical-requirements.md) retains the original illustrative step-by-step sequence.
 
-For conditional numerical estimates of optical turbulence and a proposed simulation path, see [optical turbulence research](atmospheric-turbulence-research.md). Those estimates are **not** a calibrated prediction of image distortion.
-
-## Work sequence / acceptance questions
-
-1. Validate the dry-air optical refractivity coefficient and units at a declared wavelength and reference state; document uncertainty.
-2. Implement/test the analytic hydrostatic inverse solution independently of the renderer, including limiting cases, positivity bounds, and numerical consistency of `n(h)`.
-3. Calculate lapse rate and `N²(h)` from that solution, and compare with dry adiabatic values. Keep *existence*, *stability*, and *time evolution* separate.
-4. Add a physically grounded temperature/gradient diagnostic alongside the optical comparison, with explicit `not applicable` for Vacuum and `not physically admissible` when assumptions fail.
-5. Add humidity as a subsequent research increment; only then consider forced, time-dependent dynamics and observational comparisons.
+For conditional numerical optical-turbulence sensitivity, see [the research note](atmospheric-turbulence-research.md), not a predictive simulation.
 
 ## Scientific caveats
 

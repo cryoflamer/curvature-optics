@@ -1,6 +1,6 @@
 # Modern Animation project contracts — compatibility foundation
 
-**Built-in catalog and read-only project lifecycle:** see [Modern built-in demonstrations](modern-demo-catalog.md)
+**Built-in catalog and read-only project lifecycle:** see [Modern built-in demonstrations](demo-catalog.md)
 for the agreed catalog, immutable originals, independent copies and acceptance
 roadmap. Built-ins will reuse these contracts and portable project validators;
 origin/read-only status belongs to trusted catalog/lifecycle metadata rather
@@ -63,8 +63,7 @@ for playback, exact-state thumbnail lookup and detached batch capture. Switches
 never edit the contract. Step 7B.3 exports the effective variant through
 Storyboard JSON, PNG and video, while Library exports and save always use
 authored physics. A variant JSON is an independently valid project: its base
-and reference agree and its images match the exported physical frames. See
-the catalog roadmap for export routing and naming.
+and reference agree and its images match the exported physical frames. See the [catalog contract](demo-catalog.md) for export routing and naming.
 
 A **contract** is a prospective agreement about which History snapshots may be
 included in one animation. It is not a History search filter: a search result can
@@ -504,11 +503,10 @@ cameras are not moved to a new actual Earth model.
 atmospheric profiles** used by Accurate. Flat with Standard or supported
 Temperature lapse now uses **negative signed effective curvature** when rays
 bend downward, rather than pretending refraction is absent. Flat Vacuum still
-uses exact straight lines. Unsupported atmospheres, positive virtual Flat
-curvature, strongly anomalous gradients and out-of-range geometry are rejected
+uses exact straight lines. Unrepresentable atmospheres, invalid signed Flat mesh embeddings,
+strongly anomalous gradients and out-of-range geometry are rejected
 with an explicit Accurate fallback in the Animation Studio; this is not an
-authoritative physical visibility solver. See
-`docs/interactive-rendering-migration.md` for the signed Flat qualification.
+authoritative physical visibility solver. See [interactive rendering](interactive-rendering.md) for signed Flat support, fallback and current qualification limits.
 
 ## Geometry and constraints
 

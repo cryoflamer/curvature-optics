@@ -22,7 +22,7 @@ CurvatureApp.html?ui=legacy (diagnostics)    CurvatureModern.html (primary)
 - The authored `DrawModel(g)` entrypoint now also accepts an explicitly supplied model as its **third** argument (`DrawModel(g, diagnosticOptions, model)`). Horizon/object partitions and geographic point helpers receive that same model, and the normal Canvas presenter passes its owning `legacyAppContext.model` through the frame-audit bridge. Old one- and two-argument calls, including controlled diagnostic captures, still use the Legacy global for compatibility. This isolates the geometry **model reference**, not the remaining drawing DOM, audit globals or `ControlPanels`; direct Modern mounting is not yet safe.
 - Legacy Canvas routing now lives in `src/app/LegacyCanvasPresenter.js`. Each presenter receives the model, renderer, mode, diagnostic capture and fallback through explicit ports; two presenters can use independent graphs and status displays in one JS realm. `DrawMainCanvasFrame()` remains the historical callback for `GraphX3D`. This is a **draw-routing boundary**, not complete isolation of legacy drawing globals or a justification for removing the Demos iframe.
 - `src/ui/modern/ModernLocationCatalog.js` is a read-only, browser-loaded
-  identity registry for the [active geographic migration checklist](modern-location-migration.md).
+  identity registry for the [native scenario compatibility contract](native-scenario-compatibility.md).
   It does not register unsupported Scene presets or convert authored Legacy states.
 - `CurvatureModern.html` loads its own UI (`src/ui/modern/ModernApp.js`), state validators, scene composition and renderers. **Scene** has one viewport; **Compare** renders two physical configurations using separate A/B graphs with shared camera/object inputs. Compare A and B can use different surface and atmosphere settings.
 - `src/ui/modern/ModernRoute.js` routes bare `CurvatureApp.html` and old `?ui=modern` bookmarks to the **canonical `CurvatureModern.html` document** without rewriting browser history back to Legacy. Explicit `?ui=legacy` and historical `?state=`, `?demo=`, `?pos=`, `?play=`, `?tab=`, `?embed=` links still boot the unchanged Legacy runtime for reference and compatibility. Legacy `?state=` and Modern `?experiment=` are **different formats** and are not interchangeable.
@@ -68,11 +68,7 @@ Not every module is solely owned by the listed layer. Verify **actual callers an
 A future refactor should begin with a specific defect or maintenance goal and pass the [development verification](development.md), rather than another speculative sweep for unused code.
 
 ## Focused architectural references
-The [active Canvas Direct interactive rendering migration plan](interactive-rendering-migration.md)
-tracks the source-backed Scene/Compare drag, wheel, keyboard and Animation Studio
-preview architecture, staged rollout, and physical fallbacks. It is a *future
-work plan*, not evidence that Modern interactive preview has already migrated.
-
+[Interactive rendering](interactive-rendering.md) documents the current shared Canvas Direct/Accurate fallback and camera interaction contract. Remaining browser and optical-quality gates are recorded in [#32](https://github.com/cryoflamer/curvature-optics/issues/32), not a staged Markdown roadmap.
 
 The general architecture above is the current entry point. Keep the following
 specialized evidence accessible where maintenance or regression analysis needs

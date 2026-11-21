@@ -115,7 +115,7 @@ test('Curve teaches a combined Legacy projection without objects; Compare A/B is
     'no false native lesson preset may be enabled before its view is implemented');
   assert.equal(catalog.scenario('earth-curvature-lesson').status, 'not-ported');
   assert.ok(![1, 2].includes(controls.showModel));
-  assert.match(read('docs/modern-location-migration.md'), /Overlay-equivalent teaching view/);
+  assert.match(read('docs/native-scenario-compatibility.md'), /Overlay-equivalent teaching view/);
 });
 
 test('Bedford initial signed distances are three distinct markers; no clamping or fake Compare dual view', () => {
@@ -137,7 +137,7 @@ test('Bedford initial signed distances are three distinct markers; no clamping o
   assert.deepEqual(model.ObjDist, [124, 0], 'modern validator must reject, not clamp, signed range');
   assert.equal(catalog.scenario('bedford-level-experiment').nativePresetId, 'bedford');
   assert.equal(catalog.scenario('bedford-level-experiment').status, 'partial');
-  assert.match(read('docs/modern-location-migration.md'), /signed-distance prelude/);
+  assert.match(read('docs/native-scenario-compatibility.md'), /signed-distance prelude/);
 });
 
 test('source-only Grace zero spacing is retained as an explicit blocker instead of coerced geometry', () => {

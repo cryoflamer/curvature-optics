@@ -1,3 +1,5 @@
+> **Status:** historical architectural and numerical audit, not the current issue queue. Reconciled delivery/acceptance work is in GitHub [#6](https://github.com/cryoflamer/curvature-optics/issues/6), [#7](https://github.com/cryoflamer/curvature-optics/issues/7), [#12–#17](https://github.com/cryoflamer/curvature-optics/issues/12), [#23](https://github.com/cryoflamer/curvature-optics/issues/23) and [#24](https://github.com/cryoflamer/curvature-optics/issues/24). This source-backed research record contains intermediate design proposals and implementation diary entries: never read older “Next”, “pending CI” or checklists as current implementation truth. Inspect live Issues, source commits and tests before starting work.
+
 ## Animation Studio draft cleanup and recovery fix (#24)
 
 A source-level recovery amplification path was found: multiple tab backups

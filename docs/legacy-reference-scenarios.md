@@ -1,3 +1,5 @@
+> The pending original/Modern parity discussion is not a live checklist here. Future selective native scenario decisions and acceptance are tracked in [#38](https://github.com/cryoflamer/curvature-optics/issues/38); keep this document as preserved source/fixture evidence.
+
 # Reproducible Legacy reference scenarios
 
 Status: **source-state fixtures** (historical work item #140.12.57). The source fixture itself is **not a rendered oracle or pixel baseline**. A separate [actual six-frame Opera browser export](legacy-visual-validation.md) now provides original-Canvas **regression observations**, not a numerical ray-tracing oracle or proof of Legacy/Modern equivalence. A Modern translation and independent optical output remain **missing**.

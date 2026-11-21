@@ -1,9 +1,9 @@
 # Legacy feature migration plan
 
 > **Current active location/scenario migration tracker:**
-> [Modern geographic location migration — active checklist](modern-location-migration.md).
-> This page remains the historical feature/retirement analysis; the new
-> plan adapts static geographic scenes while retaining Legacy playback.
+> [Native Modern scenario compatibility (current boundary)](native-scenario-compatibility.md).
+> This page remains a **historical**, test-backed feature/retirement analysis;
+> separate future native ports require explicit decisions in [#38](https://github.com/cryoflamer/curvature-optics/issues/38). Legacy playback is retained.
 
 > **Historical test-backed inventory, not an active migration plan.** Legacy is
 > preserved as an independent animated application. See current

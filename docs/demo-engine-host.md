@@ -97,9 +97,9 @@ use globals. The iframe is still required in the working Modern Demos UI.
 Do not interpret factory tests as browser pixel parity or permission to
 remove the iframe.
 
-## Next step, not included here
+## Optional technical limitation (tracked in GitHub #39)
 
-Make the remaining model/graph/panel dependencies instance-scoped, then
+If future work is approved in [#39](https://github.com/cryoflamer/curvature-optics/issues/39), make the remaining model/graph/panel dependencies instance-scoped, then
 construct an isolated canvas/runtime without polluting Modern's global realm.
 Remove the iframe **only after** actual Opera playback and visual parity
 checks of all nine families. Do not delete `CurvatureApp.html` before this

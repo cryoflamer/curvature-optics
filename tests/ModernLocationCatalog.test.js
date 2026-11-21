@@ -109,18 +109,19 @@ test('browser loads the metadata exactly once before Scene adapter and ModernApp
   assert.doesNotMatch(module, /(?:eval\(|new Function\(|\bfetch\()/);
 });
 
-test('active migration checklist exposes all stable scenario IDs and tracks completion without falsely certifying geometry', () => {
-  const doc = read('docs/modern-location-migration.md');
-  const stage = doc.slice(doc.indexOf('### Stage D'), doc.indexOf('### Stage E'));
-  const checkItems = [...stage.matchAll(/^- \[([ xX])\] `([a-z-]+)`/gm)];
-  assert.deepEqual(checkItems.map(m => m[2]), catalog.SCENARIOS.map(s => s.id));
-  // A completed migration may turn [ ] into [x] without breaking this test.
-  // Evidence and the catalog status should be reviewed as part of that patch.
-  for (const path of ['README.md', 'PROJECT_STATE.md', 'docs/legacy-migration-plan.md', 'docs/architecture.md']) {
-    assert.match(read(path), /modern-location-migration\.md/, path + ' should link to the active checklist');
+test('current compatibility reference keeps all stable scenario IDs without a duplicate TODO checklist', () => {
+  const doc = read('docs/native-scenario-compatibility.md');
+  const rows = doc.split('\n').filter(line => line.startsWith('| `')).map(line => line.split('`')[1]);
+  assert.deepEqual(rows, catalog.SCENARIOS.map(s => s.id));
+  // The data source remains the immutable catalog + source animations.
+  // Docs retain the separate-physics gates without pretending a port happened.
+  for (const file of ['README.md', 'PROJECT_STATE.md', 'docs/legacy-migration-plan.md',
+    'docs/architecture.md']) {
+    assert.ok(read(file).includes('native-scenario-compatibility.md'),
+      file + ' should link to the current technical boundary');
   }
-  assert.match(doc, /History, save\/reload/);
-  assert.match(doc, /Scene and both Compare A\/B/);
+  assert.match(doc, /Scene and both Compare/);
   assert.match(doc, /71 authored transitions/);
-  assert.match(doc, /not an objective/);
+  assert.match(doc, /not approved/);
+  assert.match(doc, /signed-distance prelude/i);
 });

@@ -208,6 +208,14 @@ See [Legacy reference validation](legacy-visual-validation.md), [Legacy preserva
 - For a targeted Git change, run relevant tests **before and after**, inspect `git diff --check`, document any pre-existing failures, and test clean `git am --3way` application if distributing a compatpatch. Prefer **one commit per compatpatch**. A Git format-patch can contain binary diffs but does **not** create a tag.
 - Do not silently rebaseline PNGs or accept Legacy/Modern parity on filename, JSON field-name match or a visually similar screenshot. Physical correctness, numerical agreement and regression stability are distinct questions.
 
+## Backlog ownership and documentation lifecycle (Issue #28)
+
+**GitHub Issues are the sole active backlog.** New implementation tasks, deferred technical debt, research proposals, dependencies, missing CI evidence and manual browser/scientific acceptance gates must be filed or updated there. Use [Milestones](https://github.com/cryoflamer/curvature-optics/milestones) for workstreams. Before creating a new Issue, check all open/closed Issues and source/CI evidence so old stage notes are not re-filed as new work. Separate implemented, CI-verified and manually accepted states.
+
+Markdown files describe **durable** architecture, physics and numerical derivations, source/data/provenance contracts, limitations, reproducible experiments and supported workflows. They may link to Issues, but must not accumulate unchecked TODO roadmaps or chronological compatpatch journals. Historical notes can remain only when specifically useful for technical evidence or regression fixtures and are explicitly marked noncanonical. Recover removed plans from Git history; [historical records](historical-records.md) explains how.
+
+When closing an Issue, retain acceptance evidence and relevant commit/CI links there. Update the current technical contract if runtime behavior changes, preserve old external URLs and original photo identities, run relative-link/documentation regressions, and never silently weaken scientific checks or claim browser tests that were not run.
+
 ## Documentation lifecycle
 
 `README.md`, `architecture.md`, `physics.md`, `user-guide.md` and this page are the **current entry points**. [Research archive](research-archive.md) documents recovery of removed CPU/WebGPU experiments. [Historical records](historical-records.md) inventories 71 retired migration/patch-note documents and explains how to recover them from Git; selected older scientific notes and test contracts remain tracked intentionally. Prefer updating current guides when implemented behavior changes instead of adding a new “plan” for every patch.

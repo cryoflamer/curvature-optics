@@ -1,3 +1,5 @@
+> **Status:** historical animation-system research and implementation evidence. Current animation contracts live in [modern-animation-contract.md](modern-animation-contract.md), and actionable work in [#25](https://github.com/cryoflamer/curvature-optics/issues/25), [#27](https://github.com/cryoflamer/curvature-optics/issues/27) and other GitHub Issues. Early “missing module” and recommended compatpatch sequence below predate delivered code, **not an active backlog**.
+
 # Curvature — дослідження єдиної системи фізичної анімації
 
 **База коду:** реконструйований стан після Compatpatch #140.12.119.3 (`248512a` у дослідницькому Git-дереві).  

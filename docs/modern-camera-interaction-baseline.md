@@ -96,7 +96,10 @@ must keep the observer position and both models' physical parameters fixed.
 Both Compare viewports must receive the same camera angles; the originating
 viewport only determines the pixel-to-angle calibration.
 
-## Planned follow-ups and gates
+## Historical follow-up proposal (no longer an active backlog)
+
+These 137.x proposals predate shared Canvas Direct input/motion implementation and are retained as profiling evidence only. Current eligibility, browser fallback and optional profiling gates are in [interactive rendering](interactive-rendering.md) and [#32](https://github.com/cryoflamer/curvature-optics/issues/32). Do not reimplement an already superseded stage.
+
 
 1. **137.1**: hook pointerdown/move/up/cancel + pointer capture to the Scene
    and both Compare canvases, with one shared camera state; exercise both

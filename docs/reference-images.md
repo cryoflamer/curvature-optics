@@ -1,6 +1,6 @@
 # Reference images and observation sources
 
-Status: 7C.5 foundation, local Library, keyframe links, presentation and portable asset transport implemented. See [demo roadmap](modern-demo-catalog.md) for order and
+Status: 7C.5 foundation, local Library, keyframe links, presentation and portable asset transport implemented. See [built-in demo contract](demo-catalog.md) for implementation and [#33](https://github.com/cryoflamer/curvature-optics/issues/33) for remaining browser acceptance,
 [camera calibration](camera-calibration.md) for the deferred research project.
 
 ## Purpose and boundaries
@@ -244,7 +244,7 @@ assets undergo structural validation at catalog generation; validate their image
 content and publication rights before shipping. Existing Soundly remains unchanged.
 No photography is added here. PNG/video composition and safe deletion remain deferred.
 
-## Remaining delivery steps
+## Historical delivery evidence (outstanding gates are GitHub Issues)
 
 - 7C.2: implemented as above; accepted in Opera.
 - 7C.3: implemented local ID links as above; accepted in Opera.

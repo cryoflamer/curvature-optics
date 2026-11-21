@@ -1,3 +1,5 @@
+> **Historical test-backed planning/implementation evidence; not an active TODO list.** New UX and Modern application work belongs in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues), with active entrypoints documented in [architecture](architecture.md). Retained for protected Legacy/Modern ownership and comparison records.
+
 # Modern UI plan — compatibility patches 130–134
 
 > **Historical design record retained for regression tests.** Statements below

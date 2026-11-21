@@ -38,16 +38,16 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
     'refactor-closure-140.12.73.md','cpu-hybrid-shooting.md']) {
     assert.ok(!names.includes(name), `superseded documentation is back: ${name}`);
   }
-  // The Animation v2 guides, location checklist, and the active topic-based
-  // interactive-rendering migration plan, built-in demo catalog roadmap,
-  // and the reference image / calibration topic contracts
-  // are bounded exceptions, not permission
-  // for another chronological series of patch diaries.
+  // Surviving topical/physical contracts are not active TODO roadmaps.
+  // The old four living backlog files were intentionally migrated to Issues.
   for(const name of ['modern-animation-contract.md', 'modern-animation-project-wizard.md',
-    'modern-location-migration.md', 'interactive-rendering-migration.md', 'modern-demo-catalog.md',
-    'reference-images.md', 'camera-calibration.md', 'technical-debt.md',
+    'native-scenario-compatibility.md', 'interactive-rendering.md', 'demo-catalog.md',
+    'reference-images.md', 'camera-calibration.md',
     'landmark-editor.md', 'landmark-editor-audit.md'])
     assert.ok(names.includes(name), 'required topic-based guide missing: '+name);
+  for (const name of ['modern-location-migration.md', 'interactive-rendering-migration.md',
+    'modern-demo-catalog.md', 'technical-debt.md'])
+    assert.ok(!names.includes(name), 'retired backlog has reappeared: '+name);
   assert.ok(names.length <= 58, 'a chronological documentation tree was reintroduced');
 });
 

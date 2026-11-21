@@ -30,10 +30,7 @@ engineered-ray, fused-gradient qualification, Legacy reference/animation,
 WebGL2 renderer and camera-interaction documents are likewise retained where
 there is a specific technical or testing reason.
 
-`PROJECT_STATE.md` remains a **historical development journal**, not the
-current architectural contract. It may mention files that now exist only in
-Git history. Do not treat its old instructions as instructions to enable
-archived CPU/WebGPU research.
+`PROJECT_STATE.md` was reduced for #28 to a **short live handoff**, not an alternative roadmap. Its pre-migration 6,965-line journal remains accessible at [the previous revision](https://github.com/cryoflamer/curvature-optics/blob/aa8b2b1a94fa72432648f2ffcec8929a90601b04/PROJECT_STATE.md). Old instructions do not authorize reviving CPU/WebGPU research.
 
 ## Recover a retired document from Git
 
@@ -61,18 +58,15 @@ experiments. A Git format-patch does not create tags.
 
 ## Documentation policy going forward
 
-**Specific active-plan exception (2026-11-16):**
-[`modern-location-migration.md`](modern-location-migration.md) is a persistent,
-evidence-gated checklist for migrating named Legacy geographic scenarios to
-native Modern Scene/Compare. It is deliberately maintained across many commits
-rather than being a chronological compatpatch diary. Its existence does not
-revive archived migration logs or authorize removing the independent Legacy
-playback runtime. The documentation inventory cap permits this one additional
-focused guide.
+**Issue #28 update:** The remaining living TODO inventories were migrated to GitHub Issues. The following source documents were removed after preserving stable technical summaries and mapping tasks to Issues:
 
-Update the current guides when implementation changes. Preserve focused
-numerical/physical evidence as necessary, and keep regression fixtures and
-tests independent of deleted patch journals. New one-off plans should not be
-added to the active documentation merely to record another commit; Git history
-provides that chronology. Revisit this policy only for a specific maintenance
-need or a reproducible failure.
+| Former backlog / roadmap file | Current destination |
+| --- | --- |
+| `docs/technical-debt.md` | #29 HUD, #30 vertical guides, #31 persistence |
+| `docs/interactive-rendering-migration.md` | [interactive rendering](interactive-rendering.md) and #32 acceptance |
+| `docs/modern-demo-catalog.md` | [demo catalog](demo-catalog.md), #33 browser acceptance, #37 Soundly |
+| `docs/modern-location-migration.md` | [native-scenario compatibility](native-scenario-compatibility.md), #38 deliberate deferred decision |
+
+These originals remain available at [the pre-consolidation revision](https://github.com/cryoflamer/curvature-optics/tree/aa8b2b1a94fa72432648f2ffcec8929a90601b04). Scientific methods, verified observations and current data/renderer contracts must remain in durable topical docs, not be discarded because an earlier file was titled a plan.
+
+New implementation tasks, deferred research and pending acceptance belong in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues). Keep regression-backed technical documents. A future documentation cleanup must first trace source links, migrate valuable content, and review test/fixture readers; no new parallel TODO trackers.

@@ -1,3 +1,5 @@
+> **Documentation boundary:** This is a scientific/calibration implementation record, with historical stage notes and current physical contracts. For actual unresolved work and acceptance status, use GitHub [#6](https://github.com/cryoflamer/curvature-optics/issues/6), [#7](https://github.com/cryoflamer/curvature-optics/issues/7), [#14](https://github.com/cryoflamer/curvature-optics/issues/14), and [#37](https://github.com/cryoflamer/curvature-optics/issues/37). Old “Next” and CI-pending notes are **historical**, not a second task queue.
+
 ## 8F.5b.3c — Selected physical point orbit pivot
 
 Integrated Globe Free View uses the staged/confirmed material point or selected
@@ -800,7 +802,7 @@ The primary deliverable of 8A–8E is a reusable photo-to-camera authoring tool:
 
 This avoids interrupting the existing Studio work and avoids manually fitting
 all existing Soundly frames before a reusable tool exists. Read
-[reference images](reference-images.md) and the [demo roadmap](modern-demo-catalog.md)
+[reference images](reference-images.md) and the [built-in demo contract](demo-catalog.md)
 when resuming in a new session.
 
 ## Initial headless point projector (8A.1)

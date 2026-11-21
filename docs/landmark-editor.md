@@ -1,3 +1,5 @@
+> **Current work and acceptance:** GitHub [#7](https://github.com/cryoflamer/curvature-optics/issues/7), related generic calibration [#6](https://github.com/cryoflamer/curvature-optics/issues/6) and workflow [#14](https://github.com/cryoflamer/curvature-optics/issues/14). Historical numbered stages below preserve physical geometry, UI and schema evidence, **not live TODO status**. The full 20-pair Soundly browser gate remains unverified until actually accepted.
+
 # Physical-only correspondence editor (8F.6l)
 
 The integrated physical Free View is the sole correspondence editing route.
@@ -101,7 +103,7 @@ Buttons and modes are implementation details, not prerequisites.
   alternatives. No regressions in import/export, fit, residuals, persistence,
   physical anchors, or navigation.
 
-## Roadmap
+## Historical implementation roadmap (noncanonical)
 
 | Stage | Scope |
 | --- | --- |
@@ -847,21 +849,21 @@ Report negative results and termination status, not just improved training RMS.
 
 ## Definition of done
 
-- [ ] Individual object selection and highlighting are reliable in supported scenes.
-- [ ] Modeless rectangular magnifier re-renders the same initial optical view
+- Individual object selection and highlighting are reliable in supported scenes.
+- Modeless rectangular magnifier re-renders the same initial optical view
   with independent orbit/pan/zoom and reliable Reset View.
-- [ ] Multi-owner context and the generic workflow are verified on Soundly
+- Multi-owner context and the generic workflow are verified on Soundly
   and another scene type before local picking.
-- [ ] Magnifier navigation leaves the experiment camera unchanged.
-- [ ] Vertex, edge and surface anchors are selectable and physically projected.
-- [ ] Existing correspondences can be refined without losing photo pixels or roles.
-- [ ] Fit, Validation, residuals and stale-result invalidation work for new anchors.
-- [ ] Portable JSON and drafts round-trip; older experiments remain readable.
-- [ ] Topology changes produce explicit invalid-anchor handling.
-- [ ] Geometry, projection, solver and browser regressions pass.
-- [ ] Soundly comparison and limitations are documented.
+- Magnifier navigation leaves the experiment camera unchanged.
+- Vertex, edge and surface anchors are selectable and physically projected.
+- Existing correspondences can be refined without losing photo pixels or roles.
+- Fit, Validation, residuals and stale-result invalidation work for new anchors.
+- Portable JSON and drafts round-trip; older experiments remain readable.
+- Topology changes produce explicit invalid-anchor handling.
+- Geometry, projection, solver and browser regressions pass.
+- Soundly comparison and limitations are documented.
 
-## Roadmap after 8F
+## Historical follow-up directions (tasks belong in GitHub)
 
 Resume 8C.5a (existing SVD diagnostics exposed in UI), 8C.5b (Huber loss if
 justified), 8C.5c (automated influence analysis), 8C.6 (multistart/DLT/P3P),
