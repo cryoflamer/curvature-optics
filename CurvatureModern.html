@@ -164,7 +164,21 @@
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="B"></script>
   </div>
   <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
-    <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · physical correspondences and optical fit</p></div><button type="button" id="ModernCalibrationClose">Back to Scene</button></header>
+    <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · physical correspondences and optical fit</p></div><div class="modern-calibration-toolbar"><button type="button" id="ModernCalibrationProjectsToggle" aria-expanded="false" aria-controls="ModernCalibrationProjectsPanel">Projects</button><button type="button" id="ModernCalibrationClose">Back to Scene</button></div></header>
+    <section id="ModernCalibrationProjectsPanel" aria-label="Calibration Projects" hidden>
+      <div class="modern-calibration-projects-toolbar">
+        <h2>Calibration Projects</h2>
+        <button type="button" id="ModernCalibrationProjectsRefresh">Refresh list</button>
+        <button type="button" id="ModernCalibrationProjectsBack">Back to editor</button>
+      </div>
+      <p>Saved Calibration Projects are independent editable drafts. Opening another project first saves the current work. Reference images and archived results are never deleted by this list.</p>
+      <p id="ModernCalibrationProjectsStatus" role="status" aria-live="polite"></p>
+      <div id="ModernCalibrationProjectsLegacy" hidden>
+        <p>Your previous calibration draft is still safe. You can explicitly adopt it as a project while keeping the original recovery copy.</p>
+        <button type="button" id="ModernCalibrationProjectsAdopt">Adopt existing draft</button>
+      </div>
+      <div id="ModernCalibrationProjectsList" class="modern-calibration-projects-list" aria-label="Saved calibration projects"></div>
+    </section>
     <nav class="modern-calibration-stages" aria-label="Photo calibration stages">
       <button type="button" data-calibration-stage="correspondences" aria-current="step">1 · Correspondences</button>
       <button type="button" data-calibration-stage="calibration">2 · Calibration</button>

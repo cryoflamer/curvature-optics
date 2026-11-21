@@ -1575,3 +1575,21 @@ button{cursor:pointer}
 #ModernGraphHost[data-photo-display-mode="photo"] .modern-camera-telemetry,
 #ModernGraphHost[data-photo-display-mode="photo"] .modern-target-direction,
 #ModernGraphHost[data-photo-display-mode="photo"] .modern-temperature-column{visibility:hidden}
+
+/* Calibration Projects stays within the Photo Calibration workspace. */
+#ModernCalibrationProjectsPanel[hidden]{display:none!important}
+#ModernPhotoCalibration[data-projects-list=open] > :not(header):not(#ModernCalibrationProjectsPanel){display:none!important}
+.modern-calibration-projects-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 12px}
+.modern-calibration-projects-toolbar h2{flex:1 1 200px;margin:0}
+#ModernCalibrationProjectsStatus{min-height:1.4em;font-size:13px;color:#375c7b}
+#ModernCalibrationProjectsStatus.is-error{color:#a12232}
+#ModernCalibrationProjectsLegacy{border:1px solid #bfd6e9;background:#f1f7fd;border-radius:8px;padding:10px 14px;margin:12px 0}
+#ModernCalibrationProjectsLegacy[hidden]{display:none!important}
+.modern-calibration-projects-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;margin-top:12px}
+.modern-calibration-project-card{border:1px solid #c4d6e4;border-radius:9px;padding:14px;background:#f9fcff;min-width:0}
+.modern-calibration-project-card[data-project-active=true]{border-color:#2377ae;background:#f1f8fe}
+.modern-calibration-project-card h3{overflow-wrap:anywhere;margin:0 0 8px}
+.modern-calibration-project-card p{margin:4px 0;font-size:13px;color:#355b76;overflow-wrap:anywhere}
+.modern-calibration-project-card .modern-calibration-project-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.modern-calibration-project-card .modern-calibration-project-label{font-size:12px;font-weight:600;color:#1f5f99}
+@media(max-width:760px){.modern-calibration-projects-list{grid-template-columns:1fr}}

@@ -852,11 +852,161 @@
       // belong to 8F.7p.5. Never replace current editor on failed prepare.
       return helper.prepare(project,env);
     }
+    // Project list is metadata-only: never decode photo originals to draw cards.
+    const projectsToggle=$('ModernCalibrationProjectsToggle'),
+      projectsPanel=$('ModernCalibrationProjectsPanel'),
+      projectsBack=$('ModernCalibrationProjectsBack'),
+      projectsRefresh=$('ModernCalibrationProjectsRefresh'),
+      projectsAdopt=$('ModernCalibrationProjectsAdopt'),
+      projectsLegacy=$('ModernCalibrationProjectsLegacy'),
+      projectsStatus=$('ModernCalibrationProjectsStatus'),
+      projectsList=$('ModernCalibrationProjectsList');
+    const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
+    let projectRows=[],projectListBusy=false,projectListToken=0,projectInspection=null;
+    function projectsMessage(text,error=false){
+      projectsStatus.textContent=text;
+      projectsStatus.classList.toggle('is-error',error);
+    }
+    function projectsControls(){
+      projectsToggle.setAttribute('aria-expanded',String(!projectsPanel.hidden));
+      projectsBack.disabled=projectListBusy;
+      projectsRefresh.disabled=projectListBusy;
+      projectsAdopt.disabled=projectListBusy;
+    }
+    function projectStamp(ts){
+      return Number.isSafeInteger(ts)?new Date(ts).toLocaleString():'Unknown time';
+    }
+    function projectRow(entry){
+      const card=doc.createElement('article');
+      card.className='modern-calibration-project-card';
+      card.dataset.calibrationProjectId=entry.id;
+      const state=projectSession?.state();
+      const active=state?.projectId===entry.id,unsaved=active&&state.unsaved;
+      card.dataset.projectActive=String(active);
+      card.dataset.projectUnsaved=String(!!unsaved);
+      const name=doc.createElement('h3');name.textContent=entry.title;
+      card.append(name);
+      const desc=doc.createElement('p');
+      desc.textContent=[
+        entry.photo?'Photo '+entry.photo.width+' × '+entry.photo.height+' px':'No reference photo',
+        entry.stage==='result'?'Result':entry.stage==='calibration'?'Calibration':'Correspondences',
+        entry.rowCount+' correspondences'
+      ].join(' · ');
+      card.append(desc);
+      const fitLine=doc.createElement('p');
+      fitLine.textContent=entry.fitRmsPx!==null?
+        'Best fit RMS '+Number(entry.fitRmsPx.toPrecision(5))+' px'+
+          (entry.fitStatus?' · '+entry.fitStatus:''):
+        'Fit: '+(entry.fitStatus||'Not yet fitted');
+      card.append(fitLine);
+      const updated=doc.createElement('p');
+      updated.textContent='Updated '+projectStamp(entry.updatedAt)+' · Revision '+entry.revision;
+      card.append(updated);
+      const actions=doc.createElement('div');
+      actions.className='modern-calibration-project-actions';
+      const open=doc.createElement('button');open.type='button';
+      open.textContent=active?'Reopen':'Open';
+      open.dataset.calibrationProjectOpen=entry.id;
+      open.disabled=projectListBusy;
+      open.onclick=()=>void openFromProjects(entry.id);
+      actions.append(open);
+      if(active){
+        const label=doc.createElement('span');
+        label.className='modern-calibration-project-label';
+        label.textContent=state.error?'Unsaved — '+state.error:
+          unsaved?'Unsaved changes':state.pending?'Saving…':'Active project';
+        actions.append(label);
+      }else if(entry.forkOf){
+        const label=doc.createElement('span');label.className='modern-calibration-project-label';
+        label.textContent='Conflict copy';actions.append(label);
+      }
+      card.append(actions);
+      return card;
+    }
+    function renderProjects(){
+      projectsList.replaceChildren(...projectRows.map(projectRow));
+      if(!projectRows.length){
+        const empty=doc.createElement('p');
+        empty.textContent='No saved Calibration Projects yet. Your current editor draft remains separate and untouched.';
+        projectsList.append(empty);
+      }
+      projectsLegacy.hidden=projectInspection?.status!=='legacy-pending';
+      const state=projectSession?.state();
+      if(state?.error)projectsMessage('Active project has unsaved changes: '+state.error,true);
+      else if(state?.unsaved)projectsMessage('Active project has unsaved changes. Resolve its save before opening another project.',true);
+      else if(!projectListBusy&&projectInspection?.status==='recovery-required')
+        projectsMessage('Existing draft needs recovery: '+projectInspection.reason+
+          '. The original was not modified.',true);
+      projectsControls();
+    }
+    async function refreshProjectList(){
+      const token=++projectListToken,storage=env.CurvatureModernCalibrationProjectStore,
+        migration=env.CurvatureModernCalibrationProjectMigration;
+      if(!storage||!migration){projectsMessage('Calibration Projects storage unavailable.',true);return;}
+      projectsMessage('Reading saved project metadata…');
+      projectsRefresh.disabled=true;
+      try{
+        const [rows,inspection]=await Promise.all([
+          storage.list(env.indexedDB),migration.inspect(env)
+        ]);
+        if(token!==projectListToken||projectsPanel.hidden)return;
+        projectRows=rows;
+        projectInspection=inspection;
+        projectsMessage(rows.length+' saved Calibration Project'+(rows.length===1?'':'s')+'.');
+        renderProjects();
+      }catch(error){
+        if(token===projectListToken&&!projectsPanel.hidden)
+          projectsMessage('Cannot load projects: '+error.message+'. Current work is unchanged.',true);
+      }finally{if(token===projectListToken)projectsControls();}
+    }
+    function showProjectList(open){
+      if(projectListBusy)return;
+      projectsPanel.hidden=!open;
+      workspace.dataset.projectsList=open?'open':'closed';
+      projectsControls();
+      if(open)void refreshProjectList();
+      else{++projectListToken;projectsToggle.focus();}
+    }
+    async function openFromProjects(id){
+      if(projectListBusy)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Saving current work and verifying the selected project…');
+      try{
+        const outcome=await openCalibrationProject(id);
+        try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,outcome.project.id);}
+        catch(_ignored){/* Session selection is optional. Never store photo bytes. */}
+        // The caller must leave the library after a successful activation;
+        // do not hide the editor on any failed validation or save.
+        projectListBusy=false;
+        showProjectList(false);
+      }catch(error){
+        projectsMessage('Cannot open project: '+error.message+'. The current editor was retained.',true);
+      }finally{projectListBusy=false;renderProjects();}
+    }
+    async function adoptFromProjects(){
+      if(projectListBusy)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Verifying and adopting existing draft; the original will be retained…');
+      try{
+        const saved=await adoptLegacyCalibrationDraft();
+        projectListBusy=false;
+        await refreshProjectList();
+        projectsMessage('Existing draft adopted as '+saved.title+'. Choose Open to activate it.');
+      }catch(error){
+        projectsMessage('Adoption failed: '+error.message+'. The original draft was retained.',true);
+      }finally{projectListBusy=false;renderProjects();}
+    }
+    projectsToggle.onclick=()=>showProjectList(projectsPanel.hidden);
+    projectsBack.onclick=()=>showProjectList(false);
+    projectsRefresh.onclick=()=>void refreshProjectList();
+    projectsAdopt.onclick=()=>void adoptFromProjects();
     function persistenceSession(){
       if(!projectSession){
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
-        projectSession=helper.create(env);
+        projectSession=helper.create(env,{onChange:()=>{
+          if(!projectsPanel.hidden)renderProjects();
+        }});
       }
       return projectSession;
     }
@@ -966,6 +1116,44 @@
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
       finally{restoring=false;if(scene&&!physicalSessionId)newPhysicalSession();syncFitControls();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
+    }
+    async function adoptLegacyCalibrationDraft(){
+      const migration=env.CurvatureModernCalibrationProjectMigration;
+      if(!migration)throw Error('Calibration migration unavailable');
+      if(projectSession?.project())
+        throw Error('An active Calibration Project is already bound; use Open instead');
+      if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+         photoGestures.active||resultGestures.active)
+        throw Error('Stop fitting, applying, loading or editing endpoints before adoption');
+      const previousInert=workspace.inert,request=++projectSwitchEpoch;
+      projectSwitchBusy=true;switchInterference=false;workspace.inert=true;
+      let observed=editorMutation;
+      try{
+        if(scene){
+          const outgoing=persist(true);
+          if(outgoing)await outgoing;
+        }
+        await writeQueue;
+        observed=editorMutation;
+        if(projectSwitchEpoch!==request||switchInterference||editorMutation!==observed)
+          throw Error('Editor changed during adoption');
+        if(dbPromise){const open=await dbPromise;open.close();dbPromise=null;}
+        const check=await migration.inspect(env);
+        if(check.status==='recovery-required')
+          throw Error('Legacy draft needs raw recovery: '+check.reason);
+        if(check.status!=='legacy-pending')
+          throw Error('There is no eligible legacy draft to adopt');
+        const outcome=await migration.migrate(env);
+        if(projectSwitchEpoch!==request||switchInterference||editorMutation!==observed)
+          throw Error('Editor changed during adoption; original draft is still available');
+        if(!outcome.project||!['migrated','already'].includes(outcome.status))
+          throw Error('Draft migration produced no openable project');
+        projectStartupStatus={status:'adopted',projectId:outcome.project.id};
+        return outcome.project;
+      }finally{
+        projectSwitchBusy=false;workspace.inert=previousInert;
+        if(switchInterference&&scene)void persist();
+      }
     }
     // The only editor-side project switch entry point. The library UI added
     // in 8F.7p.6 will invoke this explicit operation; startup never does.
@@ -1898,11 +2086,17 @@
         e.preventDefault();deletePair(workflow.activePair);
       }
     });
-    for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
+    for(const event of ['click','change','input','pointerup','pointercancel','wheel'])
+      workspace.addEventListener(event,e=>{
+        // Project library actions never represent mutations of editor state.
+        if(e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'))return;
+        persist();
+      });
     syncFitControls();syncPairToolbar();
     mounted={enter,restore:restoreDraft,inspectProjectStartup,
       projectStartupStatus:()=>({...projectStartupStatus}),
-      openCalibrationProject,projectPersistenceStatus:()=>projectSession?.state()||null,
+      openCalibrationProject,adoptLegacyCalibrationDraft,
+      refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,
       captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,

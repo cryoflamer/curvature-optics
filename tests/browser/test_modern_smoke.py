@@ -599,6 +599,45 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(self.page.evaluate(
             "d=>CurvatureModernPhotoCalibrationEditor.mount(document).importExperiment(d)",data))
 
+
+    def test_calibration_projects_library_adopts_retained_draft_and_reopens_it(self):
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        button=workspace.locator('#ModernCalibrationProjectsToggle')
+        button.click()
+        expect(panel).to_be_visible()
+        expect(button).to_have_attribute('aria-expanded','true')
+        expect(workspace.locator('#ModernCalibrationProjectsLegacy')).to_be_visible(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationProjectsList')).to_contain_text(
+            'No saved Calibration Projects')
+        workspace.locator('#ModernCalibrationProjectsAdopt').click()
+        rows=workspace.locator('[data-calibration-project-id]')
+        expect(rows).to_have_count(1,timeout=30000)
+        expect(workspace.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'Existing draft adopted',timeout=30000)
+        row=rows.first
+        self.assertIn('correspondences',row.inner_text().lower())
+        self.assertIn('No reference photo',row.inner_text())
+        self.assertEqual(self.page.evaluate("""async () => {
+            const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
+            const item=await CurvatureModernCalibrationProjectStore.get(indexedDB,rows[0].id);
+            return {count:rows.length,photo:item.photo,embedded:JSON.stringify(item).includes('data:image'),
+                raw:!!(await CurvatureModernCalibrationProjectStore.legacy(indexedDB))};
+        }"""),{'count':1,'photo':None,'embedded':False,'raw':True})
+        row.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        expect(button).to_have_attribute('aria-expanded','false')
+        expect(workspace.locator('#ModernCalibrationStorage')).to_contain_text(
+            'Calibration Project',timeout=30000)
+        button.click()
+        expect(panel).to_be_visible()
+        selected=workspace.locator('[data-project-active="true"]')
+        expect(selected).to_have_count(1)
+        expect(selected).to_contain_text('Active project')
+        workspace.locator('#ModernCalibrationProjectsBack').click()
+        expect(panel).to_be_hidden()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_atmosphere_retains_observations_and_changes_worker_projection(self):
         workspace=self.open_physical_calibration()
         data=self.soundly_calibration_experiment()

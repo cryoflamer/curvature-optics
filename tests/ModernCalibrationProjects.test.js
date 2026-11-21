@@ -812,3 +812,24 @@ test('project editor captures bound autosave before a queued task and persists i
   assert.match(src,/if\(oldView\)activateVisualProject\(oldView\)/);
   assert.match(src,/else\{\s*\/\/ The first explicit open can start from an empty editor/);
 });
+
+test('Calibration Projects library reads only compact summaries and opens through the guarded editor API',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const root=path.resolve(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const source=fs.readFileSync(path.join(root,'src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  for(const id of ['ModernCalibrationProjectsToggle','ModernCalibrationProjectsPanel',
+    'ModernCalibrationProjectsRefresh','ModernCalibrationProjectsBack','ModernCalibrationProjectsStatus',
+    'ModernCalibrationProjectsList','ModernCalibrationProjectsAdopt','ModernCalibrationProjectsLegacy'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  assert.match(source,/storage\.list\(env\.indexedDB\)/);
+  assert.match(source,/migration\.inspect\(env\)/);
+  assert.match(source,/async function openFromProjects\(id\)/);
+  assert.match(source,/await openCalibrationProject\(id\)/);
+  assert.match(source,/async function adoptLegacyCalibrationDraft\(\)/);
+  assert.match(source,/await migration\.migrate\(env\)/);
+  assert.match(source,/env\.sessionStorage\?\.setItem\(LAST_PROJECT_KEY,outcome\.project\.id\)/);
+  assert.doesNotMatch(source.slice(source.indexOf('function projectRow(entry)'),
+    source.indexOf('function renderProjects()')),/record\.original|dataUrl|createObjectURL/);
+  assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'\)/);
+});

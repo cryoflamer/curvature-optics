@@ -1,3 +1,39 @@
+## 8F.7p.6 — Calibration Projects library UI, explicit legacy adoption (#14)
+
+Added an accessible Projects list inside the existing Photo Calibration
+workspace, with Open/Back to editor, refresh and plain-text compact
+metadata cards. Each card shows title, verified photo dimensions (or
+no photo), stage, correspondence count, fit summary, updated time,
+revision, active and unsaved/error state, and conflict-copy provenance;
+the list reads the dedicated summary rows and never decodes original
+images. On Open, it invokes the guarded live editor switch from
+8F.7p.5b and hides the list only after successful durable activation.
+Failed saves, missing originals, concurrent revisions and recovery errors
+remain visible without falsely indicating a successful switch.
+Project-list events are excluded from the old catch-all editor persist
+listener so the Open click itself cannot invalidate the switch.
+The selected project ID alone may be remembered in sessionStorage;
+no photo bytes or checkpoint are copied there.
+
+A retained legacy draft appears separately, with a deliberately explicit
+'Adopt existing draft' action. It saves the outgoing legacy draft first,
+closes the old DB connection, verifies migration eligibility, preserves
+raw recovery and adopts asset-first through the existing atomic
+migration contract. This does not create a different project from
+current work automatically and is not New/Rename/Duplicate/Delete.
+The UI shows the adopted row before the user chooses Open.
+An end-to-end Chromium smoke test exercises adoption of a real
+no-photo calibration draft, metadata-only listing, IDB raw preservation,
+opening and returning to the list. The full workflow is set to qualify
+modifications of the browser smoke suite.
+
+No science, Legacy entrypoint, History or archive rows are changed.
+The next planned stage 8F.7p.7 adds explicit New / Rename / Duplicate /
+Delete; 8F.7p.9 covers broader multi-photo, concurrency, quota,
+reload and failure scenarios. A green Fast CI alone does not establish
+complete browser acceptance.
+Direct commit to built-in-demo, no PR. Reasoning recommendation High / 3.
+
 ## 8F.7p.5b.2 — Inline guard test expectation corrected (#14)
 
 Fast CI 44844516104 showed 212/213 Node contracts passing and the
