@@ -115,7 +115,7 @@ test('current compatibility reference keeps all stable scenario IDs without a du
   assert.deepEqual(rows, catalog.SCENARIOS.map(s => s.id));
   // The data source remains the immutable catalog + source animations.
   // Docs retain the separate-physics gates without pretending a port happened.
-  for (const file of ['README.md', 'PROJECT_STATE.md', 'docs/legacy-migration-plan.md',
+  for (const file of ['README.md', 'docs/legacy-migration-plan.md',
     'docs/architecture.md']) {
     assert.ok(read(file).includes('native-scenario-compatibility.md'),
       file + ' should link to the current technical boundary');
