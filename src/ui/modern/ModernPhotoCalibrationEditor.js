@@ -616,15 +616,23 @@
       const session=inlineViewer.sessionSnapshot();
       if(session)inlineSessions[inlineRole]={source:JSON.stringify(inlineSource),session};
     }
-    function saveInline(){
+    function saveInline(fromPersist=false){
       if(restoring||switchingInline||!physicalSessionId||!scene)return;
       try{
         captureInline();
         // Project views belong to their own IndexedDB checkpoint. Never
         // overwrite the retained single-draft inline session from a project.
-        if(projectSession?.project())return;
+        // A viewer-only gesture must also persist without requiring an
+        // unrelated photo/toolbar event. Avoid recursion from persist().
+        if(projectSession?.project()){
+          if(!fromPersist){
+            const saved=persist();
+            if(saved)void saved.catch(()=>{});
+          }
+          return;
+        }
         env.localStorage.setItem(INLINE_KEY,JSON.stringify({id:physicalSessionId,photo:record?.id||null,sessions:inlineSessions}));
-      }catch(error){/* Optional UI storage; the atomic calibration draft is independent. */}
+      }catch(error){/* Optional UI storage; project write failures are reported by persist(). */}
     }
     function readInline(){
       try{
@@ -861,19 +869,28 @@
         return;
       }
       editorMutation++;
-      saveInline();
+      saveInline(true);
       const data=captureDraftState();
       const session=projectSession?.project()?projectSession:null;
       const inline=session?captureInlineState():null;
-      const saved=writeQueue.catch(()=>{}).then(async()=>{
-        if(session){
+      let saved;
+      if(session){
+        // Bind the captured project ID/generation and snapshot before
+        // yielding to any earlier async write. Queuing mark() itself would
+        // allow a late callback to accidentally mark a newly opened project.
+        try{
           session.mark(data,inline);
-          const result=await session.save();
-          const current=projectSession===session&&session.state().projectId===result.project.id;
-          if(current)$('ModernCalibrationStorage').textContent=
-            result.status==='forked'?'Conflict fork saved in Calibration Projects.':
-              'Calibration Project saved in this browser.';
-        }else{
+          saved=session.save().then(result=>{
+            const current=projectSession===session&&
+              session.state().projectId===result.project.id;
+            if(current)$('ModernCalibrationStorage').textContent=
+              result.status==='forked'?'Conflict fork saved in Calibration Projects.':
+                'Calibration Project saved in this browser.';
+            return result;
+          });
+        }catch(error){saved=Promise.reject(error);}
+      }else{
+        saved=writeQueue.catch(()=>{}).then(async()=>{
           const db=await database();
           await new Promise((resolve,reject)=>{
             const tx=db.transaction('draft','readwrite');
@@ -882,8 +899,8 @@
           });
           if(!projectSession?.project())
             $('ModernCalibrationStorage').textContent='Draft saved in this browser.';
-        }
-      });
+        });
+      }
       // Apply and guarded switching await this rejecting promise. Ordinary
       // UI events still use a handled queue for fire-and-forget autosaves.
       writeQueue=saved.catch(e=>{
@@ -1015,16 +1032,27 @@
         requireGuard();
         try{
           activateVisualProject(incoming);
-          activated=true;
           session.bind(prepared.project);
+          activated=true;
           projectStartupStatus={status:'active',projectId:prepared.project.id};
           $('ModernCalibrationStorage').textContent='Calibration Project opened and verified.';
         }catch(error){
-          if(oldView){
-            try{activateVisualProject(oldView);}
-            catch(rollback){throw Error('Project activation failed; rollback also failed: '+
-              error.message+' / '+rollback.message);}
-          }
+          try{
+            if(oldView)activateVisualProject(oldView);
+            else{
+              // The first explicit open can start from an empty editor.
+              // Do not leave a half-activated project on a render failure.
+              restoring=true;
+              try{
+                scene=null;record=null;image=null;view=null;activeSource=null;
+                fitBest=null;fitSignature=null;paintedFit=null;viewBest=false;
+                workflow.replaceAll();inlineSessions={initial:null};
+                resultViews={initial:null,best:null};physicalSessionId=null;
+                photoInfo.replaceChildren();
+              }finally{restoring=false;}
+            }
+          }catch(rollback){throw Error('Project activation failed; rollback also failed: '+
+            error.message+' / '+rollback.message);}
           throw error;
         }
         return {status:'opened',project:session.project()};

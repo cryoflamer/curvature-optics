@@ -794,3 +794,21 @@ test('an incoming project keeps both independent photo and model views plus inli
   assert.match(functionSource,/restoring=true/);
   assert.match(functionSource,/finally\{restoring=false;\}/);
 });
+
+test('project editor captures bound autosave before a queued task and persists inline-only gestures',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const start=src.indexOf('function persist(forSwitch=false)'),end=src.indexOf('async function restoreDraft()',start);
+  const persistence=src.slice(start,end);
+  assert.ok(start>=0&&end>start);
+  assert.match(persistence,/session\.mark\(data,inline\);\s*saved=session\.save\(\)/);
+  assert.doesNotMatch(persistence,/writeQueue\.catch\(\(\)=>\{\}\)\.then\(async\(\)=>\{\s*if\(session\)/);
+  const inline=src.slice(src.indexOf('function saveInline(fromPersist=false)'),
+    src.indexOf('function readInline()'));
+  assert.match(inline,/if\(projectSession\?\.project\(\)\)\{\s*if\(!fromPersist\)\{/);
+  assert.match(inline,/const saved=persist\(\)/);
+  assert.match(persistence,/saveInline\(true\)/);
+  assert.match(src,/if\(oldView\)activateVisualProject\(oldView\)/);
+  assert.match(src,/else\{\s*\/\/ The first explicit open can start from an empty editor/);
+});

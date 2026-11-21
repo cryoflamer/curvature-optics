@@ -1,3 +1,19 @@
+## 8F.7p.5b.1 — Project-bound inline autosave and early capture corrected (#14)
+
+While reviewing 8F.7p.5b, the project-mode persist path was strengthened:
+mark(data,inline) and coordinator.save() now run synchronously at call
+time, before any older promise is awaited. This captures the immutable
+project ID/generation at submission rather than risking a late mark of
+a different bound project. Inline-only model-view gestures trigger
+project checkpoint writes, without overwriting the single-draft
+localStorage state and without calling persist recursively. Opening
+the first project from a blank editor now also restores a blank editor
+if a render fails after mutation, instead of leaving partial content.
+The successful activation flag is set only after coordinator binding
+is acknowledged. A focused source contract test documents these guards.
+Original migration, photo and optical logic remain unchanged.
+Direct commit to built-in-demo, no PR; reasoning level Medium / 2.
+
 ## 8F.7p.5b — Explicit editor switch, durable outgoing save and rollback (#14)
 
 The mounted Photo Calibration editor now exposes openCalibrationProject(id),
