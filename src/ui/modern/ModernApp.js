@@ -632,7 +632,7 @@
   // ID on every reload misclassified an old pagehide backup as another tab.
   var studioWorkspaceSessionId=studioDraftAutosave.workspaceSessionId((function(){
     try{return root.sessionStorage;}catch(error){return null;}
-  }()),root.crypto);
+  }()),root.crypto,root);
   var studioIndexedBaseline=null;
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
