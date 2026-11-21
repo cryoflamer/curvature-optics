@@ -195,9 +195,13 @@ test('failed transaction leaves independent synchronous crash backups intact',as
 
 test('Animation Studio redirects a conflicting opened project into an independent recoverable draft',async()=>{
   const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  const start=source.indexOf('  function persistStudioWorkspace(){');
+  const start=source.indexOf('  function persistStudioWorkspace(settings){');
   const end=source.indexOf('  function writeStudioDraftIndexedDB()',start);
-  assert.ok(start>0&&end>start);
+  assert.ok(start>0&&end>start,'the mounted writer must delegate to the durable workspace coordinator');
+  assert.match(source.slice(start,end),/studioPersistenceCoordinator\.persist\(settings\)/);
+  assert.match(fs.readFileSync(path.join(__dirname,
+    '../src/animation/ModernAnimationWorkspacePersistence.js'),'utf8'),
+    /options\.onFork\(conflict\.forkId,message\)/);
   const db=memoryIndexedDB(),crypto=clock(),base=makeTwo(),local=memoryStorage();
   await autosave.writeCollection(db,base);
   const fromOtherTab=autosave.withWorkspace(base,'project_alpha',

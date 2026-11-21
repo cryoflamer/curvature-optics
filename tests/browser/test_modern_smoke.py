@@ -639,7 +639,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel).to_be_visible()
         selected=workspace.locator('[data-project-active="true"]')
         expect(selected).to_have_count(1)
-        expect(selected).to_contain_text('Active project')
+        expect(selected).to_contain_text('Opened')
+        expect(selected.locator('[data-calibration-project-delete]')).to_be_disabled()
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         expect(panel).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
@@ -719,11 +720,28 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel).to_be_hidden(timeout=30000)
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         cards=panel.locator('[data-calibration-project-id]')
-        expect(cards).to_have_count(2,timeout=30000)
-        self.assertTrue(cards.first.evaluate('(node) => node.clientWidth <= 235'))
+        # Opening the first named project adopts the pre-existing legacy draft.
+        # Assert a protected recovery project, not simply an arbitrary third card.
+        expect(cards).to_have_count(3,timeout=30000)
+        rows=self.page.evaluate("""async () => {
+            const summaries=await CurvatureModernCalibrationProjectStore.list(indexedDB);
+            const legacy=await CurvatureModernCalibrationProjectStore.legacy(indexedDB);
+            return {titles:summaries.map(row=>row.title),
+                ids:summaries.map(row=>row.id),rawPreserved:!!legacy};
+        }""")
+        self.assertCountEqual(rows['titles'],
+                              ['Recovered calibration','First calibration','Second calibration'])
+        self.assertEqual(len(set(rows['ids'])),3)
+        self.assertTrue(rows['rawPreserved'],'legacy draft recovery copy must remain available')
+        named=cards.filter(has_text=re.compile(r'First calibration|Second calibration'))
+        expect(named).to_have_count(2)
+        self.assertTrue(named.first.evaluate('(node) => node.clientWidth <= 290'))
         initial=self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId""")
-        first=cards.first
+        self.assertEqual(initial,
+                         panel.locator('[data-calibration-project-id]').filter(
+                             has_text='Second calibration').get_attribute('data-calibration-project-id'))
+        first=panel.locator('[data-calibration-project-id]').filter(has_text='First calibration')
         first.click()
         expect(first).to_have_class(re.compile(r'is-selected'))
         self.assertEqual(self.page.evaluate("""() =>

@@ -1,3 +1,21 @@
+## Full CI contract and browser smoke reconciliation (#14, #24)
+
+The supplied Full CI log archive was inspected for five failures.
+Three Node expectations were stale after animation draft cleanup, the
+workspace persistence coordinator extraction, and the new remembered
+Calibration subview preference. The concurrency test still exercises real
+forked durable persistence and now also checks the coordinator bridge.
+
+Two Chromium smoke expectations were outdated: active cards show 'Opened',
+and the initial explicit project switch migrates the preserved legacy draft.
+The selection test now asserts two explicitly named projects, one distinct
+Recovered calibration project, and the retained raw legacy recovery copy
+instead of assuming two cards total. Card-width expectations follow the
+current scoped compact layout.
+
+Test and project-state documentation changes only, no production logic.
+Full CI rerun is required for 8F.7p.9 acceptance.
+
 ## Explicit Calibration Project save recovery UI (#14)
 
 Calibration Projects now offers Save now when an active project has an unsaved

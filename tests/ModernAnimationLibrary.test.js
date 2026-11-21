@@ -720,7 +720,7 @@ test('project lifecycle has independent draft controls and no conflicting confir
   draftDelete.listeners.click({stopPropagation(){}});
   assert.deepEqual(calls.at(-1),['removeDraft','draft_one']);
   assert.equal(button('Current').disabled,true);
-  assert.ok(nodes().some(n=>n.textContent.includes('Autosaved and stashed drafts are independent')));
+  assert.ok(nodes().some(n=>n.textContent.includes('Autosaved drafts are independent. Cleanup never removes saved Library projects, History or photos.')));
   assert.ok(!nodes().some(n=>n.className==='modern-animation-library-pending'));
   assert.ok(!nodes().some(n=>n.className==='modern-animation-library-duplicate-warning'));
 });

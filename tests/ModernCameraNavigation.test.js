@@ -819,7 +819,8 @@ test('display and navigation preferences are immediately saved and restored inde
     historyFilters:{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'},
     studioPickerFilters:{query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'},displayPanels:{advanced:false,diagnostics:false,gpu:false,profiler:false},
     navigation:{speed:100,turnRate:1,wheelStep:'auto'},
-    workspace:{mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}}
+    workspace:{mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,
+      calibrationView:'editor',sections:{}}
   });
   const reopened=boot(null,{[preferences.STORAGE_KEY]:saved});
   assert.equal(reopened.app.getOpticalQuality(),'auto');
