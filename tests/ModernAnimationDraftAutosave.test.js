@@ -469,8 +469,10 @@ test('bulk tombstones block recovery forks from older tab snapshots and clean ob
   const cp=(name,when)=>autosave.checkpoint({draft:studio.edit(studio.blank(),'name',name),
     selectedKey:null,quality:'auto',prepared:false,positionMs:0},when);
   const base=autosave.collection('draft_current',cp('Opened',100),101);
-  const old=autosave.withWorkspace(base,'draft_second',cp('Other draft',150),151);
-  const different=autosave.withWorkspace(base,'draft_second',cp('Diverged in another tab',152),153);
+  const old=autosave.normalizeCollection({...autosave.withWorkspace(
+    base,'draft_second',cp('Other draft',150),151),activeId:'draft_current'});
+  const different=autosave.normalizeCollection({...autosave.withWorkspace(
+    base,'draft_second',cp('Diverged in another tab',152),153),activeId:'draft_current'});
   autosave.writeSessionLocal(storage,old,'tab_aaaaaaaa');
   autosave.writeSessionLocal(storage,different,'tab_bbbbbbbb');
   const before=autosave.combineCollections(autosave.readSessionLocals(storage));
