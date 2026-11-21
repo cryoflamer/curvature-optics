@@ -1681,6 +1681,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             apply()
             self.page.wait_for_function("window.__qualificationArchiveGate.ready",timeout=30000)
             expect(button).to_be_disabled()
+            # Busy Apply must not make the whole workspace inert: navigating
+            # away is a supported cancellation-by-generation regression.
+            self.assertFalse(workspace.evaluate("(node) => node.inert"))
             workspace.locator('#ModernCalibrationClose').click()
             expect(self.page.locator('#ModernSceneTab')).to_have_attribute('aria-pressed','true')
             self.assertEqual(read_scene(),original_scene)
