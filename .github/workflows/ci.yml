@@ -2,7 +2,7 @@ name: Curvature fast verification
 
 on:
   push:
-    branches: [built-in-demo]
+    branches: [main]
   workflow_dispatch:
     inputs:
       scope:

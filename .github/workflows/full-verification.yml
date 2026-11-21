@@ -3,8 +3,8 @@ name: Curvature full verification
 on:
   workflow_call:
   workflow_dispatch:
-  # Expensive full verification is opt-in. Fast CI remains automatic on
-  # built-in-demo pushes; full is deliberately invoked only for milestones.
+  # Expensive full verification is opt-in. Fast CI runs on main pushes;
+  # full verification requires an explicit manual dispatch.
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+          ref: ${{ github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+          ref: ${{ github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'built-in-demo' || github.ref }}
+          ref: ${{ github.ref }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'

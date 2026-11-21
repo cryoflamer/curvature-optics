@@ -1,0 +1,104 @@
+# Curvature Optics — agent operating rules
+
+This file is the **single authoritative operating policy** for coding agents
+working on this repository. It applies to ChatGPT, Codex, and other agents.
+It is intentionally separate from project status (`PROJECT_STATE.md`) and
+scientific documentation (`docs/`).
+
+## First read and sources of truth
+
+1. Read this file and `PROJECT_STATE.md`.
+2. Check the actual Git branch/HEAD, `git status`, latest relevant commits,
+   and the GitHub Issue named in the user's task. Inspect current source,
+   tests and CI before trusting an old roadmap or handoff.
+3. GitHub **Issues** are the authoritative backlog; **Milestones** group work.
+   Keep task requirements, acceptance gates and dependencies in Issues.
+   Do not create parallel TODO roadmaps, issue-numbered files or patch diaries.
+4. Durable architecture, numerical/physical assumptions, data formats,
+   browser/Legacy boundaries and research results belong in `docs/`.
+   Implementation history belongs in Git, not `PROJECT_STATE.md`.
+
+## Git policy — one permanent branch, no PRs
+
+- **`main` is the only permanent development branch.** Normal authorized
+  changes are committed directly to `main`; push to `origin/main` after
+  the relevant targeted verification. Respect the user's explicit scope.
+- **Never create a Pull Request** or use a PR as an alternative delivery
+  workflow. Do not create a temporary branch unless explicitly approved.
+- Before a commit/push verify the remote, branch, clean intended diff, current
+  head and absence of unrelated local edits. Never discard someone's changes.
+- One logically bounded change per commit. Write English **passive-voice**
+  commit subjects. Use a relevant Issue reference where useful.
+- Never force-push, reset/discard work, rewrite published history, delete
+  branches/tags, or change the repository's default branch without explicit
+  authorization. No unrequested merges or repo administration.
+- Annotated tags mark deliberately reviewed baselines, **not** untested
+  snapshots. Do not claim release status from the presence of a tag.
+- The historical `built-in-demo`, `dev`, `refactor` and other branches
+  are not active development targets. Do not delete them automatically.
+
+## Testing — targeted by default
+
+**Do not run the entire test suite by default.** Full Node regressions and
+all-browser smoke suites can be slow. Choose the smallest meaningful set
+that exercises the changed behavior and its affected contracts.
+
+- Documentation only: validate relative links, documentation regression
+  tests and referenced files. No physics/browser suite by default.
+- Optics, geometry or atmosphere: run *targeted* numerical/visibility/horizon,
+  parity, precision and regression tests for the modified model.
+- Data models, History, calibration or persistence: targeted schema,
+  migration, recovery, collision and failure-path tests.
+- UI/interaction: focused DOM/Node tests, with affected browser smoke when
+  a browser-dependent behavior actually changes or acceptance requires it.
+- Legacy transport/reference or architecture changes: affected preservation,
+  isolation and static-boundary checks; never weaken their assertions.
+- Source-format/syntax checks should run where appropriate; `git diff --check`
+  should pass before reporting a clean commit.
+
+Run a **full** local suite or manual GitHub full workflow only if the user
+explicitly requests it, or after separately agreeing a release/acceptance
+validation plan. Do **not** invoke `scope=full` as an unasked-for next step.
+The automatic push CI on `main` is a curated *fast* gate, not full verification.
+
+If a needed check is unusually expensive, explain the reason and proposed
+scope before running it. Do not skip a physics-critical test and then claim
+the result validated. Report precisely which tests were executed, passed,
+failed or skipped; distinguish known baseline CI failures from introduced
+regressions. Manual Opera/Chromium testing, scientific image acceptance and
+WGSL compilation **must not be claimed without actually performing them**.
+
+Never modify numerical tolerances, optical data, protected reference images,
+expected test fixtures or regression coverage merely to make CI green.
+Scientific correctness and fast UI approximation have distinct acceptance
+criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
+
+## Work boundaries and delivery
+
+- Implement only what was requested or agreed; surface any scope expansion.
+  Avoid opportunistic refactors, new HTML entry points or duplicate stores.
+- Keep stable semantic filenames; never embed compatpatch/version/Issue
+  numbers in source, documentation or test filenames.
+- Preserve original photographs and provenance, physical scene/optics
+  invariants, existing portable schemas, Legacy URL/storyboard functionality,
+  and independent Compare A/B atmosphere settings.
+- Verify the actual resulting Git tree/commit before claiming changes exist.
+  When a task includes GitHub updates, report the exact Issue/commit status.
+- Do not close an Issue merely because implementation exists; check its
+  acceptance tests, CI status, browser/scientific evidence and any explicit
+  user-acceptance requirement.
+- This repository currently works **without a Compatсh workflow**. Do not
+  introduce format-patch ZIPs or an alternative Git delivery unless requested.
+- `PROJECT_STATE.md` stays a short handoff (current branch, baseline,
+  important verified limitations and pointers), never a duplicate backlog.
+
+## Main entry points
+
+- `README.md` — usage and source map
+- `docs/architecture.md` — runtime boundaries
+- `docs/physics.md` — numerical and physical model
+- `docs/development.md` — targeted commands and CI workflow
+- `docs/modern-animation-contract.md` — project/keyframe invariants
+- `docs/reference-images.md` — original image and source semantics
+- `PROJECT_STATE.md` — brief current-state handoff
+- GitHub Issues and Milestones — priorities and pending acceptance

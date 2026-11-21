@@ -9,8 +9,10 @@ revision [aa8b2b1a94fa72432648f2ffcec8929a90601b04](https://github.com/cryoflame
 
 ## Branch and baseline
 
-- Working development branch: `built-in-demo`; this handoff was rewritten in
-  the documentation-consolidation branch based on `aa8b2b1a94`.
+- Permanent development branch: `main`. Historic development from `built-in-demo`
+  and documentation reconciliation from `backlog-consolidation` were brought
+  forward by fast-forward, without PR merging. Follow `AGENTS.md` for the
+  no-PR and selective-test policy.
 - Last source commit reviewed for migration: `aa8b2b1a94fa72432648f2ffcec8929a90601b04` —
   “Animation candidate compatibility was limited to effective frame channels”.
 - **Do not call the baseline fully green.** On that source commit Fast/Full CI
@@ -20,6 +22,8 @@ revision [aa8b2b1a94fa72432648f2ffcec8929a90601b04](https://github.com/cryoflame
   callers. Both Chromium UI smoke shards passed. Review and regenerate the
   static evidence **only after auditing source changes**; do not bypass
   protected architecture checks or imply that scientific acceptance followed.
+- Full tests are not run by default; fast CI on `main` does not certify full
+  scientific/browser acceptance. See `AGENTS.md`.
 - These facts are a point-in-time handoff, not a live CI status. Check GitHub
   Actions and the actual branch head before starting work.
 
@@ -27,7 +31,7 @@ revision [aa8b2b1a94fa72432648f2ffcec8929a90601b04](https://github.com/cryoflame
 
 - [#28 — Docs TODO / backlog consolidation](https://github.com/cryoflamer/curvature-optics/issues/28):
   consolidate historical plans and journals, preserve scientific contracts, and
-  verify the branch/PR changes before closing.
+  verify migrated documentation on `main` and close only after acceptance.
 - [Milestone 1 — Stabilization & Acceptance](https://github.com/cryoflamer/curvature-optics/milestone/1):
   CI; #1, #14, #23, #24 and the browser qualification gates.
 - [Milestone 2 — Animation Studio UX](https://github.com/cryoflamer/curvature-optics/milestone/2):
@@ -68,10 +72,12 @@ its own status, checks and evidence.
    implementation note, unchecked box, or this handoff.
 2. Choose **one bounded Issue/stage** and preserve physical, data ownership,
    Legacy compatibility, and user-browser acceptance contracts.
-3. New tasks, deferred research and unresolved acceptance gates go to GitHub
+3. Use a single permanent `main` branch; do not create PRs or temporary
+   branches unless explicitly approved. Run targeted tests by default.
+4. New tasks, deferred research and unresolved acceptance gates go to GitHub
    Issues. Do not add a parallel TODO roadmap or chronological patch diary.
-4. Keep descriptive stable repository filenames. Format-patch ZIPs can use
+5. Keep descriptive stable repository filenames. Format-patch ZIPs can use
    compatpatch numbers; source and docs filenames cannot.
-5. Record exact tests, CI runs, limitations and any unavailable manual browser
+6. Record exact tests, CI runs, limitations and any unavailable manual browser
    qualification in the Issue and commit. Never report merely implemented code
    as accepted scientific evidence.

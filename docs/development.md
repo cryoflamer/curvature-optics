@@ -1,6 +1,6 @@
 # Development and verification
 
-This is the workflow for the **post-#140.12.74 active branch**. Use [architecture](architecture.md) for module ownership, [physics](physics.md) for assumptions and [user guide](user-guide.md) for visible behavior. Historical patch notes in `docs/` and the long `PROJECT_STATE.md` are not a substitute for checking current source.
+This is the workflow for the **post-#140.12.74 active branch**. Use [architecture](architecture.md) for module ownership, [physics](physics.md) for assumptions and [user guide](user-guide.md) for visible behavior. Historical patch notes in `docs/` are not a substitute for checking current source and the concise `PROJECT_STATE.md`.
 
 ## Requirements and local workflow
 
@@ -20,7 +20,7 @@ Run source checks from the repo root; tests may use relative file paths.
 
 ## Automated gates
 
-**Fast, representative closure suite** (script is also the canonical index of its exact subprocesses):
+**Architecture/Legacy closure suite (run only when relevant to the change; script lists its subprocesses):**
 
 ```sh
 node tools/check-refactor-closure.js --list
@@ -45,7 +45,7 @@ node --test tests/LegacyDemosDirectPort.test.js
 python3 tools/validate-legacy-visual-reference.py
 ```
 
-For a broader regression run (potentially slow/resource-intensive):
+**Expensive full Node run — requires explicit approval:**
 
 ```sh
 node --test tests/*.test.js
@@ -55,51 +55,49 @@ node --test tests/*.test.js
 
 ## GitHub Actions CI
 
-### CI verification policy
+### Single-branch development and selective verification
 
-Working branch: `built-in-demo`. Changes are committed directly to this branch;
-PRs are not part of this workflow. Before every commit, recommend a reasoning
-level (1/3, 2/3 or 3/3).
+The single permanent working branch is `main`. Normal work is committed
+directly to `main` **without Pull Requests**. Short-lived branches, including
+future feature/fix branches, require explicit approval. Stable, fully
+qualified baselines may be tagged deliberately; a tag is not proof of CI.
 
-## Two speeds, no silent coverage loss
+Before changing source: inspect `AGENTS.md`, `PROJECT_STATE.md`, the current
+Issue, `git status`, HEAD, and relevant implementation and test boundaries.
+Never force-push or rewrite public history without explicit permission.
 
-**Push / fast:** `.github/workflows/ci.yml` runs automatically after each push
-to `built-in-demo`. Two parallel jobs check the existing full architecture and
-Legacy preservation gate (`tools/check-refactor-closure.js`) plus a reviewed set
-of short Node contracts around Modern state, Calibration Projects, verified
-originals, History and animation persistence. The architecture gate already
-validates the protected Legacy visual references, so there is no duplicate
-Python PNG validation step. A new push may cancel an obsolete fast push run.
+**Default:** run the smallest meaningful subset of tests for changed modules.
+For a documentation-only change, run local Markdown/link and relevant
+documentation-contract tests; do not run full optics or browsers. For optics,
+run targeted numerical/visibility/accuracy tests; for storage, test recovery,
+compatibility and failure; for UI, test affected DOM and focused browser
+behavior where feasible. Preserve original assertions and physics tolerances.
 
-**Full / milestone:** `.github/workflows/full-verification.yml` retains
-`node --test --test-concurrency=2 tests/*.test.js`, the entire architecture
-and Legacy gate, and **every** real Chromium UI test. It runs when requested
-through the existing `ci.yml` manual dispatch (`scope=full`), and when the full
-workflow or its browser sharding runner is modified. Full runs are never
-cancelled by subsequent development pushes. A fast green run is **not** proof
-that the full suite passed; require full success before closing a milestone,
-changing shared optics contracts, or making a new baseline tag.
+**Automatic fast CI:** `.github/workflows/ci.yml` runs on `main` pushes.
+Its curated Node contracts and protected architecture/Legacy audit are **not**
+the whole suite. A failed gate must be reported, not ignored. Fast CI is an
+additional repository safety net, not permission to launch all tests locally.
 
-Manual full verification (with GitHub CLI authenticated for the repository):
+**Full verification:** the full Node suite, complete architecture audit
+and all Chromium browser smoke tests remain available in
+`.github/workflows/full-verification.yml`, but run **only after explicit
+approval or a separately agreed release-validation procedure**. Do not
+silently launch a full local run or `workflow_dispatch scope=full`.
+The full workflow has no periodic schedule, and does not run automatically
+on commits. Do not claim release/readiness or close an acceptance gate whose
+required tests have not been performed.
+
+When a required check would be very expensive, first report the intended
+scope and reason, and ask before invoking the full suite. Prefer bounded
+targeted tests; do not skip a correctness-critical check while claiming a
+validated physical result. Always report tests actually run, skipped,
+pre-existing failures and pending browser/manual scientific acceptance.
+
+An explicit full run may be triggered with:
 
 ```sh
-gh workflow run ci.yml --ref built-in-demo -f scope=full
+gh workflow run ci.yml -R cryoflamer/curvature-optics --ref main -f scope=full
 ```
-
-In GitHub Actions, select **Curvature fast verification** > **Run workflow**,
-choose **built-in-demo** and **full**. If the UI (sourced from default `main`)
-does not expose the new input yet, triggering the existing `ci.yml` on
-`built-in-demo` with no `scope` input also selects full (the default).
-For manually re-running fast checks, use `scope=fast`.
-
-**Nightly scheduling constraint:** `full-verification.yml` declares a daily
-02:23 UTC schedule, but GitHub evaluates `schedule` triggers *only* on the
-default branch, currently `main`. Until the workflow definition is also placed
-on `main`, this schedule is **not active**. Do not change `main` or the default
-branch silently. After that separate administrative step, scheduled jobs
-explicitly check out `built-in-demo`, not `main`. The manual full route above
-works from the existing `ci.yml` workflow. No cron/notification service is
-being claimed as active in the meantime.
 
 ## Targeted developer commands
 

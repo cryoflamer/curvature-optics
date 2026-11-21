@@ -173,6 +173,11 @@ Bare `CurvatureApp.html` and older `?ui=modern` bookmarks redirect to `Curvature
 
 For first-time use, start with the [user guide](docs/user-guide.md). **Modern Accurate may take appreciably longer to recalculate** because it numerically traces refracted rays; it is not intended to animate every Legacy storyboard frame.
 
+**Agent and Git workflow:** [AGENTS.md](AGENTS.md) defines the single-`main`,
+no-PR, issue-first, selective-test rules for this repository. The short
+[PROJECT_STATE.md](PROJECT_STATE.md) is a handoff, not a second task tracker.
+A fast push check is not full browser or physics acceptance.
+
 ## Current project map
 
 | Area | Primary code / contract |
