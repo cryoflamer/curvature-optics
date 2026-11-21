@@ -11,9 +11,10 @@
   function el(doc,tag,className){
     var node=doc.createElement(tag);node.className=className;return node;
   }
-  function create(doc,host,render){
+  function create(doc,host,render,options){
     if(!doc.body||typeof doc.addEventListener!=='function')return null;
     var node=el(doc,'div','modern-history-inspector');
+    if(options&&options.className)node.classList.add(options.className);
     node.hidden=true;node.setAttribute('role','dialog');
     node.setAttribute('aria-label','Saved snapshot or animation details');
     doc.body.appendChild(node);

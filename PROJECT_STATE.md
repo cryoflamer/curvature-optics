@@ -1,3 +1,15 @@
+## Calibration Projects card and inspector sizing correction (#23)
+
+Card-level info buttons now have explicit 24px dimensions and are styled only
+inside Calibration Projects. Calibration cards use a wider, cleaner 258px layout,
+shorter metadata and flexible Open/Rename/Duplicate actions; zero linked results
+and redundant revision text are omitted from the compact cards but kept in detail.
+The shared inspector accepts an optional instance CSS class so Calibration's
+read-only popup alone is limited to 460px, with a 92px contained photo, balanced
+label/value rows, wrapping fit diagnostics and concise help copy. Animation Library
+inspector styling and calibration persistence are unchanged. Source contract
+regressions cover the scoped layout and inspector option.
+
 ## Calibration Project card details inspector (#23)
 
 Saved Calibration Project cards now include the same explicit ⓘ button and shared

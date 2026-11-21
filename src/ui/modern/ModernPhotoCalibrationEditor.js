@@ -893,7 +893,7 @@
     // Reuse Animation Library's explicit card-details dialog. Read-only and
     // backed only by already loaded project summaries and verified photo previews.
     function projectInspectorMarkup(doc,entry){
-      const inner=doc.createElement('div');inner.className='modern-history-inspector-inner';
+      const inner=doc.createElement('div');inner.className='modern-history-inspector-inner modern-calibration-inspector-inner';
       const title=doc.createElement('strong');title.className='modern-history-inspector-title';
       title.textContent=entry.title;inner.append(title);
       inner.append(projectPreview(entry.photo));
@@ -918,13 +918,13 @@
       if(entry.forkOf)row('Origin','Conflict copy');
       columns.append(section);inner.append(columns);
       const note=doc.createElement('p');note.className='modern-history-inspector-description';
-      note.textContent='Details only. Select a card to highlight it; Open or double-click to edit. '+
-        'Linked archived results remain separate from the project.';
+      note.textContent='Read-only details. Open the project to edit it.';
       inner.append(note);
       return inner;
     }
     const projectInspector=env.CurvatureModernThumbnailPreview?.create(
-      doc,projectsList,projectInspectorMarkup)||null;
+      doc,projectsList,projectInspectorMarkup,
+      {className:'modern-calibration-project-inspector'})||null;
     function photoPreviewKey(photo){return photo?.sha256||null;}
     function projectPreview(photo){
       const key=photoPreviewKey(photo);
@@ -1056,17 +1056,18 @@
         info.append(element);
         return element;
       }
-      detail((entry.photo?'Photo '+entry.photo.width+' × '+entry.photo.height+' px':'No reference photo')+
-        ' · '+entry.rowCount+' correspondences','modern-animation-library-card-meta');
+      detail(entry.rowCount+' correspondences · '+
+        (entry.photo?entry.photo.width+' × '+entry.photo.height+' px':'No reference photo'),
+        'modern-animation-library-card-meta');
       const fit=entry.fitRmsPx!==null?
         'Fit: '+(entry.fitStatus?entry.fitStatus.split(' · ')[0]:'result')+
           ' · RMS '+Number(entry.fitRmsPx.toPrecision(3))+' px':
         'Fit: '+(entry.fitStatus||'Not yet fitted');
       detail(fit,'modern-animation-library-card-summary modern-calibration-project-fit',
         entry.fitStatus||'');
-      detail(entry.resultCount+' linked archived result'+(entry.resultCount===1?'':'s'),
-        'modern-animation-library-card-summary');
-      detail('Updated '+projectStamp(entry.updatedAt)+' · Revision '+entry.revision,
+      if(entry.resultCount>0)detail(entry.resultCount+' linked archived result'+
+        (entry.resultCount===1?'':'s'),'modern-animation-library-card-summary');
+      detail('Updated '+projectStamp(entry.updatedAt),
         'modern-animation-library-card-updated');
       if(active&&state&&(state.error||unsaved||state.pending))
         detail(state.error?'Unsaved — '+state.error:unsaved?'Unsaved changes':'Saving…',

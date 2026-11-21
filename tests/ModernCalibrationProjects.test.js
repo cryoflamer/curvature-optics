@@ -1055,7 +1055,7 @@ test('Calibration project info uses the shared read-only per-card inspector with
   const studio=fs.readFileSync(path.resolve(__dirname,
     '../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
   assert.match(studio,/inspector\.infoButton\(card,libraryPreviewEntry\(entry\),card,p\.name\)/);
-  assert.match(source,/CurvatureModernThumbnailPreview\?\.create\(\s*doc,projectsList,projectInspectorMarkup\)/);
+  assert.match(source,/CurvatureModernThumbnailPreview\?\.create\(\s*doc,projectsList,projectInspectorMarkup,/);
   assert.match(source,/projectInspector\.infoButton\(card,entry,card,entry\.title\)/);
   assert.match(source,/row\('Correspondences',entry\.rowCount\)/);
   assert.match(source,/row\('Fit status',entry\.fitStatus/);
@@ -1068,4 +1068,22 @@ test('Calibration project info uses the shared read-only per-card inspector with
   assert.match(inspector,/event\.stopPropagation\(\)/);
   assert.doesNotMatch(source.slice(source.indexOf('function projectInspectorMarkup('),
     source.indexOf('const projectInspector=') ),/openFromProjects\(|projectSession\.bind\(/);
+});
+
+test('Calibration card and inspector layout stays compact and scoped to Calibration',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const css=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  const editor=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const preview=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernThumbnailPreview.js'),'utf8');
+  assert.match(preview,/function create\(doc,host,render,options\)/);
+  assert.match(preview,/if\(options&&options\.className\)node\.classList\.add\(options\.className\)/);
+  assert.match(editor,/className:'modern-calibration-project-inspector'/);
+  assert.match(css,/\.modern-calibration-project-card \.modern-card-info-button\{/);
+  assert.match(css,/\.modern-calibration-project-card\{flex:0 0 258px\}/);
+  assert.match(css,/\.modern-history-inspector\.modern-calibration-project-inspector\{\s*width:min\(460px/);
+  assert.match(css,/\.modern-calibration-project-inspector \.modern-calibration-project-preview\{\s*height:92px/);
+  assert.match(css,/\.modern-calibration-project-inspector \.modern-history-inspector-row strong\{/);
+  assert.match(editor,/if\(entry\.resultCount>0\)detail\(/);
 });

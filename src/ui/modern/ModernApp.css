@@ -1606,3 +1606,60 @@ button{cursor:pointer}
 .modern-calibration-project-preview img{width:100%;height:100%;object-fit:contain;display:block}
 @media(max-width:550px){.modern-calibration-project-preview{height:98px}}
 
+
+/* Calibration Project cards: compact control and a balanced metadata layout.
+ * Changes are scoped to Calibration rather than altering Animation Library. */
+.modern-calibration-project-card{flex:0 0 258px}
+.modern-calibration-project-card .modern-card-info-button{
+  top:7px;left:7px;width:24px;height:24px;min-width:24px;max-width:24px;
+  min-height:24px;max-height:24px;flex:none;box-sizing:border-box;
+  padding:0;border-radius:6px;font-size:15px;font-weight:400;line-height:1
+}
+.modern-calibration-project-card .modern-animation-library-card-info{
+  gap:4px;min-width:0
+}
+.modern-calibration-project-card .modern-animation-library-card-title{
+  overflow-wrap:anywhere
+}
+.modern-calibration-project-card .modern-calibration-project-actions{
+  display:flex;flex-wrap:wrap;gap:5px
+}
+.modern-calibration-project-card .modern-calibration-project-actions button{
+  flex:1 1 auto;min-width:0;padding:6px 8px
+}
+.modern-calibration-project-card .modern-animation-library-card-meta{
+  overflow-wrap:anywhere
+}
+/* The same shared details controller, with a Calibration-specific size and
+ * photograph treatment. Long solver diagnostics wrap instead of widening it. */
+.modern-history-inspector.modern-calibration-project-inspector{
+  width:min(460px,calc(100vw - 24px));padding:12px;max-height:calc(100vh - 24px)
+}
+.modern-calibration-project-inspector .modern-calibration-project-preview{
+  height:92px;border-radius:6px
+}
+.modern-calibration-project-inspector .modern-calibration-project-preview img{
+  max-width:100%;max-height:100%;object-fit:contain
+}
+.modern-calibration-project-inspector .modern-history-inspector-inner{
+  gap:9px;padding-bottom:0
+}
+.modern-calibration-project-inspector .modern-history-inspector-column{
+  min-width:0;padding:9px
+}
+.modern-calibration-project-inspector .modern-history-inspector-row{
+  align-items:flex-start;gap:10px
+}
+.modern-calibration-project-inspector .modern-history-inspector-row span{
+  flex:0 0 38%
+}
+.modern-calibration-project-inspector .modern-history-inspector-row strong{
+  flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.4
+}
+.modern-calibration-project-inspector .modern-history-inspector-description{
+  margin:0;color:#58758c;font-size:11px
+}
+@media(max-width:550px){
+  .modern-calibration-project-card{flex-basis:220px}
+  .modern-history-inspector.modern-calibration-project-inspector{padding:10px}
+}
