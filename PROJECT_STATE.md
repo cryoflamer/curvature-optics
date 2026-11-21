@@ -4,7 +4,7 @@ This is a **short resumption index**, not a change diary or task backlog.
 All actionable TODOs, deferred research, verification gates, and acceptance
 criteria belong to [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues);
 their workstreams belong to [Milestones](https://github.com/cryoflamer/curvature-optics/milestones). 
-The single planning board is [Curvature Optics — Development Roadmap (Project #1)](https://github.com/users/cryoflamer/projects/1), linked to this repository. Its numeric `Execution Order` field is available; priority labels and execution ranks are not yet agreed or populated.
+The single planning board is [Curvature Optics — Development Roadmap (Project #1)](https://github.com/users/cryoflamer/projects/1), linked to this repository. Its numeric `Execution Order` field is available. All currently open Issues have been assigned exactly one `priority:P0`–`priority:P3` label (verified on 2026-11-22); execution ranks have not yet been assigned. Check live GitHub metadata before relying on this snapshot.
 For implementation history use `git log`, closed Issues, and the pre-consolidation
 revision [aa8b2b1a94fa72432648f2ffcec8929a90601b04](https://github.com/cryoflamer/curvature-optics/tree/aa8b2b1a94fa72432648f2ffcec8929a90601b04).
 
