@@ -24,6 +24,21 @@
   var COLLECTION_VERSION=2,COLLECTION_KEY='curvature-modern-animation-workspaces-v2';
   var COLLECTION_DB_KEY='workspaces';
   var SESSION_LOCAL_PREFIX=COLLECTION_KEY+'-session-';
+  var TAB_SESSION_KEY=COLLECTION_KEY+'-tab-id';
+  // A page load is not a new tab. Reuse the same recovery slot across F5 so
+  // an earlier pagehide checkpoint cannot masquerade as another tab's edits.
+  function workspaceSessionId(tabStorage,crypto){
+    var existing=null;
+    try{existing=tabStorage&&tabStorage.getItem(TAB_SESSION_KEY);}catch(error){}
+    if(typeof existing==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(existing))
+      return existing;
+    var token=crypto&&typeof crypto.randomUUID==='function'?
+      crypto.randomUUID().replace(/-/g,''):
+      Math.random().toString(36).slice(2)+Date.now().toString(36);
+    var id='session_'+token;
+    try{if(tabStorage)tabStorage.setItem(TAB_SESSION_KEY,id);}catch(error){}
+    return id;
+  }
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
   function string(v,max){if(typeof v!=='string'||v.length>max)throw RangeError('Invalid animation draft text');return v;}
   function number(v,min,max){if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)
@@ -530,5 +545,5 @@
     reconcileCollection:reconcileCollection,writeCollectionMerged:writeCollectionMerged,
     writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
-    SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX});
+    SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId});
 }));
