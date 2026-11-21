@@ -2089,7 +2089,13 @@
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])
       workspace.addEventListener(event,e=>{
         // Project library actions never represent mutations of editor state.
-        if(e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'))return;
+        // The list rerenders synchronously on Open and detaches the clicked
+        // card before bubbling reaches this listener. closest() on the now
+        // detached target would return null. composedPath() preserves the
+        // original event ancestry and must be checked before autosaving.
+        const path=typeof e.composedPath==='function'?e.composedPath():[];
+        if(path.includes(projectsPanel)||path.includes(projectsToggle)||
+           e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'))return;
         persist();
       });
     syncFitControls();syncPairToolbar();

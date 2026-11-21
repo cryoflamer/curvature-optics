@@ -775,7 +775,7 @@ test('editor provides an explicit guarded project switch without automatic start
   assert.match(source,/const incoming=await prepareVisualProject\(prepared\)/);
   assert.match(source,/activateVisualProject\(oldView\)/);
   assert.match(source,/session\.bind\(prepared\.project\)/);
-  assert.match(source,/openCalibrationProject,projectPersistenceStatus:/);
+  assert.match(source,/openCalibrationProject,adoptLegacyCalibrationDraft,\s*refreshProjectList,projectPersistenceStatus:/);
   assert.match(source,/if\(projectSession\?\.project\(\)\)\{\s*if\(!fromPersist\)\{/);
   assert.doesNotMatch(app,/\.openCalibrationProject\(/);
 });
@@ -832,4 +832,5 @@ test('Calibration Projects library reads only compact summaries and opens throug
   assert.doesNotMatch(source.slice(source.indexOf('function projectRow(entry)'),
     source.indexOf('function renderProjects()')),/record\.original|dataUrl|createObjectURL/);
   assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'\)/);
+  assert.match(source,/path\.includes\(projectsPanel\)\|\|path\.includes\(projectsToggle\)/);
 });

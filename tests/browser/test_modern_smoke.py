@@ -624,8 +624,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             return {count:rows.length,photo:item.photo,embedded:JSON.stringify(item).includes('data:image'),
                 raw:!!(await CurvatureModernCalibrationProjectStore.legacy(indexedDB))};
         }"""),{'count':1,'photo':None,'embedded':False,'raw':True})
+        saved_id=row.get_attribute('data-calibration-project-id')
+        # Open re-renders its card before the click bubbles to the workspace.
+        # The event path must still exclude this UI action from editor autosave.
         row.locator('[data-calibration-project-open]').click()
         expect(panel).to_be_hidden(timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),
+            saved_id)
         expect(button).to_have_attribute('aria-expanded','false')
         expect(workspace.locator('#ModernCalibrationStorage')).to_contain_text(
             'Calibration Project',timeout=30000)

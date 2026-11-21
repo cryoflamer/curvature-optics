@@ -1,3 +1,24 @@
+## 8F.7p.6a — Project list Open click propagation and inventory test corrected (#14)
+
+Initial Fast CI 44845256400 had 213/214 Node tests green;
+the failing test expected the previous mounted API shape before
+adoptLegacyCalibrationDraft and refreshProjectList were added.
+Full CI 44845256458 confirmed all original architecture/Legacy checks,
+but the new real Chromium scenario could adopt and list the retained
+legacy draft without closing the list after Open. Opening a card
+synchronously rebuilds the list and detaches the clicked button,
+so a later workspace-level click handler using closest() alone no
+longer identifies the event as originating in the library. That
+unwanted persist() invalidated the generation guard and blocked Open.
+The event filter now checks the DOM event's original composedPath()
+as well as closest() fallback, preventing this mutation race without
+relaxing editor write or activation guards. The browser test now also
+asserts that the selected project ID was bound after Open.
+All original legacy assets and recovery rows remain untouched.
+
+Direct correction in built-in-demo without PR; reasoning Medium / 2.
+Full and Fast CI must be green before manual UI qualification.
+
 ## 8F.7p.6 — Calibration Projects library UI, explicit legacy adoption (#14)
 
 Added an accessible Projects list inside the existing Photo Calibration
