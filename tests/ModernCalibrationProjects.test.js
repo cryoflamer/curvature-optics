@@ -776,7 +776,7 @@ test('editor provides an explicit guarded project switch without automatic start
   assert.match(source,/activateVisualProject\(oldView\)/);
   assert.match(source,/session\.bind\(prepared\.project\)/);
   assert.match(source,/openCalibrationProject,projectPersistenceStatus:/);
-  assert.match(source,/if\(projectSession\?\.project\(\)\)return;/);
+  assert.match(source,/if\(projectSession\?\.project\(\)\)\{\s*if\(!fromPersist\)\{/);
   assert.doesNotMatch(app,/\.openCalibrationProject\(/);
 });
 test('an incoming project keeps both independent photo and model views plus inline state',()=>{

@@ -1,3 +1,14 @@
+## 8F.7p.5b.2 — Inline guard test expectation corrected (#14)
+
+Fast CI 44844516104 showed 212/213 Node contracts passing and the
+Architecture/Legacy job passing. The one failing source assertion expected
+the previous project inline saver to return unconditionally; the
+intentional newer behavior persists inline-only gestures through
+persist() while retaining old localStorage bytes. The assertion now
+recognizes the guarded non-recursive callback. No production code
+or security/physics/validation logic changed. Reasoning level
+Medium / 2; direct commit to built-in-demo, no PR.
+
 ## 8F.7p.5b.1 — Project-bound inline autosave and early capture corrected (#14)
 
 While reviewing 8F.7p.5b, the project-mode persist path was strengthened:
