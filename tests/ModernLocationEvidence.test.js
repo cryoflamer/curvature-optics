@@ -137,7 +137,7 @@ test('Bedford initial signed distances are three distinct markers; no clamping o
   assert.deepEqual(model.ObjDist, [124, 0], 'modern validator must reject, not clamp, signed range');
   assert.equal(catalog.scenario('bedford-level-experiment').nativePresetId, 'bedford');
   assert.equal(catalog.scenario('bedford-level-experiment').status, 'partial');
-  assert.match(read('docs/native-scenario-compatibility.md'), /signed-distance prelude/);
+  assert.match(read('docs/native-scenario-compatibility.md'), /signed-distance prelude/i);
 });
 
 test('source-only Grace zero spacing is retained as an explicit blocker instead of coerced geometry', () => {
