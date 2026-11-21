@@ -661,7 +661,8 @@
         "tests/ModernAnimationContract.test.js",
         "tests/ModernAnimationHudIntegration.test.js",
         "tests/ModernAnimationLibrary.test.js",
-        "tests/ModernAnimationProject.test.js"
+        "tests/ModernAnimationProject.test.js",
+        "tests/ModernDemoCatalog.test.js"
       ],
       "commonJsToolCallers": []
     },
@@ -684,7 +685,8 @@
         "tests/ModernAnimationLibraryFilters.test.js",
         "tests/ModernAnimationProjectPersistence.test.js",
         "tests/ModernAnimationProjectWizard.test.js",
-        "tests/ModernAnimationStudio.test.js"
+        "tests/ModernAnimationStudio.test.js",
+        "tests/ModernDemoCatalog.test.js"
       ],
       "commonJsToolCallers": []
     },
