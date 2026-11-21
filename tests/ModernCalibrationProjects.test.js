@@ -877,14 +877,14 @@ test('CRUD actions isolate new scene, duplicate checkpoint and import without ed
   assert.equal((await storage.get(null,created.id)).title,'Untitled calibration');
   await assert.rejects(actions.duplicate(env,created.id,2,{storage,files:fakeFiles}),
     /another tab/);
-  const data={scene:snapshot,referenceImage:{id:'original',title:'Raster'},
+  const data={scene:legacyDraft().scene,referenceImage:legacyRecord(),
     referenceSource:null,observations:[],fit:{freeParameters:[],result:null,
     status:'Unfitted',running:false}};
   const imported=actions.importedDraft(data,'import-session');
-  assert.equal(imported.record.id,'original');
+  assert.equal(imported.record.id,'soundly');
   assert.equal(imported.activeSource.imported,true);
   const importerFiles={...fakeFiles,
-    async captureVerified(d){touch.push('capture-photo');assert.equal(d.record.id,'original');
+    async captureVerified(d){touch.push('capture-photo');assert.equal(d.record.id,'soundly');
       return {photo:null,checkpoint:null,overview:{stage:'correspondences',
         rowCount:0,fitStatus:null,fitRmsPx:null}};}};
   const newImport=await actions.importAsNew(env,data,{storage,files:importerFiles,now:125});
