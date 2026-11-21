@@ -1,3 +1,32 @@
+## 8F.7p.8 — Verified photo selection and per-project Apply/archive binding (#14)
+
+Reference photo selection verifies and commits an original in the
+Reference Image Library before changing the live editor. Local, demo and
+Library sources reuse images by verified SHA-256 identity, preserving
+source attribution and existing correspondences on verification failure.
+Existing Library metadata is not overwritten. Project records remain
+photo-byte-free.
+
+Non-archived Apply first acknowledges the editable checkpoint, captures
+the active project generation, archives the immutable scientific result
+(with project provenance for a new row), validates transfer, links the
+archived result ID through the generation-bound project CAS coordinator,
+then protects History and commits the physical target. Link failure
+aborts before History and Scene mutation; the archive remains for retry.
+Concurrent project revisions follow the existing full-candidate conflict
+fork path. Repeated linking is idempotent. Archive deduplication preserves
+first attribution, while each project maintains independent resultIds.
+Legacy unbound drafts and archived-to-Compare Apply remain unchanged.
+
+Node regressions cover two projects, idempotence, stale generations,
+storage failure/retry, a concurrent fork and Apply ordering. Chromium
+scenarios check verified local photo ingestion and two project Apply
+operations sharing one scientific result without duplicated photo data.
+The full reload/quota/concurrency/browser matrix remains 8F.7p.9.
+
+Direct commit to built-in-demo without PR. Reasoning High / 3.
+Full CI required before advancing.
+
 ## 8F.7p.7 — Calibration Projects CRUD and Import as New (#14)
 
 Added explicit New project from the current Globe Scene, guarded Rename,

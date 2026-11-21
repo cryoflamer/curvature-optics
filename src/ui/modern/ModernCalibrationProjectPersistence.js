@@ -131,6 +131,26 @@
       if(active.pending)throw Error('Cannot discard calibration edits during a pending save');
       active.latest=null;active.error=null;notify();return state();
     }
+    // Bind an immutable archived result to one guarded project generation.
+    // Save failure retains the full checkpoint for explicit retry or export.
+    function linkResult(resultId,draft,inline,expected){
+      const selected=state(),owner=active;
+      if(!expected||!owner||selected.projectId!==expected.projectId||
+         selected.generation!==expected.generation||selected.pending||selected.unsaved)
+        throw Error('Calibration Project changed or has unsaved work; archived result was not linked');
+      const ids=owner.project.resultIds;
+      const linked=ids.includes(resultId)?ids:ids.concat(resultId);
+      model.fresh({id:owner.project.id,now:owner.project.createdAt,resultIds:linked});
+      if(ids.includes(resultId))
+        return Promise.resolve({status:'already-linked',project:model.normalize(owner.project),current:true});
+      mark(draft,inline,{resultIds:linked});
+      return save().then(outcome=>{
+        if(owner!==active||owner.generation!==expected.generation||!outcome.current||
+           !outcome.project.resultIds.includes(resultId))
+          throw Error('Archived result was saved, but the editor generation changed');
+        return outcome;
+      });
+    }
     function recovery(){
       if(!active?.latest)return null;
       const v=active.latest;
@@ -141,7 +161,7 @@
         draft:v.draft,inline:v.inline,title:v.title,resultIds:v.resultIds});
     }
     function project(){return active?model.normalize(active.project):null;}
-    return Object.freeze({bind,mark,save,retry:save,prepareOpen,discard,recovery,project,state});
+    return Object.freeze({bind,mark,save,retry:save,linkResult,prepareOpen,discard,recovery,project,state});
   }
   return Object.freeze({create});
 }));

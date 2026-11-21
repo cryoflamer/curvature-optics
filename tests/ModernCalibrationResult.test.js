@@ -694,3 +694,27 @@ test('archived transition also rejects a stale generation after protecting Histo
   await assert.rejects(applyApi.create(h.host).apply('B'),e=>e.phase==='stale'&&!e.committed);
   assert.deepEqual(h.current,before);assert.ok(!h.trace.includes('commit'));
 });
+
+test('project-linked Apply durably associates the archived result before protecting History',async()=>{
+  const record=await archive.create(input(),env()),h=applyHost(record);
+  h.host.link=async(saved)=>{
+    assert.equal(saved.row.id,record.id);
+    assert.deepEqual(h.trace,['archive']);
+    h.trace.push('link');
+  };
+  const controller=applyApi.create(h.host);
+  const outcome=await controller.apply('Scene');
+  assert.deepEqual(h.trace,['archive','link','protect','commit','present']);
+  assert.equal(outcome.resultId,record.id);
+});
+
+test('failed project result link aborts before History and physical commit; archive remains retryable',async()=>{
+  const record=await archive.create(input(),env()),h=applyHost(record);
+  const before=copy(h.current);
+  h.host.link=async(saved)=>{assert.equal(saved.row.id,record.id);
+    h.trace.push('link');throw Error('Injected project storage failure');};
+  await assert.rejects(applyApi.create(h.host).apply('Scene'),e=>
+    e.phase==='link'&&e.committed===false&&/Injected project storage failure/.test(e.message));
+  assert.deepEqual(h.trace,['archive','link']);
+  assert.deepEqual(h.current,before);
+});

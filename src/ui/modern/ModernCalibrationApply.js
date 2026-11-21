@@ -77,6 +77,14 @@
         phase='stale';current();
         phase='transfer';
         const next=transfer.transfer(record,before,target);
+        phase='link';
+        // A deduplicated scientific result can be linked to multiple
+        // projects. A link failure must abort before History or commit.
+        if(!archived&&typeof host.link==='function'){
+          current();
+          await host.link(saved);
+          current();
+        }
         phase='recovery';
         const backup=await host.protect(state.validate(before));
         if(!backup?.entry?.pinned||!Number.isSafeInteger(backup.entry.id)||backup.entry.id<1||

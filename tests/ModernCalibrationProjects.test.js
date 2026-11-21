@@ -893,3 +893,71 @@ test('CRUD actions isolate new scene, duplicate checkpoint and import without ed
   assert.deepEqual([...records.keys()].length,3);
   assert.deepEqual(touch,['capture','create','prepare','create','capture-photo','create']);
 });
+
+test('archived result links are generation-bound, idempotent and isolated across Calibration Projects',async()=>{
+  const db=memoryIndexedDB(),a=project(A),b=project(B);
+  await store.create(db,a);await store.create(db,b);
+  const {session}=persistenceSession(db);
+  session.bind(a);
+  const first={projectId:A,generation:session.state().generation};
+  const draft=legacyDraft(),inline=inlineState(draft);
+  await assert.rejects(session.linkResult(result,draft,inline,{projectId:B,
+    generation:first.generation}),/changed or has unsaved/);
+  await assert.rejects(session.linkResult('invalid-result',draft,inline,first),
+    /result links/);
+  const linked=await session.linkResult(result,draft,inline,first);
+  assert.equal(linked.status,'updated');
+  assert.deepEqual(linked.project.resultIds,[result]);
+  assert.equal(linked.project.checkpoint.payload.draft.pending[0],330);
+  assert.equal((await store.get(db,B)).resultIds.length,0);
+  const again=await session.linkResult(result,draft,inline,first);
+  assert.equal(again.status,'already-linked');
+  assert.equal((await store.get(db,A)).revision,2);
+  const other=session.bind(b);
+  await assert.rejects(session.linkResult(result,draft,inline,first),
+    /changed or has unsaved/);
+  await session.linkResult(result,draft,inline,{projectId:B,generation:other.generation});
+  assert.deepEqual((await store.get(db,A)).resultIds,[result]);
+  assert.deepEqual((await store.get(db,B)).resultIds,[result]);
+  assert.equal((await store.get(db,A)).revision,2);
+  assert.equal((await store.get(db,B)).revision,2);
+});
+
+test('archive link failed CAS retains complete retryable draft and cannot redirect a competing generation',async()=>{
+  const db=memoryIndexedDB(),a=project(A),b=project(B);
+  await store.create(db,a);await store.create(db,b);
+  const {session}=persistenceSession(db);
+  session.bind(a);
+  const expected={projectId:A,generation:session.state().generation};
+  const draft=legacyDraft(),inline=inlineState(draft);
+  db.failMutation(store.SUMMARIES,'put');
+  await assert.rejects(session.linkResult(result,draft,inline,expected),
+    /Injected transaction failure/);
+  assert.deepEqual((await store.get(db,A)).resultIds,[]);
+  assert.equal(session.state().unsaved,true);
+  assert.deepEqual(JSON.parse(session.recovery()).resultIds,[result]);
+  assert.throws(()=>session.bind(b),/Unsaved or pending/);
+  const repaired=await session.retry();
+  assert.deepEqual(repaired.project.resultIds,[result]);
+  assert.equal((await store.get(db,A)).revision,2);
+  session.bind(b);
+  assert.deepEqual((await store.get(db,B)).resultIds,[]);
+});
+
+test('simultaneous result links from stale tabs fork rather than overwrite another project result',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {env,adapter}=persistenceSession(db);
+  const first=coordinator.create(env,{adapter,decoder:importer,clock:()=>1450});
+  const second=coordinator.create(env,{adapter,decoder:importer,clock:()=>1451});
+  first.bind(start);second.bind(start);
+  const binding=session=>({projectId:A,generation:session.state().generation});
+  const one=await first.linkResult(result,legacyDraft(),null,binding(first));
+  const alternate='calibration-result-v1-'+'b'.repeat(64);
+  const two=await second.linkResult(alternate,legacyDraft(),null,binding(second));
+  assert.equal(one.status,'updated');
+  assert.equal(two.status,'forked');
+  assert.deepEqual((await store.get(db,A)).resultIds,[result]);
+  assert.deepEqual((await store.get(db,two.project.id)).resultIds,[alternate]);
+  assert.equal(two.project.forkOf,A);
+});

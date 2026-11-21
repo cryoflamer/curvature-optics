@@ -706,6 +706,90 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Soundly',timeout=30000)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_calibration_project_photo_selection_retains_verified_library_original(self):
+        import base64
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        original=data['referenceImage']['original']['dataUrl']
+        workspace.locator('#ModernCalibrationFile').set_input_files({
+            'name':'selected-original.png','mimeType':'image/png',
+            'buffer':base64.b64decode(original.split(',',1)[1])})
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+            'selected-original.png',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const active=editor.exportExperiment(),saved=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            const identity=await CurvatureModernReferenceImageImport.identify(active.referenceImage,window);
+            const rows=await Promise.all(saved.map(x=>CurvatureModernReferenceImageLibrary.get(indexedDB,x.id)));
+            return {count:rows.length,matched:rows.some(x=>x&&x.record.original.dataUrl===active.referenceImage.original.dataUrl),
+                shaLength:identity.sha256.length,source:active.referenceSource.source};
+        }""")
+        self.assertEqual(result,{'count':1,'matched':True,'shaLength':64,'source':'local'})
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_calibration_project_apply_links_reused_result_in_two_independent_projects(self):
+        import json
+        workspace=self.open_physical_calibration()
+        data=self.soundly_calibration_experiment()
+        data=self.page.evaluate("""data => {
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters;
+            const points=rows.map(row=>({id:row.landmark.id,status:'visible',
+                observed:row.pixel,predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight}));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,
+                evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,
+                    cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(
+                    rows,freeParameters,model,physics,1176,791)};
+            return data;
+        }""",data)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'linked-calibration.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')})
+        original=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(original).to_have_count(1,timeout=30000)
+        a=original.get_attribute('data-calibration-project-id')
+        original.locator('[data-calibration-project-duplicate]').click()
+        duplicate=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster (copy)')
+        expect(duplicate).to_have_count(1,timeout=30000)
+        b=duplicate.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(a,b)
+        for selected in [a,b]:
+            panel.locator('[data-calibration-project-id="'+selected+'"] [data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            button=workspace.locator('#ModernCalibrationApplyScene')
+            expect(button).to_be_enabled(timeout=30000)
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            button.click()
+            expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
+                'Save Snapshot to keep this Scene',timeout=30000)
+            self.page.locator('#ModernPhotoCalibrationOpen').click()
+            workspace.locator('#ModernCalibrationProjectsToggle').click()
+            expect(panel).to_be_visible()
+        links=self.page.evaluate("""async ids => {
+            const projects=CurvatureModernCalibrationProjectStore;
+            const archive=CurvatureModernCalibrationResultArchive;
+            const x=await projects.get(indexedDB,ids[0]),y=await projects.get(indexedDB,ids[1]);
+            const records=await archive.list(indexedDB);
+            const images=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            return {a:x.resultIds,b:y.resultIds,archiveCount:records.length,
+                photoCount:images.length,provenance:(await archive.get(indexedDB,records[0].id)).record.provenance.projectId,
+                embedded:JSON.stringify([x,y]).includes('data:image')};
+        }""",[a,b])
+        self.assertEqual(len(links['a']),1)
+        self.assertEqual(links['a'],links['b'])
+        self.assertEqual(links['archiveCount'],1)
+        self.assertEqual(links['photoCount'],1)
+        self.assertEqual(links['provenance'],a)
+        self.assertFalse(links['embedded'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_atmosphere_retains_observations_and_changes_worker_projection(self):
         workspace=self.open_physical_calibration()
         data=self.soundly_calibration_experiment()

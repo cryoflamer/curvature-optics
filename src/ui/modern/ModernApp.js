@@ -4901,6 +4901,7 @@
       throw Error('Calibration Apply requires available History storage');
     calibrationApplyBusy=true;updatePresetNavigation();refreshCalibrationApplicability();
     try{
+      let archivedProjectBinding=null;
       const controller=root.CurvatureModernCalibrationApply.create({
         ...(archived?{
           loadArchived:id=>root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,id)
@@ -4909,7 +4910,17 @@
           async archive(candidate){
             // Keep the editable original draft durable independently of archive.
             await editor.saveDraft();
-            return root.CurvatureModernCalibrationResultArchive.archiveExperiment(root.indexedDB,candidate,root);
+            archivedProjectBinding=editor.projectBinding?.()||null;
+            return root.CurvatureModernCalibrationResultArchive.archiveExperiment(
+              root.indexedDB,candidate,root,
+              {projectId:archivedProjectBinding?.projectId??null});
+          },
+          async link(saved){
+            if(archivedProjectBinding){
+              if(typeof editor.linkArchivedResult!=='function')
+                throw Error('Calibration Project result-link coordinator is unavailable');
+              await editor.linkArchivedResult(saved.row.id,archivedProjectBinding);
+            }
           }
         }),
         snapshot:experimentSnapshot,
