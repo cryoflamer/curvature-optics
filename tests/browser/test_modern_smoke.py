@@ -706,6 +706,41 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Soundly',timeout=30000)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_calibration_project_library_selection_is_separate_from_guarded_open(self):
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.once('dialog',lambda dialog:dialog.accept('First calibration'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.once('dialog',lambda dialog:dialog.accept('Second calibration'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        cards=panel.locator('[data-calibration-project-id]')
+        expect(cards).to_have_count(2,timeout=30000)
+        self.assertTrue(cards.first.evaluate('(node) => node.clientWidth <= 235'))
+        initial=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId""")
+        first=cards.first
+        first.click()
+        expect(first).to_have_class(re.compile(r'is-selected'))
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),initial)
+        expect(panel).to_be_visible()
+        expect(first.locator('.modern-animation-library-card-status')).to_be_visible()
+        first.dblclick()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),
+            first.get_attribute('data-calibration-project-id'))
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        opened=panel.locator('[data-calibration-project-id="'+first.get_attribute('data-calibration-project-id')+'"]')
+        expect(opened).to_contain_text('Opened')
+        expect(opened.locator('[data-calibration-project-delete]')).to_be_disabled()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_project_photo_selection_retains_verified_library_original(self):
         import base64
         workspace=self.open_physical_calibration()

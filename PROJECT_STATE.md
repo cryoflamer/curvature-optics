@@ -1,3 +1,23 @@
+## Commit 1 — unified Calibration Projects card library (#23)
+
+Calibration Projects now reuses Animation Library's compact scrolling
+card layout, typography, status badges and shared corner-delete control.
+A pointer single click or keyboard Space changes only the transient blue
+selection. Double-click, Enter or Open uses the existing guarded project
+activation path. The independent Opened badge marks the currently active
+editor project; an active project cannot be deleted. Corner deletion
+stops propagation, requires confirmation and existing revision checks.
+Rename and Duplicate remain available. Verified original-photo previews
+are reused without new persistent copies. The remembered collapsible
+Projects panel is unchanged.
+
+The remaining task (#24) is diagnosing duplicated Animation Studio
+working drafts and implementing confirmed bulk cleanup without touching
+saved projects; it is intentionally not implemented in this commit.
+
+Targeted contract/browser tests added. Fast CI automatically; Full CI
+remains manual.
+
 ## Calibration Projects as inline collapsible panel
 
 Projects now uses a native details/summary panel above the calibration stages

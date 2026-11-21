@@ -868,6 +868,25 @@
       projectsList=$('ModernCalibrationProjectsList');
     const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
     let projectRows=[],projectListBusy=false,projectListToken=0,projectInspection=null;
+    // A UI-only selection, deliberately independent of the active project.
+    // Never persist this into the editor draft or the project summary.
+    let projectSelectedId=null;
+    function selectProjectCard(id){
+      if(projectListBusy)return;
+      projectSelectedId=id;
+      for(const card of projectsList.querySelectorAll('[data-calibration-project-id]')){
+        const selected=card.dataset.calibrationProjectId===id;
+        card.classList.toggle('is-selected',selected);
+        card.setAttribute('aria-label',(selected?'Selected calibration: ':'Calibration: ')+
+          (card.dataset.projectTitle||'')+'. Open or double-click to edit.');
+      }
+    }
+    function projectCardControl(event,card){
+      for(let target=event.target;target&&target!==card;target=target.parentNode)
+        if(/^(BUTTON|INPUT|TEXTAREA|SELECT|A)$/.test(String(target.tagName||'').toUpperCase()))
+          return true;
+      return false;
+    }
     // In-memory previews are UI-only. An unavailable original is a visible
     // placeholder, not an error that prevents listing/opening the project.
     const projectPreviews=new Map();
@@ -875,7 +894,7 @@
     function projectPreview(photo){
       const key=photoPreviewKey(photo);
       const figure=doc.createElement('div');
-      figure.className='modern-calibration-project-preview';
+      figure.className='modern-animation-library-visual modern-calibration-project-preview';
       if(!key){figure.textContent='No reference photo';return figure;}
       const preview=projectPreviews.get(key);
       if(preview){
@@ -941,67 +960,111 @@
       return Number.isSafeInteger(ts)?new Date(ts).toLocaleString():'Unknown time';
     }
     function projectRow(entry){
-      const card=doc.createElement('article');
-      card.className='modern-calibration-project-card';
-      card.dataset.calibrationProjectId=entry.id;
       const state=projectSession?.state();
-      const active=state?.projectId===entry.id,unsaved=active&&state.unsaved;
+      const active=state?.projectId===entry.id,unsaved=active&&state.unsaved,
+        selected=projectSelectedId===entry.id;
+      const card=doc.createElement('article');
+      card.className='modern-animation-library-card modern-calibration-project-card'+
+        (selected?' is-selected':'')+(active?' is-editing':'');
+      card.dataset.calibrationProjectId=entry.id;
+      card.dataset.projectTitle=entry.title;
       card.dataset.projectActive=String(active);
       card.dataset.projectUnsaved=String(!!unsaved);
-      const name=doc.createElement('h3');name.textContent=entry.title;
-      card.append(projectPreview(entry.photo),name);
-      const desc=doc.createElement('p');
-      desc.textContent=[
-        entry.photo?'Photo '+entry.photo.width+' × '+entry.photo.height+' px':'No reference photo',
-        entry.stage==='result'?'Result':entry.stage==='calibration'?'Calibration':'Correspondences',
-        entry.rowCount+' correspondences'
-      ].join(' · ');
-      card.append(desc);
-      const fitLine=doc.createElement('p');
-      fitLine.className='modern-calibration-project-fit';
-      fitLine.textContent=entry.fitRmsPx!==null?
-        'Fit: '+(entry.fitStatus||'result')+' · RMS '+Number(entry.fitRmsPx.toPrecision(3))+' px':
+      card.tabIndex=0;
+      card.setAttribute('role','group');
+      card.setAttribute('aria-label',(selected?'Selected calibration: ':'Calibration: ')+entry.title+
+        '. Open or double-click to edit.');
+      card.addEventListener('click',event=>{
+        if(!projectCardControl(event,card))selectProjectCard(entry.id);
+      });
+      card.addEventListener('dblclick',event=>{
+        if(!projectCardControl(event,card)&&!projectListBusy)void openFromProjects(entry.id);
+      });
+      card.addEventListener('keydown',event=>{
+        if(projectCardControl(event,card))return;
+        if(event.key==='Enter'&&!projectListBusy){
+          event.preventDefault();void openFromProjects(entry.id);
+        }else if(event.key===' '||event.key==='Spacebar'){
+          event.preventDefault();selectProjectCard(entry.id);
+        }
+      });
+      card.append(projectPreview(entry.photo));
+      const info=doc.createElement('div');
+      info.className='modern-animation-library-card-info';
+      const name=doc.createElement('strong');
+      name.className='modern-animation-library-card-title';
+      name.textContent=entry.title;name.title=entry.title;
+      info.append(name);
+      const badges=doc.createElement('div');
+      badges.className='modern-animation-library-card-status';
+      const selection=doc.createElement('span');
+      selection.className='modern-animation-library-status-selected';
+      selection.textContent='Selected';
+      badges.append(selection);
+      if(active){
+        const opened=doc.createElement('span');
+        opened.className='modern-animation-library-status-editing';
+        opened.textContent='Opened';
+        badges.append(opened);
+      }else if(entry.forkOf){
+        const fork=doc.createElement('span');
+        fork.className='modern-calibration-project-fork';
+        fork.textContent='Conflict copy';
+        badges.append(fork);
+      }
+      info.append(badges);
+      function detail(value,klass,tooltip){
+        const element=doc.createElement('small');
+        element.className=klass;
+        element.textContent=value;
+        if(tooltip)element.title=tooltip;
+        info.append(element);
+        return element;
+      }
+      detail((entry.photo?'Photo '+entry.photo.width+' × '+entry.photo.height+' px':'No reference photo')+
+        ' · '+entry.rowCount+' correspondences','modern-animation-library-card-meta');
+      const fit=entry.fitRmsPx!==null?
+        'Fit: '+(entry.fitStatus?entry.fitStatus.split(' · ')[0]:'result')+
+          ' · RMS '+Number(entry.fitRmsPx.toPrecision(3))+' px':
         'Fit: '+(entry.fitStatus||'Not yet fitted');
-      fitLine.title=entry.fitStatus||'';
-      card.append(fitLine);
-      const links=doc.createElement('p');
-      links.textContent=entry.resultCount+' linked archived result'+(entry.resultCount===1?'':'s');
-      card.append(links);
-      const updated=doc.createElement('p');
-      updated.className='modern-calibration-project-meta';
-      updated.textContent='Updated '+projectStamp(entry.updatedAt)+' · Revision '+entry.revision;
-      card.append(updated);
+      detail(fit,'modern-animation-library-card-summary modern-calibration-project-fit',
+        entry.fitStatus||'');
+      detail(entry.resultCount+' linked archived result'+(entry.resultCount===1?'':'s'),
+        'modern-animation-library-card-summary');
+      detail('Updated '+projectStamp(entry.updatedAt)+' · Revision '+entry.revision,
+        'modern-animation-library-card-updated');
+      if(active&&state&&(state.error||unsaved||state.pending))
+        detail(state.error?'Unsaved — '+state.error:unsaved?'Unsaved changes':'Saving…',
+          'modern-calibration-project-warning');
+      card.append(info);
       const actions=doc.createElement('div');
-      actions.className='modern-calibration-project-actions';
-      const open=doc.createElement('button');open.type='button';
-      open.textContent=active?'Reopen':'Open';
-      open.dataset.calibrationProjectOpen=entry.id;
-      open.disabled=projectListBusy;
-      open.onclick=()=>void openFromProjects(entry.id);
-      actions.append(open);
+      actions.className='modern-animation-library-card-actions modern-calibration-project-actions';
       function action(label,key,callback,disabled=false){
         const button=doc.createElement('button');button.type='button';
         button.textContent=label;button.dataset[key]=entry.id;
         button.disabled=projectListBusy||disabled;
-        button.onclick=()=>void callback(entry);
-        actions.append(button);
-        return button;
+        button.onclick=event=>{event.stopPropagation();void callback(entry);};
+        actions.append(button);return button;
       }
+      action(active?'Reopen':'Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
       action('Rename','calibrationProjectRename',renameFromProjects);
       action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
-      const deletion=action('Delete','calibrationProjectDelete',deleteFromProjects,active);
-      if(active)deletion.title='Open another project before deleting this active project';
-      if(active){
-        const label=doc.createElement('span');
-        label.className='modern-calibration-project-label';
-        label.textContent=state.error?'Unsaved — '+state.error:
-          unsaved?'Unsaved changes':state.pending?'Saving…':'Active project';
-        actions.append(label);
-      }else if(entry.forkOf){
-        const label=doc.createElement('span');label.className='modern-calibration-project-label';
-        label.textContent='Conflict copy';actions.append(label);
-      }
       card.append(actions);
+      const deletion=doc.createElement('button');
+      deletion.type='button';
+      deletion.className='modern-animation-library-delete modern-card-delete';
+      deletion.dataset.calibrationProjectDelete=entry.id;
+      deletion.disabled=projectListBusy||active;
+      deletion.setAttribute('aria-label','Delete calibration '+entry.title);
+      deletion.title=active?'Open another project before deleting this active project':
+        'Delete calibration '+entry.title;
+      deletion.onclick=event=>{event.stopPropagation();void deleteFromProjects(entry);};
+      ['pointerdown','mousedown','dblclick','dragstart'].forEach(type=>
+        deletion.addEventListener(type,event=>{
+          event.stopPropagation();
+          if(type==='mousedown'||type==='dragstart')event.preventDefault();
+        }));
+      card.append(deletion);
       return card;
     }
     function renderProjects(){
@@ -1032,6 +1095,7 @@
         ]);
         if(token!==projectListToken||projectsPanel.hidden)return;
         projectRows=rows;
+        if(projectSelectedId&&!rows.some(row=>row.id===projectSelectedId))projectSelectedId=null;
         projectInspection=inspection;
         projectsMessage(rows.length+' saved Calibration Project'+(rows.length===1?'':'s')+'.');
         renderProjects();

@@ -991,7 +991,7 @@ test('Project card photographs resolve lazily by SHA-256 without saving raster b
   const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   assert.match(source,/library\.findOriginal\(env\.indexedDB,identity,env\.crypto/);
   assert.match(source,/projectPreviews\.set\(key,preview\)/);
-  assert.match(source,/card\.append\(projectPreview\(entry\.photo\),name\)/);
+  assert.match(source,/card\.append\(projectPreview\(entry\.photo\)\)/);
   assert.match(source,/env\.CurvatureModernApp\?\.rememberCalibrationView\?\.\(open\?'projects':'editor'\)/);
   assert.match(source,/showProjectList\(env\.CurvatureModernApp\?\.getCalibrationView\?\.\(\)==='projects'\)/);
   assert.match(app,/function rememberCalibrationView\(view\)/);
@@ -1001,11 +1001,12 @@ test('Calibration Project library cards remain compact and fit diagnostics are s
   const fs=require('node:fs'),path=require('node:path');
   const css=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
   const editor=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
-  assert.match(css,/\.modern-calibration-project-card\{[^}]*max-width:390px/);
-  assert.match(css,/\.modern-calibration-projects-list\{[^}]*repeat\(auto-fill/);
-  assert.match(css,/\.modern-calibration-project-preview\{[^}]*aspect-ratio:3\/2/);
-  assert.match(editor,/Fit: '\+\(entry\.fitStatus\|\|'result'\)\+' · RMS '/);
-  assert.match(editor,/fitLine\.title=entry\.fitStatus/);
+  assert.match(css,/\.modern-calibration-project-card\{[^}]*flex:0 0 226px/);
+  assert.match(css,/\.modern-calibration-projects-list\{[^}]*overflow-x:auto/);
+  assert.match(css,/\.modern-calibration-project-preview\{[^}]*height:115px/);
+  assert.match(editor,/modern-animation-library-card-status/);
+  assert.match(editor,/modern-animation-library-card-actions/);
+  assert.match(editor,/modern-card-delete/);
 });
 
 test('Calibration Projects renders as a non-exclusive disclosure using existing workspace preference',()=>{
@@ -1023,4 +1024,25 @@ test('Calibration Projects renders as a non-exclusive disclosure using existing 
   assert.doesNotMatch(css,/#ModernPhotoCalibration\[data-projects-list=open\] >/);
   assert.match(source,/projectsDisclosure\.addEventListener\('toggle',\(\)=>showProjectList\(projectsDisclosure\.open\)\)/);
   assert.match(source,/rememberCalibrationView\?\.\(open\?'projects':'editor'\)/);
+});
+
+test('Calibration Project library interaction matches Animation Library selection/open/delete contract',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const css=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  const studio=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  assert.match(source,/let projectSelectedId=null/);
+  assert.match(source,/card\.addEventListener\('click',event=>/);
+  assert.match(source,/card\.addEventListener\('dblclick',event=>/);
+  assert.match(source,/event\.key==='Enter'/);
+  assert.match(source,/event\.key===' '\|\|event\.key==='Spacebar'/);
+  assert.match(source,/if\(!projectCardControl\(event,card\)\)selectProjectCard\(entry\.id\)/);
+  assert.match(source,/modern-animation-library-card modern-calibration-project-card/);
+  assert.match(source,/modern-animation-library-status-editing/);
+  assert.match(source,/deletion\.disabled=projectListBusy\|\|active/);
+  assert.match(source,/event\.stopPropagation\(\);void deleteFromProjects\(entry\)/);
+  assert.match(css,/\.modern-calibration-projects-list\{display:flex/);
+  assert.match(studio,/modern-animation-library-card.is-selected|is-selected/);
 });
