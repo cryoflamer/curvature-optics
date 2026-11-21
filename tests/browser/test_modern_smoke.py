@@ -690,6 +690,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         imported=panel.locator('[data-calibration-project-id]').filter(
             has_text='Soundly regression raster')
         expect(imported).to_have_count(1,timeout=30000)
+        imported_id=imported.get_attribute('data-calibration-project-id')
+        self.assertEqual(self.page.evaluate("""async id => {
+            const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return {hasVerifiedPhoto:!!row.photo?.identity?.sha256,
+                noEmbeddedPhoto:!JSON.stringify(row).includes('data:image'),
+                photoOnlyByReference:row.checkpoint.payload.draft.record===null};
+        }""",imported_id),
+            {'hasVerifiedPhoto':True,'noEmbeddedPhoto':True,'photoOnlyByReference':True})
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),active)
         imported.locator('[data-calibration-project-open]').click()
