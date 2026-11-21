@@ -130,7 +130,7 @@ test('Modern loads recovery before the editor bootstrap and keeps UI state in Mo
   assert.ok(html.indexOf(location)<html.indexOf('src/ui/modern/ModernApp.js'));
   assert.match(app,/studioRecoveryApi\.create\(/);
   assert.match(app,/restoreStudioCollection/);
-  assert.match(app,/function persistStudioWorkspace\(\)/);
+  assert.match(app,/function persistStudioWorkspace\(settings\)/);
   assert.doesNotMatch(app,/root\.addEventListener\('beforeunload',function/);
 });
 

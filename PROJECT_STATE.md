@@ -1,3 +1,7 @@
+## Animation Studio cleanup Fast CI qualification (#24)
+
+The Fast Node suite now includes ModernAnimationDraftAutosave.test.js so the new batch-deletion, local-backup and tombstone recovery regressions are exercised on every push. The workspace recovery source contract was updated to accept the new optional durable-persistence settings argument. Full CI remains manual.
+
 ## Animation Studio draft cleanup and recovery fix (#24)
 
 A source-level recovery amplification path was found: multiple tab backups
