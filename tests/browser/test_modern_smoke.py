@@ -756,7 +756,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         a=original.get_attribute('data-calibration-project-id')
         original.locator('[data-calibration-project-duplicate]').click()
         duplicate=panel.locator('[data-calibration-project-id]').filter(
-            has_text='Soundly regression raster (copy)')
+            has_text='Soundly regression raster.png (copy)')
         expect(duplicate).to_have_count(1,timeout=30000)
         b=duplicate.get_attribute('data-calibration-project-id')
         self.assertNotEqual(a,b)
