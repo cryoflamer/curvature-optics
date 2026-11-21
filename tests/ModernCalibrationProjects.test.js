@@ -901,9 +901,9 @@ test('archived result links are generation-bound, idempotent and isolated across
   session.bind(a);
   const first={projectId:A,generation:session.state().generation};
   const draft=legacyDraft(),inline=inlineState(draft);
-  await assert.rejects(session.linkResult(result,draft,inline,{projectId:B,
+  assert.throws(()=>session.linkResult(result,draft,inline,{projectId:B,
     generation:first.generation}),/changed or has unsaved/);
-  await assert.rejects(session.linkResult('invalid-result',draft,inline,first),
+  assert.throws(()=>session.linkResult('invalid-result',draft,inline,first),
     /result links/);
   const linked=await session.linkResult(result,draft,inline,first);
   assert.equal(linked.status,'updated');
@@ -914,7 +914,7 @@ test('archived result links are generation-bound, idempotent and isolated across
   assert.equal(again.status,'already-linked');
   assert.equal((await store.get(db,A)).revision,2);
   const other=session.bind(b);
-  await assert.rejects(session.linkResult(result,draft,inline,first),
+  assert.throws(()=>session.linkResult(result,draft,inline,first),
     /changed or has unsaved/);
   await session.linkResult(result,draft,inline,{projectId:B,generation:other.generation});
   assert.deepEqual((await store.get(db,A)).resultIds,[result]);
