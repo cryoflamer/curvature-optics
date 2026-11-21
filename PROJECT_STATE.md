@@ -1,3 +1,14 @@
+## 8F.7p.5a.1 — Static test caller inventory corrected (#14)
+
+Fast CI 44843459378: all Node contracts passed; architecture stopped
+at the reviewed Legacy isolation inventory because the new activation
+preflight regression imports ModernCalibrationProjectCheckpoint directly.
+The matching CommonJS test caller is now recorded. No production code,
+browser entrypoint, photo bytes, mathematical computation, or validation
+criterion was changed.
+
+Direct commit to built-in-demo; no PR. Reasoning level Medium / 2.
+
 ## 8F.7p.5a — Non-destructive Calibration Project startup and activation preflight (#14)
 
 The legacy editor now opens its existing calibration DB at the current
