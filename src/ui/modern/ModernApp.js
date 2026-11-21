@@ -628,8 +628,11 @@
   var studioWorkspaceLocalSaved=false;
   // Each page has its own synchronous recovery slot. Multiple tabs must never
   // overwrite one another's pending localStorage backups.
-  var studioWorkspaceSessionId='session_'+Math.random().toString(36).slice(2)+
-    '_'+Date.now().toString(36);
+  // sessionStorage survives F5 but is scoped to this browser tab. A fresh
+  // ID on every reload misclassified an old pagehide backup as another tab.
+  var studioWorkspaceSessionId=studioDraftAutosave.workspaceSessionId((function(){
+    try{return root.sessionStorage;}catch(error){return null;}
+  }()),root.crypto);
   var studioIndexedBaseline=null;
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
