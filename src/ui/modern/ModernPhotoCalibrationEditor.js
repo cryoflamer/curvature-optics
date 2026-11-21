@@ -620,6 +620,9 @@
       if(restoring||switchingInline||!physicalSessionId||!scene)return;
       try{
         captureInline();
+        // Project views belong to their own IndexedDB checkpoint. Never
+        // overwrite the retained single-draft inline session from a project.
+        if(projectSession?.project())return;
         env.localStorage.setItem(INLINE_KEY,JSON.stringify({id:physicalSessionId,photo:record?.id||null,sessions:inlineSessions}));
       }catch(error){/* Optional UI storage; the atomic calibration draft is independent. */}
     }
@@ -640,7 +643,8 @@
     function newPhysicalSession(){
       physicalSessionId=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
       inlineSessions={initial:null};inlineRole=null;
-      try{env.localStorage.removeItem(INLINE_KEY);env.localStorage.removeItem('curvature-calibration-magnifier-v1');env.localStorage.removeItem('curvature-landmark-viewer-window-v1');}catch(error){/* Optional UI storage. */}
+      // Retain historical inline recovery while editing a project.
+      if(!projectSession?.project())try{env.localStorage.removeItem(INLINE_KEY);env.localStorage.removeItem('curvature-calibration-magnifier-v1');env.localStorage.removeItem('curvature-landmark-viewer-window-v1');}catch(error){/* Optional UI storage. */}
     }
     let previewValid=false,photoGhost=null,initialProjectionKey=null;
     const identityRaster=doc.createElement('canvas');
@@ -763,6 +767,9 @@
     // No project is activated at startup by merely inspecting migration readiness.
     // The legacy draft remains writable until guarded activation is qualified.
     let projectStartupStatus={status:'uninspected'};
+    // No project owns the live editor until an explicit, fully qualified open.
+    let projectSession=null,projectSwitchBusy=false,projectSwitchEpoch=0;
+    let editorMutation=0,switchInterference=false;
     function database(){
       if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
         // Opening without a fixed version also supports the project-store v2
@@ -837,23 +844,53 @@
       // belong to 8F.7p.5. Never replace current editor on failed prepare.
       return helper.prepare(project,env);
     }
-    function persist(){
+    function persistenceSession(){
+      if(!projectSession){
+        const helper=env.CurvatureModernCalibrationProjectPersistence;
+        if(!helper)throw Error('Calibration Project coordinator unavailable');
+        projectSession=helper.create(env);
+      }
+      return projectSession;
+    }
+    function persist(forSwitch=false){
       if(restoring||!scene)return;
+      if(projectSwitchBusy&&!forSwitch){
+        // A programmatic event during a switch invalidates the pending
+        // activation. Never silently drop its mutated editor state.
+        editorMutation++;switchInterference=true;
+        return;
+      }
+      editorMutation++;
       saveInline();
       const data=captureDraftState();
+      const session=projectSession?.project()?projectSession:null;
+      const inline=session?captureInlineState():null;
       const saved=writeQueue.catch(()=>{}).then(async()=>{
-        const db=await database();
-        await new Promise((resolve,reject)=>{
-          const tx=db.transaction('draft','readwrite');
-          tx.objectStore('draft').put(data,'active');
-          tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Draft write failed'));
-        });
-        $('ModernCalibrationStorage').textContent='Draft saved in this browser.';
+        if(session){
+          session.mark(data,inline);
+          const result=await session.save();
+          const current=projectSession===session&&session.state().projectId===result.project.id;
+          if(current)$('ModernCalibrationStorage').textContent=
+            result.status==='forked'?'Conflict fork saved in Calibration Projects.':
+              'Calibration Project saved in this browser.';
+        }else{
+          const db=await database();
+          await new Promise((resolve,reject)=>{
+            const tx=db.transaction('draft','readwrite');
+            tx.objectStore('draft').put(data,'active');
+            tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Draft write failed'));
+          });
+          if(!projectSession?.project())
+            $('ModernCalibrationStorage').textContent='Draft saved in this browser.';
+        }
       });
-      // Existing callers may fire-and-forget; the explicit Apply operation
-      // also awaits the original rejecting promise before mutating Scene.
-      writeQueue=saved.catch(e=>{$('ModernCalibrationStorage').textContent='Draft not saved: '+e.message;});
-      $('ModernCalibrationStorage').textContent='Saving draft…';
+      // Apply and guarded switching await this rejecting promise. Ordinary
+      // UI events still use a handled queue for fire-and-forget autosaves.
+      writeQueue=saved.catch(e=>{
+        $('ModernCalibrationStorage').textContent=
+          (session?'Calibration Project':'Draft')+' not saved: '+e.message;
+      });
+      $('ModernCalibrationStorage').textContent='Saving '+(session?'project':'draft')+'…';
       return saved;
     }
     async function restoreDraft(){
@@ -912,6 +949,149 @@
         $('ModernCalibrationStorage').textContent='Draft restored from this browser.';
       }catch(e){$('ModernCalibrationStorage').textContent='Cannot restore draft: '+e.message;}
       finally{restoring=false;if(scene&&!physicalSessionId)newPhysicalSession();syncFitControls();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
+    }
+    // The only editor-side project switch entry point. The library UI added
+    // in 8F.7p.6 will invoke this explicit operation; startup never does.
+    async function openCalibrationProject(id){
+      const storage=env.CurvatureModernCalibrationProjectStore;
+      const migration=env.CurvatureModernCalibrationProjectMigration;
+      if(!storage||!migration)throw Error('Calibration Projects are unavailable');
+      if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+         photoGestures.active||resultGestures.active)
+        throw Error('Stop fitting, applying, loading or editing endpoints before opening another project');
+      const model=env.CurvatureModernCalibrationProject;
+      model.id(id);
+      const request=++projectSwitchEpoch,formerInert=workspace.inert;
+      projectSwitchBusy=true;switchInterference=false;workspace.inert=true;
+      let observed=editorMutation,oldView=null,activated=false;
+      function guard(){
+        return projectSwitchBusy&&projectSwitchEpoch===request&&
+          editorMutation===observed&&!switchInterference&&
+          !fitWorker&&!applyBusy&&!pendingPhotoLoads;
+      }
+      function requireGuard(){
+        if(!guard())throw Error('Calibration changed during project switch; outgoing work remains active');
+      }
+      try{
+        // Never move away from the live editor until its most recent
+        // outgoing state has a durable acknowledgement, not just an enqueued
+        // promise. A failed IndexedDB write aborts the switch.
+        if(scene){
+          const ack=persist(true);
+          if(ack)await ack;
+        }
+        await writeQueue;
+        observed=editorMutation;
+        requireGuard();
+
+        const session=persistenceSession();
+        if(!session.project()){
+          // Upgrade requires the singleton editor's old DB connection to
+          // be closed. inspect/migrate preserve the raw v1/v2 draft.
+          if(dbPromise){const open=await dbPromise;open.close();dbPromise=null;}
+          const check=await migration.inspect(env);
+          requireGuard();
+          if(check.status==='recovery-required')
+            throw Error('Export or recover the unsupported legacy draft before opening a project: '+check.reason);
+          if(check.status==='legacy-pending'||check.status==='adopted'){
+            const adopted=await migration.migrate(env);
+            requireGuard();
+            if(adopted.status==='already-removed')
+              throw Error('Previously adopted Calibration Project was deleted; legacy recovery remains available');
+          }
+        }
+        // A project is independently verified and decoded before the first
+        // mutation of the live editor. prepareOpen rechecks the DB revision.
+        const prepared=await session.prepareOpen(id,guard);
+        requireGuard();
+        const incoming=await prepareVisualProject(prepared);
+        requireGuard();
+        oldView=scene?{
+          draft:captureDraftState(),inline:captureInlineState(),
+          decoded:image,next:prepareScene({model:scene.model,physics:scene.physics}),
+          rows:workflow.rows.map(r=>jsonCopy(r)),
+          fit:fitBest
+        }:null;
+        requireGuard();
+        try{
+          activateVisualProject(incoming);
+          activated=true;
+          session.bind(prepared.project);
+          projectStartupStatus={status:'active',projectId:prepared.project.id};
+          $('ModernCalibrationStorage').textContent='Calibration Project opened and verified.';
+        }catch(error){
+          if(oldView){
+            try{activateVisualProject(oldView);}
+            catch(rollback){throw Error('Project activation failed; rollback also failed: '+
+              error.message+' / '+rollback.message);}
+          }
+          throw error;
+        }
+        return {status:'opened',project:session.project()};
+      }finally{
+        projectSwitchBusy=false;workspace.inert=formerInert;
+        if(!activated&&switchInterference&&scene)void persist();
+        syncFitControls();
+      }
+    }
+    async function prepareVisualProject(prepared){
+      const d=prepared.draft;
+      if(!d)throw Error('Empty Calibration Project has no editor checkpoint yet');
+      const next=prepareScene(d.scene);
+      let decoded=null,rows=[];
+      if(d.record){
+        decoded=new env.Image();decoded.src=d.record.original.dataUrl;
+        await decoded.decode();
+        if(decoded.naturalWidth!==d.record.original.width||
+           decoded.naturalHeight!==d.record.original.height)
+          throw Error('Calibration Project image changed during decoding');
+        rows=observationRows(d.rows,decoded.naturalWidth,decoded.naturalHeight,true,next.model);
+        validateLegacyTopology(rows,next);
+      }
+      // Preserve the exact fit; do not silently discard invalid science.
+      const fit=d.fitBest?validateFitResult(d.fitBest,rows,d.freeParameters,
+        next.model,next.physics,decoded?.naturalWidth,decoded?.naturalHeight):null;
+      return {draft:d,inline:prepared.inline,decoded,next,rows,fit};
+    }
+    function activateVisualProject(target){
+      const d=target.draft;
+      restoring=true;
+      try{
+        // Reject late async photo and source completions, and prevent an old
+        // Apply callback from mutating a newly selected project.
+        ++loadToken;++catalogToken;++applyRevision;
+        contextMenu.close();photoGestures.cancel();resultGestures.cancel();
+        inlineViewer.cancelGesture();inlineViewer.close();
+        photoGhost=null;inlineSource=null;inlineRole=null;file.value='';
+        record=d.record;image=target.decoded;activeSource=d.activeSource;
+        view=null;resultViews={initial:null,best:null};
+        fitBest=null;fitSignature=null;paintedFit=null;viewBest=false;
+        fitFailures=[];initialPoints=null;initialProjectionKey=null;diagnosticResult=null;
+        workflow.replaceAll(target.rows);
+        showScene(target.next);
+        physicalSessionId=d.physicalSessionId;
+        if(record){photoDetails(record,activeSource);fitPhoto();}
+        else{photoInfo.replaceChildren();referenceTools.open=true;}
+        view=d.view;
+        workflow.restoreDraft({editing:d.editing,pending:d.pending,pendingModel:d.pendingModel,
+          activePair:d.activePair,explicitAdd:d.explicitAdd});
+        workflow.restoreHistory(d.undoStack,d.redoStack);
+        weight.value=d.weight;px.value=d.pending?String(d.pending[0]):'';
+        py.value=d.pending?String(d.pending[1]):'';
+        residualMode.value=d.residualMode;
+        inlineSessions=target.inline?.sessions?jsonCopy(target.inline.sessions):{initial:null};
+        applyFreeFields(d.freeParameters);
+        if(target.fit)restoreFit(target.fit,d.fitStatus);
+        else fitStatus.textContent=d.fitStatus;
+        const chosen=[...packages.values()].find(p=>
+          d.selectedOwner&&JSON.stringify(p.owner)===JSON.stringify(d.selectedOwner));
+        selectedObjectKey=chosen?.key??null;
+        resultViews=jsonCopy(d.resultViews);
+        setStage(d.stage,{camera:d.resultCamera,save:false,render:false});
+        refreshRows();syncFitControls();
+        if(viewBest&&fitBest)paintBest();else meshDraw();
+        photoDraw();
+      }finally{restoring=false;}
     }
     function populate(select,options){
       select.replaceChildren(...options.map(([value,label])=>{
@@ -1692,7 +1872,10 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,inspectProjectStartup,projectStartupStatus:()=>({...projectStartupStatus}),captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,inspectProjectStartup,
+      projectStartupStatus:()=>({...projectStartupStatus}),
+      openCalibrationProject,projectPersistenceStatus:()=>projectSession?.state()||null,
+      captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

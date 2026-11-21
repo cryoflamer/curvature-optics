@@ -1,3 +1,35 @@
+## 8F.7p.5b — Explicit editor switch, durable outgoing save and rollback (#14)
+
+The mounted Photo Calibration editor now exposes openCalibrationProject(id),
+which is deliberately unused by startup and awaits the stage 8F.7p.6
+library UI. The editor refuses switching during fit workers, Apply,
+pending photo load, restoration or active pointer gestures; it sets an
+inert interaction boundary and invalidates the operation if a programmatic
+mutation is detected. Before reading the incoming project, the current
+outgoing editor snapshot is durably acknowledged: the retained legacy v2
+draft is written first and, if needed, the exact raw original is migrated
+asset-first; an already active Project uses the generation-bound CAS
+coordinator, preserving conflict forks and explicit unsaved failure.
+It closes the old IndexedDB connection before v2 migration.
+Incoming project read, verified photo hydration, scene/rows/fit
+preparation, generation guard and revision recheck all precede editor
+mutation. Activation restores pending correspondence, history,
+fit/stage, independent photo and model views, inline session, source
+attribution and selected owner, invalidates old load/source/Apply
+tokens, and rolls back the previous visual snapshot if activation
+throws. The coordinator binds the selected ID only after activation.
+Project-mode autosave now writes the bound IndexedDB row, not legacy
+draft/active, and keeps the legacy inline localStorage recovery intact;
+legacy mode and Apply's rejecting save promise are preserved.
+Two source-bound regression guards were added. A separate browser
+exercise and user-facing project library remain 8F.7p.6/.9.
+
+No automatic legacy migration or UI project switch was introduced.
+No optical algorithms, History archive or photo deletion changed.
+Reasoning recommendation High / 3; direct commit to built-in-demo,
+no PR. Fresh Fast CI is required; full browser qualification remains
+mandatory before claiming UI acceptance.
+
 ## 8F.7p.5a — Non-destructive Calibration Project startup and activation preflight (#14)
 
 The legacy editor now opens its existing calibration DB at the current

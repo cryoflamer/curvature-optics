@@ -759,3 +759,38 @@ test('project activation preflight rejects a newer remote revision before any ed
   assert.equal((await store.get(db,B)).revision,2);
   assert.equal(session.recovery(),null);
 });
+
+test('editor provides an explicit guarded project switch without automatic startup activation',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(source,/async function openCalibrationProject\(id\)/);
+  assert.match(source,/if\(projectSwitchBusy\|\|restoring\|\|fitWorker\|\|applyBusy\|\|pendingPhotoLoads/);
+  assert.match(source,/workspace\.inert=true/);
+  assert.match(source,/const ack=persist\(true\);/);
+  assert.match(source,/if\(ack\)await ack;/);
+  assert.match(source,/await migration\.migrate\(env\)/);
+  assert.match(source,/const prepared=await session\.prepareOpen\(id,guard\)/);
+  assert.match(source,/const incoming=await prepareVisualProject\(prepared\)/);
+  assert.match(source,/activateVisualProject\(oldView\)/);
+  assert.match(source,/session\.bind\(prepared\.project\)/);
+  assert.match(source,/openCalibrationProject,projectPersistenceStatus:/);
+  assert.match(source,/if\(projectSession\?\.project\(\)\)return;/);
+  assert.doesNotMatch(app,/\.openCalibrationProject\(/);
+});
+test('an incoming project keeps both independent photo and model views plus inline state',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const from=source.indexOf('function activateVisualProject(target)');
+  const until=source.indexOf('function populate(select,options)',from);
+  const functionSource=source.slice(from,until);
+  for(const marker of ['d.view','d.resultViews','d.undoStack','d.redoStack',
+    'd.pending','d.pendingModel','d.fitStatus','d.freeParameters',
+    'd.physicalSessionId','d.selectedOwner','target.inline?.sessions']){
+    assert.ok(functionSource.includes(marker),'Missing project activation state: '+marker);
+  }
+  assert.match(functionSource,/restoring=true/);
+  assert.match(functionSource,/finally\{restoring=false;\}/);
+});
