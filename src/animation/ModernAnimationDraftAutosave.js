@@ -27,16 +27,26 @@
   var TAB_SESSION_KEY=COLLECTION_KEY+'-tab-id';
   // A page load is not a new tab. Reuse the same recovery slot across F5 so
   // an earlier pagehide checkpoint cannot masquerade as another tab's edits.
-  function workspaceSessionId(tabStorage,crypto){
+  function workspaceSessionId(tabStorage,crypto,tabWindow){
     var existing=null;
     try{existing=tabStorage&&tabStorage.getItem(TAB_SESSION_KEY);}catch(error){}
     if(typeof existing==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(existing))
       return existing;
+    // Some file:// or privacy-restricted contexts deny sessionStorage.
+    // window.name is scoped to the browsing context and survives F5.
+    var windowName=null;
+    try{windowName=tabWindow&&tabWindow.name;}catch(error){}
+    if(typeof windowName==='string'&&
+       /^curvature_optics_(session_[A-Za-z0-9_-]{8,92})$/.test(windowName))
+      return windowName.slice('curvature_optics_'.length);
     var token=crypto&&typeof crypto.randomUUID==='function'?
       crypto.randomUUID().replace(/-/g,''):
       Math.random().toString(36).slice(2)+Date.now().toString(36);
-    var id='session_'+token;
-    try{if(tabStorage)tabStorage.setItem(TAB_SESSION_KEY,id);}catch(error){}
+    var id='session_'+token,stored=false;
+    try{if(tabStorage){tabStorage.setItem(TAB_SESSION_KEY,id);stored=true;}}catch(error){}
+    if(!stored&&tabWindow&&!windowName){
+      try{tabWindow.name='curvature_optics_'+id;}catch(error){}
+    }
     return id;
   }
   function object(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
