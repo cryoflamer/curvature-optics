@@ -630,9 +630,12 @@
   // overwrite one another's pending localStorage backups.
   // sessionStorage survives F5 but is scoped to this browser tab. A fresh
   // ID on every reload misclassified an old pagehide backup as another tab.
-  var studioWorkspaceSessionId=studioDraftAutosave.workspaceSessionId((function(){
-    try{return root.sessionStorage;}catch(error){return null;}
-  }()),root.crypto,root);
+  // Some scene-only test harnesses omit the optional Animation Studio
+  // persistence module. Do not initialize its recovery identity in that case.
+  var studioWorkspaceSessionId=studioDraftAutosave?
+    studioDraftAutosave.workspaceSessionId((function(){
+      try{return root.sessionStorage;}catch(error){return null;}
+    }()),root.crypto,root):null;
   var studioIndexedBaseline=null;
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
