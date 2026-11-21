@@ -119,9 +119,11 @@ until the entire multi-stage Issue is complete.
   because the required capability or permission is unavailable. Explain the
   specific limitation. Do not generate a script when all necessary operations
   were completed with connected tools.
-- Generate a ready-to-run, task-specific Bash script for the user's WSL
-  environment using `gh` **only for those outstanding operations**; do not
-  repeat mutations already confirmed through connected tools.
+- For unavailable operations, provide a ready-to-run, task-specific `gh` Bash
+  code block **directly in the chat** for copy-paste into the user's WSL terminal.
+  Do not create or attach a `.sh` file unless the user explicitly requests one.
+  Include **only outstanding operations**; never repeat mutations already
+  confirmed through connected tools.
 - Discover live Project, field, and item IDs using `gh project view`,
   `gh project field-list`, and `gh project item-list`. Never invent IDs,
   assume cached IDs remain valid, or use unsupported `gh project item-edit`
