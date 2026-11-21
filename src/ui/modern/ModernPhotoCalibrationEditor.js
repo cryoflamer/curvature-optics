@@ -857,6 +857,9 @@
       projectsPanel=$('ModernCalibrationProjectsPanel'),
       projectsBack=$('ModernCalibrationProjectsBack'),
       projectsRefresh=$('ModernCalibrationProjectsRefresh'),
+      projectsNew=$('ModernCalibrationProjectsNew'),
+      projectsImport=$('ModernCalibrationProjectsImport'),
+      projectsImportFile=$('ModernCalibrationProjectsImportFile'),
       projectsAdopt=$('ModernCalibrationProjectsAdopt'),
       projectsLegacy=$('ModernCalibrationProjectsLegacy'),
       projectsStatus=$('ModernCalibrationProjectsStatus'),
@@ -872,6 +875,8 @@
       projectsBack.disabled=projectListBusy;
       projectsRefresh.disabled=projectListBusy;
       projectsAdopt.disabled=projectListBusy;
+      projectsNew.disabled=projectListBusy;
+      projectsImport.disabled=projectListBusy;
     }
     function projectStamp(ts){
       return Number.isSafeInteger(ts)?new Date(ts).toLocaleString():'Unknown time';
@@ -910,6 +915,18 @@
       open.disabled=projectListBusy;
       open.onclick=()=>void openFromProjects(entry.id);
       actions.append(open);
+      function action(label,key,callback,disabled=false){
+        const button=doc.createElement('button');button.type='button';
+        button.textContent=label;button.dataset[key]=entry.id;
+        button.disabled=projectListBusy||disabled;
+        button.onclick=()=>void callback(entry);
+        actions.append(button);
+        return button;
+      }
+      action('Rename','calibrationProjectRename',renameFromProjects);
+      action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
+      const deletion=action('Delete','calibrationProjectDelete',deleteFromProjects,active);
+      if(active)deletion.title='Open another project before deleting this active project';
       if(active){
         const label=doc.createElement('span');
         label.className='modern-calibration-project-label';
@@ -996,6 +1013,128 @@
         projectsMessage('Adoption failed: '+error.message+'. The original draft was retained.',true);
       }finally{projectListBusy=false;renderProjects();}
     }
+    function projectActions(){
+      const actions=env.CurvatureModernCalibrationProjectActions;
+      const storage=env.CurvatureModernCalibrationProjectStore;
+      if(!actions||!storage)throw Error('Calibration Project actions unavailable');
+      return {actions,storage};
+    }
+    function projectActionMessage(error,prefix){
+      projectsMessage(prefix+': '+error.message+'. Active work was not replaced.',true);
+    }
+    async function newFromProjects(){
+      if(projectListBusy)return;
+      const title=env.prompt('Name of the new Calibration Project','Untitled calibration');
+      if(title===null)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Creating a new Calibration Project from the current Scene…');
+      try{
+        const {actions}=projectActions();
+        const snapshot=env.CurvatureModernApp.getPhotoCalibrationScene();
+        prepareScene(snapshot); // Explicit Globe / supported-atmosphere preflight.
+        const created=await actions.createNew(env,snapshot,{title:title.trim()});
+        try{
+          const opened=await openCalibrationProject(created.id);
+          try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
+          projectListBusy=false;showProjectList(false);
+        }catch(error){
+          await refreshProjectList();
+          throw Error('Project '+created.title+' was created, but opening failed: '+error.message);
+        }
+      }catch(error){projectActionMessage(error,'New failed');}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    async function renameCalibrationProject(entry,title){
+      const {storage}=projectActions();
+      const active=projectSession?.project()?.id===entry.id;
+      if(!active)return storage.rename(env.indexedDB,entry.id,entry.revision,title);
+      if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+          photoGestures.active||resultGestures.active)
+        throw Error('Finish active calibration operations before renaming');
+      const previousInert=workspace.inert,request=++projectSwitchEpoch;
+      projectSwitchBusy=true;switchInterference=false;workspace.inert=true;
+      try{
+        const ack=persist(true);if(ack)await ack;
+        await writeQueue;
+        if(projectSwitchEpoch!==request||switchInterference)
+          throw Error('Calibration changed during rename');
+        const session=projectSession;
+        const current=session.project();
+        if(current.id!==entry.id)throw Error('Selected project changed before rename');
+        const renamed=await storage.rename(env.indexedDB,current.id,current.revision,title);
+        if(projectSwitchEpoch!==request||switchInterference)
+          throw Error('Calibration changed during rename; refresh to inspect the saved title');
+        session.bind(renamed);
+        return renamed;
+      }finally{
+        projectSwitchBusy=false;workspace.inert=previousInert;
+        if(switchInterference&&scene)void persist();
+      }
+    }
+    async function renameFromProjects(entry){
+      if(projectListBusy)return;
+      const title=env.prompt('Rename Calibration Project',entry.title);
+      if(title===null||title===entry.title)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Renaming with revision protection…');
+      try{
+        const renamed=await renameCalibrationProject(entry,title.trim());
+        projectListBusy=false;await refreshProjectList();
+        projectsMessage('Renamed to '+renamed.title+'.');
+      }catch(error){projectActionMessage(error,'Rename failed');}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    async function duplicateFromProjects(entry){
+      if(projectListBusy)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Verifying original photograph and duplicating the saved checkpoint…');
+      try{
+        const {actions}=projectActions();
+        const created=await actions.duplicate(env,entry.id,entry.revision);
+        projectListBusy=false;await refreshProjectList();
+        projectsMessage('Created '+created.title+'. Open it to edit independently.');
+      }catch(error){projectActionMessage(error,'Duplicate failed');}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    async function deleteFromProjects(entry){
+      if(projectListBusy)return;
+      if(projectSession?.project()?.id===entry.id){
+        projectsMessage('Open another project before deleting the active project.',true);return;
+      }
+      if(!env.confirm('Delete Calibration Project "'+entry.title+'"? The reference photo, archived results, and old recovery draft will be retained.'))return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Checking project revision before deletion…');
+      try{
+        const {storage}=projectActions();
+        await storage.remove(env.indexedDB,entry.id,entry.revision);
+        projectListBusy=false;await refreshProjectList();
+        projectsMessage('Deleted project "'+entry.title+'". Photos and archived results were retained.');
+      }catch(error){projectActionMessage(error,'Delete failed');}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    async function importAsNewFromProjects(file){
+      if(projectListBusy)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Validating imported calibration and verifying its original photograph…');
+      try{
+        if(file.size>40*1024*1024)throw Error('Experiment file exceeds 40 MiB');
+        const data=validateExperiment(JSON.parse(await file.text()),env.CurvatureModernReferenceImage.validate);
+        // Verification and IndexedDB create must finish before listing the new
+        // project; no import into the active editor is performed.
+        const {actions}=projectActions();
+        const created=await actions.importAsNew(env,data,{
+          title:(data.referenceImage.title||'Imported calibration').slice(0,160)});
+        projectListBusy=false;await refreshProjectList();
+        projectsMessage('Imported '+created.title+' as a separate project. Choose Open to activate it.');
+      }catch(error){projectActionMessage(error,'Import as New failed');}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    projectsNew.onclick=()=>void newFromProjects();
+    projectsImport.onclick=()=>projectsImportFile.click();
+    projectsImportFile.onchange=()=>{
+      const file=projectsImportFile.files[0];
+      if(file)void importAsNewFromProjects(file).finally(()=>{projectsImportFile.value='';});
+    };
     projectsToggle.onclick=()=>showProjectList(projectsPanel.hidden);
     projectsBack.onclick=()=>showProjectList(false);
     projectsRefresh.onclick=()=>void refreshProjectList();

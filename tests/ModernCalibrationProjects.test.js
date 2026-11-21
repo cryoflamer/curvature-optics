@@ -834,3 +834,62 @@ test('Calibration Projects library reads only compact summaries and opens throug
   assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'\)/);
   assert.match(source,/path\.includes\(projectsPanel\)\|\|path\.includes\(projectsToggle\)/);
 });
+
+test('CRUD actions isolate new scene, duplicate checkpoint and import without editor mutation',async()=>{
+  const actions=require('../src/ui/modern/ModernCalibrationProjectActions');
+  const checkpoint=require('../src/ui/modern/ModernCalibrationProjectCheckpoint');
+  const snapshot={model:{showModel:1,rEarth:6371000,rFEarth:6371000,
+    CameraEast:0,CameraNorth:0,Height:2,Pan:0,Nick:0,Roll:0,FocalLengthField:50},
+    physics:{atmosphere:'vacuum'}};
+  const fresh=actions.emptyDraft(snapshot,'scene-session');
+  assert.deepEqual(fresh.rows,[]);
+  assert.equal(fresh.record,null);
+  assert.equal(fresh.stage,'correspondences');
+  assert.equal(fresh.pending,null);
+  assert.equal(fresh.fitBest,null);
+  checkpoint.validateDraft(fresh,null);
+  const env={crypto:webcrypto,indexedDB:{}};
+  const records=new Map(),touch=[];
+  const storage={
+    async create(db,row){assert.equal(db,env.indexedDB);
+      if(records.has(row.id))throw Error('Duplicate ID');
+      records.set(row.id,copy(row));touch.push('create');return copy(row);
+    },
+    async get(db,id){return copy(records.get(id)||null);}
+  };
+  const fakeFiles={
+    validateDraft:checkpoint.validateDraft,
+    async captureVerified(d){touch.push('capture');return checkpoint.extract(d,null,null);},
+    async prepare(p){touch.push('prepare');return {draft:checkpoint.payloadOf(p).draft,inline:null};},
+    extract:checkpoint.extract
+  };
+  const created=await actions.createNew(env,snapshot,{storage,files:fakeFiles,now:123});
+  assert.equal(created.title,'Untitled calibration');
+  assert.equal(created.revision,1);
+  assert.equal(created.overview.rowCount,0);
+  assert.equal(created.photo,null);
+  assert.notEqual(created.checkpoint.payload.draft.physicalSessionId,'scene-session');
+  const duplicate=await actions.duplicate(env,created.id,1,{storage,files:fakeFiles,now:124});
+  assert.notEqual(duplicate.id,created.id);
+  assert.notEqual(duplicate.checkpoint.payload.draft.physicalSessionId,
+    created.checkpoint.payload.draft.physicalSessionId);
+  assert.equal(duplicate.title,'Untitled calibration (copy)');
+  assert.equal((await storage.get(null,created.id)).title,'Untitled calibration');
+  await assert.rejects(actions.duplicate(env,created.id,2,{storage,files:fakeFiles}),
+    /another tab/);
+  const data={scene:snapshot,referenceImage:{id:'original',title:'Raster'},
+    referenceSource:null,observations:[],fit:{freeParameters:[],result:null,
+    status:'Unfitted',running:false}};
+  const imported=actions.importedDraft(data,'import-session');
+  assert.equal(imported.record.id,'original');
+  assert.equal(imported.activeSource.imported,true);
+  const importerFiles={...fakeFiles,
+    async captureVerified(d){touch.push('capture-photo');assert.equal(d.record.id,'original');
+      return {photo:null,checkpoint:null,overview:{stage:'correspondences',
+        rowCount:0,fitStatus:null,fitRmsPx:null}};}};
+  const newImport=await actions.importAsNew(env,data,{storage,files:importerFiles,now:125});
+  assert.equal(newImport.title,'Imported calibration');
+  assert.notEqual(newImport.id,created.id);
+  assert.deepEqual([...records.keys()].length,3);
+  assert.deepEqual(touch,['capture','create','prepare','create','capture-photo','create']);
+});

@@ -1592,4 +1592,6 @@ button{cursor:pointer}
 .modern-calibration-project-card p{margin:4px 0;font-size:13px;color:#355b76;overflow-wrap:anywhere}
 .modern-calibration-project-card .modern-calibration-project-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
 .modern-calibration-project-card .modern-calibration-project-label{font-size:12px;font-weight:600;color:#1f5f99}
+.modern-calibration-project-actions button[data-calibration-project-delete]{color:#a12232}
+.modern-calibration-project-actions button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:760px){.modern-calibration-projects-list{grid-template-columns:1fr}}

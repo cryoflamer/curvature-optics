@@ -136,6 +136,7 @@
 <script src="src/ui/modern/ModernCalibrationProjectCheckpoint.js"></script>
 <script src="src/ui/modern/ModernCalibrationProjectMigration.js"></script>
 <script src="src/ui/modern/ModernCalibrationProjectPersistence.js"></script>
+<script src="src/ui/modern/ModernCalibrationProjectActions.js"></script>
 <script src="src/ui/modern/ModernCalibrationResult.js"></script>
 <script src="src/ui/modern/ModernCalibrationResultArchive.js"></script>
 <script src="src/ui/modern/ModernCalibrationTransfer.js"></script>
@@ -168,6 +169,9 @@
     <section id="ModernCalibrationProjectsPanel" aria-label="Calibration Projects" hidden>
       <div class="modern-calibration-projects-toolbar">
         <h2>Calibration Projects</h2>
+        <button type="button" id="ModernCalibrationProjectsNew">New project</button>
+        <button type="button" id="ModernCalibrationProjectsImport">Import as New</button>
+        <input type="file" id="ModernCalibrationProjectsImportFile" accept=".json,application/json" hidden>
         <button type="button" id="ModernCalibrationProjectsRefresh">Refresh list</button>
         <button type="button" id="ModernCalibrationProjectsBack">Back to editor</button>
       </div>
@@ -189,7 +193,7 @@
     <div class="modern-calibration-toolbar modern-calibration-session">
       <p id="ModernCalibrationPhotoInfo"></p>
       <button type="button" id="ModernCalibrationExportExperiment" disabled>Export JSON</button>
-      <button type="button" id="ModernCalibrationImportExperiment">Import JSON</button>
+      <button type="button" id="ModernCalibrationImportExperiment" title="Replace the current calibration editor draft">Import JSON (replace current)</button>
       <input type="file" id="ModernCalibrationExperimentFile" accept=".json,application/json" hidden>
     </div>
     <details id="ModernCalibrationReferenceTools" class="modern-calibration-disclosure" open>

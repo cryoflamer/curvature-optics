@@ -1,3 +1,19 @@
+## 8F.7p.7 — Calibration Projects CRUD and Import as New (#14)
+
+Added explicit New project from the current Globe Scene, guarded Rename,
+duplicate of a verified saved checkpoint with fresh session identity,
+revision-checked Delete with confirmation, and Import as New from portable
+calibration JSON. The existing editor import is explicitly labelled as
+replacement. Active deletion is refused until another project is opened.
+New/duplicate/import create an independent row before any optional Open,
+never overwrite the active editor or legacy raw draft. Photo identity and
+archive links are shared by reference; no cascading deletes or raster bytes
+are stored in project records. Active rename checkpoints the editor before
+CAS and rebinds the new revision only after durable acknowledgement.
+
+Implementation committed directly to built-in-demo without PR.
+CI qualification is required before advancing to 8F.7p.8.
+
 ## 8F.7p.6a — Project list Open click propagation and inventory test corrected (#14)
 
 Initial Fast CI 44845256400 had 213/214 Node tests green;

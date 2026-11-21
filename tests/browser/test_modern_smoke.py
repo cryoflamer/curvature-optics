@@ -644,6 +644,60 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_calibration_projects_crud_and_import_as_new(self):
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel).to_be_visible()
+        self.page.once('dialog',lambda dialog:dialog.accept('Independent scene'))
+        workspace.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        active=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId""")
+        self.assertIsNotNone(active)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        active_row=panel.locator('[data-calibration-project-id="'+active+'"]')
+        expect(active_row).to_contain_text('Independent scene',timeout=30000)
+        expect(active_row.locator('[data-calibration-project-delete]')).to_be_disabled()
+        self.page.once('dialog',lambda dialog:dialog.accept('Renamed independent'))
+        active_row.locator('[data-calibration-project-rename]').click()
+        expect(active_row).to_contain_text('Renamed independent',timeout=30000)
+        active_row.locator('[data-calibration-project-duplicate]').click()
+        copy_row=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Renamed independent (copy)')
+        expect(copy_row).to_have_count(1,timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
+            const original=rows.find(r=>r.title==='Renamed independent');
+            const duplicate=rows.find(r=>r.title==='Renamed independent (copy)');
+            const a=await CurvatureModernCalibrationProjectStore.get(indexedDB,original.id);
+            const b=await CurvatureModernCalibrationProjectStore.get(indexedDB,duplicate.id);
+            return {active:CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId,
+                distinct:a.id!==b.id&&a.checkpoint.payload.draft.physicalSessionId!==b.checkpoint.payload.draft.physicalSessionId,
+                noPhoto:a.photo===null&&b.photo===null};
+        }""")
+        self.assertEqual(result,{'active':active,'distinct':True,'noPhoto':True})
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        copy_row.locator('[data-calibration-project-delete]').click()
+        expect(copy_row).to_have_count(0,timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),active)
+        experiment=self.soundly_calibration_experiment()
+        import json
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'import-calibration.json','mimeType':'application/json',
+            'buffer':json.dumps(experiment).encode('utf-8')})
+        imported=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(imported).to_have_count(1,timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),active)
+        imported.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+            'Soundly',timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_atmosphere_retains_observations_and_changes_worker_projection(self):
         workspace=self.open_physical_calibration()
         data=self.soundly_calibration_experiment()
