@@ -373,15 +373,24 @@
     }catch(error){}
     return values;
   }
-  // Remove only older tab snapshots already present *exactly* in a
-  // committed IndexedDB collection (possibly under a conflict-recovery ID).
+  // A committed checkpoint can supersede a previous page's backup even if
+  // its savedAt/playhead changed during normal autosave. Compare *draft data*
+  // instead of full checkpoint JSON; never discard a distinct edited draft.
+  function backedUpCheckpoint(source,stored){
+    if(JSON.stringify(source.draft)!==JSON.stringify(stored.draft)||
+       source.quality!==stored.quality||source.prepared!==stored.prepared)
+      return false;
+    return source.libraryId===stored.libraryId&&
+      source.libraryRevision===stored.libraryRevision||
+      // Recovery forks intentionally detach a saved project from its Library ID.
+      stored.libraryId===null&&stored.libraryRevision===null;
+  }
+  // Remove old tab snapshots only when their data is durably represented.
   // Never remove the current tab's synchronous backup or an unsent branch.
   function pruneSessionLocals(storage,durable,currentSessionId){
     if(!storage||typeof storage.key!=='function'||
       typeof storage.removeItem!=='function'||!Number.isSafeInteger(storage.length))return 0;
-    var stored=normalizeCollection(durable),entries=stored.workspaces.map(function(e){
-      return JSON.stringify(e.checkpoint);
-    });
+    var stored=normalizeCollection(durable),entries=stored.workspaces;
     var removed=new Map((stored.removed||[]).map(function(e){return [e.id,e.removedAt];}));
     var discarded=0,keys=[];
     try{
@@ -396,8 +405,10 @@
         var backed=source.workspaces.every(function(item){
           // A durable tombstone also makes a stale backup safe to discard,
           // provided that its content was saved before the deletion.
-          return entries.includes(JSON.stringify(item.checkpoint))||
-            (removed.get(item.id)||0)>=item.checkpoint.savedAt;
+          return entries.some(function(entry){
+            return entry.checkpoint.savedAt>=item.checkpoint.savedAt&&
+              backedUpCheckpoint(item.checkpoint,entry.checkpoint);
+          })||(removed.get(item.id)||0)>=item.checkpoint.savedAt;
         });
         var deletions=(source.removed||[]).every(function(item){
           return (removed.get(item.id)||0)>=item.removedAt;
