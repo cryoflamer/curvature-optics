@@ -788,6 +788,23 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(links['photoCount'],1)
         self.assertEqual(links['provenance'],a)
         self.assertFalse(links['embedded'])
+        # Deleting one project never cascades into the shared scientific
+        # archive, original photo, or the other project's durable link.
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        panel.locator('[data-calibration-project-id="'+a+'"] [data-calibration-project-delete]').click()
+        expect(panel.locator('[data-calibration-project-id="'+a+'"]')).to_have_count(0,timeout=30000)
+        self.page.reload(wait_until='load')
+        durable=self.page.evaluate("""async ids => {
+            const project=await CurvatureModernCalibrationProjectStore.get(indexedDB,ids[1]);
+            const removed=await CurvatureModernCalibrationProjectStore.get(indexedDB,ids[0]);
+            const results=await CurvatureModernCalibrationResultArchive.list(indexedDB);
+            const images=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            return {removed:removed===null,resultIds:project.resultIds,
+                results:results.length,images:images.length};
+        }""",[a,b])
+        self.assertTrue(durable['removed'])
+        self.assertEqual(durable['resultIds'],links['b'])
+        self.assertEqual((durable['results'],durable['images']),(1,1))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_atmosphere_retains_observations_and_changes_worker_projection(self):
