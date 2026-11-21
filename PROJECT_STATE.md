@@ -1,3 +1,16 @@
+## Calibration Projects card layout refinement
+
+The project library now uses compact cards (maximum 390 px) rather than
+stretching a single item across the browser viewport. Photo previews have
+a 3:2 aspect-ratio frame with contain scaling, preserving the complete
+original photo. The visible fit summary is short (status and rounded RMS),
+while the detailed solver status remains in a tooltip and the editor.
+Metadata typography is quieter and card actions align to the bottom.
+This is presentation-only; project records, previews and navigation
+persistence are unchanged.
+
+Fast CI only, consistent with the current verification policy.
+
 ## Full CI trigger policy and browser smoke registration (Calibration UX)
 
 Full CI was unintentionally triggered by pushes to the Chromium smoke file.

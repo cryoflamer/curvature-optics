@@ -996,3 +996,14 @@ test('Project card photographs resolve lazily by SHA-256 without saving raster b
   assert.match(source,/showProjectList\(env\.CurvatureModernApp\?\.getCalibrationView\?\.\(\)==='projects'\)/);
   assert.match(app,/function rememberCalibrationView\(view\)/);
 });
+
+test('Calibration Project library cards remain compact and fit diagnostics are summarized',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const css=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.css'),'utf8');
+  const editor=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  assert.match(css,/\.modern-calibration-project-card\{[^}]*max-width:390px/);
+  assert.match(css,/\.modern-calibration-projects-list\{[^}]*repeat\(auto-fill/);
+  assert.match(css,/\.modern-calibration-project-preview\{[^}]*aspect-ratio:3\/2/);
+  assert.match(editor,/Fit: '\+\(entry\.fitStatus\|\|'result'\)\+' · RMS '/);
+  assert.match(editor,/fitLine\.title=entry\.fitStatus/);
+});

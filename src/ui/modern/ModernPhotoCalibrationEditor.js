@@ -959,15 +959,17 @@
       ].join(' · ');
       card.append(desc);
       const fitLine=doc.createElement('p');
+      fitLine.className='modern-calibration-project-fit';
       fitLine.textContent=entry.fitRmsPx!==null?
-        'Best fit RMS '+Number(entry.fitRmsPx.toPrecision(5))+' px'+
-          (entry.fitStatus?' · '+entry.fitStatus:''):
+        'Fit: '+(entry.fitStatus||'result')+' · RMS '+Number(entry.fitRmsPx.toPrecision(3))+' px':
         'Fit: '+(entry.fitStatus||'Not yet fitted');
+      fitLine.title=entry.fitStatus||'';
       card.append(fitLine);
       const links=doc.createElement('p');
       links.textContent=entry.resultCount+' linked archived result'+(entry.resultCount===1?'':'s');
       card.append(links);
       const updated=doc.createElement('p');
+      updated.className='modern-calibration-project-meta';
       updated.textContent='Updated '+projectStamp(entry.updatedAt)+' · Revision '+entry.revision;
       card.append(updated);
       const actions=doc.createElement('div');
