@@ -54,8 +54,14 @@
         if(options.getGeneration()!==generation){
           options.absorbLate(remote);return; // never overwrite active edits
         }
+        // Local backups may have been pruned after the durable read. Do not
+        // replay their stale in-memory copies into IndexedDB on every F5.
+        var pendingLocal=autosave.combineCollections([
+          autosave.readCollectionLocal(storage())
+        ].concat(autosave.readSessionLocals(storage())));
+        if(!pendingLocal&&oldLocal)pendingLocal=local; // one-time v1 migration
         var best=freshPlaceholder&&remote?remote:
-          autosave.combineCollections([local,remote]);
+          autosave.combineCollections([pendingLocal,remote]);
         if(best&&(freshPlaceholder&&remote||!local||
            JSON.stringify(best)!==JSON.stringify(local))){
           options.restoreCollection(best);
