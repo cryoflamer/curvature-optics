@@ -44,7 +44,7 @@ test('Modern document is isolated from legacy control/runtime scripts and uses a
   assert.match(modern,/id="ModernCompareMessage" hidden/);
   assert.match(modern,/<base href="\.\/">/);
   assert.match(source('docs/modern-ui-plan.md'),/132/);
-  assert.match(source('PROJECT_STATE.md'),/\[Architecture\]\(docs\/architecture\.md\)/);
+  assert.match(source('AGENTS.md'),/GitHub Issues, Milestones and Project #1/);
 });
 
 test('Modern standalone runtime binds working scene controls and does not instantiate Legacy UI',()=>{
