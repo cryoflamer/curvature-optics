@@ -64,7 +64,7 @@ test('140.12.76: current guides, test-backed contracts, and physical evidence su
     'docs/continuous-physical-verification.md',
     'tests/fixtures/legacy-browser-references.zip',
     'tests/fixtures/legacy-browser-reference-lock.json',
-    'PROJECT_STATE.md', 'CurvatureApp.html', 'CurvatureModern.html'
+    'AGENTS.md', 'CurvatureApp.html', 'CurvatureModern.html'
   ]) assert.ok(exists(file), `protected reference missing: ${file}`);
 });
 
