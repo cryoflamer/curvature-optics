@@ -1724,6 +1724,7 @@
       saveAs:function(){saveNamedAnimation(false);},
       openDraft:function(id){requestStudioSwitch('draft',id);},
       removeDraft:function(id){deleteStudioWorkspace(id);},
+      removeAllDrafts:function(keepCurrent){return deleteAllStudioDrafts(keepCurrent);},
       exportSelected:function(){exportNamedAnimations(false);},
       exportAll:function(){exportNamedAnimations(true);},
       importFile:function(file){importNamedAnimations(file);},
@@ -2206,6 +2207,59 @@
     dropStudioWorkspace(id);
     studioLibraryNotice('Autosaved draft deleted. Named projects were not changed.',false);
   }
+  function deleteAllStudioDrafts(keepCurrent){
+    if(!studioDraftAutosave||!studioWorkspaceReady||!studioWorkspaces||
+       studioLibraryBusy||studioActiveDemo){
+      studioLibraryNotice('Open the editable Animation Studio workspace before clearing drafts.',true);
+      return Promise.resolve(false);
+    }
+    var active=studioWorkspaceId,activeDraft=active.indexOf('draft_')===0;
+    var drafts=studioWorkspaces.workspaces.filter(function(item){
+      return item.id.indexOf('draft_')===0;
+    });
+    var victims=drafts.filter(function(item){return !keepCurrent||item.id!==active;});
+    if(!victims.length){studioLibraryNotice('No other working drafts to delete.',false);
+      return Promise.resolve(false);}
+    var replaceCurrent=!keepCurrent&&activeDraft;
+    var prompt='Delete '+victims.length+' independent working draft'+(victims.length===1?'':'s')+
+      '? '+(replaceCurrent?'The opened draft will be replaced by an empty one. ':
+        'The opened draft will be kept. ')+
+      'Named Library projects, History and photos are never deleted. This cannot be undone.';
+    if(typeof root.confirm==='function'&&!root.confirm(prompt))return Promise.resolve(false);
+    studioLibraryBusy=true;renderStudioLibrary();
+    var originalId=studioWorkspaceId;
+    if(!saveStudioDraft(false)){
+      studioLibraryBusy=false;studioLibraryNotice('Cannot clear drafts: active work could not be saved.',true);
+      return Promise.resolve(false);
+    }
+    var generation=studioDraftGeneration;
+    return persistStudioWorkspace({requireDurable:true}).then(function(ack){
+      if(!ack||studioWorkspaceId!==originalId||generation!==studioDraftGeneration)
+        throw Error('Current work changed or durable checkpoint failed; cleanup was not started');
+      if(replaceCurrent)performStudioSwitch('new');
+      var staged=studioDraftAutosave.withoutDrafts(studioWorkspaces,
+        Math.max(Date.now(),studioDraftSavedAt+1));
+      if(!staged.deletedIds.length)return 0;
+      studioDraftGeneration++;studioWorkspaces=staged.collection;
+      studioDraftSavedAt=staged.collection.savedAt;
+      try{studioWorkspaceLocalSaved=studioDraftAutosave.writeSessionLocal(
+        preferencesStorage(),studioWorkspaces,studioWorkspaceSessionId);}
+      catch(error){studioWorkspaceLocalSaved=false;}
+      if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+      studioDraftSaveTimer=null;
+      return persistStudioWorkspace({requireDurable:true}).then(function(confirmed){
+        if(!confirmed)throw Error('Deletion not fully acknowledged. Recovery copy retained; inspect and retry.');
+        return staged.deletedIds.length;
+      });
+    }).then(function(count){
+      studioLibraryMessage=count+' working draft'+(count===1?'':'s')+
+        ' deleted. Named projects, History and photos are unchanged.';
+      studioLibraryError=false;return true;
+    }).catch(function(error){
+      studioLibraryMessage='Working draft cleanup was not fully confirmed: '+error.message;
+      studioLibraryError=true;return false;
+    }).then(function(ok){studioLibraryBusy=false;renderStudioLibrary();return ok;});
+  }
   function deleteNamedAnimation(id){
     var actions=studioLibraryActions();
     if(actions)return actions.remove(id);
@@ -2253,7 +2307,7 @@
     studioDraftSavedAt=stamp;
     return record;
   }
-  function persistStudioWorkspace(){
+  function persistStudioWorkspace(settings){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
     if(!studioWorkspaces||!studioDraftAutosave)return Promise.resolve(false);
     if(!studioPersistenceCoordinator){
@@ -2281,7 +2335,7 @@
         absorbLate:absorbLateStudioWorkspaces
       });
     }
-    return studioPersistenceCoordinator.persist();
+    return studioPersistenceCoordinator.persist(settings);
   }
   function writeStudioDraftIndexedDB(){return persistStudioWorkspace();}
   function dropStudioWorkspace(id){

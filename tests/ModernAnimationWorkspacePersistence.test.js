@@ -164,3 +164,17 @@ test('failed first write cannot poison subsequent queued writes',async()=>{
   h.waits[1].resolve(h.result());
   assert.equal(await second,true);
 });
+
+test('strict cleanup requires IndexedDB durability rather than local-only fallback',async()=>{
+  const offline=harness({noDb:true});
+  assert.equal(await offline.coordinator.persist({requireDurable:true}),false);
+  const failure=harness(),pending=failure.coordinator.persist({requireDurable:true});
+  await tick();failure.waits[0].reject(Error('quota'));
+  assert.equal(await pending,false);
+  assert.equal(failure.get().localSaved,true);
+});
+test('strict cleanup rejects protected concurrent deletion',async()=>{
+  const h=harness(),pending=h.coordinator.persist({requireDurable:true});
+  await tick();h.waits[0].resolve(h.result({protectedDeletes:['draft_changed']}));
+  assert.equal(await pending,false);
+});

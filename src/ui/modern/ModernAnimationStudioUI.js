@@ -338,6 +338,8 @@
     renderDemoGallery(doc,host,options,actions,inspector);
     var userHeading=el(doc,'div','modern-animation-library-category modern-my-projects-category');
     userHeading.appendChild(el(doc,'strong','modern-animation-library-category-title','My Projects · '+entries.length));
+    userHeading.appendChild(el(doc,'small','modern-animation-library-hint',
+      'Working drafts ('+(options.draftWorkspaces||[]).length+')'));
     host.appendChild(userHeading);
     var message=el(doc,'p','modern-animation-library-note',options.activeDemo?
       'Opened built-in demo: '+options.activeDemo.project.name+' · Read-only · Create copy to edit.':options.activeId?
@@ -357,10 +359,23 @@
     }
     if((options.draftWorkspaces||[]).length){
       var drafts=el(doc,'section','modern-animation-workspace-list');
-      drafts.appendChild(el(doc,'strong','','Working drafts (not saved projects)'));
+      drafts.appendChild(el(doc,'strong','','Working drafts ('+options.draftWorkspaces.length+') · not saved projects'));
       drafts.appendChild(el(doc,'p','modern-animation-library-hint',
-        'Autosaved and stashed drafts are independent. Open draft applies a copy to the editor; '+
-        'only Delete draft removes it.'));
+        'Autosaved drafts are independent. Cleanup never removes saved Library projects, History or photos.'));
+      var cleanup=el(doc,'div','modern-animation-workspace-cleanup');
+      var keepLabel=el(doc,'label','modern-animation-workspace-keep-current');
+      var keep=el(doc,'input');keep.type='checkbox';keep.checked=true;
+      keep.setAttribute('aria-label','Keep current working draft');
+      keepLabel.appendChild(keep);keepLabel.appendChild(el(doc,'span','','Keep current draft'));
+      cleanup.appendChild(keepLabel);
+      var removeAll=button(doc,'Delete all drafts','Delete working drafts after confirmation',
+        function(){if(actions.removeAllDrafts)actions.removeAllDrafts(keep.checked);});
+      removeAll.className+=' modern-animation-workspace-clear';
+      var currentDraft=options.draftWorkspaces.some(function(item){return item.active;});
+      function eligible(){removeAll.disabled=!!options.busy||
+        (options.draftWorkspaces.length===1&&currentDraft&&keep.checked);}
+      keep.addEventListener('change',eligible);eligible();
+      cleanup.appendChild(removeAll);drafts.appendChild(cleanup);
       (options.draftWorkspaces||[]).forEach(function(draft){
         var item=el(doc,'div','modern-animation-workspace-item'+(draft.active?' is-active':''));
         item.appendChild(el(doc,'span','',draft.name+' · '+draft.frames+' keyframes'+

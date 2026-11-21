@@ -133,3 +133,16 @@ test('Modern loads recovery before the editor bootstrap and keeps UI state in Mo
   assert.match(app,/function persistStudioWorkspace\(\)/);
   assert.doesNotMatch(app,/root\.addEventListener\('beforeunload',function/);
 });
+
+test('bulk cleanup UI and host use the existing serialized workspace writer',()=>{
+  const root=path.resolve(__dirname,'..');
+  const app=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.js'),'utf8');
+  const ui=fs.readFileSync(path.join(root,'src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  assert.match(app,/function deleteAllStudioDrafts\(keepCurrent\)/);
+  assert.match(app,/withoutDrafts\(studioWorkspaces/);
+  assert.match(app,/persistStudioWorkspace\(\{requireDurable:true\}\)/);
+  assert.match(app,/removeAllDrafts:function\(keepCurrent\)/);
+  assert.match(ui,/Working drafts \('/);
+  assert.match(ui,/Keep current draft/);
+  assert.match(ui,/Delete all drafts/);
+});

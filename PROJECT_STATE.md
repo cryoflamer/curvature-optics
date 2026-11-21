@@ -1,3 +1,27 @@
+## Animation Studio draft cleanup and recovery fix (#24)
+
+A source-level recovery amplification path was found: multiple tab backups
+were merged before later deletion tombstones were considered, potentially
+forking already-deleted drafts as `draft_recovered_*`. Tombstones are now
+collected before recovery entries, and older local backups made obsolete by
+durable tombstones can be pruned. This is a plausible explanation for the
+visible duplicate storm, not a claim that the user's private IndexedDB
+records were inspected.
+
+Animation Library now shows Working drafts (N), plus Delete all drafts
+with Keep current draft checked by default. Deleting the active draft
+first durably checkpoints it and creates a new empty active draft. All
+remaining independent drafts are removed as one tombstone-bearing batch.
+Named animation projects, History, photos and saved keyframes are never
+deleted. Only a durable IndexedDB acknowledgment qualifies cleanup as
+successful; changed drafts in another tab remain protected. Cleanup
+follows the existing serialized writer and preserves recovery information
+on storage failure.
+
+Node regressions cover batch semantics, stale-tab recovery, IndexedDB
+failure, and protected concurrent deletion. Full CI is manual; Fast CI
+runs on push.
+
 ## Commit 1 — unified Calibration Projects card library (#23)
 
 Calibration Projects now reuses Animation Library's compact scrolling

@@ -441,3 +441,44 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
   assert.equal(autosave.getWorkspace(racing.ctx.studioWorkspaces,
     'project_saved_project').draft.name,'Very late changes');
 });
+
+test('batch deletes only inactive independent working drafts, never named project workspaces',()=>{
+  const make=(name,when,libraryId=null)=>autosave.checkpoint({
+    draft:studio.edit(studio.blank(),'name',name),selectedKey:null,
+    quality:'auto',prepared:false,positionMs:0,libraryId,
+    libraryRevision:libraryId?4:null},when);
+  let collection=autosave.collection('project_saved_one',make('Named',101,'saved_one'),105);
+  collection=autosave.withWorkspace(collection,'draft_first',make('First',107),108);
+  collection=autosave.withWorkspace(collection,'draft_second',make('Second',109),110);
+  collection=autosave.withWorkspace(collection,'draft_current',make('Current',111),112);
+  const original=structuredClone(collection);
+  const outcome=autosave.withoutDrafts(collection,120);
+  assert.deepEqual(collection,original);
+  assert.deepEqual(outcome.deletedIds,['draft_first','draft_second']);
+  assert.deepEqual(outcome.collection.workspaces.map(e=>e.id),['project_saved_one','draft_current']);
+  assert.equal(outcome.collection.removed.length,2);
+  assert.equal(autosave.withoutDrafts(outcome.collection,121).deletedIds.length,0);
+  assert.equal(autosave.getWorkspace(outcome.collection,'project_saved_one').libraryId,'saved_one');
+});
+test('bulk tombstones block recovery forks from older tab snapshots and clean obsolete backups',()=>{
+  const data=new Map(),storage={
+    get length(){return data.size;},key:i=>[...data.keys()][i]||null,
+    getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),
+    removeItem:k=>data.delete(k)
+  };
+  const cp=(name,when)=>autosave.checkpoint({draft:studio.edit(studio.blank(),'name',name),
+    selectedKey:null,quality:'auto',prepared:false,positionMs:0},when);
+  const base=autosave.collection('draft_current',cp('Opened',100),101);
+  const old=autosave.withWorkspace(base,'draft_second',cp('Other draft',150),151);
+  const different=autosave.withWorkspace(base,'draft_second',cp('Diverged in another tab',152),153);
+  autosave.writeSessionLocal(storage,old,'tab_aaaaaaaa');
+  autosave.writeSessionLocal(storage,different,'tab_bbbbbbbb');
+  const before=autosave.combineCollections(autosave.readSessionLocals(storage));
+  assert.ok(before.workspaces.some(e=>e.id.startsWith('draft_recovered_')));
+  const cleaned=autosave.withoutDrafts(old,200).collection;
+  autosave.writeSessionLocal(storage,cleaned,'tab_cccccccc');
+  const replay=autosave.combineCollections([cleaned,...autosave.readSessionLocals(storage)]);
+  assert.deepEqual(replay.workspaces.map(e=>e.id),['draft_current']);
+  assert.equal(autosave.pruneSessionLocals(storage,cleaned,'tab_cccccccc'),2);
+  assert.equal(storage.getItem(autosave.SESSION_LOCAL_PREFIX+'tab_aaaaaaaa'),null);
+});

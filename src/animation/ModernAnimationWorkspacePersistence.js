@@ -14,11 +14,12 @@
        typeof options.getGeneration!=='function'||typeof options.onFork!=='function')
       throw TypeError('Animation workspace persistence requires collection, generation and fork handlers');
     var autosave=options.autosave,writeQueue=Promise.resolve();
-    function persist(){
+    function persist(settings){
+      var requireDurable=!!(settings&&settings.requireDurable);
       var current=options.getCollection(),atGeneration=options.getGeneration();
       if(!current)return Promise.resolve(false);
       var indexedDB=options.indexedDB();
-      if(!indexedDB)return Promise.resolve(!!options.localSaved());
+      if(!indexedDB)return Promise.resolve(!requireDurable&&!!options.localSaved());
       // Keep the snapshot fixed for this write, but read the previous durable
       // baseline only when the queued operation starts (after earlier writes).
       var attempt=writeQueue.catch(function(){return false;}).then(function(){
@@ -50,14 +51,15 @@
             // editor, recover unrelated remote drafts, and re-checkpoint later.
             options.absorbLate(result.collection);
           }
-          return !result.conflicts.some(function(item){return item.id===current.activeId;});
+          return !result.conflicts.some(function(item){return item.id===current.activeId;})&&
+            (!requireDurable||!result.protectedDeletes.length);
         });
       });
       writeQueue=attempt;
       return attempt.catch(function(error){
         options.status('IndexedDB backup failed: '+error.message+
           (options.localSaved()?' · local backup retained.':' · project switching blocked.'),true);
-        return !!options.localSaved();
+        return !requireDurable&&!!options.localSaved();
       });
     }
     return Object.freeze({persist:persist});

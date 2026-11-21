@@ -186,6 +186,27 @@
       savedAt:Math.max(savedAt||Date.now(),original.savedAt+1),activeId:activeId,
       workspaces:original.workspaces.filter(function(item){return item.id!==id;}),removed:removed});
   }
+  // Batch-delete only inactive unlinked drafts. Saved Library project slots
+  // are always retained. Replacing an active draft must happen beforehand.
+  function withoutDrafts(value,savedAt){
+    var original=normalizeCollection(value),active=original.activeId;
+    var victims=original.workspaces.filter(function(item){
+      return item.id.indexOf('draft_')===0&&item.id!==active;
+    });
+    if(!victims.length)return {collection:original,deletedIds:[]};
+    var when=Math.max(savedAt||Date.now(),original.savedAt+1);
+    original.workspaces.forEach(function(item){when=Math.max(when,item.checkpoint.savedAt+1);});
+    var ids=new Set(victims.map(function(item){return item.id;}));
+    var removed=(original.removed||[]).concat(victims.map(function(item){
+      return {id:item.id,removedAt:when};
+    }));
+    // Validation refuses partial deletion if tombstone capacity is exceeded.
+    var next=normalizeCollection({version:COLLECTION_VERSION,
+      savedAt:when,activeId:active,
+      workspaces:original.workspaces.filter(function(item){return !ids.has(item.id);}),
+      removed:removed});
+    return {collection:next,deletedIds:Array.from(ids)};
+  }
   // Prepare the next durable workspace collection before changing the live
   // editor. A stash is an independent draft, never the named project's slot.
   function restoreSavedProject(value,projectId,savedCheckpoint,stashId,savedAt){
@@ -358,7 +379,10 @@
         var source;
         try{source=normalizeCollection(JSON.parse(storage.getItem(key)));}catch(error){return;}
         var backed=source.workspaces.every(function(item){
-          return entries.includes(JSON.stringify(item.checkpoint));
+          // A durable tombstone also makes a stale backup safe to discard,
+          // provided that its content was saved before the deletion.
+          return entries.includes(JSON.stringify(item.checkpoint))||
+            (removed.get(item.id)||0)>=item.checkpoint.savedAt;
         });
         var deletions=(source.removed||[]).every(function(item){
           return (removed.get(item.id)||0)>=item.removedAt;
@@ -382,13 +406,18 @@
       for(var i=0;i<text.length;i++)hash=Math.imul(hash^text.charCodeAt(i),16777619);
       return workspaceId('draft_recovered_'+(hash>>>0).toString(36));
     }
+    // Gather all deletion markers first. The previous single-pass merge
+    // could fork an obsolete draft before encountering its tombstone.
+    sources.forEach(function(source){
+      (source.collection.removed||[]).forEach(function(t){
+        if(t.removedAt>(removed.get(t.id)||0))removed.set(t.id,t.removedAt);
+      });
+    });
     sources.forEach(function(source){
       var current=source.collection;
       active=current.activeId;
-      (current.removed||[]).forEach(function(t){
-        if(t.removedAt>(removed.get(t.id)||0))removed.set(t.id,t.removedAt);
-      });
       current.workspaces.forEach(function(e){
+        if((removed.get(e.id)||0)>=e.checkpoint.savedAt)return;
         var previous=entries.get(e.id);
         if(previous&&source.sessionId&&previous.sessionId&&
           source.sessionId!==previous.sessionId&&
@@ -492,6 +521,7 @@
     makeWorkspaceId:makeWorkspaceId,projectWorkspaceId:projectWorkspaceId,
     normalizeCollection:normalizeCollection,collection:collection,
     withWorkspace:withWorkspace,withoutWorkspace:withoutWorkspace,
+    withoutDrafts:withoutDrafts,
     restoreSavedProject:restoreSavedProject,
     getWorkspace:getWorkspace,readCollectionLocal:readCollectionLocal,
     writeCollectionLocal:writeCollectionLocal,readCollection:readCollection,
