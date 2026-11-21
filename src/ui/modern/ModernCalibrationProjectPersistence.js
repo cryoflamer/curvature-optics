@@ -100,6 +100,32 @@
       tail=work.catch(()=>{});
       return work;
     }
+    // Side-effect-free incoming activation preflight. Callers must still
+    // synchronously recheck their editor generation and commit only after
+    // the existing editor has durably saved its outgoing checkpoint.
+    async function prepareOpen(id,guard=()=>true){
+      model.id(id);
+      if(typeof guard!=='function')throw TypeError('Invalid project activation guard');
+      const owner=active,expectedEpoch=epoch,expectedSequence=sequence;
+      function assertCurrent(){
+        if(active!==owner||epoch!==expectedEpoch||sequence!==expectedSequence||
+           active&&(active.pending||active.latest)||guard()!==true)
+          throw Error('Stale or unsaved calibration activation; active editor was not changed');
+      }
+      assertCurrent();
+      const before=await storage.get(env.indexedDB,id);
+      assertCurrent();
+      if(!before)throw Error('Calibration project missing; active editor was not changed');
+      const prepared=await checkpoint.prepare(before,env,adapter,decoder);
+      assertCurrent();
+      // A competing tab can rename/delete/save between photo decoding and
+      // activation. Never accept a stale revision or an orphan list row.
+      const current=await storage.get(env.indexedDB,id);
+      assertCurrent();
+      if(!current||current.revision!==before.revision)
+        throw Error('Calibration project changed during activation preparation');
+      return prepared;
+    }
     function discard(){
       if(!active)throw Error('No bound Calibration Project');
       if(active.pending)throw Error('Cannot discard calibration edits during a pending save');
@@ -115,7 +141,7 @@
         draft:v.draft,inline:v.inline,title:v.title,resultIds:v.resultIds});
     }
     function project(){return active?model.normalize(active.project):null;}
-    return Object.freeze({bind,mark,save,retry:save,discard,recovery,project,state});
+    return Object.freeze({bind,mark,save,retry:save,prepareOpen,discard,recovery,project,state});
   }
   return Object.freeze({create});
 }));

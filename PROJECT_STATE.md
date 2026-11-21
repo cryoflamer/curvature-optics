@@ -1,3 +1,32 @@
+## 8F.7p.5a — Non-destructive Calibration Project startup and activation preflight (#14)
+
+The legacy editor now opens its existing calibration DB at the current
+version, instead of demanding v1 after the new v2 project store upgrades
+it. It closes/retries connections on versionchange. Startup restores the
+legacy draft first, drains its writer, closes that connection and performs
+a read-only project/marker inspection. It classifies valid legacy work,
+unsupported drafts needing raw recovery, adopted projects, and deliberately
+deleted adopted projects without auto-migrating, re-adopting or switching
+the live editor. Existing single-draft autosave remains in charge.
+Migration and project persistence APIs are now loaded by Modern, but
+neither automatically binds a project or changes the editor.
+
+The coordinator additionally exposes prepareOpen(id,guard): an incoming
+snapshot is read, photo-hydrated and scientifically checked before any
+editor mutation; captured epoch, write sequence, pending/unsaved state,
+caller generation guard and a second durable revision read all must
+still match. Stale/unavailable/deleted candidates fail closed.
+Five new Node regression cases cover pending/recovery inspection,
+tombstones, complete no-photo preflight, dirty/late guard failures
+and concurrent newer revisions. Static script and CommonJS inventory
+are updated. Actual project switching, outgoing checkpoint/rollback,
+worker/Apply cancellation and active selection remain the next bounded
+8F.7p.5b integration, before first UI library at 8F.7p.6.
+
+This is deliberately not a complete 8F.7p.5 UI activation.
+No historical draft is deleted, and no scientific optics changed.
+Direct commit to built-in-demo without PR. Reasoning level High / 3.
+
 ## 8F.7p.4a — Deferred persistence module registered in static boundary (#14)
 
 Fast CI 44834253141: all 205 Node tests passed, including eight new

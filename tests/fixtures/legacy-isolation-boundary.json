@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 135,
-      "uniqueScripts": 133,
+      "scriptTags": 137,
+      "uniqueScripts": 135,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -246,6 +246,8 @@
         "src/ui/modern/ModernCalibrationProject.js",
         "src/ui/modern/ModernCalibrationProjectStore.js",
         "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
+        "src/ui/modern/ModernCalibrationProjectMigration.js",
+        "src/ui/modern/ModernCalibrationProjectPersistence.js",
         "src/ui/modern/ModernCalibrationResult.js",
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernCalibrationTransfer.js",
@@ -439,6 +441,8 @@
       "src/ui/modern/ModernCalibrationApply.js",
       "src/ui/modern/ModernCalibrationProject.js",
       "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
+      "src/ui/modern/ModernCalibrationProjectMigration.js",
+      "src/ui/modern/ModernCalibrationProjectPersistence.js",
       "src/ui/modern/ModernCalibrationProjectStore.js",
       "src/ui/modern/ModernCalibrationResult.js",
       "src/ui/modern/ModernCalibrationResultArchive.js",
@@ -503,8 +507,6 @@
       "src/jsgx3d.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
-      "src/ui/modern/ModernCalibrationProjectMigration.js",
-      "src/ui/modern/ModernCalibrationProjectPersistence.js",
       "src/x.js",
       "src/xtc.js"
     ]
@@ -3108,7 +3110,9 @@
       "commonJsToolCallers": []
     },
     "src/ui/modern/ModernCalibrationProjectMigration.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernCalibrationProjects.test.js"
@@ -3116,7 +3120,9 @@
       "commonJsToolCallers": []
     },
     "src/ui/modern/ModernCalibrationProjectPersistence.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernCalibrationProjects.test.js"

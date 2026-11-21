@@ -7794,7 +7794,12 @@
       }
       var editor=root.CurvatureModernPhotoCalibrationEditor&&root.CurvatureModernPhotoCalibrationEditor.mount(document);
       if(startupMode!=='calibration')restoreWorkspace();
-      Promise.resolve(editor&&editor.restore()).catch(function(error){
+      Promise.resolve(editor&&editor.restore()).then(function(){
+        // The legacy draft is restored first. Inspect the new project
+        // marker only after its v1 connection has been closed; never
+        // adopt or activate automatically before the guarded switch stage.
+        return editor&&editor.inspectProjectStartup&&editor.inspectProjectStartup();
+      }).catch(function(error){
         preferencesStatus('Calibration recovery failed: '+error.message,true);
       }).then(function(){
         if(photoTab)photoTab.disabled=false;

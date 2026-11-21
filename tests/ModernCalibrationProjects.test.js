@@ -682,3 +682,80 @@ test('discard is explicit and never allowed during a pending calibration write',
   assert.equal(session.recovery(),null);
   assert.equal(session.state().revision,2);
 });
+
+test('startup inspection is read-only and classifies legacy, missing and unsupported work',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db);
+  assert.deepEqual(await migration.inspect(env),{status:'legacy-pending',sourceVersion:2});
+  assert.equal(await store.migrationMarker(db),null);
+  assert.deepEqual(await store.legacy(db),raw);
+  const invalid=legacyDraft();invalid.scene.model.showModel=2;
+  const broken=memoryIndexedDB(invalid),result=await migration.inspect(migrationEnv(broken));
+  assert.equal(result.status,'recovery-required');
+  assert.match(result.reason,/Flat/);
+  assert.deepEqual(await store.legacy(broken),invalid);
+  assert.equal(await store.migrationMarker(broken),null);
+  const empty=memoryIndexedDB(null);
+  empty.tables.get('draft').delete('active');
+  assert.deepEqual(await migration.inspect(migrationEnv(empty)),{status:'empty'});
+});
+test('startup inspection never resurrects an intentionally deleted migrated project',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const adopted=await migration.migrate(env,{adapter,decoder:importer});
+  assert.deepEqual(await migration.inspect(env),{status:'adopted',
+    projectId:adopted.project.id,sourceVersion:2});
+  await store.remove(db,adopted.project.id,1);
+  assert.deepEqual(await migration.inspect(env),{status:'adopted-deleted',
+    projectId:adopted.project.id,sourceVersion:2});
+  assert.deepEqual(await store.legacy(db),raw);
+});
+test('project activation preflight hydrates a complete no-photo checkpoint without binding it',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db);
+  const current=project(A),draft=legacyDraft();
+  draft.record=null;draft.activeSource=null;draft.rows=[];draft.pending=null;
+  draft.pendingModel=null;draft.activePair=null;draft.editing=null;draft.selectedOwner=null;
+  const parts=await require('../src/ui/modern/ModernCalibrationProjectCheckpoint')
+    .captureVerified(draft,null,env);
+  const target=model.fresh({id:B,now:100,title:'Ready',...parts});
+  await store.create(db,current);await store.create(db,target);
+  const session=coordinator.create(env);
+  session.bind(current);
+  const ready=await session.prepareOpen(B);
+  assert.equal(ready.project.id,B);
+  assert.deepEqual(ready.draft,draft);
+  assert.equal(ready.inline,null);
+  assert.equal(session.state().projectId,A);
+  assert.equal(session.state().revision,1);
+  assert.equal((await store.get(db,B)).revision,1);
+});
+test('project activation preflight rejects unsaved and stale editor generations',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),a=project(A),b=project(B);
+  await store.create(db,a);await store.create(db,b);
+  let allowed=true;
+  const wrapper={...store,get:async(...args)=>{
+    const read=await store.get(...args);allowed=false;return read;
+  }};
+  const session=coordinator.create(env,{storage:wrapper});
+  session.bind(a);
+  await assert.rejects(session.prepareOpen(B,()=>allowed),/Stale or unsaved/);
+  assert.equal(session.state().projectId,A);
+  session.mark(legacyDraft());
+  await assert.rejects(session.prepareOpen(B),/Stale or unsaved/);
+  assert.equal(session.state().unsaved,true);
+  assert.deepEqual((await store.list(db)).map(x=>x.id).sort(),[A,B].sort());
+});
+test('project activation preflight rejects a newer remote revision before any editor mutation',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),a=project(A),b=project(B);
+  await store.create(db,a);await store.create(db,b);
+  let count=0;
+  const wrapper={...store,get:async(...args)=>{
+    const read=await store.get(...args);
+    if(++count===1)await store.rename(db,B,1,'Changed elsewhere',200);
+    return read;
+  }};
+  const session=coordinator.create(env,{storage:wrapper});
+  session.bind(a);
+  await assert.rejects(session.prepareOpen(B),/changed during activation/);
+  assert.equal(session.state().projectId,A);
+  assert.equal((await store.get(db,B)).revision,2);
+  assert.equal(session.recovery(),null);
+});

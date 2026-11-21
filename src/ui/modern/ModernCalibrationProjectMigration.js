@@ -79,6 +79,28 @@
     return keys.length===other.length&&keys.every(key=>
       Object.hasOwn(b,key)&&sameJson(a[key],b[key]));
   }
+  // A harmless startup gate: report what exists without migrating or
+  // switching the live editor. Raw recovery remains possible even if
+  // the old draft is unsupported or fails scientific validation.
+  async function inspect(env){
+    if(!env?.indexedDB)throw Error('Calibration migration inspection requires IndexedDB');
+    const marker=await store.migrationMarker(env.indexedDB);
+    const legacy=await store.legacy(env.indexedDB);
+    if(marker){
+      const project=await store.get(env.indexedDB,marker.projectId);
+      return {status:project?'adopted':'adopted-deleted',
+        projectId:marker.projectId,sourceVersion:marker.sourceVersion};
+    }
+    if(legacy===null)return {status:'empty'};
+    try{
+      const draft=normalizeLegacy(legacy);
+      matchingInline(env.localStorage,draft);
+      return {status:'legacy-pending',sourceVersion:legacy.version};
+    }catch(error){
+      return {status:'recovery-required',sourceVersion:legacy?.version??null,
+        reason:String(error.message||error)};
+    }
+  }
   async function rawRecovery(db){
     // Raw browser draft (including original bytes). Not a portable project
     // format, and intentionally never deleted by migration or Project remove.
@@ -131,5 +153,5 @@
       throw Error('Calibration migration round-trip changed saved work; old draft retained');
     return {status:'migrated',marker,project:durable};
   }
-  return Object.freeze({INLINE_KEY,normalizeLegacy,matchingInline,rawRecovery,migrate});
+  return Object.freeze({INLINE_KEY,normalizeLegacy,matchingInline,rawRecovery,inspect,migrate});
 }));

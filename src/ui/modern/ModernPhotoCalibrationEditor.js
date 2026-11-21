@@ -760,13 +760,25 @@
     // IndexedDB keeps original images out of the small localStorage quota.
     // A single atomic record binds the photograph to its fixed scene and pairs.
     let restoring=false,blockedFlatDraft=false,writeQueue=Promise.resolve(),dbPromise=null;
+    // No project is activated at startup by merely inspecting migration readiness.
+    // The legacy draft remains writable until guarded activation is qualified.
+    let projectStartupStatus={status:'uninspected'};
     function database(){
       if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
-        const request=env.indexedDB.open('curvature-photo-calibration',1);
-        request.onupgradeneeded=()=>request.result.createObjectStore('draft');
-        request.onsuccess=()=>resolve(request.result);
-        request.onerror=()=>reject(request.error);
-        request.onblocked=()=>reject(Error('Calibration storage blocked'));
+        // Opening without a fixed version also supports the project-store v2
+        // schema after an independently verified legacy adoption.
+        const request=env.indexedDB.open('curvature-photo-calibration');
+        request.onupgradeneeded=()=>{
+          const db=request.result;
+          if(!db.objectStoreNames.contains('draft'))db.createObjectStore('draft');
+        };
+        request.onsuccess=()=>{
+          const db=request.result;
+          db.onversionchange=()=>{db.close();dbPromise=null;};
+          resolve(db);
+        };
+        request.onerror=()=>{dbPromise=null;reject(request.error);};
+        request.onblocked=()=>{dbPromise=null;reject(Error('Calibration storage blocked'));};
       });
       return dbPromise;
     }
@@ -777,6 +789,23 @@
         request.onsuccess=()=>resolve(request.result);
         request.onerror=()=>reject(request.error);
       });
+    }
+    async function inspectProjectStartup(){
+      const migration=env.CurvatureModernCalibrationProjectMigration;
+      if(!migration)return {status:'unavailable'};
+      if(restoring)throw Error('Calibration draft restoration is unfinished');
+      // Never race the old editor's write queue with an IndexedDB upgrade.
+      await writeQueue;
+      const db=await database();
+      db.close();dbPromise=null;
+      // Read-only classification of existing state. This does not call
+      // migrate(), bind a new project, replace the editor, or delete raw data.
+      const result=await migration.inspect(env);
+      projectStartupStatus=result;
+      if(result.status==='recovery-required')
+        $('ModernCalibrationStorage').textContent=
+          'Calibration recovery required; original draft retained: '+result.reason;
+      return result;
     }
     function captureDraftState(){
       // The same byte-for-byte v2 checkpoint serves the existing legacy
@@ -1663,7 +1692,7 @@
     });
     for(const event of ['click','change','input','pointerup','pointercancel','wheel'])workspace.addEventListener(event,()=>persist());
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
+    mounted={enter,restore:restoreDraft,inspectProjectStartup,projectStartupStatus:()=>({...projectStartupStatus}),captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},
       referenceImageId:record.id,referenceSource:activeSource?{source:activeSource.source,demoId:activeSource.demoId||null}:null,
       width:record.original.width,height:record.original.height,
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};

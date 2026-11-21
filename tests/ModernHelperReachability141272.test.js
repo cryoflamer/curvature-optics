@@ -40,13 +40,11 @@ test('Modern helper inventory remains reviewed and locally available', () => {
   assert.deepEqual(actual, [...required].sort(), 'review newly added/removed modules explicitly');
   for (const name of required) {
     assert.ok(fs.statSync(path.join(modernDir, name)).size > 0, name + ' must have source');
-    // Migration and project persistence stay unbound until guarded wiring in 8F.7p.5.
-    // Inventory the source module without requiring a parser-time script.
-    const deferred=['ModernCalibrationProjectMigration.js',
-      'ModernCalibrationProjectPersistence.js'].includes(name);
-    assert.equal(tagsFor(name).length, deferred?0:
+    // Both modules are now parser-time dependencies, but their APIs remain
+    // inert unless startup inspection or a future explicit switch calls them.
+    assert.equal(tagsFor(name).length,
       ['ModernCompareGraph.js','ModernAnimationPreviewGraph.js'].includes(name)?2:1,
-      name + (deferred?' must remain unbound during 8F.7p.3':' must remain loaded by Modern'));
+      name + ' must remain loaded by Modern');
   }
 });
 
@@ -61,9 +59,7 @@ test('140.12.72: Compare graphs A and B retain distinct parser-time script loads
 test('140.12.72: Modern dependency modules load before the Scene bootstrap', () => {
   const appIndex = tagsFor('ModernApp.js')[0].index;
   for (const name of required) {
-    if (name === 'ModernApp.js' || name === 'ModernCompareGraph.js' ||
-        name === 'ModernCalibrationProjectMigration.js' ||
-        name === 'ModernCalibrationProjectPersistence.js') continue;
+    if (name === 'ModernApp.js' || name === 'ModernCompareGraph.js') continue;
     assert.ok(tagsFor(name)[0].index < appIndex, name + ' must load before ModernApp');
   }
 });
