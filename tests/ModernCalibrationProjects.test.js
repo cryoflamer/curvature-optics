@@ -972,3 +972,14 @@ test('Apply caller forwards its guarded project identity and result linker to Mo
   assert.match(app,/archivedProjectBinding=editor\.projectBinding\?\.\(\)\|\|null/);
   assert.match(app,/await editor\.linkArchivedResult\(saved\.row\.id,archivedProjectBinding\)/);
 });
+
+test('Apply click never schedules a racing workspace autosave beside the awaited explicit checkpoint',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const editor=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const listener=editor.slice(editor.indexOf("for(const event of ['click','change','input','pointerup','pointercancel','wheel'])"),
+    editor.indexOf('syncFitControls();syncPairToolbar();',editor.indexOf("for(const event of ['click','change','input','pointerup','pointercancel','wheel'])")));
+  assert.match(listener,/path\.includes\(applyButton\)/);
+  assert.match(listener,/ModernCalibrationApplyScene/);
+  assert.match(editor,/revision:\(\)=>applyRevision\+':'\+loadToken,saveDraft:\(\)=>persist\(\)/);
+});

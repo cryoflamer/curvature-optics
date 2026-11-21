@@ -1,3 +1,19 @@
+## 8F.7p.8g — Apply click autosave race prevented (#14)
+
+The full-browser two-project flow linked the first archived result but left
+the second project's resultIds empty. A successful Scene status could be
+stale from the preceding Apply. The editor workspace-level delegated click
+listener was still calling persist() for the Apply button even though its
+explicit handler already awaits saveDraft() inside host.archive(). A second
+overlapping generation-bound save can leave an unexpected pending/unsaved
+state during the subsequent CAS link. Apply clicks are now excluded from the
+generic autosave listener using both composedPath and closest fallback.
+The explicit saveDraft checkpoint remains the authoritative write barrier.
+The Chromium test now asserts the per-Apply success status and the exact
+active project's durable resultIds=1 before navigating or opening another
+project; it cannot pass on the first Apply's stale Scene text. A Node
+source contract protects the exclusion.
+
 ## 8F.7p.8f — Apply caller project-link bridge corrected (#14)
 
 Full Chromium qualification exposed a successful physical Apply whose

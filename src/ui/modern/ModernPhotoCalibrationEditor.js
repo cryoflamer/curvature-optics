@@ -2274,8 +2274,12 @@
         // detached target would return null. composedPath() preserves the
         // original event ancestry and must be checked before autosaving.
         const path=typeof e.composedPath==='function'?e.composedPath():[];
+        // Apply owns an explicit durable checkpoint-before-archive barrier.
+        // Its click must not queue a *second* project autosave while the
+        // archive/link step is checking for pending generation-bound writes.
         if(path.includes(projectsPanel)||path.includes(projectsToggle)||
-           e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'))return;
+           path.includes(applyButton)||
+           e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'))return;
         persist();
       });
     syncFitControls();syncPairToolbar();

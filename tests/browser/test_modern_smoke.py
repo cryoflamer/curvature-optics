@@ -770,6 +770,12 @@ class ModernBrowserSmoke(unittest.TestCase):
                 selected)
             self.page.once('dialog',lambda dialog:dialog.accept())
             button.click()
+            expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+                'Applied to Scene',timeout=30000)
+            self.page.wait_for_function("""async id => {
+                const record=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return record?.resultIds.length===1;
+            }""",arg=selected,timeout=30000)
             expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
                 'Save Snapshot to keep this Scene',timeout=30000)
             self.page.locator('#ModernPhotoCalibrationOpen').click()
