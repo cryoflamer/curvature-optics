@@ -110,8 +110,17 @@ until the entire multi-stage Issue is complete.
   changed; do not duplicate Issue backlogs or create a commit diary.
 
 **When direct GitHub/Project updates are unavailable:**
+- **Use connected tools first.** Before offering a script, check the tools
+  currently available and attempt all authorized GitHub/Project/Actions
+  operations that they support. Do not assume a limitation observed in an
+  earlier chat still applies. Never delegate an operation merely for
+  convenience when it can be completed directly.
+- **Provide a script only for operations that cannot be performed directly**
+  because the required capability or permission is unavailable. Explain the
+  specific limitation. Do not generate a script when all necessary operations
+  were completed with connected tools.
 - Generate a ready-to-run, task-specific Bash script for the user's WSL
-  environment using `gh`. Include **only outstanding operations**; do not
+  environment using `gh` **only for those outstanding operations**; do not
   repeat mutations already confirmed through connected tools.
 - Discover live Project, field, and item IDs using `gh project view`,
   `gh project field-list`, and `gh project item-list`. Never invent IDs,
