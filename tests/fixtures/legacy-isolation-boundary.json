@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 137,
-      "uniqueScripts": 135,
+      "scriptTags": 138,
+      "uniqueScripts": 136,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -248,6 +248,7 @@
         "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationProjectMigration.js",
         "src/ui/modern/ModernCalibrationProjectPersistence.js",
+        "src/ui/modern/ModernCalibrationProjectActions.js",
         "src/ui/modern/ModernCalibrationResult.js",
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernCalibrationTransfer.js",
@@ -440,6 +441,7 @@
       "src/ui/modern/ModernAtmosphericShimmer.js",
       "src/ui/modern/ModernCalibrationApply.js",
       "src/ui/modern/ModernCalibrationProject.js",
+      "src/ui/modern/ModernCalibrationProjectActions.js",
       "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
       "src/ui/modern/ModernCalibrationProjectMigration.js",
       "src/ui/modern/ModernCalibrationProjectPersistence.js",
@@ -511,7 +513,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 229,
+  "sourceJsCount": 230,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -3085,6 +3087,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectActions.js",
         "src/ui/modern/ModernCalibrationProjectCheckpoint.js",
         "src/ui/modern/ModernCalibrationProjectMigration.js",
         "src/ui/modern/ModernCalibrationProjectPersistence.js",
@@ -3096,11 +3099,22 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/ui/modern/ModernCalibrationProjectActions.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernCalibrationProjects.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/ui/modern/ModernCalibrationProjectCheckpoint.js": {
       "directHtmlLoads": [
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectActions.js",
         "src/ui/modern/ModernCalibrationProjectMigration.js",
         "src/ui/modern/ModernCalibrationProjectPersistence.js"
       ],
@@ -3135,6 +3149,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/ui/modern/ModernCalibrationProjectActions.js",
         "src/ui/modern/ModernCalibrationProjectMigration.js",
         "src/ui/modern/ModernCalibrationProjectPersistence.js"
       ],
