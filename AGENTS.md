@@ -54,10 +54,13 @@ not merely its size or the presence of an Issue number.
   not as a separate list of tasks. The Project is linked to this repository.
 - **Milestones** group workstreams/stages; they do not establish execution
   priority. Some intentionally deferred Issues may have no milestone.
-- **Labels** describe independent dimensions, once defined and approved:
-  `priority:P0` through `priority:P3` (critical/blocker to optional),
-  `type:*` (kind of work), and `status:*` (readiness). Do not confuse
-  priority with readiness, or assume these labels have already been created.
+- **Labels** describe independent dimensions: each open Issue should have
+  exactly one `priority:P0`–`priority:P3` and one primary `type:*` label.
+  Add `workflow:blocked`, `workflow:deferred`, and/or
+  `workflow:needs-decision` only when applicable, and revisit those labels
+  as dependencies or decisions change. The Project's native `Status` field
+  tracks execution state (Todo / In Progress / Done); do not duplicate it
+  with `status:*` labels or treat an unset workflow label as acceptance.
 - Use native Issue `blocked by` / `blocking` dependencies where supported;
   otherwise document explicit Issue links. Dependencies and acceptance gates
   take precedence over a simple numeric ranking.
