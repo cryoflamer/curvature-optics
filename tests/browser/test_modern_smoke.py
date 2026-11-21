@@ -3629,3 +3629,38 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        data=self.soundly_calibration_experiment()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'photo-project.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')})
+        entry=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(entry).to_have_count(1,timeout=30000)
+        image=entry.locator('.modern-calibration-project-preview img')
+        expect(image).to_be_visible(timeout=30000)
+        self.assertTrue(image.evaluate('(node) => node.complete && node.naturalWidth > 0'))
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage).workspace.calibrationView"""),
+            'projects')
+        self.page.reload(wait_until='load')
+        expect(panel).to_be_visible(timeout=30000)
+        expect(image).to_be_visible(timeout=30000)
+        self.assertTrue(image.evaluate('(node) => node.complete && node.naturalWidth > 0'))
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""),None)
+        workspace.locator('#ModernCalibrationProjectsBack').click()
+        expect(panel).to_be_hidden()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage).workspace.calibrationView"""),
+            'editor')
+        self.page.reload(wait_until='load')
+        expect(workspace).to_be_visible(timeout=30000)
+        expect(panel).to_be_hidden()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)

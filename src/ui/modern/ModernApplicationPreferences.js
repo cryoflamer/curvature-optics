@@ -60,6 +60,7 @@
       sceneTab:TABS.includes(data.sceneTab)?data.sceneTab:'Camera',
       compareTab:TABS.includes(data.compareTab)?data.compareTab:'Camera',
       compareModel:['A','B'].includes(data.compareModel)?data.compareModel:null,
+      calibrationView:data.calibrationView==='projects'?'projects':'editor',
       sections:Object.freeze(sections)
     });
   }

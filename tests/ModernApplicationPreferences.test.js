@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const preferences=require('../src/ui/modern/ModernApplicationPreferences');
 const historyFilterDefaults={query:'',mode:'all',geometry:'any',atmosphere:'any',geometryRelation:'any',refractionRelation:'any'};
-const workspaceDefaults={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
+const workspaceDefaults={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,calibrationView:'editor',sections:{}};
 function storage(values={}){
   const data=new Map(Object.entries(values));
   return {data,getItem(key){return data.has(key)?data.get(key):null;},
@@ -241,4 +241,17 @@ test('all five workspaces share the same local preference roundtrip and startup 
   assert.equal(preferences.startupWorkspace('invalid','compare',null,false,null),'compare');
   assert.equal(preferences.startupWorkspace('animation','scene','invalid',false,'compare'),'animation');
   assert.equal(preferences.startupWorkspace(null,'invalid',null,false,null),'scene');
+});
+
+test('Calibration Projects subview reuses the existing workspace preferences and reset contract',()=>{
+  const db=storage();
+  preferences.write(db,{workspace:{mode:'calibration',calibrationView:'projects'}});
+  assert.equal(preferences.read(db).workspace.calibrationView,'projects');
+  assert.equal(preferences.read(db).workspace.mode,'calibration');
+  assert.equal(preferences.normalize({workspace:{calibrationView:'invalid'}}).workspace.calibrationView,'editor');
+  assert.equal(preferences.normalize({workspace:{calibrationView:1}}).workspace.calibrationView,'editor');
+  preferences.write(db,{workspace:{mode:'calibration',calibrationView:'editor'}});
+  assert.equal(preferences.read(db).workspace.calibrationView,'editor');
+  preferences.reset(db);
+  assert.deepEqual(preferences.read(db).workspace,workspaceDefaults);
 });

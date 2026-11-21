@@ -983,3 +983,16 @@ test('Apply click never schedules a racing workspace autosave beside the awaited
   assert.match(listener,/ModernCalibrationApplyScene/);
   assert.match(editor,/revision:\(\)=>applyRevision\+':'\+loadToken,saveDraft:\(\)=>persist\(\)/);
 });
+
+test('Project card photographs resolve lazily by SHA-256 without saving raster bytes into project records',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  assert.match(source,/library\.findOriginal\(env\.indexedDB,identity,env\.crypto/);
+  assert.match(source,/projectPreviews\.set\(key,preview\)/);
+  assert.match(source,/card\.append\(projectPreview\(entry\.photo\),name\)/);
+  assert.match(source,/env\.CurvatureModernApp\?\.rememberCalibrationView\?\.\(open\?'projects':'editor'\)/);
+  assert.match(source,/showProjectList\(env\.CurvatureModernApp\?\.getCalibrationView\?\.\(\)==='projects'\)/);
+  assert.match(app,/function rememberCalibrationView\(view\)/);
+});

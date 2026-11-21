@@ -852,7 +852,9 @@
       // belong to 8F.7p.5. Never replace current editor on failed prepare.
       return helper.prepare(project,env);
     }
-    // Project list is metadata-only: never decode photo originals to draw cards.
+    // Project cards begin with compact metadata. Verified preview images are
+    // resolved lazily from the independent Reference Image Library, not from
+    // the project checkpoint or from a second photo store.
     const projectsToggle=$('ModernCalibrationProjectsToggle'),
       projectsPanel=$('ModernCalibrationProjectsPanel'),
       projectsBack=$('ModernCalibrationProjectsBack'),
@@ -866,6 +868,64 @@
       projectsList=$('ModernCalibrationProjectsList');
     const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
     let projectRows=[],projectListBusy=false,projectListToken=0,projectInspection=null;
+    // In-memory previews are UI-only. An unavailable original is a visible
+    // placeholder, not an error that prevents listing/opening the project.
+    const projectPreviews=new Map();
+    function photoPreviewKey(photo){return photo?.sha256||null;}
+    function projectPreview(photo){
+      const key=photoPreviewKey(photo);
+      const figure=doc.createElement('div');
+      figure.className='modern-calibration-project-preview';
+      if(!key){figure.textContent='No reference photo';return figure;}
+      const preview=projectPreviews.get(key);
+      if(preview){
+        const img=doc.createElement('img');img.src=preview;
+        img.alt='Reference photograph';img.loading='lazy';
+        figure.append(img);
+      }else figure.textContent=projectPreviews.has(key)?
+        'Photograph unavailable':'Loading photograph…';
+      return figure;
+    }
+    async function fetchProjectPreviews(token){
+      const library=env.CurvatureModernReferenceImageLibrary,
+        importer=env.CurvatureModernReferenceImageImport;
+      if(!library?.findOriginal||!importer?.verifyOriginal)return;
+      // Resolve each content identity only once; no original bytes enter
+      // project rows, preference storage or any other persistent cache.
+      const photos=new Map(projectRows.filter(row=>row.photo).map(row=>
+        [photoPreviewKey(row.photo),row.photo]));
+      for(const [key,identity] of photos){
+        if(token!==projectListToken||projectsPanel.hidden)return;
+        if(projectPreviews.has(key))continue;
+        let preview=null;
+        try{
+          const found=await library.findOriginal(env.indexedDB,identity,env.crypto,
+            original=>importer.verifyOriginal(original,env));
+          if(found){
+            if(found.record.thumbnail){
+              await importer.verify(found.record,env);
+              preview=found.record.thumbnail.dataUrl;
+            }else{
+              // Older observations may have no thumbnail. Generate a small
+              // display-only raster; never store the copy in IndexedDB.
+              const photo=new env.Image();photo.src=found.record.original.dataUrl;
+              await photo.decode();
+              const canvas=doc.createElement('canvas');
+              const scale=Math.min(1,320/Math.max(photo.naturalWidth,photo.naturalHeight));
+              canvas.width=Math.max(1,Math.round(photo.naturalWidth*scale));
+              canvas.height=Math.max(1,Math.round(photo.naturalHeight*scale));
+              const context=canvas.getContext('2d');
+              if(context){context.drawImage(photo,0,0,canvas.width,canvas.height);
+                preview=canvas.toDataURL('image/jpeg',.72);}
+              canvas.width=canvas.height=0;
+            }
+          }
+        }catch(error){env.console?.warn?.('Calibration Project preview unavailable:',error);}
+        if(token!==projectListToken||projectsPanel.hidden)return;
+        projectPreviews.set(key,preview);
+        renderProjects();
+      }
+    }
     function projectsMessage(text,error=false){
       projectsStatus.textContent=text;
       projectsStatus.classList.toggle('is-error',error);
@@ -890,7 +950,7 @@
       card.dataset.projectActive=String(active);
       card.dataset.projectUnsaved=String(!!unsaved);
       const name=doc.createElement('h3');name.textContent=entry.title;
-      card.append(name);
+      card.append(projectPreview(entry.photo),name);
       const desc=doc.createElement('p');
       desc.textContent=[
         entry.photo?'Photo '+entry.photo.width+' × '+entry.photo.height+' px':'No reference photo',
@@ -974,6 +1034,7 @@
         projectInspection=inspection;
         projectsMessage(rows.length+' saved Calibration Project'+(rows.length===1?'':'s')+'.');
         renderProjects();
+        void fetchProjectPreviews(token);
       }catch(error){
         if(token===projectListToken&&!projectsPanel.hidden)
           projectsMessage('Cannot load projects: '+error.message+'. Current work is unchanged.',true);
@@ -983,6 +1044,7 @@
       if(projectListBusy)return;
       projectsPanel.hidden=!open;
       workspace.dataset.projectsList=open?'open':'closed';
+      env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
       projectsControls();
       if(open)void refreshProjectList();
       else{++projectListToken;projectsToggle.focus();}
@@ -1876,6 +1938,10 @@
         catch(e){scene=null;env.alert(e.message);return false;}
       }
       void refreshSources();persist();
+      // The parent Modern workspace already owns the persisted navigation
+      // preference. Restore this subview only when Calibration is entered;
+      // do not auto-open or bind any stored project.
+      showProjectList(env.CurvatureModernApp?.getCalibrationView?.()==='projects');
       return true;
     }
     $('ModernCalibrationReset').onclick=()=>{

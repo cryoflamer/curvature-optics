@@ -654,7 +654,7 @@
     geometryRelation:'any',refractionRelation:'any'};
   var displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
   var legacyDisplayPanels=Object.assign({},displayPanels);
-  var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
+  var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,calibrationView:'editor',sections:{}};
   var workspaceSections=[];
   var workspaceInitialSections={
     'camera.pose':true,'camera.navigation':false,'camera.animation':true,
@@ -713,6 +713,7 @@
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
       compareTab:remembered.workspace.compareTab,compareModel:remembered.workspace.compareModel,
+      calibrationView:remembered.workspace.calibrationView,
       sections:Object.assign({},remembered.workspace.sections)};
     navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
   }
@@ -777,6 +778,12 @@
     workspaceNavigationVersion++;
     if(workspaceState.mode!==mode){workspaceState.mode=mode;saveApplicationPreferences();}
     setWorkspaceEntryChoice(mode);
+  }
+  function rememberCalibrationView(view){
+    if(!['editor','projects'].includes(view))throw RangeError('Invalid Calibration view');
+    if(workspaceState.calibrationView===view)return;
+    workspaceState.calibrationView=view;
+    saveApplicationPreferences();
   }
   // Navigation from a particular Picker card is UI-only and never restored
   // from preferences or included in a physical experiment snapshot.
@@ -913,7 +920,7 @@
   }
   function resetWorkspaceLayout(){
     setWorkspaceEntryChoice(null);
-    workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,sections:{}};
+    workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,calibrationView:'editor',sections:{}};
     displayPanels={advanced:false,diagnostics:false,gpu:false,profiler:false};
     legacyDisplayPanels=Object.assign({},displayPanels);
     state.compareSelected='A';
@@ -969,6 +976,7 @@
       setWorkspaceEntryChoice(null);
       workspaceState={mode:defaults.workspace.mode,sceneTab:defaults.workspace.sceneTab,
         compareTab:defaults.workspace.compareTab,compareModel:defaults.workspace.compareModel,
+        calibrationView:defaults.workspace.calibrationView,
         sections:Object.assign({},defaults.workspace.sections)};
       applyWorkspaceSections();
       // A full preference reset also restores visible tab/model selection.
@@ -7837,6 +7845,8 @@
       return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
+    getCalibrationView:function(){return workspaceState.calibrationView;},
+    rememberCalibrationView:rememberCalibrationView,
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
     getPresetSelection:function(){return state.scenePresetSelection;},
     registerCompareGraph:registerCompareGraph,drawCompare:drawCompare,
@@ -7868,7 +7878,8 @@
       studioProjects.validate(studioPrepared):null;},
     getWorkspaceState:function(){return {mode:currentWorkspaceMode(),
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
-      compareModel:state.compareSelected,sections:Object.assign({},workspaceState.sections)};},
+      compareModel:state.compareSelected,calibrationView:workspaceState.calibrationView,
+      sections:Object.assign({},workspaceState.sections)};},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
     // DevTools API remains available alongside the 138.3 Atmosphere controls.

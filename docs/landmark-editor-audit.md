@@ -1,3 +1,25 @@
+## Calibration Projects thumbnails and workspace-view restoration (#14)
+
+Calibration Projects now display a verified photo preview resolved lazily by
+its existing SHA-256 identity in Reference Image Library. Existing thumbnail
+bytes are reused, while a photo without a thumbnail is downscaled only in
+memory. No photo bytes or new image table are added to project records;
+missing or invalid originals show a placeholder without blocking project
+Open or recovery. Preview resolution is generation-bound to the current
+list and deduplicated in a transient per-page cache.
+
+The Projects/Editor subview is stored as `workspace.calibrationView` in the
+existing `ModernApplicationPreferences` record, beside the existing
+top-level workspace choice. No new localStorage/sessionStorage navigation
+key or auto-activation of the last project was introduced. Startup enters
+Calibration using existing workspace precedence, then restores the subview;
+Back to editor updates that same preference, and Reset restores the editor
+default. Added preference, source-contract and Chromium reload tests.
+
+Test policy: targeted checks and Fast CI by default; Full CI only when
+specifically justified, not after each repair. A repository workflow may
+still start Full CI automatically on push until its triggers are adjusted.
+
 ## 8F.7p.8h — Project-linked Apply UI qualification completed (#14)
 
 Chromium shard 0 on 8F.7p.8g passed the two-project archived Apply,

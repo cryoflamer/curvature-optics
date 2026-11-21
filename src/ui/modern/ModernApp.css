@@ -1595,3 +1595,9 @@ button{cursor:pointer}
 .modern-calibration-project-actions button[data-calibration-project-delete]{color:#a12232}
 .modern-calibration-project-actions button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:760px){.modern-calibration-projects-list{grid-template-columns:1fr}}
+
+/* Calibration Project photo preview: UI-only, aspect-preserving, compact. */
+.modern-calibration-project-preview{width:100%;height:148px;border:1px solid #d3e1eb;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;background:#eaf1f6;
+  color:#58738b;font-size:13px;margin-bottom:12px}
+.modern-calibration-project-preview img{width:100%;height:100%;object-fit:contain;display:block}
