@@ -3,18 +3,8 @@ name: Curvature full verification
 on:
   workflow_call:
   workflow_dispatch:
-  # GitHub schedules only workflows on the DEFAULT branch (currently main).
-  # This becomes active after this workflow is installed on main too.
-  schedule:
-    - cron: '23 2 * * *'
-  # Qualify changes to the full runner without re-running full tests on every push.
-  push:
-    branches: [built-in-demo]
-    paths:
-      - '.github/workflows/full-verification.yml'
-      - '.github/workflows/ci.yml'
-      - 'tools/run-browser-smoke.py'
-      - 'tests/browser/test_modern_smoke.py'
+  # Expensive full verification is opt-in. Fast CI remains automatic on
+  # built-in-demo pushes; full is deliberately invoked only for milestones.
 
 permissions:
   contents: read

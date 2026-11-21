@@ -3627,8 +3627,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(editor.get_by_label('Frame name')).to_have_value('CI renamed keyframe')
 
 
-if __name__ == '__main__':
-    unittest.main()
 
     def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
         import json
@@ -3664,3 +3662,7 @@ if __name__ == '__main__':
         expect(workspace).to_be_visible(timeout=30000)
         expect(panel).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+
+if __name__ == '__main__':
+    unittest.main()

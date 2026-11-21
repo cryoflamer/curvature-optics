@@ -1,3 +1,15 @@
+## Full CI trigger policy and browser smoke registration (Calibration UX)
+
+Full CI was unintentionally triggered by pushes to the Chromium smoke file.
+The existing workflow now retains only workflow_dispatch/workflow_call:
+Fast CI continues to run for every push, while full qualification is
+manual/explicit. The previous daily schedule and path-filtered push are
+disabled in accordance with the requested test budget.
+
+The new photo-preview/reload Chromium test is placed inside the existing
+ModernBrowserSmoke class before the unittest main entrypoint. No change to
+physical calibration data or project record format.
+
 ## Calibration Projects thumbnails and workspace-view restoration (#14)
 
 Calibration Projects now display a verified photo preview resolved lazily by
