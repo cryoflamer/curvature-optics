@@ -437,8 +437,9 @@
       });
     });
     removed.forEach(function(when,id){
-      if(entries.has(id)&&entries.get(id).checkpoint.savedAt<=when)entries.delete(id);
-      else removed.delete(id);
+      if(!entries.has(id))return; // retain the durable marker across reloads
+      if(entries.get(id).checkpoint.savedAt<=when)entries.delete(id);
+      else removed.delete(id); // a genuinely newer edit outranks deletion
     });
     if(!entries.size)return null;
     if(!entries.has(active))active=entries.keys().next().value;

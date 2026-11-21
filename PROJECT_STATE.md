@@ -1,3 +1,7 @@
+## Persistent deletion marker after repeated workspace recovery (#24)
+
+Recovery now retains tombstones when the deleted draft is already absent from the recovered entries. Previously, merging a durable deletion with older tab snapshots could drop the marker itself, permitting resurrection on a later reload. An added two-round recovery regression ensures tombstone persistence and no revived workspaces.
+
 ## Animation Studio cleanup Fast CI qualification (#24)
 
 The Fast Node suite now includes ModernAnimationDraftAutosave.test.js so the new batch-deletion, local-backup and tombstone recovery regressions are exercised on every push. The workspace recovery source contract was updated to accept the new optional durable-persistence settings argument. Full CI remains manual.

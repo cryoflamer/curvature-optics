@@ -481,6 +481,11 @@ test('bulk tombstones block recovery forks from older tab snapshots and clean ob
   autosave.writeSessionLocal(storage,cleaned,'tab_cccccccc');
   const replay=autosave.combineCollections([cleaned,...autosave.readSessionLocals(storage)]);
   assert.deepEqual(replay.workspaces.map(e=>e.id),['draft_current']);
+  assert.ok(replay.removed.some(item=>item.id==='draft_second'));
+  // A second reload with the old backup must *still* respect the marker.
+  const twice=autosave.combineCollections([replay,old]);
+  assert.deepEqual(twice.workspaces.map(e=>e.id),['draft_current']);
+  assert.ok(twice.removed.some(item=>item.id==='draft_second'));
   assert.equal(autosave.pruneSessionLocals(storage,cleaned,'tab_cccccccc'),2);
   assert.equal(storage.getItem(autosave.SESSION_LOCAL_PREFIX+'tab_aaaaaaaa'),null);
 });
