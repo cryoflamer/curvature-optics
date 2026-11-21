@@ -25,9 +25,11 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
   return {promise,resolve,reject};
 }
 async function settle(){await new Promise(setImmediate);}
-function harness({local=null,legacy=null,remote=null,pending=null,generation=0,indexed=true}={}){
+function harness({local=null,legacy=null,remote=null,pending=null,generation=0,indexed=true,
+  oldSessions=[]}={}){
   const storage=memoryStorage(),calls=[],events=new Map(),docEvents=new Map();
   if(local)autosave.writeSessionLocal(storage,local,'tab_aaaaaaaa');
+  oldSessions.forEach(({id,collection})=>autosave.writeSessionLocal(storage,collection,id));
   if(legacy)autosave.writeLocal(storage,legacy);
   const win={crypto:{randomUUID:()=> '00000000-0000-4000-8000-000000000001'},
     addEventListener:(name,fn)=>events.set(name,fn)};
@@ -145,4 +147,32 @@ test('bulk cleanup UI and host use the existing serialized workspace writer',()=
   assert.match(ui,/Working drafts \('/);
   assert.match(ui,/Keep current draft/);
   assert.match(ui,/Delete all drafts/);
+});
+
+test('F5 does not replay superseded old-page backups with different save timestamps',async()=>{
+  const remote=collection('Same draft','draft_original',500);
+  const oldSessions=Array.from({length:5},(_,i)=>({
+    id:'tab_previous_'+i,collection:collection('Same draft','draft_original',100+i)
+  }));
+  const h=harness({remote,oldSessions});
+  await settle();
+  assert.equal(h.active().workspaces.length,1,
+    'committed copies are not separate working drafts');
+  assert.equal(h.calls.includes('persist'),false,
+    'already durable backups must not be reintroduced by recovery');
+  assert.equal(autosave.readSessionLocals(h.storage).length,0,
+    'obsolete page backups should be pruned after durable recovery');
+});
+
+test('an old session with genuinely different draft content is kept for recovery',async()=>{
+  const remote=collection('Durable revision','draft_original',500);
+  const oldSessions=[{id:'tab_unflushed',collection:collection('Different unsaved work',
+    'draft_original',450)}];
+  const h=harness({remote,oldSessions});
+  await settle();
+  assert.equal(autosave.readSessionLocals(h.storage).length,1,
+    'uncommitted work is not automatically deleted');
+  assert.ok(h.active().workspaces.some(e=>e.checkpoint.draft.name==='Different unsaved work')||
+    h.active().workspaces.some(e=>e.checkpoint.draft.name==='Durable revision'),
+    'workspace remains recoverable');
 });
