@@ -859,6 +859,7 @@
       projectsDisclosure=$('ModernCalibrationProjectsDisclosure'),
       projectsPanel=$('ModernCalibrationProjectsPanel'),
       projectsRefresh=$('ModernCalibrationProjectsRefresh'),
+      projectsSave=$('ModernCalibrationProjectsSave'),
       projectsNew=$('ModernCalibrationProjectsNew'),
       projectsImport=$('ModernCalibrationProjectsImport'),
       projectsImportFile=$('ModernCalibrationProjectsImportFile'),
@@ -985,6 +986,11 @@
       projectsStatus.classList.toggle('is-error',error);
     }
     function projectsControls(){
+      const save=projectSession?.state();
+      const needsSave=!!save?.projectId&&(save.unsaved||!!save.error||save.pending>0);
+      projectsSave.hidden=!needsSave;
+      projectsSave.disabled=projectListBusy||!save?.unsaved||save.pending>0;
+      projectsSave.textContent=save?.pending>0?'Saving…':save?.error?'Retry save':'Save now';
       projectsToggle.setAttribute('aria-expanded',String(!projectsPanel.hidden));
       projectsRefresh.disabled=projectListBusy;
       projectsAdopt.disabled=projectListBusy;
@@ -1114,8 +1120,13 @@
       }
       projectsLegacy.hidden=projectInspection?.status!=='legacy-pending';
       const state=projectSession?.state();
-      if(state?.error)projectsMessage('Active project has unsaved changes: '+state.error,true);
-      else if(state?.unsaved)projectsMessage('Active project has unsaved changes. Resolve its save before opening another project.',true);
+      if(state?.pending>0)projectsMessage('Saving active Calibration Project…');
+      else if(state?.error)projectsMessage('Save failed: '+state.error+'. Use Retry save before switching projects.',true);
+      else if(state?.unsaved)projectsMessage('Active project has unsaved changes. Use Save now before switching projects.',true);
+      else if(state?.projectId&&projectsStatus.dataset.saveNotice==='active'){
+        projectsMessage('Calibration Project saved in this browser.');
+        delete projectsStatus.dataset.saveNotice;
+      }
       else if(!projectListBusy&&projectInspection?.status==='recovery-required')
         projectsMessage('Existing draft needs recovery: '+projectInspection.reason+
           '. The original was not modified.',true);
@@ -1311,6 +1322,40 @@
     };
     projectsDisclosure.addEventListener('toggle',()=>showProjectList(projectsDisclosure.open));
     projectsRefresh.onclick=()=>void refreshProjectList();
+    async function saveActiveFromProjects(){
+      if(projectListBusy)return;
+      const session=projectSession,initial=session?.state();
+      if(!initial?.projectId||!initial.unsaved||initial.pending>0)return;
+      projectListBusy=true;
+      projectsStatus.dataset.saveNotice='active';
+      renderProjects();
+      projectsMessage(initial.error?'Retrying the exact unsaved Calibration Project snapshot…':
+        'Saving the active Calibration Project…');
+      try{
+        // Retry the captured latest snapshot, including pending correspondences
+        // and Undo/Redo. Do not mark an unrelated current editor or discard it.
+        const outcome=await session.retry();
+        const after=session.state();
+        if(!outcome.current||after.projectId!==initial.projectId&&
+            outcome.status!=='forked'||after.pending||after.unsaved)
+          throw Error('Project changed during save; retained unsaved work');
+        projectListBusy=false;
+        await refreshProjectList();
+        if(!session.state().unsaved&&!session.state().pending){
+          delete projectsStatus.dataset.saveNotice;
+          projectsMessage(outcome.status==='forked'?
+            'Changes safely saved as a conflict copy. Review the updated project list.':
+            'Calibration Project saved in this browser.');
+        }
+      }catch(error){
+        projectsMessage('Save failed: '+error.message+'. Your unsaved work is retained.',true);
+      }finally{
+        projectListBusy=false;
+        renderProjects();
+      }
+    }
+    projectsSave.onclick=()=>void saveActiveFromProjects();
+
     projectsAdopt.onclick=()=>void adoptFromProjects();
     function persistenceSession(){
       if(!projectSession){

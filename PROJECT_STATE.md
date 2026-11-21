@@ -1,3 +1,17 @@
+## Explicit Calibration Project save recovery UI (#14)
+
+Calibration Projects now offers Save now when an active project has an unsaved
+checkpoint, Retry save after a failed write, and a disabled Saving… state
+while a write is pending. The action uses the existing generation-bound
+coordinator retry() with its retained exact snapshot (including pending
+correspondences and Undo/Redo), rather than resetting or replacing the editor.
+List metadata is refreshed on acknowledgment; stale unsaved warnings are
+cleared and successful/conflict-fork saves are reported explicitly.
+Save errors leave the latest checkpoint recoverable; controls are disabled
+during the explicit retry. Node regressions cover the action contract and
+failed-write/retry persistence. Full browser recovery qualification remains
+8F.7p.9; this is not an acceptance claim.
+
 ## Calibration Projects card and inspector sizing correction (#23)
 
 Card-level info buttons now have explicit 24px dimensions and are styled only

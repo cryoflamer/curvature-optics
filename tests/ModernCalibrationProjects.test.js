@@ -1087,3 +1087,42 @@ test('Calibration card and inspector layout stays compact and scoped to Calibrat
   assert.match(css,/\.modern-calibration-project-inspector \.modern-history-inspector-row strong\{/);
   assert.match(editor,/if\(entry\.resultCount>0\)detail\(/);
 });
+
+test('Calibration Projects exposes generation-safe Save now / Retry save without discarding the editor',()=>{
+  const fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const source=fs.readFileSync(path.join(root,'src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  const persistence=require('../src/ui/modern/ModernCalibrationProjectPersistence');
+  assert.match(html,/id="ModernCalibrationProjectsSave" hidden disabled/);
+  assert.match(source,/projectsSave=\$\('ModernCalibrationProjectsSave'\)/);
+  assert.match(source,/projectsSave\.disabled=projectListBusy\|\|!save\?\.unsaved\|\|save\.pending>0/);
+  assert.match(source,/projectsSave\.textContent=save\?\.pending>0\?'Saving…':save\?\.error\?'Retry save':'Save now'/);
+  assert.match(source,/projectsSave\.onclick=\(\)=>void saveActiveFromProjects\(\)/);
+  assert.match(source,/const outcome=await session\.retry\(\)/);
+  assert.match(source,/await refreshProjectList\(\)/);
+  assert.match(source,/Save failed: /);
+  assert.match(source,/Calibration Project saved in this browser/);
+  assert.match(css,/#ModernCalibrationProjectsSave\[hidden\]/);
+  assert.equal(typeof persistence.create,'function');
+});
+
+test('Explicit retry of a failed project save keeps work and clears warning after acknowledgement',async()=>{
+  const db=memoryIndexedDB(),start=project(A);
+  await store.create(db,start);
+  const {session}=persistenceSession(db);
+  session.bind(start);
+  const draft=legacyDraft();draft.view.x=137;
+  session.mark(draft,inlineState(draft));
+  db.failMutation(store.SUMMARIES,'put');
+  await assert.rejects(session.save(),/Injected transaction failure/);
+  assert.equal(session.state().pending,0);
+  assert.equal(session.state().unsaved,true);
+  assert.ok(session.state().error);
+  const result=await session.retry();
+  assert.equal(result.status,'updated');
+  assert.equal(session.state().error,null);
+  assert.equal(session.state().unsaved,false);
+  assert.equal(session.state().pending,0);
+  assert.equal((await store.get(db,A)).checkpoint.payload.draft.view.x,137);
+});

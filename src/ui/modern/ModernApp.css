@@ -1663,3 +1663,8 @@ button{cursor:pointer}
   .modern-calibration-project-card{flex-basis:220px}
   .modern-history-inspector.modern-calibration-project-inspector{padding:10px}
 }
+
+/* Explicit recovery for unsaved Calibration Project checkpoints. */
+#ModernCalibrationProjectsSave[hidden]{display:none!important}
+#ModernCalibrationProjectsSave:not(:disabled){font-weight:650;border-color:#5b99cc;background:#e5f3ff}
+#ModernCalibrationProjectsSave:disabled{opacity:.65;cursor:default}
