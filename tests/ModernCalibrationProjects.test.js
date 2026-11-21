@@ -831,7 +831,7 @@ test('Calibration Projects library reads only compact summaries and opens throug
   assert.match(source,/env\.sessionStorage\?\.setItem\(LAST_PROJECT_KEY,outcome\.project\.id\)/);
   assert.doesNotMatch(source.slice(source.indexOf('function projectRow(entry)'),
     source.indexOf('function renderProjects()')),/record\.original|dataUrl|createObjectURL/);
-  assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle'\)/);
+  assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'\)/);
   assert.match(source,/path\.includes\(projectsPanel\)\|\|path\.includes\(projectsToggle\)/);
 });
 

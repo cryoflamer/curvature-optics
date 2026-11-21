@@ -781,6 +781,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.locator('#ModernPhotoCalibrationOpen').click()
             workspace.locator('#ModernCalibrationProjectsToggle').click()
             expect(panel).to_be_visible()
+        for selected in [a,b]:
+            expect(panel.locator('[data-calibration-project-id="'+selected+'"]')).to_contain_text(
+                '1 linked archived result',timeout=30000)
         links=self.page.evaluate("""async ids => {
             const projects=CurvatureModernCalibrationProjectStore;
             const archive=CurvatureModernCalibrationResultArchive;

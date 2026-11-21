@@ -1,3 +1,13 @@
+## 8F.7p.8h — Project-linked Apply UI qualification completed (#14)
+
+Chromium shard 0 on 8F.7p.8g passed the two-project archived Apply,
+verified photo reuse, non-cascading deletion and reload flow. The
+existing source-inventory Node assertion still matched the old project
+panel/toggle-only closest() selector, so it is now updated to include
+the intentionally excluded Apply button. The same browser regression
+also verifies the compact Project cards' linked result count, not just
+IndexedDB records. Full CI must qualify this final test-only correction.
+
 ## 8F.7p.8g — Apply click autosave race prevented (#14)
 
 The full-browser two-project flow linked the first archived result but left
