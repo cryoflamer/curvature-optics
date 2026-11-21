@@ -80,6 +80,60 @@ not merely its size or the presence of an Issue number.
 - Project field setup, issue import, label taxonomy, and populated execution
   ranks are distinct steps: verify each before reporting it complete.
 
+## GitHub synchronization after work
+
+After **each implementation stage or planning change**, check whether the
+corresponding GitHub Issues and Project #1 need synchronization. Do not wait
+until the entire multi-stage Issue is complete.
+
+**Before implementation:**
+- Read the current rules and handoff, inspect the actual branch/HEAD, relevant
+  commits, Issue acceptance criteria, dependencies, labels, CI and source.
+- Check the Issue's single `priority:*` and `type:*` labels, applicable
+  `workflow:*` labels, Project `Status`, and `Execution Order`.
+- Once implementation actually starts, set Project `Status = In Progress`.
+  Do not mark planning/discussion alone as implementation.
+
+**After each stage:**
+- Verify the actual commit on `main`, targeted test results, relevant GitHub
+  Actions runs and all applicable acceptance gates. Record what remains
+  unverified, especially manual browser and scientific/physical checks.
+- Update the Issue with completed steps, exact commit and test/CI evidence,
+  limitations, remaining acceptance work and the next action. Keep it open if
+  implementation or acceptance is incomplete.
+- Set `Status = Done` and close the Issue **only after all acceptance criteria
+  are confirmed**. A commit or green automated tests alone are insufficient.
+- Reassess dependent Issues, `workflow:blocked`, `workflow:deferred`,
+  `workflow:needs-decision`, and the agreed execution queue. Remove stale
+  blockers when evidence supports it; never mechanically renumber the queue.
+- Update `PROJECT_STATE.md` only if the short resumption context materially
+  changed; do not duplicate Issue backlogs or create a commit diary.
+
+**When direct GitHub/Project updates are unavailable:**
+- Generate a ready-to-run, task-specific Bash script for the user's WSL
+  environment using `gh`. Include **only outstanding operations**; do not
+  repeat mutations already confirmed through connected tools.
+- Discover live Project, field, and item IDs using `gh project view`,
+  `gh project field-list`, and `gh project item-list`. Never invent IDs,
+  assume cached IDs remain valid, or use unsupported `gh project item-edit`
+  flags. Resolve Issue-to-item identity before modifying Project fields.
+- Preserve unrelated fields and labels. Fail clearly on missing IDs,
+  ambiguous matches, permission errors, or command failures; avoid partial
+  silent success. Print intended changes and reread affected values afterward.
+- Do not automatically close Issues without confirmed acceptance; do not
+  reorder `Execution Order` without accounting for dependencies and user
+  agreement. Ask for the user's actual `gh` output to confirm changes.
+
+**Final report after each stage:**
+1. State exactly what changed and identify the verified commit.
+2. List tests/CI/acceptance checks performed, failed, skipped or outstanding.
+3. Identify GitHub Issue and Project changes confirmed by API or `gh` output.
+4. State remaining synchronization work and provide the `gh` script when
+   direct updates could not be completed.
+
+Never report GitHub synchronization as complete without confirmation from
+the API or the user's actual command output.
+
 ## Git policy — one permanent branch, no PRs
 
 - **`main` is the only permanent development branch.** Normal authorized
