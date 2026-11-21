@@ -560,3 +560,36 @@ test('durable backup absorbs older page checkpoints even with changed save metad
   assert.equal(backups.length,1);
   assert.equal(backups[0].workspaces[0].checkpoint.draft.name,'Distinct unsent edits');
 });
+
+test('replayed stale project conflicts reuse the durable draft instead of growing after every F5',()=>{
+  // Browser evidence from #24: same project stays active, while each reload
+  // previously appended a draft_* ID with the identical old savedAt.
+  const cp=(name,when)=>autosave.checkpoint({
+    draft:studio.edit(studio.blank(),'name',name),selectedKey:null,
+    quality:'auto',prepared:false,positionMs:0,
+    libraryId:'saved',libraryRevision:40},when);
+  const base=autosave.collection('project_saved',cp('Initial revision',100),100);
+  const stale=autosave.collection('project_saved',cp('Unsent revision',150),150);
+  let durable=autosave.collection('project_saved',cp('Current project',300),300);
+  let created=0;
+  const crypto={randomUUID:()=>String(++created).padStart(32,'0')};
+  let recoveryId=null;
+  for(let reload=0;reload<10;reload++){
+    const result=autosave.reconcileCollection(stale,base,durable,crypto);
+    durable=result.collection;
+    const copies=durable.workspaces.filter(e=>e.id.startsWith('draft_'));
+    assert.equal(copies.length,1,'F5 '+reload+' must not append an identical recovery draft');
+    if(recoveryId===null)recoveryId=copies[0].id;
+    assert.equal(copies[0].id,recoveryId);
+    assert.equal(copies[0].checkpoint.savedAt,150);
+    assert.equal(copies[0].checkpoint.draft.name,'Unsent revision');
+    assert.equal(durable.workspaces.find(e=>e.id==='project_saved').checkpoint.draft.name,
+      'Current project','the named project must remain unchanged');
+  }
+  assert.equal(created,1,'only the first conflict needs a recovery ID');
+  const another=autosave.collection('project_saved',cp('Different unsent revision',175),175);
+  const independent=autosave.reconcileCollection(another,base,durable,crypto);
+  assert.equal(independent.collection.workspaces.filter(e=>e.id.startsWith('draft_')).length,2,
+    'distinct conflicting edits must still be protected as a separate draft');
+  assert.equal(created,2);
+});
