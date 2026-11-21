@@ -1,3 +1,16 @@
+## Calibration Projects as inline collapsible panel
+
+Projects now uses a native details/summary panel above the calibration stages
+rather than a separate page. Editor controls remain visible when the panel
+is expanded. New/Import/Rename/Duplicate/Delete/Open preserve guarded
+behavior; successful Open/New collapses the panel.
+
+Open/closed state reuses the existing ModernApplicationPreferences
+workspace.calibrationView field (projects/editor), restored on F5 through
+normal workspace startup. Toggling never autosaves the project or creates
+another storage mechanism. Source-contract and browser tests updated.
+Fast CI only; Full CI remains manual.
+
 ## Full CI trigger policy and browser smoke registration (Calibration UX)
 
 Full CI was unintentionally triggered by pushes to the Chromium smoke file.

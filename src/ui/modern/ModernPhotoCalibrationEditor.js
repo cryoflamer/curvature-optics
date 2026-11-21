@@ -856,8 +856,8 @@
     // resolved lazily from the independent Reference Image Library, not from
     // the project checkpoint or from a second photo store.
     const projectsToggle=$('ModernCalibrationProjectsToggle'),
+      projectsDisclosure=$('ModernCalibrationProjectsDisclosure'),
       projectsPanel=$('ModernCalibrationProjectsPanel'),
-      projectsBack=$('ModernCalibrationProjectsBack'),
       projectsRefresh=$('ModernCalibrationProjectsRefresh'),
       projectsNew=$('ModernCalibrationProjectsNew'),
       projectsImport=$('ModernCalibrationProjectsImport'),
@@ -932,7 +932,6 @@
     }
     function projectsControls(){
       projectsToggle.setAttribute('aria-expanded',String(!projectsPanel.hidden));
-      projectsBack.disabled=projectListBusy;
       projectsRefresh.disabled=projectListBusy;
       projectsAdopt.disabled=projectListBusy;
       projectsNew.disabled=projectListBusy;
@@ -1043,13 +1042,18 @@
       }finally{if(token===projectListToken)projectsControls();}
     }
     function showProjectList(open){
-      if(projectListBusy)return;
+      if(projectListBusy){
+        projectsDisclosure.open=!projectsPanel.hidden;
+        return;
+      }
+      const changed=projectsPanel.hidden===open;
+      projectsDisclosure.open=open;
       projectsPanel.hidden=!open;
-      workspace.dataset.projectsList=open?'open':'closed';
       env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
       projectsControls();
+      if(!changed)return;
       if(open)void refreshProjectList();
-      else{++projectListToken;projectsToggle.focus();}
+      else ++projectListToken;
     }
     async function openFromProjects(id){
       if(projectListBusy)return;
@@ -1202,8 +1206,7 @@
       const file=projectsImportFile.files[0];
       if(file)void importAsNewFromProjects(file).finally(()=>{projectsImportFile.value='';});
     };
-    projectsToggle.onclick=()=>showProjectList(projectsPanel.hidden);
-    projectsBack.onclick=()=>showProjectList(false);
+    projectsDisclosure.addEventListener('toggle',()=>showProjectList(projectsDisclosure.open));
     projectsRefresh.onclick=()=>void refreshProjectList();
     projectsAdopt.onclick=()=>void adoptFromProjects();
     function persistenceSession(){
@@ -2345,9 +2348,9 @@
         // Apply owns an explicit durable checkpoint-before-archive barrier.
         // Its click must not queue a *second* project autosave while the
         // archive/link step is checking for pending generation-bound writes.
-        if(path.includes(projectsPanel)||path.includes(projectsToggle)||
-           path.includes(applyButton)||
-           e.target?.closest?.('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'))return;
+        if(path.includes(projectsDisclosure)||path.includes(projectsPanel)||
+           path.includes(projectsToggle)||path.includes(applyButton)||
+           e.target?.closest?.('#ModernCalibrationProjectsDisclosure, #ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'))return;
         persist();
       });
     syncFitControls();syncPairToolbar();

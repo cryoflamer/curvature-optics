@@ -1578,7 +1578,9 @@ button{cursor:pointer}
 
 /* Calibration Projects stays within the Photo Calibration workspace. */
 #ModernCalibrationProjectsPanel[hidden]{display:none!important}
-#ModernPhotoCalibration[data-projects-list=open] > :not(header):not(#ModernCalibrationProjectsPanel){display:none!important}
+.modern-calibration-projects-disclosure{margin:14px 0 18px}
+.modern-calibration-projects-disclosure > summary{cursor:pointer;font-weight:600}
+.modern-calibration-projects-disclosure > summary:focus-visible{outline:2px solid #2377ae;outline-offset:3px}
 .modern-calibration-projects-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 12px}
 .modern-calibration-projects-toolbar h2{flex:1 1 200px;margin:0}
 #ModernCalibrationProjectsStatus{min-height:1.4em;font-size:13px;color:#375c7b}

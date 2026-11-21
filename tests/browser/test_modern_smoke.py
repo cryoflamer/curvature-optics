@@ -640,7 +640,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         selected=workspace.locator('[data-project-active="true"]')
         expect(selected).to_have_count(1)
         expect(selected).to_contain_text('Active project')
-        workspace.locator('#ModernCalibrationProjectsBack').click()
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
         expect(panel).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
@@ -3648,12 +3648,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             'projects')
         self.page.reload(wait_until='load')
         expect(panel).to_be_visible(timeout=30000)
+        expect(workspace.locator('.modern-calibration-stages')).to_be_visible()
         expect(image).to_be_visible(timeout=30000)
         self.assertTrue(image.evaluate('(node) => node.complete && node.naturalWidth > 0'))
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""),None)
-        workspace.locator('#ModernCalibrationProjectsBack').click()
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
         expect(panel).to_be_hidden()
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernApplicationPreferences.read(localStorage).workspace.calibrationView"""),

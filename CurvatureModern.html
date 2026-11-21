@@ -165,15 +165,15 @@
     <script src="src/ui/modern/ModernAnimationPreviewGraph.js" data-animation-side="B"></script>
   </div>
   <section id="ModernPhotoCalibration" class="modern-photo-calibration" aria-labelledby="ModernCalibrationTitle" hidden>
-    <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · physical correspondences and optical fit</p></div><div class="modern-calibration-toolbar"><button type="button" id="ModernCalibrationProjectsToggle" aria-expanded="false" aria-controls="ModernCalibrationProjectsPanel">Projects</button><button type="button" id="ModernCalibrationClose">Back to Scene</button></div></header>
-    <section id="ModernCalibrationProjectsPanel" aria-label="Calibration Projects" hidden>
+    <header><div><h1 id="ModernCalibrationTitle">Photo Calibration</h1><p>Camera authoring · physical correspondences and optical fit</p></div><div class="modern-calibration-toolbar"><button type="button" id="ModernCalibrationClose">Back to Scene</button></div></header>
+    <details id="ModernCalibrationProjectsDisclosure" class="modern-calibration-disclosure modern-calibration-projects-disclosure">
+      <summary id="ModernCalibrationProjectsToggle" aria-expanded="false" aria-controls="ModernCalibrationProjectsPanel">Calibration Projects</summary>
+      <section id="ModernCalibrationProjectsPanel" aria-label="Saved Calibration Projects" hidden>
       <div class="modern-calibration-projects-toolbar">
-        <h2>Calibration Projects</h2>
         <button type="button" id="ModernCalibrationProjectsNew">New project</button>
         <button type="button" id="ModernCalibrationProjectsImport">Import as New</button>
         <input type="file" id="ModernCalibrationProjectsImportFile" accept=".json,application/json" hidden>
         <button type="button" id="ModernCalibrationProjectsRefresh">Refresh list</button>
-        <button type="button" id="ModernCalibrationProjectsBack">Back to editor</button>
       </div>
       <p>Saved Calibration Projects are independent editable drafts. Opening another project first saves the current work. Reference images and archived results are never deleted by this list.</p>
       <p id="ModernCalibrationProjectsStatus" role="status" aria-live="polite"></p>
@@ -182,7 +182,8 @@
         <button type="button" id="ModernCalibrationProjectsAdopt">Adopt existing draft</button>
       </div>
       <div id="ModernCalibrationProjectsList" class="modern-calibration-projects-list" aria-label="Saved calibration projects"></div>
-    </section>
+      </section>
+    </details>
     <nav class="modern-calibration-stages" aria-label="Photo calibration stages">
       <button type="button" data-calibration-stage="correspondences" aria-current="step">1 · Correspondences</button>
       <button type="button" data-calibration-stage="calibration">2 · Calibration</button>

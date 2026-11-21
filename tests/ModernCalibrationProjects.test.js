@@ -818,8 +818,8 @@ test('Calibration Projects library reads only compact summaries and opens throug
   const root=path.resolve(__dirname,'..');
   const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   const source=fs.readFileSync(path.join(root,'src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
-  for(const id of ['ModernCalibrationProjectsToggle','ModernCalibrationProjectsPanel',
-    'ModernCalibrationProjectsRefresh','ModernCalibrationProjectsBack','ModernCalibrationProjectsStatus',
+  for(const id of ['ModernCalibrationProjectsToggle','ModernCalibrationProjectsDisclosure',
+    'ModernCalibrationProjectsPanel','ModernCalibrationProjectsRefresh','ModernCalibrationProjectsStatus',
     'ModernCalibrationProjectsList','ModernCalibrationProjectsAdopt','ModernCalibrationProjectsLegacy'])
     assert.match(html,new RegExp('id="'+id+'"'));
   assert.match(source,/storage\.list\(env\.indexedDB\)/);
@@ -831,8 +831,8 @@ test('Calibration Projects library reads only compact summaries and opens throug
   assert.match(source,/env\.sessionStorage\?\.setItem\(LAST_PROJECT_KEY,outcome\.project\.id\)/);
   assert.doesNotMatch(source.slice(source.indexOf('function projectRow(entry)'),
     source.indexOf('function renderProjects()')),/record\.original|dataUrl|createObjectURL/);
-  assert.match(source,/closest\?\.\('#ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'\)/);
-  assert.match(source,/path\.includes\(projectsPanel\)\|\|path\.includes\(projectsToggle\)/);
+  assert.match(source,/closest\?\.\('#ModernCalibrationProjectsDisclosure, #ModernCalibrationProjectsPanel, #ModernCalibrationProjectsToggle, #ModernCalibrationApplyScene'\)/);
+  assert.match(source,/path\.includes\(projectsDisclosure\)\|\|path\.includes\(projectsPanel\)/);
 });
 
 test('CRUD actions isolate new scene, duplicate checkpoint and import without editor mutation',async()=>{
@@ -1006,4 +1006,21 @@ test('Calibration Project library cards remain compact and fit diagnostics are s
   assert.match(css,/\.modern-calibration-project-preview\{[^}]*aspect-ratio:3\/2/);
   assert.match(editor,/Fit: '\+\(entry\.fitStatus\|\|'result'\)\+' · RMS '/);
   assert.match(editor,/fitLine\.title=entry\.fitStatus/);
+});
+
+test('Calibration Projects renders as a non-exclusive disclosure using existing workspace preference',()=>{
+  const fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'..');
+  const html=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
+  const source=fs.readFileSync(path.join(root,'src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const css=fs.readFileSync(path.join(root,'src/ui/modern/ModernApp.css'),'utf8');
+  const x=html.indexOf('<details id="ModernCalibrationProjectsDisclosure"'),
+    y=html.indexOf('<nav class="modern-calibration-stages"',x);
+  assert.ok(x>0&&y>x);
+  assert.match(html.slice(x,y),/<summary id="ModernCalibrationProjectsToggle"/);
+  assert.match(html.slice(x,y),/id="ModernCalibrationProjectsPanel"/);
+  assert.match(html.slice(x,y),/<\/details>/);
+  assert.doesNotMatch(html,/id="ModernCalibrationProjectsBack"/);
+  assert.doesNotMatch(css,/#ModernPhotoCalibration\[data-projects-list=open\] >/);
+  assert.match(source,/projectsDisclosure\.addEventListener\('toggle',\(\)=>showProjectList\(projectsDisclosure\.open\)\)/);
+  assert.match(source,/rememberCalibrationView\?\.\(open\?'projects':'editor'\)/);
 });
