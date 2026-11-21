@@ -1,3 +1,13 @@
+## Calibration Project card details inspector (#23)
+
+Saved Calibration Project cards now include the same explicit ⓘ button and shared
+read-only inspector controller used by Animation Library cards. The inspector
+shows an already verified reference-photo preview, correspondence count, fit
+status/RMS, linked archived result count, revision and update time. It does not
+activate, select, persist or modify the project. Card actions remain isolated;
+closing the Projects panel or refreshing the list dismisses stale details.
+A source contract regression was added to the Calibration Projects Node tests.
+
 ## Persistent deletion marker after repeated workspace recovery (#24)
 
 Recovery now retains tombstones when the deleted draft is already absent from the recovered entries. Previously, merging a durable deletion with older tab snapshots could drop the marker itself, permitting resurrection on a later reload. An added two-round recovery regression ensures tombstone persistence and no revived workspaces.

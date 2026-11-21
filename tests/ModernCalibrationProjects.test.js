@@ -1046,3 +1046,26 @@ test('Calibration Project library interaction matches Animation Library selectio
   assert.match(css,/\.modern-calibration-projects-list\{display:flex/);
   assert.match(studio,/modern-animation-library-card.is-selected|is-selected/);
 });
+
+
+test('Calibration project info uses the shared read-only per-card inspector without opening a project',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const source=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
+  const studio=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernAnimationStudioUI.js'),'utf8');
+  assert.match(studio,/inspector\.infoButton\(card,libraryPreviewEntry\(entry\),card,p\.name\)/);
+  assert.match(source,/CurvatureModernThumbnailPreview\?\.create\(\s*doc,projectsList,projectInspectorMarkup\)/);
+  assert.match(source,/projectInspector\.infoButton\(card,entry,card,entry\.title\)/);
+  assert.match(source,/row\('Correspondences',entry\.rowCount\)/);
+  assert.match(source,/row\('Fit status',entry\.fitStatus/);
+  assert.match(source,/row\('Fit RMS',entry\.fitRmsPx/);
+  assert.match(source,/row\('Linked archived results',entry\.resultCount\)/);
+  assert.match(source,/inner\.append\(projectPreview\(entry\.photo\)\)/);
+  assert.match(source,/projectInspector\?\.hide\(\)/);
+  const inspector=fs.readFileSync(path.resolve(__dirname,
+    '../src/ui/modern/ModernThumbnailPreview.js'),'utf8');
+  assert.match(inspector,/event\.stopPropagation\(\)/);
+  assert.doesNotMatch(source.slice(source.indexOf('function projectInspectorMarkup('),
+    source.indexOf('const projectInspector=') ),/openFromProjects\(|projectSession\.bind\(/);
+});

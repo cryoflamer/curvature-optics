@@ -890,6 +890,41 @@
     // In-memory previews are UI-only. An unavailable original is a visible
     // placeholder, not an error that prevents listing/opening the project.
     const projectPreviews=new Map();
+    // Reuse Animation Library's explicit card-details dialog. Read-only and
+    // backed only by already loaded project summaries and verified photo previews.
+    function projectInspectorMarkup(doc,entry){
+      const inner=doc.createElement('div');inner.className='modern-history-inspector-inner';
+      const title=doc.createElement('strong');title.className='modern-history-inspector-title';
+      title.textContent=entry.title;inner.append(title);
+      inner.append(projectPreview(entry.photo));
+      const columns=doc.createElement('div');columns.className='modern-history-inspector-columns';
+      const section=doc.createElement('section');section.className='modern-history-inspector-column';
+      const heading=doc.createElement('strong');heading.className='modern-history-inspector-heading';
+      heading.textContent='Calibration project';section.append(heading);
+      function row(label,value){
+        const line=doc.createElement('div');line.className='modern-history-inspector-row';
+        const name=doc.createElement('span');name.textContent=label;
+        const detail=doc.createElement('strong');detail.textContent=String(value);
+        line.append(name,detail);section.append(line);
+      }
+      row('Reference photo',entry.photo?entry.photo.width+' × '+entry.photo.height+' px':'None');
+      row('Correspondences',entry.rowCount);
+      row('Fit status',entry.fitStatus||'Not yet fitted');
+      row('Fit RMS',entry.fitRmsPx===null?'Not available':
+        Number(entry.fitRmsPx.toPrecision(3))+' px');
+      row('Linked archived results',entry.resultCount);
+      row('Revision',entry.revision);
+      row('Updated',projectStamp(entry.updatedAt));
+      if(entry.forkOf)row('Origin','Conflict copy');
+      columns.append(section);inner.append(columns);
+      const note=doc.createElement('p');note.className='modern-history-inspector-description';
+      note.textContent='Details only. Select a card to highlight it; Open or double-click to edit. '+
+        'Linked archived results remain separate from the project.';
+      inner.append(note);
+      return inner;
+    }
+    const projectInspector=env.CurvatureModernThumbnailPreview?.create(
+      doc,projectsList,projectInspectorMarkup)||null;
     function photoPreviewKey(photo){return photo?.sha256||null;}
     function projectPreview(photo){
       const key=photoPreviewKey(photo);
@@ -1065,9 +1100,11 @@
           if(type==='mousedown'||type==='dragstart')event.preventDefault();
         }));
       card.append(deletion);
+      if(projectInspector)projectInspector.infoButton(card,entry,card,entry.title);
       return card;
     }
     function renderProjects(){
+      projectInspector?.hide();
       projectsList.replaceChildren(...projectRows.map(projectRow));
       if(!projectRows.length){
         const empty=doc.createElement('p');
@@ -1113,6 +1150,7 @@
       const changed=projectsPanel.hidden===open;
       projectsDisclosure.open=open;
       projectsPanel.hidden=!open;
+      if(!open)projectInspector?.hide();
       env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
       projectsControls();
       if(!changed)return;
