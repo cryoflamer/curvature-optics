@@ -46,6 +46,37 @@ Routine discussion, exploratory analysis and simple answers do not require
 a pre-implementation recommendation. The level should reflect task risk,
 not merely its size or the presence of an Issue number.
 
+## GitHub planning — single Project and execution queue
+
+- **GitHub Issues remain the only authoritative task backlog.** Use
+  [Curvature Optics — Development Roadmap](https://github.com/users/cryoflamer/projects/1)
+  (user Project **#1**) as the **single planning view** of those same Issues,
+  not as a separate list of tasks. The Project is linked to this repository.
+- **Milestones** group workstreams/stages; they do not establish execution
+  priority. Some intentionally deferred Issues may have no milestone.
+- **Labels** describe independent dimensions, once defined and approved:
+  `priority:P0` through `priority:P3` (critical/blocker to optional),
+  `type:*` (kind of work), and `status:*` (readiness). Do not confuse
+  priority with readiness, or assume these labels have already been created.
+- Use native Issue `blocked by` / `blocking` dependencies where supported;
+  otherwise document explicit Issue links. Dependencies and acceptance gates
+  take precedence over a simple numeric ranking.
+- Project #1 has a numeric **`Execution Order`** field. Lower values mean
+  earlier recommended execution; prefer sparse ranks such as 10, 20, 30
+  so tasks can be inserted. Order is advisory and must account for priority,
+  dependencies, readiness, risk, and current project goals. Never infer it
+  from Issue number or milestone number alone.
+- Agree on initial labels, priorities, and execution ordering with the user
+  before bulk assignment. Maintain a practical near-term queue rather than
+  continually renumbering the entire backlog. Revisit the queue after
+  completed tasks or changed dependencies; explain material reordering.
+- Update the existing Project/Issues directly when connected tools permit.
+  If GitHub Projects fields or label definitions cannot be modified through
+  available tools, provide reproducible `gh` CLI/API commands for the user;
+  do not claim those changes were applied. Do not create another Project.
+- Project field setup, issue import, label taxonomy, and populated execution
+  ranks are distinct steps: verify each before reporting it complete.
+
 ## Git policy — one permanent branch, no PRs
 
 - **`main` is the only permanent development branch.** Normal authorized
