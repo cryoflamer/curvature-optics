@@ -2,21 +2,22 @@
 
 This file is the **single authoritative operating policy** for coding agents
 working on this repository. It applies to ChatGPT, Codex, and other agents.
-It is intentionally separate from project status (`PROJECT_STATE.md`) and
+Live project state comes from GitHub Issues, Project #1, commits, Actions and
 scientific documentation (`docs/`).
 
 ## First read and sources of truth
 
-1. Read this file and `PROJECT_STATE.md`.
-2. Check the actual Git branch/HEAD, `git status`, latest relevant commits,
-   and the GitHub Issue named in the user's task. Inspect current source,
-   tests and CI before trusting an old roadmap or handoff.
+1. Read this file from the current `main` branch.
+2. Reconstruct live state from actual Git branch/HEAD, `git status`, recent
+   relevant commits, GitHub Issues, Project #1 (`Status`, `Execution Order`),
+   current source/tests, and GitHub Actions. Never infer current progress,
+   next tasks or CI health from memory or an old snapshot.
 3. GitHub **Issues** are the authoritative backlog; **Milestones** group work.
    Keep task requirements, acceptance gates and dependencies in Issues.
    Do not create parallel TODO roadmaps, issue-numbered files or patch diaries.
 4. Durable architecture, numerical/physical assumptions, data formats,
    browser/Legacy boundaries and research results belong in `docs/`.
-   Implementation history belongs in Git, not `PROJECT_STATE.md`.
+   Implementation history belongs in Git, not a status snapshot.
 
 ## Reasoning level before implementation
 
@@ -87,8 +88,8 @@ corresponding GitHub Issues and Project #1 need synchronization. Do not wait
 until the entire multi-stage Issue is complete.
 
 **Before implementation:**
-- Read the current rules and handoff, inspect the actual branch/HEAD, relevant
-  commits, Issue acceptance criteria, dependencies, labels, CI and source.
+- Read current rules and inspect actual branch/HEAD, relevant commits, Issue
+  acceptance criteria, dependencies, labels, Project fields, CI and source.
 - Check the Issue's single `priority:*` and `type:*` labels, applicable
   `workflow:*` labels, Project `Status`, and `Execution Order`.
 - Once implementation actually starts, set Project `Status = In Progress`.
@@ -106,8 +107,9 @@ until the entire multi-stage Issue is complete.
 - Reassess dependent Issues, `workflow:blocked`, `workflow:deferred`,
   `workflow:needs-decision`, and the agreed execution queue. Remove stale
   blockers when evidence supports it; never mechanically renumber the queue.
-- Update `PROJECT_STATE.md` only if the short resumption context materially
-  changed; do not duplicate Issue backlogs or create a commit diary.
+- Record completed stages, acceptance evidence and remaining work in the
+  relevant Issue/Project; update `docs/` only for durable technical knowledge.
+  Do not maintain a parallel status handoff or commit diary.
 
 **When direct GitHub/Project updates are unavailable:**
 - **Use connected tools first.** Before offering a script, check the tools
@@ -216,8 +218,8 @@ criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
   user-acceptance requirement.
 - This repository currently works **without a Compatсh workflow**. Do not
   introduce format-patch ZIPs or an alternative Git delivery unless requested.
-- `PROJECT_STATE.md` stays a short handoff (current branch, baseline,
-  important verified limitations and pointers), never a duplicate backlog.
+- Do not recreate `PROJECT_STATE.md` or a replacement status snapshot.
+  Recover current progress from live GitHub and Git sources instead.
 
 ## Main entry points
 
@@ -227,5 +229,5 @@ criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
 - `docs/development.md` — targeted commands and CI workflow
 - `docs/modern-animation-contract.md` — project/keyframe invariants
 - `docs/reference-images.md` — original image and source semantics
-- `PROJECT_STATE.md` — brief current-state handoff
-- GitHub Issues and Milestones — priorities and pending acceptance
+- GitHub Issues, Milestones and Project #1 — priorities and pending acceptance
+- Git history and GitHub Actions — implementation and CI evidence
