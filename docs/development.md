@@ -1,6 +1,6 @@
 # Development and verification
 
-This is the workflow for the **post-#140.12.74 active branch**. Use [architecture](architecture.md) for module ownership, [physics](physics.md) for assumptions and [user guide](user-guide.md) for visible behavior. Historical patch notes in `docs/` are not a substitute for checking current source and the concise `PROJECT_STATE.md`.
+This is the workflow for the **post-#140.12.74 active branch**. Use [architecture](architecture.md) for module ownership, [physics](physics.md) for assumptions and [user guide](user-guide.md) for visible behavior. Historical patch notes in `docs/` are not a substitute for current source, GitHub Issues/Project #1, commits and Actions.
 
 ## Requirements and local workflow
 
@@ -62,8 +62,8 @@ directly to `main` **without Pull Requests**. Short-lived branches, including
 future feature/fix branches, require explicit approval. Stable, fully
 qualified baselines may be tagged deliberately; a tag is not proof of CI.
 
-Before changing source: inspect `AGENTS.md`, `PROJECT_STATE.md`, the current
-Issue, `git status`, HEAD, and relevant implementation and test boundaries.
+Before changing source: inspect current `AGENTS.md`, the Issue and Project
+status, `git status`, HEAD, relevant commits, CI and test boundaries.
 Never force-push or rewrite public history without explicit permission.
 
 **Default:** run the smallest meaningful subset of tests for changed modules.
