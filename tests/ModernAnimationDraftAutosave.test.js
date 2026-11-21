@@ -489,3 +489,42 @@ test('bulk tombstones block recovery forks from older tab snapshots and clean ob
   assert.equal(autosave.pruneSessionLocals(storage,cleaned,'tab_cccccccc'),2);
   assert.equal(storage.getItem(autosave.SESSION_LOCAL_PREFIX+'tab_aaaaaaaa'),null);
 });
+
+test('F5 reuses the tab recovery slot instead of creating a new independent draft',()=>{
+  const tabValues=new Map(),localValues=new Map();
+  const tabStorage={getItem:key=>tabValues.get(key)||null,
+    setItem:(key,value)=>tabValues.set(key,String(value))};
+  const localStorage={get length(){return localValues.size;},
+    key:i=>[...localValues.keys()][i]||null,
+    getItem:key=>localValues.get(key)||null,
+    setItem:(key,value)=>localValues.set(key,String(value)),
+    removeItem:key=>localValues.delete(key)};
+  let uuid=0;
+  const crypto={randomUUID:()=>String(++uuid).padStart(32,'0')};
+  const id=autosave.workspaceSessionId(tabStorage,crypto);
+  assert.equal(autosave.workspaceSessionId(tabStorage,crypto),id);
+  assert.equal(uuid,1,'reload must not allocate a second session ID');
+  const otherTab=autosave.workspaceSessionId({
+    getItem:()=>null,setItem:()=>{}},crypto);
+  assert.notEqual(otherTab,id,'another browser tab gets a distinct session');
+
+  const draft=(name,when)=>autosave.checkpoint({
+    draft:studio.edit(studio.blank(),'name',name),selectedKey:null,
+    quality:'auto',prepared:false,positionMs:0},when);
+  const initial=autosave.collection('draft_original',draft('First edit',100),100);
+  let durable=initial;
+  for(let reload=0;reload<8;reload++){
+    // F5 starts another page instance but shares tab-scoped sessionStorage.
+    const resumed=autosave.workspaceSessionId(tabStorage,crypto);
+    assert.equal(resumed,id);
+    const current=autosave.collection('draft_original',
+      draft('Edit '+reload,200+reload),200+reload);
+    autosave.writeSessionLocal(localStorage,current,resumed);
+    const recovered=autosave.combineCollections([
+      durable,...autosave.readSessionLocals(localStorage)]);
+    assert.equal(recovered.workspaces.length,1,
+      'reload '+reload+' must not fork the current tab into an extra draft');
+    assert.equal(recovered.workspaces[0].id,'draft_original');
+    durable=recovered;
+  }
+});
