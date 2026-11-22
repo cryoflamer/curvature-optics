@@ -8627,8 +8627,9 @@
       var allowStudioRoute=!!initialStudioRoute&&!persistence.explicitUrl&&
         !['scene','compare','demos'].includes(explicitMode)&&
         !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='images')&&
-        !(workspaceState.mode==='calibration'&&
-          !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='animation'));
+        // A retained Studio subview is not a top-level workspace choice.
+        // The explicit workspace preference takes precedence on F5.
+        workspaceState.mode!=='calibration';
       var startupMode=applicationPreferences&&applicationPreferences.startupWorkspace?
         applicationPreferences.startupWorkspace(workspaceState.mode,state.mode,explicitMode,
           persistence.explicitUrl,historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]):
