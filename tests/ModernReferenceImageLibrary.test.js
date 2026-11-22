@@ -612,3 +612,35 @@ test('Where used explicitly describes reachable archived summaries and unreachab
   assert.match(report.note,/external exports/);
   assert.match(report.note,/never authorize deletion/);
 });
+
+test('Where used flags corrupt or inaccessible local recovery backups as incomplete',async()=>{
+  const imgId='local',identity={version:1,sha256:'f'.repeat(64),width:8,height:9};
+  const keys=new Map([
+    ['curvature-modern-animation-workspaces-v2','{invalid json'],
+    ['curvature-modern-animation-workspaces-v2-session-tab_broken','{also invalid']
+  ]);
+  const storage={get length(){return keys.size;},
+    key:index=>[...keys.keys()][index]||null,
+    getItem:key=>keys.has(key)?keys.get(key):null};
+  const env={indexedDB:{},localStorage:storage,
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{
+      COLLECTION_KEY:'curvature-modern-animation-workspaces-v2',
+      SESSION_LOCAL_PREFIX:'curvature-modern-animation-workspaces-v2-session-',
+      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+    },
+    CurvatureModernReferenceImageImport:{identify:async()=>identity}};
+  const found=await usageGraph.discover(env,{id:imgId,record:{}});
+  assert.equal(found.count,0);
+  assert.equal(found.complete,false);
+  assert.match(found.unavailable.join('; '),/unreadable collection backup/);
+  assert.match(found.unavailable.join('; '),/1 unreadable session backup/);
+  const inaccessible={...env,localStorage:{
+    getItem(){throw Error('Storage access denied');},key(){return null;},length:1
+  }};
+  const denied=await usageGraph.discover(inaccessible,{id:imgId,record:{}});
+  assert.equal(denied.complete,false);
+  assert.match(denied.unavailable.join('; '),/Storage access denied/);
+});

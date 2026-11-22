@@ -380,8 +380,10 @@ operation. Neither path silently imports or replaces original bytes.
 **Honest coverage and deletion safety:** the inspector only reports discoverable
 local records. It cannot authoritatively prove the absence of references in
 other browsers, unreachable tabs, portable files, exported archives, stale
-Undo/Redo records or inaccessible stores. Failed reads are reported as
-**incomplete**; they are never interpreted as an empty list. Recoverable
+Undo/Redo records or inaccessible stores. Failed reads, inaccessible localStorage and malformed retained recovery
+snapshots are reported as **incomplete**; they are never interpreted as an
+empty list. Recovery helpers may skip unreadable backups to let the editor
+load, but the inspector counts skipped slots and does not claim full coverage. Recoverable
 Storyboard links use guarded draft switching **only if** the corresponding
 workspace still exists in the active local recovery collection; inaccessible
 or foreign-tab drafts report a navigation error rather than reconstructing a

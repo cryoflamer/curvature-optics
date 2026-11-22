@@ -3304,6 +3304,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_url_import_invalid_sources_fail_without_creating_originals(self):
+        self.open_modern()
+        gallery=self.open_image_library()
+        field=gallery.get_by_label('Image URL')
+        submit=gallery.get_by_role('button',name='Import URL')
+        field.fill('https://user:password@images.example.test/photo.png')
+        submit.click()
+        expect(gallery.get_by_role('status')).to_contain_text(
+            'HTTP(S) image URL without credentials')
+        self.page.evaluate("""() => {
+            const original=window.fetch.bind(window);
+            window.fetch=(url,opts)=>{
+                if(url==='https://images.example.test/missing.png')
+                    return Promise.resolve(new Response('Missing',{status:404}));
+                if(url==='https://images.example.test/text.png')
+                    return Promise.resolve(new Response('Not an image',{status:200,
+                        headers:{'Content-Type':'text/plain'}}));
+                if(url==='https://images.example.test/denied.png')
+                    return Promise.reject(new TypeError('Browser fetch blocked'));
+                return original(url,opts);
+            };
+        }""")
+        field.fill('https://images.example.test/missing.png')
+        submit.click()
+        expect(gallery.get_by_role('status')).to_contain_text('HTTP 404')
+        field.fill('https://images.example.test/text.png')
+        submit.click()
+        expect(gallery.get_by_role('status')).to_contain_text('Reference Image Library:')
+        field.fill('https://images.example.test/denied.png')
+        submit.click()
+        expect(gallery.get_by_role('status')).to_contain_text('Browser fetch blocked')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),0)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_image_library_direct_url_import_reuses_verified_original(self):
         self.open_modern()
         self.open_image_library()
@@ -3554,6 +3590,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(links).to_contain_text('Reference photographs (1)')
         self.assertEqual(self.page.evaluate("""async () =>
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
+        # Opening the top-level Library directly is not a return flow.
+        direct=self.open_image_library()
+        expect(direct.get_by_role('button',name='Return to Storyboard')).to_be_hidden()
+        expect(direct.get_by_role('button',name='Return to Calibration')).to_be_hidden()
+        self.page.locator('#ModernAnimationTab').click()
+        expect(editor).to_be_visible()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_image_library_where_used_saved_animation_and_working_draft(self):

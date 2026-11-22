@@ -113,10 +113,26 @@
         v=>{sources.drafts=v?v.workspaces.map(function(w){return {...w,source:'recoverable'};}):[];})
     ]);
     try{
-      var autosave=env.CurvatureModernAnimationDraftAutosave;
+      var autosave=env.CurvatureModernAnimationDraftAutosave,storage=env.localStorage;
       if(autosave){
-        var local=autosave.readCollectionLocal(env.localStorage);
-        var sessions=autosave.readSessionLocals(env.localStorage);
+        if(!storage||typeof storage.getItem!=='function'||typeof storage.key!=='function')
+          throw Error('Browser localStorage unavailable; session backups cannot be inspected');
+        var local=autosave.readCollectionLocal(storage);
+        // Recovery helpers intentionally skip corrupt backups so the app can
+        // load. The usage inspector must not turn skipped records into a
+        // misleading statement of complete coverage.
+        if(storage.getItem(autosave.COLLECTION_KEY)!==null&&!local)
+          failures.push('Local workspace recovery: unreadable collection backup');
+        var sessions=autosave.readSessionLocals(storage),slots=0;
+        if(!Number.isSafeInteger(storage.length))throw Error('Cannot enumerate local recovery backups');
+        for(var si=0;si<storage.length;si++){
+          var backupKey=storage.key(si);
+          if(typeof backupKey==='string'&&
+             backupKey.startsWith(autosave.SESSION_LOCAL_PREFIX))slots++;
+        }
+        if(slots>sessions.length)
+          failures.push('Local workspace recovery: '+(slots-sessions.length)+
+            ' unreadable session backup'+(slots-sessions.length===1?'':'s'));
         var all=[...sources.drafts];
         [local,...sessions].filter(Boolean).forEach(function(collection){
           collection.workspaces.forEach(function(item){
@@ -128,7 +144,7 @@
           });
         });
         sources.drafts=all;
-      }
+      }else failures.push('Local workspace recovery: backup reader unavailable');
     }catch(error){failures.push('Local workspace recovery: '+error.message);}
     try{
       sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;
