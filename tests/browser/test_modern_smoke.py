@@ -4351,6 +4351,177 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([x for x in self.console if x.startswith('PAGE ERROR:')],
                          self.console)
 
+    def test_calibration_project_missing_original_rejects_open_and_restores_after_reimport(self):
+        # Simulate external damage to the image DB, not the application's
+        # protected (non-deleting) Library API. Opening the damaged project
+        # must fail closed while the other project's editor and portable
+        # export remain intact. Re-ingesting the exact original restores it.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');
+            canvas.width=1176;canvas.height=791;
+            const context=canvas.getContext('2d');
+            context.fillStyle='#2a578b';
+            context.fillRect(0,0,canvas.width,canvas.height);
+            context.fillStyle='#f8b94f';
+            context.fillRect(50,65,165,120);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Unrelated intact photo.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        second['observations']=second['observations'][:-1]
+        toggle.click()
+        for count,(filename,data) in enumerate(
+                [('missing-original-a.json',first),('intact-original-b.json',second)],start=1):
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                count,timeout=30000)
+        projects=self.page.evaluate("""async () => {
+            const store=CurvatureModernCalibrationProjectStore;
+            const summaries=await store.list(indexedDB);
+            return Promise.all(summaries.map(async item=>{
+                const p=await store.get(indexedDB,item.id);
+                return {id:p.id,sha:p.photo.identity.sha256,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }));
+        }""")
+        self.assertEqual(len(projects),2)
+        by_count={p['count']:p for p in projects}
+        a,b=by_count[14],by_count[13]
+        self.assertNotEqual(a['sha'],b['sha'])
+
+        def stored():
+            return self.page.evaluate("""async ids => Promise.all(ids.map(async id=>{
+                const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {id,photo:row.photo,checkpoint:row.checkpoint,
+                    resultIds:row.resultIds};
+            }))""",[a['id'],b['id']])
+
+        def active():
+            return self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectPersistenceStatus()?.projectId""")
+
+        panel.locator('[data-calibration-project-id="'+b['id']+'"] '
+                      '[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id => {
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus();
+            return status?.projectId===id && status.pending===0 && !status.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        self.assertEqual(active(),b['id'])
+        baseline=stored()
+        before_export=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(before_export['observations'],second['observations'])
+        self.assertEqual(before_export['referenceImage']['original'],
+                         second['referenceImage']['original'])
+
+        # Bypass disabled user deletion deliberately to model a damaged or
+        # externally cleared IndexedDB photo row; leave project rows intact.
+        damage=self.page.evaluate("""async identity => {
+            const lib=CurvatureModernReferenceImageLibrary;
+            const found=await lib.findOriginal(indexedDB,identity,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            if(!found)throw Error('Fixture original was never stored');
+            const blocked=await lib.remove(indexedDB,found.id).then(
+                ()=>false,error=>/disabled/.test(error.message));
+            if(!blocked)throw Error('Public reference deletion unexpectedly permitted');
+            await new Promise((resolve,reject)=>{
+                const request=indexedDB.open(lib.DATABASE,1);
+                request.onerror=()=>reject(request.error);
+                request.onsuccess=()=>{
+                    const db=request.result,tx=db.transaction(lib.STORE,'readwrite');
+                    tx.objectStore(lib.STORE).delete(found.id);
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=()=>{db.close();reject(tx.error);};
+                    tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            const missing=await lib.findOriginal(indexedDB,identity,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            return {blocked,missing:missing===null,removed:found.id};
+        }""",baseline[0]['photo']['identity'])
+        self.assertEqual((damage['blocked'],damage['missing']),(True,True))
+        self.assertEqual(stored(),baseline,
+                         'missing Library original must not delete any project checkpoint')
+
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        toggle.click()
+        expect(panel).to_be_visible(timeout=30000)
+        damaged=panel.locator('[data-calibration-project-id="'+a['id']+'"]')
+        intact=panel.locator('[data-calibration-project-id="'+b['id']+'"]')
+        expect(damaged).to_contain_text('Photograph unavailable',timeout=30000)
+        expect(intact.locator('img[alt="Reference photograph"]')).to_be_visible(
+            timeout=30000)
+        intact.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id =>
+            CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus()?.projectId===id""",
+            arg=b['id'],timeout=30000)
+        toggle.click()
+        damaged=panel.locator('[data-calibration-project-id="'+a['id']+'"]')
+        damaged.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_visible(timeout=30000)
+        expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'Cannot open project: Verified original photograph unavailable',
+            timeout=30000)
+        expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'The current editor was retained.',timeout=30000)
+        self.assertEqual(active(),b['id'])
+        self.assertEqual(stored(),baseline,
+                         'failed activation must not rewrite either checkpoint')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()"""),
+            before_export)
+
+        # The unaffected B editor still allows a complete portable download.
+        toggle.click()
+        with self.page.expect_download() as exported:
+            workspace.locator('#ModernCalibrationExportExperiment').click()
+        with open(exported.value.path(),encoding='utf-8') as stream:
+            portable_b=json.load(stream)
+        self.assertEqual(portable_b,before_export)
+        toggle.click()
+        # Re-ingest only the known genuine original through the public
+        # verified content-addressed Library API. No synthetic replacement
+        # or mutation of A's project rows is permitted.
+        restored=self.page.evaluate("""async image => {
+            const lib=CurvatureModernReferenceImageLibrary;
+            const result=await lib.ensureOriginal(indexedDB,image,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            return {sha:(await CurvatureModernReferenceImageImport.identify(image,window)).sha256,
+                rowId:result.row.id};
+        }""",first['referenceImage'])
+        self.assertEqual(restored['sha'],a['sha'])
+        self.assertEqual(stored(),baseline)
+        panel.locator('[data-calibration-project-id="'+a['id']+'"] '
+                      '[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id =>
+            CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus()?.projectId===id""",
+            arg=a['id'],timeout=30000)
+        recovered=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(recovered['observations'],first['observations'])
+        self.assertEqual(recovered['referenceImage']['original'],
+                         first['referenceImage']['original'])
+        self.assertEqual(active(),a['id'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_projects_independent_photo_viewports_survive_reload(self):
         # Real wheel zoom must durably save each independently bound project
         # without requiring a project switch to flush its viewport.
