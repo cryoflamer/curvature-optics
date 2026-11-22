@@ -6613,5 +6613,61 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(len(second['entries']),len(first['entries']))
         self.assertEqual(second['frame']['sourceSnapshotId'],frame['sourceSnapshotId'])
 
+
+    def test_animation_duplicate_edit_adjacent_frame_cancel_and_apply(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        original=before['draft']['frames'][3]
+        original_height=original['experiment']['scene']['camera']['Height']
+        # Duplicate is an explicit Studio draft edit, and its editor is isolated.
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Duplicate and edit '+original['name']).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        duplicated=self.page.evaluate("""() => CurvatureModernApp.getAnimationStudioDraft().draft""")
+        self.assertEqual(len(duplicated['frames']),10)
+        new_frame=duplicated['frames'][4]
+        self.assertEqual(duplicated['frames'][3],original)
+        self.assertEqual(duplicated['frames'][5:],before['draft']['frames'][4:])
+        self.assertEqual(new_frame['sourceSnapshotId'],None)
+        self.assertEqual(new_frame['travelMs'],1000)
+        self.assertEqual(new_frame['holdMs'],0)
+        self.assertEqual(new_frame['experiment'],original['experiment'])
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        self.assertEqual(len(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames""")),10,
+            'Cancel discards temporary changes but retains the explicit duplicate')
+        studio.locator('.modern-studio-edit-undo').first.click()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(10)
+        studio.locator('.modern-studio-filmstrip-item').nth(4).get_by_role(
+            'button', name='Edit 05').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        self.page.locator('#ModernHeight').fill(str(original_height+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        after=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(after['draft']['frames'][4]['experiment']['scene']['camera']['Height'],
+                         original_height+3)
+        self.assertEqual(after['draft']['frames'][3],original)
+        self.assertEqual(after['draft']['frames'][5:],before['draft']['frames'][4:])
+        self.assertEqual(after['history'],before['history'],
+                         'duplicating and editing a frame never implicitly writes History')
+
 if __name__ == '__main__':
     unittest.main()
