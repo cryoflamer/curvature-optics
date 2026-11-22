@@ -711,12 +711,38 @@ class ModernBrowserSmoke(unittest.TestCase):
         with self.page.expect_download() as exported:
             workspace.locator('#ModernCalibrationExportExperiment').click()
         self.assertEqual(exported.value.suggested_filename,
-                         'calibration-Soundly regression raster.json')
+                         'calibration-Soundly regression raster.png.json')
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         opened=panel.locator('[data-calibration-project-id="'+imported_id+'"]')
         expect(opened).to_have_class(re.compile(r'is-selected'))
         expect(opened).to_have_attribute('data-project-active','true')
         expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_calibration_new_project_can_be_deleted_while_open(self):
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.once('dialog',lambda dialog:dialog.accept('Disposable calibration'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        active=panel.locator('[data-project-active="true"]')
+        expect(active).to_contain_text('Disposable calibration',timeout=30000)
+        expect(active.locator('[data-calibration-project-delete]')).to_be_enabled()
+        project_id=active.get_attribute('data-calibration-project-id')
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        with self.page.expect_navigation(wait_until='domcontentloaded'):
+            active.locator('[data-calibration-project-delete]').click()
+        self.page.wait_for_function(
+            "() => !!window.CurvatureModernPhotoCalibrationEditor",timeout=30000)
+        workspace=self.open_physical_calibration()
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        expect(panel.locator('[data-calibration-project-id="'+project_id+'"]')).to_have_count(0,timeout=30000)
+        self.assertEqual(self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)) === null""",
+            project_id),True)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_project_library_selection_is_separate_from_guarded_open(self):
