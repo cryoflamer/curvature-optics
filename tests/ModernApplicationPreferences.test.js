@@ -93,6 +93,20 @@ test('workspace preferences retain validated tabs, model, mode and independent s
     compareModel:'C',sections:{'scene.camera.animation':'true',
       'compare.camera.animation':1,'__proto__':true}}}).workspace,workspaceDefaults);
 });
+test('Image Library is a durable independent workspace mode, not an experiment mode',()=>{
+  assert.ok(preferences.WORKSPACE_MODES.includes('images'));
+  const db=storage();
+  preferences.write(db,{workspace:{mode:'images',sceneTab:'Surface',compareTab:'Atmosphere'}});
+  const saved=preferences.read(db).workspace;
+  assert.equal(saved.mode,'images');
+  assert.equal(saved.sceneTab,'Surface');
+  assert.equal(saved.compareTab,'Atmosphere');
+  assert.equal(preferences.startupWorkspace(saved.mode,'compare',null,false,null),'images');
+  // Explicit physical links still win when no deliberate history choice exists.
+  assert.equal(preferences.startupWorkspace(saved.mode,'compare','scene',false,null),'scene');
+  assert.equal(preferences.startupWorkspace(saved.mode,'compare','scene',false,'images'),'images');
+});
+
 test('pre-workspace v1 preferences migrate without overriding embedded experiment mode',()=>{
   const db=storage({[preferences.STORAGE_KEY]:JSON.stringify({version:1,
     opticalQuality:'auto',displayPanels:{diagnostics:true},navigation:{speed:100}})});
