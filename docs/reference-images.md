@@ -382,7 +382,11 @@ local records. It cannot authoritatively prove the absence of references in
 other browsers, unreachable tabs, portable files, exported archives, stale
 Undo/Redo records or inaccessible stores. Failed reads are reported as
 **incomplete**; they are never interpreted as an empty list. Recoverable
-draft links are shown without pretending a direct navigation action exists.
+Storyboard links use guarded draft switching **only if** the corresponding
+workspace still exists in the active local recovery collection; inaccessible
+or foreign-tab drafts report a navigation error rather than reconstructing a
+different project. Saved owner navigation verifies the current project
+revision and refuses stale links until the inspector is refreshed.
 **Zero known uses never authorizes deletion**; the physical-delete control
 remains disabled until the Stage 5 lifecycle safety contract exists.
 
