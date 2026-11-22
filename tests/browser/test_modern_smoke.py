@@ -4189,6 +4189,50 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before_height)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames.length'), 9)
 
+    def test_animation_keyframe_edit_back_forward_and_second_tab_isolation(self):
+        self.open_modern()
+        normal_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
+        normal_mode = self.page.evaluate('CurvatureModernApp.getMode()')
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        draft_before = self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+
+        # A fresh tab does not inherit any active editing session or transient
+        # camera/physical preview from this page.
+        other = self.context.new_page()
+        try:
+            response = other.goto(self.base_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            expect(other.locator('#ModernSceneTab')).to_be_visible()
+            expect(other.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            other.wait_for_function("""() =>
+                CurvatureModernApp.getWorkspaceMode() === 'scene' ||
+                CurvatureModernApp.getWorkspaceMode() === 'compare'""")
+            self.assertEqual(other.evaluate('CurvatureModernApp.getModel().Height'), normal_height)
+            self.assertEqual(other.evaluate('CurvatureModernApp.getMode()'), normal_mode)
+        finally:
+            other.close()
+
+        # Back consumes the destination Studio route, rather than leaving the
+        # live editor on a different page from the browser address.
+        self.page.go_back()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioView()'),
+                         'library')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), normal_height)
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""), draft_before)
+        self.page.go_forward()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
         self.open_animation()

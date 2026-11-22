@@ -7864,7 +7864,9 @@
     bindStudioViews();
     // History navigation never replays a library operation or replaces a draft.
     if(root.addEventListener)root.addEventListener('popstate',function(){
-      if(keyframeEditSession){cancelStudioKeyframeEdit();return;}
+      // Consume the browser's destination route after restoring the normal
+      // workspace; do not force the old Editor view over a Back navigation.
+      if(keyframeEditSession)cancelStudioKeyframeEdit();
       var view=studioViewsApi&&studioViewsApi.route&&
         studioViewsApi.route(root.location&&root.location.href);
       if(!animationWorkspaceOpen)return;
