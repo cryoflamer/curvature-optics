@@ -4219,8 +4219,16 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertGreater(position['right'], position['left'],
                            'narrow layout stacks Inspector after the timeline')
-        self.assertLessEqual(position['bodyWidth'], position['viewportWidth'] + 3,
-                             'no page-wide horizontal overflow on a narrow screen')
+        if position['bodyWidth'] > position['viewportWidth'] + 3:
+            overflowing = self.page.evaluate("""() => [...document.querySelectorAll('body *')]
+                .filter(e => { const r=e.getBoundingClientRect(); const s=getComputedStyle(e);
+                    return r.width > 0 && r.right > innerWidth + 3 &&
+                        s.display!=='none' && s.visibility!=='hidden'; })
+                .map(e => ({tag:e.tagName,id:e.id,cls:String(e.className).slice(0,90),
+                    right:Math.round(e.getBoundingClientRect().right),
+                    width:Math.round(e.getBoundingClientRect().width)}))
+                .sort((a,b) => b.right-a.right).slice(0,14)""")
+            self.fail('narrow page overflow: '+str(position)+' offenders='+str(overflowing))
 
         studio.get_by_role('button', name='Open saved experiments to select animation keyframes').click()
         picker = self.page.locator('.modern-studio-picker-head')
