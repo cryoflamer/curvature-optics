@@ -1188,7 +1188,7 @@
       return;
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens a read-only Scene/Compare keyframe session (Stage 1). Excluded frames cannot be previewed. Preview does not save a project; use Library for permanent saves.'));
+      'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens Scene/Compare with contract-locked controls. Apply updates that keyframe in your working draft only. Excluded frames cannot be previewed. Preview does not save a project; use Library for permanent saves.'));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
     undo.className+=' modern-studio-edit-undo';undo.disabled=!options.canUndo;
@@ -1362,7 +1362,7 @@
       if(!actions.canEditKeyframe||!actions.canEditKeyframe(frame.key)){
         editButton.disabled=true;
         editButton.title='Editing requires a supported, validated animation contract';
-      }else editButton.title='Open a temporary read-only keyframe preview (Stage 1)';
+      }else editButton.title='Open the contract-locked keyframe editor';
       frameActions.appendChild(editButton);
       item.appendChild(frameActions);
       if(inspector)inspector.infoButton(item,{name:frame.name,description:'Animation keyframe '+(i+1),

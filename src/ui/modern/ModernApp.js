@@ -582,7 +582,7 @@
   // Temporary Scene/Compare sessions are read-only until Stage 2 locks inputs.
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
   var keyframeEditReturnView=null,keyframeEditShellLocks=null;
-  var keyframeControlLocks=null,keyframeEditUIBaseline=null;
+  var keyframeControlLocks=null,keyframeEditUIBaseline=null,keyframeEditApplying=false;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -4094,11 +4094,63 @@
     if(keyframeControlLocks)keyframeControlLocks.release();
     keyframeControlLocks=null;
   }
+  // No durable draft is replaced until the live controller, the current
+  // project revision and the existing multi-tab CAS coordinator agree.
+  // A second tab's divergent edit must fork instead of overwriting it.
+  async function applyStudioKeyframeEdit(button,commit){
+    if(!keyframeEditSession||keyframeEditApplying)return;
+    var session=keyframeEditSession;
+    keyframeEditApplying=true;button.disabled=true;
+    try{
+      if(!validateKeyframePreview())
+        throw RangeError('The candidate is not compatible with this project contract');
+      var expected={projectId:studioWorkspaceId||'working-draft',
+        revision:String(studioDraftGeneration),frameKey:session.frameKey};
+      var first=session.prepareApply(expected);
+      if(!root.indexedDB||!studioDraftAutosave||!studioPersistenceApi)
+        throw Error('Durable Animation Studio storage is unavailable');
+      // A named project may have been saved by another tab even when no draft
+      // autosave has changed. Do not redirect a pending edit to that revision.
+      if(studioLibraryActive&&studioLibrary){
+        var remote=await studioLibrary.get(root.indexedDB,studioLibraryActive.id);
+        if(!remote||remote.updatedAt!==studioLibraryActive.updatedAt)
+          throw Error('The saved Animation Library project has changed in another tab');
+      }
+      if(keyframeEditSession!==session)return;
+      var durable=await persistStudioWorkspace({requireDurable:true});
+      if(!durable)
+        throw Error('The Animation Studio draft changed elsewhere or could not be saved durably');
+      if(keyframeEditSession!==session)return;
+      var second=session.prepareApply(expected);
+      if(JSON.stringify(first.experiment)!==JSON.stringify(second.experiment))
+        throw Error('The keyframe candidate changed during verification');
+      var changed=commit(second);
+      cancelStudioKeyframeEdit('replace');
+      var status=newUiEl('ModernAnimationStudioMessage');
+      if(status){
+        status.classList.remove('is-error');
+        status.textContent=changed?'Keyframe updated in the working draft. Undo and Redo are available. Save changes in Library to update the named project.':
+          'No keyframe changes to apply. Returned to Animation Studio.';
+        if(root.CurvatureModernStatusMessage)
+          root.CurvatureModernStatusMessage.decorate(status,'info');
+      }
+    }catch(error){
+      if(keyframeEditSession===session&&keyframeEditBanner){
+        var message=keyframeEditBanner.querySelector('p');
+        if(message)message.textContent='Apply blocked: '+error.message+
+          '. Your temporary changes are still visible; use Cancel & Return to discard them.';
+      }
+    }finally{
+      keyframeEditApplying=false;
+      if(keyframeEditSession===session)button.disabled=false;
+    }
+  }
   // The existing Scene/Compare renderer remains authoritative; locks map
   // contract channels to its existing inputs, never to a second editor.
   // inert. Stage 2 must implement the full contract-based control allowlist
   // before any editable input or Apply action is enabled.
-  function beginStudioKeyframeEdit(key){
+  function beginStudioKeyframeEdit(key,commit){
+    if(typeof commit!=='function')throw TypeError('Animation Studio commit callback is required');
     if(keyframeEditSession||!keyframeEditApi||!studioContractApi||!keyframeControlLocksApi||
        !studioWorkspaceReady||!persistence.ready||studioLibraryBusy)
       throw Error('Keyframe editor is not ready');
@@ -4123,15 +4175,16 @@
     var title=document.createElement('strong');
     title.textContent='Editing keyframe · '+frame.name;banner.appendChild(title);
     var explanation=document.createElement('p');
-    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. All other Scene/Compare controls, gestures, presets and History actions are locked. Apply is disabled until transactional keyframe saving is implemented.';
+    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. Other controls and gestures are locked. Apply updates only the selected working-draft keyframe; Library saves are separate.';
     banner.appendChild(explanation);
     var cancel=document.createElement('button');
     cancel.type='button';cancel.textContent='Cancel & Return';
     cancel.addEventListener('click',function(){cancelStudioKeyframeEdit('replace');});
     banner.appendChild(cancel);
     var apply=document.createElement('button');
-    apply.type='button';apply.textContent='Apply & Return';apply.disabled=true;
-    apply.title='Available after transactional keyframe Apply and conflict checks are implemented';
+    apply.type='button';apply.textContent='Apply & Return';
+    apply.title='Validate and update this keyframe only; History remains unchanged';
+    apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit);});
     banner.appendChild(apply);
     keyframeEditReturnView=studioView;
     keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
@@ -4360,7 +4413,10 @@
         catch(error){return false;}
       },
       editKeyframe:function(key){
-        try{beginStudioKeyframeEdit(key);}
+        try{beginStudioKeyframeEdit(key,function(prepared){
+          var next=studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment);
+          return update(next,{group:'frame:'+prepared.frameKey+':experiment',endGroup:true});
+        });}
         catch(error){report(error);}
       },
       focusTransition:function(index){

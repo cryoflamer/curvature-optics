@@ -4388,6 +4388,53 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
 
+
+    def test_animation_keyframe_apply_one_frame_undo_redo_and_no_history_write(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            physical: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        fourth=before['draft']['frames'][3]
+        prior_height=fourth['experiment']['scene']['camera']['Height']
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        banner.get_by_role('button',name='Apply & Return').is_enabled()
+        self.page.locator('#ModernHeight').fill(str(prior_height+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=prior_height+3)
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        after=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            physical: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(after['draft']['frames'][3]['experiment']['scene']['camera']['Height'],
+                         prior_height+3)
+        self.assertEqual(after['draft']['frames'][:3],before['draft']['frames'][:3])
+        self.assertEqual(after['draft']['frames'][4:],before['draft']['frames'][4:])
+        self.assertEqual(after['physical'],before['physical'])
+        self.assertEqual(after['history'],before['history'])
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            prior_height)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            prior_height+3)
+
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
         self.open_animation()
