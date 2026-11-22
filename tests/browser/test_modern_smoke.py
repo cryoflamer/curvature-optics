@@ -3221,9 +3221,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         panel.get_by_label('Image URL').fill('https://images.example.test/field-photo.png')
         panel.get_by_role('button',name='Import URL').click()
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
-        first=self.page.evaluate("""async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0]""")
-        self.assertEqual(first['record']['sourceUrl'],'https://images.example.test/field-photo.png')
-        self.assertEqual([first['record']['original']['width'],first['record']['original']['height']],[15,11])
+        first=self.page.evaluate("""async () => {
+            const rows=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            return (await CurvatureModernReferenceImageLibrary.get(indexedDB,rows[0].id)).record;
+        }""")
+        self.assertEqual(first['sourceUrl'],'https://images.example.test/field-photo.png')
+        self.assertEqual([first['original']['width'],first['record']['original']['height']],[15,11])
         panel.get_by_label('Image URL').fill('https://images.example.test/field-photo.png')
         panel.get_by_role('button',name='Import URL').click()
         expect(panel.get_by_role('status')).to_contain_text('Existing original reused')
