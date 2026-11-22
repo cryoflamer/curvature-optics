@@ -4320,13 +4320,27 @@ class ModernBrowserSmoke(unittest.TestCase):
                   && c.workspaces.some(w=>w.id.startsWith('draft_') &&
                       w.checkpoint.draft.name==='Stage 5 follow-up on recovered B');
             }""", timeout=30000)
-            recovered = other.evaluate("""async () => {
-                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
-                return c.workspaces.map(w=>w.checkpoint.draft.name);
+            # Inspect settled durable/session identities, not a transient
+            # successful read that a later queued writer could still undo.
+            other.wait_for_timeout(800)
+            after = other.evaluate("""async () => {
+                const api=CurvatureModernAnimationDraftAutosave;
+                const c=await api.readCollection(indexedDB);
+                const session=api.workspaceSessionId(sessionStorage,crypto,window);
+                const local=localStorage.getItem(api.SESSION_LOCAL_PREFIX+session);
+                const backup=local?JSON.parse(local):null;
+                return {
+                  active:c.activeId,savedAt:c.savedAt,
+                  workspaces:c.workspaces.map(w=>({id:w.id,name:w.checkpoint.draft.name,
+                      savedAt:w.checkpoint.savedAt})),
+                  localActive:backup?.activeId,
+                  localWorkspaces:backup?.workspaces.map(w=>({id:w.id,name:w.checkpoint.draft.name}))
+                };
             }""")
-            self.assertEqual(len(recovered), count_before)
-            self.assertEqual(recovered.count('Stage 5 protected change A'), 1)
-            self.assertEqual(recovered.count('Stage 5 follow-up on recovered B'), 1)
+            recovered = [w['name'] for w in after['workspaces']]
+            self.assertEqual(len(recovered), count_before, str(after))
+            self.assertEqual(recovered.count('Stage 5 protected change A'), 1, str(after))
+            self.assertEqual(recovered.count('Stage 5 follow-up on recovered B'), 1, str(after))
             self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
                              'Stage 5 protected change A')
             self.assertEqual(other_errors, [])
