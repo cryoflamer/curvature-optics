@@ -4291,6 +4291,103 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
 
+
+    def create_physical_keyframe_project(self, scope, channel, name):
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.get_by_text('New project', exact=True).click()
+        wizard = self.page.locator('#ModernAnimationProjectWizard')
+        wizard.get_by_role('button', name='Physics Transition — one physical channel changes; camera stays fixed').click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_role('button', name='Use current Scene/Compare as reference').click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_role('button', name=scope+' · '+channel, exact=True).click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_label('Include reference as first keyframe').check()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_label('Project name').fill(name)
+        wizard.get_by_role('button', name='Create project').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(1,timeout=30000)
+        studio.locator('.modern-studio-filmstrip-item').get_by_role('button',name='Edit ',exact=False).click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        return studio
+
+    def test_animation_keyframe_physical_scene_gradient_only(self):
+        self.open_modern()
+        self.page.locator('#ModernSettingsAtmosphere').click()
+        self.page.locator('#ModernAtmosphere').select_option('temperature-lapse')
+        self.open_animation()
+        self.create_physical_keyframe_project('scene','Temperature gradient','CI Scene Gradient')
+        expect(self.page.locator('#ModernTemperatureSceneGradient')).to_be_enabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        expect(self.page.locator('#ModernRadiusKm')).to_be_disabled()
+        initial = self.page.locator('#ModernTemperatureSceneGradient').input_value()
+        proposed = -5.0 if float(initial)!=-5.0 else -4.0
+        self.page.locator('#ModernTemperatureSceneGradient').fill(str(proposed))
+        self.page.locator('#ModernTemperatureSceneGradient').press('Tab')
+        self.page.wait_for_function("""p => Math.abs(
+            Number(document.getElementById('ModernTemperatureSceneGradient').value)-p)<0.001""",
+            arg=proposed)
+        # A numeric edit must not silently enable the unrelated surface controls.
+        expect(self.page.locator('#ModernRadiusKm')).to_be_disabled()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertFalse(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
+
+    def test_animation_keyframe_physical_compare_a_curvature_only(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('A','Earth curvature','CI Compare A curvature')
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabA')).to_be_disabled()
+        expect(self.page.locator('#ModernModelTabB')).to_be_disabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        expect(self.page.locator('#ModernTemperatureCompareGradient')).to_be_disabled()
+        prior = self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)!==value""",arg=prior['A'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+
+    def test_animation_keyframe_physical_compare_b_curvature_only(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('B','Earth curvature','CI Compare B curvature')
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        prior = self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==value""",arg=prior['B'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
         self.open_animation()
