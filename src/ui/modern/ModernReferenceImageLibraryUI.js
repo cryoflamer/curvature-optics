@@ -221,8 +221,8 @@
                   usageStatus.textContent='Cannot open use: '+error.message;
                 });
               });
-              open.setAttribute('aria-label','Open '+use.title+
-                (use.frameIndex?' frame '+use.frameIndex:''));
+              open.setAttribute('aria-label','Open '+use.type+' '+use.title+
+                (use.frameIndex?' frame '+use.frameIndex:'')+' · '+use.source);
             }
           });
         });
