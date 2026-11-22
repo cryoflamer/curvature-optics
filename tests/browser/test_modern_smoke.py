@@ -4021,21 +4021,35 @@ class ModernBrowserSmoke(unittest.TestCase):
                 row?.checkpoint.payload.draft.rows.length===count;
         }""",arg={'id':a['id'],'count':expected_counts[0]},timeout=30000)
 
+        stored=lambda: self.page.evaluate("""async ids => Promise.all(
+            ids.map(async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {id,revision:p.revision,sha:p.photo.identity.sha256,
+                    stage:p.checkpoint.payload.draft.stage,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }))""",[a['id'],b['id']])
+        before_reload=stored()
+        self.assertEqual([p['count'] for p in before_reload],expected_counts,
+                         'both checkpoint row counts must be durable before F5')
         self.page.reload(wait_until='load',timeout=30000)
         expect(workspace).to_be_visible(timeout=30000)
         self.assertIsNone(self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        after_reload=stored()
+        self.assertEqual(after_reload,before_reload,
+                         'IndexedDB rows must remain byte-logically unchanged by F5')
         for project,expected in [(b,state_b),(a,state_a)]:
             open_project(project)
-            self.assertEqual(live_state(),expected)
-            durable=self.page.evaluate("""async id => {
-                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
-                return {sha:p.photo.identity.sha256,
-                    stage:p.checkpoint.payload.draft.stage,
-                    count:p.checkpoint.payload.draft.rows.length};
-            }""",project['id'])
-            self.assertEqual(durable,{'sha':project['sha'],
-                'stage':expected['stage'],'count':expected['count']})
+            live=live_state()
+            durable=stored()
+            self.assertEqual({k:v for k,v in live.items() if k!='image'},
+                             {k:v for k,v in expected.items() if k!='image'},
+                             f'editor rehydration mismatch for {project["id"]}; durable={durable}')
+            self.assertEqual(live['image'],expected['image'],
+                             'project photo original must remain unchanged')
+            active=next(p for p in durable if p['id']==project['id'])
+            self.assertEqual((active['sha'],active['stage'],active['count']),
+                             (project['sha'],expected['stage'],expected['count']))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
 
