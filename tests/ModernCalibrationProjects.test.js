@@ -779,7 +779,7 @@ test('editor guards explicit switches and clean same-tab reload restoration',()=
   assert.match(source,/if\(projectSession\?\.project\(\)\)\{\s*if\(!fromPersist\)\{/);
   assert.match(source,/if\(!session\.project\(\)&&!cleanReload\)/);
   assert.match(source,/openCalibrationProject\(id,\{cleanReload:true\}\)/);
-  assert.match(source,/sessionStorage\?\.setItem\(RELOAD_PROJECT_KEY,s\.projectId\)/);
+  assert.match(source,/sessionStorage\?\.setItem\(RELOAD_PROJECT_KEY,state\.projectId\)/);
   assert.match(app,/\.resumeCleanProjectAfterReload\(\)/);
   assert.doesNotMatch(app,/\.openCalibrationProject\(/);
 });
