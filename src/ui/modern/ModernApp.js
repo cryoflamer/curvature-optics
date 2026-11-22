@@ -7883,6 +7883,11 @@
       }).then(function(){
         if(photoTab)photoTab.disabled=false;
         restoreWorkspace();
+        // Resume only the one-shot handoff explicitly requested by Delete.
+        // Ordinary F5 preserves the existing no-auto-activation policy.
+        return editor&&editor.resumeAfterDeletedProject&&editor.resumeAfterDeletedProject();
+      }).catch(function(error){
+        preferencesStatus('Calibration deletion handoff failed: '+error.message,true);
       });
       updateSnapshotSaveAction();
       resetHistoryBaseline();
