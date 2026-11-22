@@ -16,10 +16,10 @@
   if(typeof module==='object'&&module.exports)imagePicker=require('./ModernImagePicker');
   var refs=root.CurvatureModernAnimationPresentation;
   if(typeof module==='object'&&module.exports)refs=require('../../animation/ModernAnimationPresentation');
-  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs);
+  var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs,imagePicker);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationStudioUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs){
+}(typeof globalThis!=='undefined'?globalThis:this,function(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs,imagePicker){
   'use strict';
   function el(doc,tag,className,text){
     var node=doc.createElement(tag);if(className)node.className=className;
