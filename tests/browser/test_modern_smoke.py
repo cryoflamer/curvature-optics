@@ -3954,6 +3954,12 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
                 return s.projectId===id && s.pending===0 && !s.unsaved;
             }""",arg=project['id'],timeout=30000)
+            # The correspondence list and editing toolbar are disclosure
+            # panels; make them visible before clicking their real controls.
+            self.page.evaluate("""() => {
+                document.getElementById('ModernCalibrationPairList').open=true;
+                document.getElementById('ModernCalibrationManualPairs').open=true;
+            }""")
 
         def live_state():
             return self.page.evaluate("""() => {
