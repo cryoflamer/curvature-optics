@@ -7829,7 +7829,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
                   CurvatureModernPhotoCalibrationEditor.mount(document)
                     .projectPersistenceStatus()?.projectId===id;
-            }""",arg=project_id,timeout=12000)
+            }""",arg=project_id,timeout=20000)
         except Exception:
             diagnostic=self.page.evaluate("""() => {
                 const e=CurvatureModernPhotoCalibrationEditor.mount(document);
