@@ -3457,17 +3457,21 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(cards).to_have_count(9)
         self.page.wait_for_function('CurvatureModernApp.getBuiltInDemo() === null')
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
-        editor = self.page.locator('#ModernAnimationStudio .modern-studio-editor-details')
-        editor.locator('summary').click()
-        expect(editor).not_to_have_attribute('open', '')
+        editor = self.page.locator('#ModernAnimationStudio')
+        timeline = editor.locator('.modern-studio-filmstrip')
+        inspector = editor.locator('.modern-studio-inspector-pane')
+        expect(timeline).to_be_visible()
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        inspector.get_by_role('button', name='Inspect project settings').click()
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
         self.page.locator('#ModernAnimationViewPreview').click()
         cards.nth(2).click()
         expect(diag).to_contain_text('Rendered t=15.00s')
         self.page.locator('#ModernAnimationViewEditor').click()
-        expect(editor).not_to_have_attribute('open', '')
-        expect(editor.locator('.modern-studio-keyframe').nth(2)).to_have_attribute('aria-pressed', 'true')
-        editor.locator('summary').click()
-        name = self.page.locator('#ModernAnimationStudio').get_by_label('Project name')
+        expect(timeline).to_be_visible()
+        expect(timeline.locator('.modern-studio-keyframe').nth(2)).to_have_attribute('aria-pressed', 'true')
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        name = editor.get_by_label('Project name')
         name.fill('Soundly navigation check')
         name.press('Tab')
         self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() === null')
@@ -3911,6 +3915,51 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_editor_timeline_inspector_and_responsive_layout(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio = self.page.locator('#ModernAnimationStudio')
+        timeline = studio.locator('.modern-studio-timeline-pane')
+        strip = timeline.locator('.modern-studio-keyframe')
+        inspector = studio.locator('.modern-studio-inspector-pane')
+        expect(strip).to_have_count(9)
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        layout = self.page.evaluate("""() => {
+            const t=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const i=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {timelineTop:t.top,inspectorTop:i.top,timelineRight:t.right,inspectorLeft:i.left};
+        }""")
+        self.assertLess(abs(layout['timelineTop'] - layout['inspectorTop']), 12)
+        self.assertLessEqual(layout['timelineRight'], layout['inspectorLeft'])
+
+        selected_name = studio.get_by_label('Frame name')
+        selected_name.fill('Stage 3 editable keyframe')
+        inspector.get_by_role('button', name='Inspect project settings').click()
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        expect(timeline).to_be_visible()
+        studio.get_by_label('Project name').fill('Stage 3 project settings')
+        inspector.get_by_role('button', name='Inspect selected keyframe').click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 3 editable keyframe')
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getAnimationStudioDraft().draft.name"), 'Stage 3 project settings')
+
+        self.page.set_viewport_size({'width': 700, 'height': 850})
+        expect(strip).to_have_count(9)
+        narrow = self.page.evaluate("""() => {
+            const t=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const i=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {timelineTop:t.top,inspectorTop:i.top};
+        }""")
+        self.assertGreater(narrow['inspectorTop'], narrow['timelineTop'])
+        strip.nth(1).click()
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        expect(strip.nth(1)).to_have_attribute('aria-pressed', 'true')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
 
     def test_animation_studio_views_share_draft_and_playback(self):
         self.open_modern()
