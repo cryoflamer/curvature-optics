@@ -162,7 +162,8 @@
       if(use.type==='animation'){
         if(!env.CurvatureModernApp?.openImageUsageAnimation)
           throw Error('Guarded Animation navigation is unavailable');
-        await env.CurvatureModernApp.openImageUsageAnimation(use.ownerId,use.frameKey,use.revision);
+        await env.CurvatureModernApp.openImageUsageAnimation(
+          use.ownerId,use.frameKey,use.revision,use.frameIndex,selected&&selected.id);
       }else if(use.type==='calibration'){
         tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
         tab.click();
