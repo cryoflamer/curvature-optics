@@ -88,8 +88,19 @@
         syncReturnNavigation();
       }
     });
+    var returnToStoryboard=button('Return to Storyboard',toolbar,function(){
+      if(busy)return;
+      var tab=doc.getElementById('ModernAnimationViewEditor');
+      if(!tab)return;
+      tab.click();
+      if(tab.getAttribute('aria-selected')==='true'){
+        env.CurvatureImageLibraryReturnToStoryboard=false;
+        syncReturnNavigation();
+      }
+    });
     function syncReturnNavigation(){
       returnToCalibration.hidden=!env.CurvatureImageLibraryReturnToCalibration;
+      returnToStoryboard.hidden=!env.CurvatureImageLibraryReturnToStoryboard;
     }
     syncReturnNavigation();
     var backup=button('Download full backup',toolbar,function(){run(async function(){
@@ -160,7 +171,7 @@
       search.disabled=value;sourceFilter.disabled=value;kindFilter.disabled=value;
       backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;
       urlInput.disabled=value;addUrl.disabled=value;paste.disabled=value;
-      returnToCalibration.disabled=value;gallery.inert=value;
+      returnToCalibration.disabled=value;returnToStoryboard.disabled=value;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
