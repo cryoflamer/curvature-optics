@@ -178,3 +178,19 @@ test('strict cleanup rejects protected concurrent deletion',async()=>{
   await tick();h.waits[0].resolve(h.result({protectedDeletes:['draft_changed']}));
   assert.equal(await pending,false);
 });
+
+
+test('strict keyframe guard blocks remote drift without adopting a competing baseline',async()=>{
+  const h=harness();
+  const expected={id:'project_alpha',serializedDraft:'{"name":"original"}'};
+  const job=h.coordinator.persist({requireDurable:true,unchangedDraft:expected});
+  await tick();
+  assert.equal(h.actions.find(x=>x[0]==='merge').length,3);
+  h.waits[0].resolve(h.result({staleWorkspace:true}));
+  assert.equal(await job,false);
+  assert.equal(h.get().baseline.label,'baseline',
+    'blocked Apply does not acknowledge another tab as the current baseline');
+  assert.equal(h.get().collection.label,'local');
+  assert.equal(h.get().workspaceId,'project_alpha');
+  assert.equal(h.actions.some(x=>x[0]==='local backup'),false);
+});

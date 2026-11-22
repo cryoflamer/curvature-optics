@@ -17,6 +17,7 @@
     function persist(settings){
       var requireDurable=!!(settings&&settings.requireDurable);
       var current=options.getCollection(),atGeneration=options.getGeneration();
+      var unchangedDraft=settings&&settings.unchangedDraft||null;
       if(!current)return Promise.resolve(false);
       var indexedDB=options.indexedDB();
       if(!indexedDB)return Promise.resolve(!requireDurable&&!!options.localSaved());
@@ -24,7 +25,14 @@
       // baseline only when the queued operation starts (after earlier writes).
       var attempt=writeQueue.catch(function(){return false;}).then(function(){
         return autosave.writeCollectionMerged(indexedDB,current,
-          options.getBaseline(),options.crypto()).then(function(result){
+          options.getBaseline(),options.crypto(),unchangedDraft).then(function(result){
+          if(result.staleWorkspace){
+            // Do not replace this tab's optimistic baseline with the changed
+            // remote: the next ordinary edit must still fork instead of
+            // overwriting another tab's project.
+            options.status('Keyframe Apply blocked: the working project was changed in another tab.',true);
+            return false;
+          }
           options.setBaseline(result.collection);
           autosave.pruneSessionLocals(options.storage(),result.collection,options.sessionId());
           if(atGeneration===options.getGeneration()){

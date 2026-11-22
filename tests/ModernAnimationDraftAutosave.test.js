@@ -626,3 +626,27 @@ test('replayed stale project conflicts reuse the durable draft instead of growin
     'distinct conflicting edits must still be protected as a separate draft');
   assert.equal(created,2);
 });
+
+
+test('atomic unchanged-draft Apply guard rejects a stale remote while preserving its exact bytes',async()=>{
+  const db=memoryIndexedDB(),a=autosave.checkpoint({draft:studio.blank(),selectedKey:null,
+    quality:'fast',prepared:false,positionMs:0},2000);
+  const base=autosave.collection('draft_atomic_a',a,2000);
+  await autosave.writeCollection(db,base);
+  const updated=structuredClone(a);
+  updated.draft.name='Other-tab mutation';
+  updated.savedAt=3000;
+  const remote=autosave.withWorkspace(base,'draft_atomic_a',updated,3000);
+  await autosave.writeCollection(db,remote);
+  const guard={id:'draft_atomic_a',serializedDraft:JSON.stringify(a.draft)};
+  const result=await autosave.writeCollectionMerged(db,base,base,{randomUUID(){
+    return '11111111111144448888111111111111';}},guard);
+  assert.equal(result.staleWorkspace,true);
+  assert.equal(result.conflicts.length,0);
+  assert.deepEqual(await autosave.readCollection(db),remote,
+    'failed Apply may not write any changed or unchanged project payload');
+  const permitted=await autosave.writeCollectionMerged(db,remote,remote,{randomUUID(){
+    return '22222222222244448888222222222222';}},
+    {id:'draft_atomic_a',serializedDraft:JSON.stringify(updated.draft)});
+  assert.equal(permitted.staleWorkspace,undefined);
+});

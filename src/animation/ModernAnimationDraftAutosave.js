@@ -499,7 +499,11 @@
       workspaces:Array.from(entries.values(),function(e){return {id:e.id,checkpoint:e.checkpoint};}),
       removed:Array.from(removed,function(t){return {id:t[0],removedAt:t[1]};})});
   }
-  function writeCollectionMerged(indexedDB,staged,baseline,crypto){
+  // An Apply session carries the draft content observed at entry. Unlike a
+  // normal autosave, a no-op checkpoint must not acknowledge a newer remote
+  // draft and then apply an old keyframe to the still-open editor.
+  // Check inside the SAME readwrite transaction that reconciles the collection.
+  function writeCollectionMerged(indexedDB,staged,baseline,crypto,unchangedDraft){
     var next=normalizeCollection(staged),before=baseline?normalizeCollection(baseline):null;
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
@@ -518,8 +522,25 @@
           var read=store.get(COLLECTION_DB_KEY);
           read.onsuccess=function(){
             try{
-              result=reconcileCollection(next,before,
-                read.result==null?null:normalizeCollection(read.result),crypto);
+              var remote=read.result==null?null:normalizeCollection(read.result);
+              if(unchangedDraft){
+                if(!unchangedDraft||typeof unchangedDraft.id!=='string'||
+                   typeof unchangedDraft.serializedDraft!=='string')
+                  throw TypeError('Invalid keyframe Apply revision guard');
+                var row=remote&&remote.workspaces.find(function(item){
+                  return item.id===unchangedDraft.id;});
+                var prior=before&&before.workspaces.find(function(item){
+                  return item.id===unchangedDraft.id;});
+                if((row&&JSON.stringify(row.checkpoint.draft)!==unchangedDraft.serializedDraft)||
+                   (!row&&(prior||remote&&remote.removed&&
+                     remote.removed.some(function(item){return item.id===unchangedDraft.id;})))){
+                  // A blocked Apply is not a writer: leave the complete remote
+                  // collection and the protected drafts of other tabs intact.
+                  result={collection:remote,conflicts:[],protectedDeletes:[],staleWorkspace:true};
+                  return;
+                }
+              }
+              result=reconcileCollection(next,before,remote,crypto);
               store.put(result.collection,COLLECTION_DB_KEY);
             }catch(error){tx.abort();fail(error);}
           };

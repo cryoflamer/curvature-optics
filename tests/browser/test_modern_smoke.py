@@ -4517,6 +4517,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             banner=self.page.locator('#ModernKeyframeEditBanner')
             banner.get_by_role('button',name='Apply & Return').click()
             expect(banner).to_contain_text('Apply blocked',timeout=30000)
+            expect(banner).to_contain_text('changed in another tab')
             self.assertEqual(self.page.evaluate("""() =>
                 CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
                 unchanged)

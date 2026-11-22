@@ -583,6 +583,7 @@
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
   var keyframeEditReturnView=null,keyframeEditShellLocks=null;
   var keyframeControlLocks=null,keyframeEditUIBaseline=null,keyframeEditApplying=false;
+  var keyframeEditDraftAtEntry=null;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -4117,7 +4118,8 @@
           throw Error('The saved Animation Library project has changed in another tab');
       }
       if(keyframeEditSession!==session)return;
-      var durable=await persistStudioWorkspace({requireDurable:true});
+      var durable=await persistStudioWorkspace({requireDurable:true,
+        unchangedDraft:{id:session.projectId,serializedDraft:keyframeEditDraftAtEntry}});
       if(!durable)
         throw Error('The Animation Studio draft changed elsewhere or could not be saved durably');
       if(keyframeEditSession!==session)return;
@@ -4187,6 +4189,7 @@
     apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit);});
     banner.appendChild(apply);
     keyframeEditReturnView=studioView;
+    keyframeEditDraftAtEntry=JSON.stringify(studioDraft);
     keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:workspaceState.compareModel};
     keyframeEditSession=session;keyframeEditBanner=banner;
@@ -4213,6 +4216,7 @@
       applyExperiment(session.cancel());syncNumericInputs();syncCompareEditor();
       resetHistoryBaseline();setMode('animation',false);
       keyframeEditUIBaseline=null;keyframeEditReturnView=null;
+      keyframeEditDraftAtEntry=null;
       throw error;
     }finally{keyframeEditEntering=false;}
     return true;
@@ -4241,7 +4245,7 @@
     setMode('animation',false);
     setStudioView(keyframeEditReturnView||'editor',true,routeAction);
     renderAnimationStudio(studioHistoryEntries);
-    keyframeEditReturnView=null;
+    keyframeEditReturnView=null;keyframeEditDraftAtEntry=null;
     return true;
   }
   // Animation Studio owns an independent draft, thumbnail picker and timeline.
