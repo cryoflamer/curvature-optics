@@ -561,8 +561,7 @@ test('durable backup absorbs older page checkpoints even with changed save metad
   assert.equal(backups[0].workspaces[0].checkpoint.draft.name,'Distinct unsent edits');
 });
 
-test('queued old checkpoint cannot roll back committed concurrent edits or drop a fork',async()=>{
-  const db=memoryIndexedDB();
+test('queued old checkpoint cannot roll back committed concurrent edits or drop a fork',()=>{
   const cp=(name,when)=>autosave.checkpoint({
     draft:studio.edit(studio.blank(),'name',name),selectedKey:null,
     quality:'auto',prepared:false,positionMs:0,
@@ -572,10 +571,8 @@ test('queued old checkpoint cannot roll back committed concurrent edits or drop 
   const b=autosave.withWorkspace(base,'project_saved',cp('Tab B edit',210),211);
   let generated=0;
   const crypto={randomUUID:()=>String(++generated).padStart(32,'0')};
-  await autosave.writeCollection(db,base);
-  const committedA=await autosave.writeCollectionMerged(db,a,base,crypto);
-  assert.equal(autosave.getWorkspace(committedA.collection,'project_saved').draft.name,'Tab A edit');
-  const conflict=await autosave.writeCollectionMerged(db,b,base,crypto);
+  assert.equal(autosave.getWorkspace(a,'project_saved').draft.name,'Tab A edit');
+  const conflict=autosave.reconcileCollection(b,base,a,crypto);
   assert.equal(conflict.conflicts.length,1);
   const forkId=conflict.conflicts[0].forkId;
   assert.equal(autosave.getWorkspace(conflict.collection,'project_saved').draft.name,'Tab A edit');
@@ -583,8 +580,8 @@ test('queued old checkpoint cannot roll back committed concurrent edits or drop 
   // A slow queued save still owns the original bytes but may execute after
   // the baseline was advanced to the A+B merge. It must be a no-op, not
   // replace A with Original or infer deletion of the newly created fork.
-  const late=await autosave.writeCollectionMerged(db,base,conflict.collection,crypto);
-  const durable=await autosave.readCollection(db);
+  const late=autosave.reconcileCollection(base,conflict.collection,conflict.collection,crypto);
+  const durable=late.collection;
   assert.equal(autosave.getWorkspace(durable,'project_saved').draft.name,'Tab A edit');
   assert.equal(autosave.getWorkspace(durable,forkId).draft.name,'Tab B edit');
   assert.equal(durable.workspaces.length,conflict.collection.workspaces.length);
@@ -592,7 +589,7 @@ test('queued old checkpoint cannot roll back committed concurrent edits or drop 
   assert.deepEqual(late.protectedDeletes,[]);
   // Deliberate deletion uses a tombstone and must continue to work.
   const removed=autosave.withoutWorkspace(durable,forkId,'project_saved',350);
-  const deletion=await autosave.writeCollectionMerged(db,removed,durable,crypto);
+  const deletion=autosave.reconcileCollection(removed,durable,durable,crypto);
   assert.equal(autosave.getWorkspace(deletion.collection,forkId),null);
   assert.ok(deletion.collection.removed.some(x=>x.id===forkId));
 });
