@@ -85,6 +85,33 @@
       candidate=from.pop();
       return snapshot();
     }
+    function recovery(){
+      assertActive();
+      return immutable({version:1,projectId:projectId,frameKey:frameKey,
+        mode:mode,original:clone(original),workspace:clone(workspace),
+        candidate:clone(candidate),past:clone(past),future:clone(future)});
+    }
+    function restoreRecovery(saved){
+      assertActive();
+      if(!saved||saved.version!==1||saved.projectId!==projectId||
+         saved.frameKey!==frameKey||saved.mode!==mode||
+         JSON.stringify(saved.original)!==JSON.stringify(original)||
+         JSON.stringify(saved.workspace)!==JSON.stringify(workspace)||
+         !Array.isArray(saved.past)||!Array.isArray(saved.future)||
+         saved.past.length>limit||saved.future.length>limit)
+        throw RangeError('Keyframe recovery does not match the current frame');
+      var checkpoints=[saved.candidate].concat(saved.past,saved.future);
+      checkpoints.forEach(function(entry){
+        if(!entry||!entry.display||entry.display.mode!==mode||
+           !options.contractApi.inspectCandidate(contract,entry).allowed)
+          throw RangeError('Keyframe recovery contains a contract-incompatible state');
+      });
+      // Validate every snapshot before mutating the live session.
+      candidate=clone(saved.candidate);
+      past=clone(saved.past);future=clone(saved.future);
+      group=null;groupRecorded=false;
+      return snapshot();
+    }
     function cancel(){
       assertActive();active=false;
       return clone(workspace);
@@ -104,6 +131,7 @@
       mode:mode,allowedPaths:immutable(clone(paths)),original:immutable(original),
       workspace:immutable(workspace),snapshot:snapshot,replace:replace,
       history:history,beginGroup:beginGroup,endGroup:endGroup,
+      recovery:recovery,restoreRecovery:restoreRecovery,
       undo:function(){return travel('undo');},redo:function(){return travel('redo');},
       cancel:cancel,prepareApply:prepareApply,finish:finish,
       active:function(){return active;}});

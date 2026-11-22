@@ -4249,7 +4249,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""),draft_before)
 
-    def test_animation_keyframe_edit_session_f5_discards_preview(self):
+    def test_animation_keyframe_edit_session_f5_recovers_undo_redo(self):
         self.open_modern()
         before_mode = self.page.evaluate('CurvatureModernApp.getMode()')
         before_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -4262,14 +4262,37 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         self.assertTrue(self.page.locator('body').evaluate(
             "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        starting=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(starting+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+3)
+        self.page.locator('#ModernHeight').fill(str(starting+6))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+6)
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Undo',exact=True).click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+3)
+        expect(banner.get_by_role('button',name='Redo',exact=True)).to_be_enabled()
         self.page.reload(wait_until='load')
-        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
-        self.assertFalse(self.page.locator('body').evaluate(
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        expect(banner).to_contain_text('Recovered unsaved keyframe edits')
+        self.assertTrue(self.page.locator('body').evaluate(
             "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),starting+3)
+        banner.get_by_role('button',name='Redo',exact=True).click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+6)
+        banner.get_by_role('button',name='Cancel & Return').click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before_mode)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before_height)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames.length'), 9)
+        self.assertIsNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
 
     def test_animation_keyframe_edit_back_forward_and_second_tab_isolation(self):
         self.open_modern()

@@ -585,6 +585,9 @@
   var keyframeControlLocks=null,keyframeEditUIBaseline=null,keyframeEditApplying=false;
   var keyframeEditDraftAtEntry=null,keyframeEditHistoryControls=null;
   var keyframeEditRestoring=false,keyframeEditWheelGroupTimer=null;
+  var KEYFRAME_EDIT_RECOVERY_KEY='curvature-modern-keyframe-edit-recovery-v1';
+  var keyframeRecoveryPending=null,keyframeRecoverySettled=false,keyframeRecoveryRemote=null;
+  var keyframeRecoveryAttempted=false,keyframeEditCommit=null;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -647,6 +650,11 @@
       try{return root.sessionStorage;}catch(error){return null;}
     }()),root.crypto,root):null;
   var studioIndexedBaseline=null;
+  try{
+    var savedKeyframeRecovery=root.sessionStorage&&
+      root.sessionStorage.getItem(KEYFRAME_EDIT_RECOVERY_KEY);
+    if(savedKeyframeRecovery)keyframeRecoveryPending=JSON.parse(savedKeyframeRecovery);
+  }catch(error){keyframeRecoveryPending=null;}
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
   var studioLibraryFilters=studioLibraryFiltersApi?studioLibraryFiltersApi.normalize():null;
@@ -2549,6 +2557,13 @@
         if(studioLibraryPending)refreshStudioLibrary();
         else renderStudioLibrary();
       },
+      onSettled:function(remote,error){
+        keyframeRecoveryRemote=remote;
+        keyframeRecoverySettled=!error;
+        if(error&&keyframeRecoveryPending)
+          studioDraftStatus('Keyframe F5 recovery awaits working-project storage: '+error.message,true);
+        tryResumeKeyframeRecovery();
+      },
       persist:persistStudioWorkspace,
       saveDraft:saveStudioDraft,
       writeDraft:writeStudioDraftIndexedDB
@@ -4080,6 +4095,80 @@
     keyframeEditShellLocks.forEach(function(item){item.node.inert=item.inert;});
     keyframeEditShellLocks=null;
   }
+  function clearKeyframeEditRecovery(){
+    keyframeRecoveryPending=null;
+    try{if(root.sessionStorage)root.sessionStorage.removeItem(KEYFRAME_EDIT_RECOVERY_KEY);}
+    catch(error){/* Storage may be unavailable, but Cancel still ends the session. */}
+  }
+  function saveKeyframeEditRecovery(){
+    if(!keyframeEditSession||keyframeEditEntering||keyframeEditRestoring)return;
+    try{
+      var storage=root.sessionStorage;
+      if(!storage)throw Error('sessionStorage unavailable');
+      var library=studioLibraryActive||studioLibraryPending;
+      var saved={version:1,tabId:studioWorkspaceSessionId,
+        draftAtEntry:keyframeEditDraftAtEntry,
+        libraryId:library?library.id:null,
+        libraryRevision:library?(library.updatedAt||library.revision):null,
+        returnView:keyframeEditReturnView,
+        uiBaseline:keyframeEditUIBaseline,
+        compareSelected:state.compareSelected,
+        session:keyframeEditSession.recovery()};
+      var json=JSON.stringify(saved);
+      if(json.length>3000000)throw RangeError('Recovery history exceeds session storage limit');
+      storage.setItem(KEYFRAME_EDIT_RECOVERY_KEY,json);
+    }catch(error){
+      var note=keyframeEditBanner&&keyframeEditBanner.querySelector('.modern-keyframe-edit-hint');
+      if(note)note.textContent='F5 recovery unavailable: '+error.message+
+        ' · Apply or Cancel before refreshing';
+    }
+  }
+  function tryResumeKeyframeRecovery(){
+    if(!keyframeRecoveryPending||keyframeRecoveryAttempted||!keyframeRecoverySettled||
+       !persistence.ready||!studioWorkspaceReady||!studioRouteReady||keyframeEditSession)
+      return;
+    keyframeRecoveryAttempted=true;
+    var saved=keyframeRecoveryPending;
+    function blocked(message){
+      studioDraftStatus('Keyframe recovery was not applied: '+message+
+        '. The tab-local checkpoint was retained.',true);
+    }
+    try{
+      if(!saved||saved.version!==1||saved.tabId!==studioWorkspaceSessionId||
+         !saved.session||saved.session.projectId!==studioWorkspaceId||
+         !studioDraft||!studioDraft.contract||
+         saved.draftAtEntry!==JSON.stringify(studioDraft)||
+         !['library','editor','preview'].includes(saved.returnView))
+        throw Error('active working project or revision does not match');
+      var remote=keyframeRecoveryRemote&&
+        studioDraftAutosave.getWorkspace(keyframeRecoveryRemote,studioWorkspaceId);
+      if(!remote||JSON.stringify(remote.draft)!==saved.draftAtEntry)
+        throw Error('the durable working project was changed or is unavailable');
+      var frame=studioDraft.frames.find(function(item){return item.key===saved.session.frameKey;});
+      if(!frame||JSON.stringify(frame.experiment)!==JSON.stringify(saved.session.original))
+        throw Error('the selected keyframe no longer matches');
+      var source=studioLibraryActive||studioLibraryPending;
+      if((source?source.id:null)!==saved.libraryId||
+         (source?(source.updatedAt||source.revision):null)!==saved.libraryRevision)
+        throw Error('the linked Animation Library revision does not match');
+      var navigationAtStart=workspaceNavigationVersion;
+      var checkLibrary=saved.libraryId&&studioLibrary?
+        studioLibrary.get(root.indexedDB,saved.libraryId):Promise.resolve(null);
+      Promise.resolve(checkLibrary).then(function(library){
+        if(saved.libraryId&&(!library||library.updatedAt!==saved.libraryRevision))
+          throw Error('the Animation Library project changed in another tab');
+        if(keyframeEditSession||!persistence.ready||studioWorkspaceId!==saved.session.projectId||
+           JSON.stringify(studioDraft)!==saved.draftAtEntry||
+           workspaceNavigationVersion!==navigationAtStart)
+          throw Error('the workspace changed while recovery was being checked');
+        renderAnimationStudio(studioHistoryEntries);
+        if(typeof keyframeEditCommit!=='function')
+          throw Error('the Animation Studio editor is not ready');
+        beginStudioKeyframeEdit(saved.session.frameKey,keyframeEditCommit,saved);
+        keyframeRecoveryPending=null;
+      }).catch(function(error){blocked(error.message);});
+    }catch(error){blocked(error.message);}
+  }
   function syncKeyframeEditHistoryControls(){
     if(!keyframeEditSession||!keyframeEditHistoryControls)return;
     var state=keyframeEditSession.history(),controls=keyframeEditHistoryControls;
@@ -4111,6 +4200,7 @@
       syncNumericInputs();syncCompareEditor();redraw();
     }finally{keyframeEditRestoring=false;}
     syncKeyframeEditHistoryControls();
+    saveKeyframeEditRecovery();
     return true;
   }
   function validateKeyframePreview(){
@@ -4126,6 +4216,7 @@
         throw RangeError('The animation contract rejected '+(verdict.issues[0]&&verdict.issues[0].path||'this edit'));
       keyframeEditSession.replace(candidate);
       syncKeyframeEditHistoryControls();
+      saveKeyframeEditRecovery();
       return true;
     }catch(error){
       var previous=keyframeEditSession.snapshot();
@@ -4227,9 +4318,13 @@
     }
     var physical=newUiEl('ModernWorkspace');
     if(!physical||!physical.parentNode)throw Error('Scene/Compare workspace is unavailable');
+    var recovered=arguments.length>2?arguments[2]:null;
     var session=keyframeEditApi.begin({projectId:studioWorkspaceId||'working-draft',
       revision:String(studioDraftGeneration),frame:frame,contract:studioDraft.contract,
-      workspaceExperiment:experimentSnapshot(),contractApi:studioContractApi});
+      workspaceExperiment:recovered?recovered.session.workspace:experimentSnapshot(),
+      contractApi:studioContractApi});
+    if(recovered)session.restoreRecovery(recovered.session);
+    else clearKeyframeEditRecovery();
     var banner=document.createElement('section');
     banner.id='ModernKeyframeEditBanner';banner.className='modern-keyframe-edit-banner';
     banner.setAttribute('aria-label','Temporary keyframe editor');
@@ -4291,10 +4386,11 @@
     apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit);});
     actions.appendChild(apply);
     banner.appendChild(actions);
-    keyframeEditReturnView=studioView;
+    keyframeEditReturnView=recovered?recovered.returnView:studioView;
     keyframeEditDraftAtEntry=JSON.stringify(studioDraft);
-    keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
-      compareModel:workspaceState.compareModel};
+    keyframeEditUIBaseline=recovered?recovered.uiBaseline:
+      {sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
+       compareModel:workspaceState.compareModel};
     keyframeEditSession=session;keyframeEditBanner=banner;
     keyframeEditHistoryControls={undo:undo,redo:redo,status:historyStatus};
     physical.parentNode.insertBefore(banner,physical);
@@ -4313,6 +4409,17 @@
       keyframeControlLocks=keyframeControlLocksApi.create(physical,session.allowedPaths,scope);
       syncKeyframeEditHistoryControls();
       lockKeyframeShell();
+      if(recovered){
+        keyframeEditRestoring=true;
+        try{
+          applyExperiment(session.snapshot());
+          if(session.mode==='compare'&&['A','B'].includes(recovered.compareSelected))
+            state.compareSelected=recovered.compareSelected;
+          syncNumericInputs();syncCompareEditor();redraw();
+        }finally{keyframeEditRestoring=false;}
+        explanation.textContent='Recovered unsaved keyframe edits after F5 · Apply or Cancel to finish';
+      }
+      saveKeyframeEditRecovery();
     }catch(error){
       document.body.classList.remove('modern-keyframe-edit-active');
       unlockKeyframeControls();
@@ -4325,6 +4432,7 @@
       resetHistoryBaseline();setMode('animation',false);
       keyframeEditUIBaseline=null;keyframeEditReturnView=null;
       keyframeEditDraftAtEntry=null;
+      if(!recovered)clearKeyframeEditRecovery();
       throw error;
     }finally{keyframeEditEntering=false;}
     return true;
@@ -4332,6 +4440,7 @@
   function cancelStudioKeyframeEdit(routeAction){
     if(!keyframeEditSession)return false;
     endKeyframeEditWheelGroup();
+    clearKeyframeEditRecovery();
     var session=keyframeEditSession,original=session.cancel();
     keyframeEditSession=null;keyframeEditHistoryControls=null;
     document.body.classList.remove('modern-keyframe-edit-active');
@@ -4483,6 +4592,10 @@
       refreshLibrary:renderStudioLibrary
     });
     function update(next,options){return studioEditing.commit(next,options);}
+    keyframeEditCommit=function(prepared){
+      var next=studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment);
+      return update(next,{group:'frame:'+prepared.frameKey+':experiment',endGroup:true});
+    };
     function restoreEditHistory(direction){return studioEditing.step(direction);}
     function report(error){
       var status=newUiEl('ModernAnimationStudioMessage');
@@ -4571,10 +4684,7 @@
         catch(error){return false;}
       },
       editKeyframe:function(key){
-        try{beginStudioKeyframeEdit(key,function(prepared){
-          var next=studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment);
-          return update(next,{group:'frame:'+prepared.frameKey+':experiment',endGroup:true});
-        });}
+        try{beginStudioKeyframeEdit(key,keyframeEditCommit);}
         catch(error){report(error);}
       },
       focusTransition:function(index){
@@ -8338,6 +8448,7 @@
       if(startupMode!=='calibration')restoreWorkspace();
       if(allowStudioRoute)setStudioView(initialStudioRoute,false);
       studioRouteReady=true;
+      tryResumeKeyframeRecovery();
       Promise.resolve(editor&&editor.restore()).then(function(){
         // The legacy draft is restored first. Inspect the new project
         // marker only after its v1 connection has been closed; never
@@ -8359,6 +8470,20 @@
       refreshCalibrationApplicability();
     }
     bindWorkingSessionLifecycle();
+    if(root.addEventListener){
+      function checkpointKeyframeOnLeave(){
+        if(!keyframeEditSession)return;
+        var focused=document.activeElement;
+        if(focused&&focused.closest&&focused.closest('#ModernWorkspace')&&
+           focused.matches&&focused.matches('input:not(:disabled)')){
+          focused.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }
+        validateKeyframePreview();
+        saveKeyframeEditRecovery();
+      }
+      root.addEventListener('pagehide',checkpointKeyframeOnLeave);
+      root.addEventListener('beforeunload',checkpointKeyframeOnLeave);
+    }
     if(sessionAutosave&&root.indexedDB&&!explicitAtStartup){
       persistenceStatus('Restoring working session…');
       sessionAutosave.read(root.indexedDB).then(function(record){

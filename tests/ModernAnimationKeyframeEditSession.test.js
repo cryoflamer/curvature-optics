@@ -52,6 +52,38 @@ test('a gesture returning to its original pose leaves no undo step',()=>{
   s.endGroup('wheel');
   assert.deepEqual(s.history(),{undo:0,redo:0,dirty:false});
 });
+test('recovery restores candidate, past and future without carrying a live gesture',()=>{
+  const options=input(),s=sessions.begin(options);
+  s.replace({...s.snapshot(),camera:{Height:11}});
+  s.replace({...s.snapshot(),camera:{Height:14}});
+  s.undo();
+  const saved=s.recovery();
+  assert.ok(Object.isFrozen(saved));
+  const resumed=sessions.begin(input());
+  resumed.restoreRecovery(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(resumed.history(),{undo:1,redo:1,dirty:true});
+  assert.equal(resumed.snapshot().camera.Height,11);
+  assert.equal(resumed.redo().camera.Height,14);
+  assert.equal(resumed.undo().camera.Height,11);
+  assert.equal(resumed.prepareApply({projectId:'project-1',revision:'rev-1',
+    frameKey:'frame-1'}).experiment.camera.Height,11);
+});
+test('recovery refuses changed frame identity and contract-incompatible history atomically',()=>{
+  const s=sessions.begin(input());
+  s.replace({...s.snapshot(),camera:{Height:18}});
+  const saved=JSON.parse(JSON.stringify(s.recovery()));
+  const target=sessions.begin(input());
+  saved.past[0].scene.locked=0;
+  assert.throws(()=>target.restoreRecovery(saved),/contract-incompatible/);
+  assert.deepEqual(target.history(),{undo:0,redo:0,dirty:false});
+  saved.past[0].scene.locked=1;
+  saved.frameKey='other';
+  assert.throws(()=>target.restoreRecovery(saved),/does not match/);
+  saved.frameKey='frame-1';
+  saved.original.camera.Height=30;
+  assert.throws(()=>target.restoreRecovery(saved),/does not match/);
+  assert.deepEqual(target.history(),{undo:0,redo:0,dirty:false});
+});
 test('cancel restores preserved workspace and makes session terminal',()=>{
   const s=sessions.begin(input());
   s.replace({...s.snapshot(),camera:{Height:30}});

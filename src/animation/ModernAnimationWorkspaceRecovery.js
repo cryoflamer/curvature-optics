@@ -71,9 +71,12 @@
         }
         // Reconcile local-only drafts using the editor-owned serialized writer.
         if(best&&JSON.stringify(best)!==JSON.stringify(remote))options.persist();
+        if(options.onSettled)options.onSettled(remote,null);
       }).catch(function(error){
         if(!local)options.status('Animation workspace recovery unavailable: '+error.message,true);
+        if(options.onSettled)options.onSettled(null,error);
       });
+      else if(options.onSettled)options.onSettled(null,null);
       if(win.addEventListener){
         win.addEventListener('pagehide',flushOnLeave);
         win.addEventListener('beforeunload',flushOnLeave);

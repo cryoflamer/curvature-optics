@@ -570,9 +570,14 @@ workspace to restore. During the session, ordinary Scene/Compare
 autosave/History, header Reset/History actions, mode switches, unrestricted
 camera gestures and Animation Studio background draft checkpoints are
 suppressed. In particular, a hidden tab must not replay an old Studio
-checkpoint through `visibilitychange` or `pagehide`. Browser refresh drops
-the temporary candidate and recovers the last durable ordinary physical
-workspace and independent Studio draft; browser Back cancels the session.
+checkpoint through `visibilitychange` or `pagehide`. Browser F5 now restores a tab-local candidate and its bounded Undo/Redo
+history **only after** the physical workspace and Studio draft complete
+startup recovery. Recovery verifies project ID, exact opening draft,
+keyframe identity, permitted channel, durable working-draft contents and
+linked Library revision before remounting the temporary editor. Unsafe or
+unavailable recovery leaves the checkpoint intact and reports a conflict
+without applying its candidate. Browser Back and explicit Cancel still
+discard the temporary edit session.
 
 **Allowed controls.** `ModernAnimationContract.allowedPaths()` is the
 authoritative channel allowlist: camera pose and zoom for Camera Motion or
@@ -596,7 +601,11 @@ native editing shortcuts retain priority. A fresh edit clears redo.
 Cancel discards the local history; Apply commits only the current validated
 candidate through the separate Studio history below. No temporary history
 is saved to Library, History or the page's normal experiment session.
-F5 recovery of this temporary history is deferred to its own stage.
+Its tab-scoped F5 checkpoint is refreshed synchronously on validated
+edits, Undo/Redo and pagehide, cleared on Apply/Cancel and never written to
+Studio or History. Cross-tab ownership is checked against the existing
+tab-session identity, while the existing IndexedDB transaction still guards
+Apply after recovery.
 
 **Apply.** `Apply & Return` checks the session's project/keyframe identity
 and generation, the persisted Library revision (if linked), and the Studio
