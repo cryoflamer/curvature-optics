@@ -83,6 +83,7 @@
     optionsFor(source,[['all','All sources'],['library','Local library'],['demo','Built-in demos']]);
     optionsFor(kind,[['all','All kinds'],...kinds.map(function(k){return [k,k==='unclassified'?'Unclassified (legacy)':k];})]);
     optionsFor(sort,[['title','Title'],['source','Source']]);
+    source.value='all';kind.value='all';sort.value='title';
     var columns=el('div','modern-image-picker-columns',undefined,dialog),
       gallery=el('div','modern-image-picker-gallery',undefined,columns);
     gallery.setAttribute('role','group');gallery.setAttribute('aria-label','Available images');
