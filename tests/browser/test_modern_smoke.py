@@ -4272,6 +4272,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['revision'],before['revision'])
         self.assertEqual(after['original'],before['original'])
         self.assertEqual(after['count'],1)
+        review=self.page.evaluate("""async id => {
+            const stored=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+            const result=await CurvatureModernImageUsageGraph.deletionReview(window,stored);
+            return {safe:result.safe,localScanComplete:result.localScanComplete,
+                knownUses:result.knownUses};
+        }""",before['id'])
+        self.assertFalse(review['safe'])
+        self.assertIsInstance(review['localScanComplete'],bool)
+        self.assertIsInstance(review['knownUses'],int)
         self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
 
     def test_image_library_stage5_second_tab_revision_disables_deletion_review(self):

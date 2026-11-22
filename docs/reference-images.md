@@ -672,7 +672,9 @@ does not revoke other project, calibration, archive or recoverable uses.
 Repeated imports/restores still use verified-original deduplication and
 their established ID-remapping contract; shipped-demo aliases remain separate.
 
-An empty and complete read of accessible local sources means **zero known
+The API deliberately names the available-record flag `localScanComplete`,
+not `complete`: it is distinct from the permanent `safe: false` deletion
+policy. An empty and complete read of accessible local sources means **zero known
 local uses at that moment**, not globally unreferenced or safe to delete.
 Even two identical scans are non-atomic against other IndexedDB databases
 and open tabs; older Undo buffers and exported copies remain inaccessible.

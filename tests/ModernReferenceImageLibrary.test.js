@@ -665,7 +665,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   const empty=await usageGraph.deletionReview(env,original);
   assert.equal(empty.safe,false);
   assert.equal(empty.knownUses,0);
-  assert.equal(empty.complete,true,'accessible local stores may be scanned without granting deletion');
+  assert.equal(empty.localScanComplete,true,'accessible local stores may be scanned without granting deletion');
   assert.equal(reads,2,'must recheck original after scanning other stores');
   assert.match(empty.reasons.join('; '),/cannot be atomically excluded/);
   await assert.rejects(library.remove(db,asset.id,1),/deletion is disabled/);
@@ -681,7 +681,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   env.CurvatureModernCalibrationProjectStore.list=async()=>{throw Error('Store inaccessible');};
   const missing=await usageGraph.deletionReview(env,original);
   assert.equal(missing.safe,false);
-  assert.equal(missing.complete,false);
+  assert.equal(missing.localScanComplete,false);
   assert.match(missing.reasons.join('; '),/Store inaccessible/);
   assert.equal((await library.list(db)).length,1);
 });
@@ -703,7 +703,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   assert.equal(updated.revision,2);
   const review=await usageGraph.deletionReview(env,current);
   assert.equal(review.safe,false);
-  assert.equal(review.complete,false);
+  assert.equal(review.localScanComplete,false);
   assert.match(review.reasons.join('; '),/Original changed during inspection/);
   assert.equal((await library.get(db,'other')).record.title,'Tab B');
 });
@@ -732,7 +732,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
   };
   const result=await usageGraph.deletionReview(env,selected);
   assert.equal(result.safe,false);
-  assert.equal(result.complete,false);
+  assert.equal(result.localScanComplete,false);
   assert.match(result.reasons.join('; '),/Original changed during inspection/);
   const after=await library.get(db,'concurrent_image');
   assert.equal(after.revision,2);
