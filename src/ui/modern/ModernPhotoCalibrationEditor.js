@@ -1140,7 +1140,7 @@
       // failed Open, etc.) during the final card rerender.
       if(!state?.projectId&&!projectListBusy&&projectInspection?.status!=='recovery-required'&&
           !projectsStatus.classList.contains('is-error')&&
-          /^(?:\\d+ saved Calibration Project|Current editor: standalone draft)/.test(
+          /^(?:\d+ saved Calibration Project|Current editor: standalone draft)/.test(
             projectsStatus.textContent))
         projectsMessage('Current editor: standalone draft (no saved Calibration Project is open).');
       if(state?.pending>0)projectsMessage('Saving active Calibration Project…');
