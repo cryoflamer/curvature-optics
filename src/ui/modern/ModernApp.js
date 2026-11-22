@@ -786,12 +786,13 @@
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
-  var animationWorkspaceOpen=false,photoCalibrationWorkspaceOpen=false;
+  var animationWorkspaceOpen=false,photoCalibrationWorkspaceOpen=false,imageLibraryWorkspaceOpen=false;
   var workspaceTabs={scene:'ModernSceneTab',compare:'ModernCompareTab',animation:'ModernAnimationTab',
-    calibration:'ModernPhotoCalibrationOpen',demos:'ModernDemosTab'};
+    calibration:'ModernPhotoCalibrationOpen',images:'ModernImageLibraryTab',demos:'ModernDemosTab'};
   var workspaceNavigationVersion=0,calibrationSceneRevision=0,calibrationApplyBusy=false;
   function currentWorkspaceMode(){
-    return photoCalibrationWorkspaceOpen?'calibration':animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;
+    return photoCalibrationWorkspaceOpen?'calibration':
+      imageLibraryWorkspaceOpen?'images':animationWorkspaceOpen?'animation':state.demosActive?'demos':state.mode;
   }
   function syncWorkspaceTabs(){
     var current=currentWorkspaceMode();
@@ -853,8 +854,10 @@
     if(fromEditor)fromEditor.hidden=!animationReturnAfterRestore||animationWorkspaceOpen;
   }
   function syncWorkspaceVisibility(){
-    var physical=newUiEl('ModernWorkspace'),animation=newUiEl('ModernAnimationWorkspace');
-    if(physical)physical.hidden=animationWorkspaceOpen||photoCalibrationWorkspaceOpen;
+    var physical=newUiEl('ModernWorkspace'),animation=newUiEl('ModernAnimationWorkspace'),
+      images=newUiEl('ModernImageLibraryWorkspace');
+    if(physical)physical.hidden=animationWorkspaceOpen||photoCalibrationWorkspaceOpen||imageLibraryWorkspaceOpen;
+    if(images)images.hidden=!imageLibraryWorkspaceOpen;
     var photo=newUiEl('ModernPhotoCalibration'),shell=newUiEl('ModernApp');
     if(photo)photo.hidden=!photoCalibrationWorkspaceOpen;
     if(shell)shell.classList.toggle('is-photo-calibration',photoCalibrationWorkspaceOpen);
@@ -8026,6 +8029,23 @@
       cancelStudioInitialPaint();stopStudioPlayback(false);
       if(studioPlayback&&!keyframeEditSession)saveStudioDraft(false);
     }
+    if(mode==='images'){
+      // A first-class, data-independent workspace: no Studio render or optics change.
+      stopCameraTransition(false,'Image Library opened',false);
+      stopAutoCameraPreview();stopCameraKeyboard(true);abortCameraDrag();cancelEdits();
+      if(persistence.dirty)flushWorkingSession();
+      if(state.demosActive&&root.CurvatureModernDemos)root.CurvatureModernDemos.deactivate();
+      state.demosActive=false;
+      var imageDemosPanel=newUiEl('ModernDemosPanel');if(imageDemosPanel)imageDemosPanel.hidden=true;
+      animationWorkspaceOpen=false;photoCalibrationWorkspaceOpen=false;imageLibraryWorkspaceOpen=true;
+      root.CurvatureImageLibraryReturnToCalibration=false;
+      root.CurvatureImageLibraryReturnToStoryboard=false;
+      syncWorkspaceVisibility();
+      var library=newUiEl('ModernReferenceImageLibrary');
+      if(library)library.dispatchEvent(new Event('curvature-library-navigation'));
+      return;
+    }
+    imageLibraryWorkspaceOpen=false;
     if(mode==='calibration'){
       if(persistence.dirty)flushWorkingSession();
       cancelPending();stopShimmerFrame();
@@ -8591,7 +8611,7 @@
       if(!initialCamera)initialCamera=captureCameraPose();
       syncNumericInputs();
       // Resolve the top-level workspace once, independently of the scene
-      // data restore. All five tabs share the same preference and URL rule.
+      // data restore. All workspace tabs share the same preference and URL rule.
       var params=typeof URLSearchParams==='function'?
         new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
       var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
