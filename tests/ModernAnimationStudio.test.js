@@ -297,21 +297,23 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   assert.equal(placeholders.length,2,'timeline camera views do not borrow unrelated History screenshots');
 });
 
-test('Timeline thumbnail Preview, Properties and Edit remain distinct and Edit is a stub',()=>{
+test('Timeline thumbnail Preview, Properties and contract-aware Edit remain distinct',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=42;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
   const {doc,host}=mockDom(),calls=[];
   editor.render(doc,host,draft,studio.inspect(draft),{
     previewFrame:key=>calls.push(['preview',key]),
     select:key=>calls.push(['properties',key]),
-    editKeyframe:key=>calls.push(['edit-stub',key])
+    canEditKeyframe:()=>true,
+    editKeyframe:key=>calls.push(['edit',key])
   },false,{selectedKey:'history-1'});
   const items=collect(host,n=>n.className==='modern-studio-filmstrip-item');
   items[1].children[0].listeners.click();
   const controls=collect(items[1],n=>n.className==='modern-studio-card-actions')[0].children;
   assert.deepEqual(controls.map(c=>c.textContent),['☷','✎']);
   assert.match(controls[0]['aria-label'],/Properties for/);
-  assert.match(controls[1]['aria-label'],/Edit .*coming soon/);
+  assert.match(controls[1]['aria-label'],/Edit .* in Scene/);
+  assert.equal(controls[1].disabled,false);
   assert.ok(controls.every(c=>c.draggable===false&&c['data-no-thumbnail-preview']==='true'));
   let prevented=0,stopped=0;
   controls.forEach(c=>{
@@ -322,7 +324,7 @@ test('Timeline thumbnail Preview, Properties and Edit remain distinct and Edit i
     c.listeners.click({stopPropagation(){stopped++;}});
   });
   assert.equal(stopped,10);assert.equal(prevented,4,'card icons never initiate the parent card drag');
-  assert.deepEqual(calls,[['preview','history-2'],['properties','history-2'],['edit-stub','history-2']]);
+  assert.deepEqual(calls,[['preview','history-2'],['properties','history-2'],['edit','history-2']]);
 });
 
 test('Keyframe card × removes its own frame without selecting, dragging or touching History',()=>{

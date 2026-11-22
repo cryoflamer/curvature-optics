@@ -4140,7 +4140,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(banner).to_contain_text('04 · Low view, hidden spans')
         expect(banner.get_by_role('button', name='Apply & Return')).to_be_disabled()
         self.assertTrue(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
-        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'), 'scene')
+        expected_mode = self.page.evaluate('''() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.display.mode''')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'), expected_mode)
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
         self.page.wait_for_timeout(700)
         self.assertEqual(self.page.evaluate("""() =>
