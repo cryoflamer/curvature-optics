@@ -3259,6 +3259,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.locator('#ModernAnimationLibraryView #ModernReferenceImageLibrary').count(),0)
         panel=self.open_image_library()
         expect(self.page.locator('#ModernImageLibraryTab')).to_have_attribute('aria-pressed','true')
+        expect(self.page.locator('#ModernImageLibraryTitle')).to_have_text('Image Library')
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
         expect(self.page.locator('#ModernWorkspace')).to_be_hidden()
         expect(panel.get_by_role('button',name='Return to Calibration')).to_be_hidden()
