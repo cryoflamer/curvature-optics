@@ -3921,7 +3921,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio = self.page.locator('#ModernAnimationStudio')
         timeline = studio.locator('.modern-studio-keyframe')
         expect(timeline).to_have_count(9)
-        expect(studio.get_by_role('button', name='Preview animation', exact=True)).to_have_count(1)
+        expect(studio.locator('.modern-studio-preview-bar button')).to_have_count(1)
         controls = studio.locator('.modern-studio-card-actions').nth(3)
         controls.get_by_text('Edit', exact=True).click()
         expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')

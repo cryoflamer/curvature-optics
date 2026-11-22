@@ -1180,7 +1180,7 @@
       return;
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens Scene or Compare in a future stage. Excluded frames cannot be previewed.'));
+      'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens Scene or Compare in a future stage. Excluded frames cannot be previewed. Preview does not save a project; use Library for permanent saves.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
