@@ -144,6 +144,86 @@
       });
     },'optional');
   }
+  // A backup is an explicit, complete, self-describing local source snapshot.
+  // Restore merges verified originals without deleting or replacing local rows.
+  // Annotations are inserted in the SAME IDB transaction as new originals.
+  function validateBackup(value){
+    if(!value||typeof value!=='object'||value.format!=='curvature-image-library-backup'||
+      value.version!==1||!Array.isArray(value.observations)||!Array.isArray(value.annotations))
+      throw RangeError('Unsupported or incomplete Image Library backup');
+    if(value.observations.length>MAX_ITEMS||value.annotations.length>MAX_ITEMS)
+      throw RangeError('Image Library backup exceeds observation limit');
+    var rows=value.observations.map(normalize),ids=new Set(),annotations=new Map();
+    rows.forEach(function(row){
+      if(ids.has(row.id))throw RangeError('Duplicate original ID in backup');
+      ids.add(row.id);
+    });
+    value.annotations.forEach(function(row){
+      if(!row||!ids.has(row.id)||annotations.has(row.id)||!Number.isSafeInteger(row.revision)||row.revision<1)
+        throw RangeError('Invalid or orphaned backup classification');
+      annotations.set(row.id,{...annotation(row),revision:row.revision,id:row.id});
+    });
+    quota(rows);annotationQuota([...annotations.values()]);
+    return {rows:rows,annotations:annotations};
+  }
+  async function restoreBackup(db,backup,crypto,verifyOriginal){
+    var inspected=validateBackup(backup);
+    if(typeof verifyOriginal!=='function')throw Error('Original decoder required for backup restore');
+    // Decoder / byte verification occurs BEFORE an IDB transaction, never while
+    // a request transaction remains open. No mutation is made on failure.
+    for(var row of inspected.rows)await verifyOriginal(row.record);
+    return transaction(db,'readwrite',function(store,read,finish,annotations){
+      if(inspected.annotations.size&&!annotations)
+        throw Error('Enable image classification before restoring a tagged backup');
+      read(store.getAll(),function(raw){
+        var all=raw.map(normalize),byId=new Map(all.map(function(row){return [row.id,row];})),
+          mapped=new Map(),created=[];
+        var reserved=new Set(inspected.rows.map(function(row){return row.id;}));
+        function content(record){
+          var copy={...record};delete copy.id;return JSON.stringify(copy);
+        }
+        inspected.rows.forEach(function(row){
+          var id=row.id,existing=byId.get(id);
+          if(existing&&content(existing.record)!==content(row.record)){
+            var match=all.find(function(other){
+              return !reserved.has(other.id)&&content(other.record)===content(row.record);
+            });
+            if(match)id=match.id;
+            else{
+              var tries=0;
+              do{
+                if(++tries>100)throw Error('Cannot allocate a backup image alias');
+                id=makeId(crypto);
+              }while(byId.has(id)||reserved.has(id));
+            }
+          }
+          if(!byId.has(id)){
+            var added=normalize({id:id,revision:1,record:{...row.record,id:id}});
+            all.push(added);byId.set(id,added);created.push(added);
+          }
+          mapped.set(row.id,id);
+        });
+        quota(all);
+        function complete(existingAnnotations){
+          var anno=new Map(existingAnnotations.map(function(row){return [row.id,row];})),
+            pending=[];
+          inspected.annotations.forEach(function(row,sourceId){
+            var target=mapped.get(sourceId);
+            if(!anno.has(target)){
+              var incoming={id:target,revision:1,...annotation(row)};
+              pending.push(incoming);anno.set(target,incoming);
+            }
+          });
+          annotationQuota([...anno.values()]);
+          created.forEach(function(row){store.add(row);});
+          pending.forEach(function(row){annotations.add(row);});
+          finish({mapping:mapped,created:created.length,annotationsAdded:pending.length});
+        }
+        if(annotations)read(annotations.getAll(),complete);
+        else complete([]);
+      });
+    },'optional');
+  }
   function setAnnotation(db,id,expected,values){
     images.validId(id);
     if(!Number.isSafeInteger(expected)||expected<0)
@@ -334,5 +414,5 @@
     return images.validId('reference_'+token);
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails});
+    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails,validateBackup:validateBackup,restoreBackup:restoreBackup});
 }));
