@@ -6572,7 +6572,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                          frame['experiment'])
         self.assertEqual(first['draft']['frames'][:3],initial['draft']['frames'][:3])
         self.assertEqual(first['draft']['frames'][4:],initial['draft']['frames'][4:])
-        # An identical explicit save must reuse rather than duplicate History.
+        # Immediate identical explicit save must reuse History after durable reconciliation.
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
