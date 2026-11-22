@@ -89,7 +89,8 @@ test('Compatibility diagnosis shows exact values, a separate transition, and a w
   assert.doesNotMatch(frames[0].className,/is-transition-to/);
   assert.equal(find(host,n=>n.tagName==='details'&&n.className==='modern-studio-diagnostics-disclosure'&&n.open===true).length,1);
   assert.equal(find(host,n=>n.tagName==='details'&&n.className==='modern-studio-transition-details'&&n.open===true).length,1);
-  assert.equal(find(host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled,true);
+  assert.equal(find(host,n=>n.tagName==='button'&&n.textContent==='Preview animation').length,0,
+    'Preview playback is opened in the separate Studio Preview view');
 });
 
 test('Physical curvature Globe–Flat is a supported single channel, not a false generic error',()=>{
