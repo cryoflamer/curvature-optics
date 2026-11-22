@@ -1151,6 +1151,11 @@
         if(token!==projectListToken||projectsPanel.hidden)return;
         projectRows=rows;
         if(projectSelectedId&&!rows.some(row=>row.id===projectSelectedId))projectSelectedId=null;
+        // Initially select the opened project; later card selections stay independent.
+        if(!projectSelectedId){
+          const openedId=projectSession?.state()?.projectId;
+          if(rows.some(row=>row.id===openedId))projectSelectedId=openedId;
+        }
         projectInspection=inspection;
         projectsMessage(rows.length+' saved Calibration Project'+(rows.length===1?'':'s')+'.');
         renderProjects();
@@ -1181,6 +1186,7 @@
       projectsMessage('Saving current work and verifying the selected project…');
       try{
         const outcome=await openCalibrationProject(id);
+        projectSelectedId=outcome.project.id;
         try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,outcome.project.id);}
         catch(_ignored){/* Session selection is optional. Never store photo bytes. */}
         // The caller must leave the library after a successful activation;
@@ -1226,6 +1232,7 @@
         const created=await actions.createNew(env,snapshot,{title:title.trim()});
         try{
           const opened=await openCalibrationProject(created.id);
+          projectSelectedId=opened.project.id;
           try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
           projectListBusy=false;showProjectList(false);
         }catch(error){
@@ -1315,6 +1322,8 @@
         const {actions}=projectActions();
         const created=await actions.importAsNew(env,data,{
           title:(data.referenceImage.title||'Imported calibration').slice(0,160)});
+        // Imported as New is selected in the library, not activated in the editor.
+        projectSelectedId=created.id;
         projectListBusy=false;await refreshProjectList();
         projectsMessage('Imported '+created.title+' as a separate project. Choose Open to activate it.');
       }catch(error){projectActionMessage(error,'Import as New failed');}
