@@ -1257,3 +1257,22 @@ test('physical or object changes cannot enter a camera keyframe replacement',()=
   assert.throws(()=>studio.replaceFrameExperiment(draft,'missing',edited),/Unknown Studio frame/);
   assert.throws(()=>studio.replaceFrameExperiment(studio.blank(),'missing',edited),/contract/);
 });
+
+
+test('explicit History provenance is attached only to the unchanged embedded keyframe',()=>{
+  const base=experiment('scene'),contract=contracts.create(base,{mode:'camera'});
+  const moved=clone(base);moved.scene.camera.Height+=15;
+  const draft=studio.fromProject(animation.createV2(contract,[
+    {name:'First',experiment:base},{name:'Second',experiment:moved}
+  ],{id:'history-link',name:'History link test'}));
+  const key=draft.frames[1].key,original=clone(draft);
+  const linked=studio.attachFrameHistory(draft,key,27,draft.frames[1].experiment);
+  assert.equal(linked.frames[1].sourceSnapshotId,27);
+  assert.deepEqual(linked.frames[0],draft.frames[0]);
+  assert.deepEqual(linked.frames[1].experiment,draft.frames[1].experiment);
+  assert.deepEqual(draft,original,'History provenance must not mutate original');
+  assert.throws(()=>studio.attachFrameHistory(draft,key,0,draft.frames[1].experiment),/Invalid History/);
+  assert.throws(()=>studio.attachFrameHistory(draft,'missing',27,draft.frames[1].experiment),/Unknown Studio frame/);
+  const stale=clone(draft.frames[1].experiment);stale.scene.camera.Height++;
+  assert.throws(()=>studio.attachFrameHistory(draft,key,27,stale),/changed/);
+});

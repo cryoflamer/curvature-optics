@@ -225,6 +225,17 @@
     next.frames[index].experiment=projects.frameExperiment(canonical,index);
     return next;
   }
+  // A History ID is provenance only: playback always uses the embedded frame.
+  // Refuse to attach provenance to a frame changed after the snapshot was saved.
+  function attachFrameHistory(draft,key,id,expectedExperiment){
+    if(!Number.isSafeInteger(id)||id<1)throw RangeError('Invalid History snapshot ID');
+    var next=copy(draft),index=next.frames.findIndex(function(f){return f.key===key;});
+    if(index<0)throw RangeError('Unknown Studio frame');
+    if(JSON.stringify(next.frames[index].experiment)!==JSON.stringify(expectedExperiment))
+      throw Error('The edited keyframe changed before History provenance could be attached');
+    next.frames[index].sourceSnapshotId=id;
+    return next;
+  }
   function move(draft,key,step){
     var next=copy(draft),index=next.frames.findIndex(function(f){return f.key===key;});
     if(index<0||![1,-1].includes(step)||index+step<0||index+step>=next.frames.length)
@@ -400,7 +411,7 @@
   return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     createEditHistory:createEditHistory,recordEdit:recordEdit,endEditGroup:endEditGroup,
     stepEditHistory:stepEditHistory,
-    edit:edit,editFrame:editFrame,replaceFrameExperiment:replaceFrameExperiment,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
+    edit:edit,editFrame:editFrame,replaceFrameExperiment:replaceFrameExperiment,attachFrameHistory:attachFrameHistory,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
     activeFrames:activeFrames,keyframeArrival:keyframeArrival,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));

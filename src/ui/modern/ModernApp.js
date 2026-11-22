@@ -4329,7 +4329,7 @@
   // No durable draft is replaced until the live controller, the current
   // project revision and the existing multi-tab CAS coordinator agree.
   // A second tab's divergent edit must fork instead of overwriting it.
-  async function applyStudioKeyframeEdit(button,commit){
+  async function applyStudioKeyframeEdit(button,commit,saveToHistory){
     if(!keyframeEditSession||keyframeEditApplying)return;
     var session=keyframeEditSession;
     keyframeEditApplying=true;button.disabled=true;syncKeyframeEditHistoryControls();
@@ -4365,14 +4365,42 @@
       if(JSON.stringify(first.experiment)!==JSON.stringify(second.experiment))
         throw Error('The keyframe candidate changed during verification');
       var changed=commit(second);
+      // The canonical embedded frame, not the mutable Scene/Compare candidate,
+      // is what the optional History action must retain.
+      var appliedFrame=studioDraft.frames.find(function(frame){return frame.key===second.frameKey;});
+      var historySnapshot=appliedFrame&&appliedFrame.experiment;
+      var historyImage=saveToHistory&&historySnapshot?historyThumbnail(historySnapshot):null;
       cancelStudioKeyframeEdit('replace');
+      var historyNotice='',historyError=false;
+      if(saveToHistory){
+        try{
+          if(!experimentHistory||!historySnapshot)
+            throw Error('History storage is unavailable');
+          var saved=await experimentHistory.record(historySnapshot,'manual',historyImage);
+          // The History entry is committed already; a later draft conflict must
+          // not rewrite the frame or an unrelated project merely to link it.
+          if(studioWorkspaceId!==session.projectId||
+             !studioDraft.frames.some(function(frame){return frame.key===second.frameKey&&
+               JSON.stringify(frame.experiment)===JSON.stringify(historySnapshot);}))
+            throw Error('History saved, but the working keyframe changed before its link was attached');
+          commit(second,saved.entry.id);
+          historyNotice=' History snapshot #'+saved.entry.id+
+            (saved.created?' saved.':' reused (identical snapshot).');
+          resetHistoryBaseline();
+          refreshHistoryList(saved.entry.id);
+        }catch(historyFailure){
+          historyError=true;
+          historyNotice=' Keyframe was applied, but the History step was not fully completed: '+
+            historyFailure.message+'. Check History before retrying.';
+        }
+      }
       var status=newUiEl('ModernAnimationStudioMessage');
       if(status){
-        status.classList.remove('is-error');
-        status.textContent=changed?'Keyframe updated in the working draft. Undo and Redo are available. Save changes in Library to update the named project.':
-          'No keyframe changes to apply. Returned to Animation Studio.';
+        status.classList.toggle('is-error',historyError);
+        status.textContent=(changed?'Keyframe updated in the working draft. Undo and Redo are available. Save changes in Library to update the named project.':
+          'No keyframe changes to apply. Returned to Animation Studio.')+historyNotice;
         if(root.CurvatureModernStatusMessage)
-          root.CurvatureModernStatusMessage.decorate(status,'info');
+          root.CurvatureModernStatusMessage.decorate(status,historyError?'error':'info');
       }
     }catch(error){
       if(keyframeEditSession===session&&keyframeEditBanner){
@@ -4477,8 +4505,16 @@
     apply.type='button';apply.className='modern-keyframe-edit-apply';
     apply.textContent='Apply & Return';
     apply.title='Validate and update this keyframe only; History remains unchanged';
-    apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit);});
+    apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit,false);});
     actions.appendChild(apply);
+    var applyWithHistory=document.createElement('button');
+    applyWithHistory.type='button';applyWithHistory.className='modern-keyframe-edit-cancel';
+    applyWithHistory.textContent='Apply + Save to History';
+    applyWithHistory.title='Update this keyframe and explicitly save or reuse a pinned History snapshot';
+    applyWithHistory.addEventListener('click',function(){
+      applyStudioKeyframeEdit(applyWithHistory,commit,true);
+    });
+    actions.appendChild(applyWithHistory);
     banner.appendChild(actions);
     keyframeEditReturnView=recovered?recovered.returnView:studioView;
     keyframeEditDraftAtEntry=JSON.stringify(studioDraft);
@@ -4686,9 +4722,12 @@
       refreshLibrary:renderStudioLibrary
     });
     function update(next,options){return studioEditing.commit(next,options);}
-    keyframeEditCommit=function(prepared){
-      var next=studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment);
-      return update(next,{group:'frame:'+prepared.frameKey+':experiment',endGroup:true});
+    keyframeEditCommit=function(prepared,historyId){
+      var next=historyId===undefined?
+        studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment):
+        studioApi.attachFrameHistory(studioDraft,prepared.frameKey,historyId,prepared.experiment);
+      return update(next,{group:'frame:'+prepared.frameKey+
+        (historyId===undefined?':experiment':':history-source'),endGroup:true});
     };
     function restoreEditHistory(direction){return studioEditing.step(direction);}
     function report(error){
