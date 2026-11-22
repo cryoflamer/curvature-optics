@@ -3908,7 +3908,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         self.create_camera_project('Shared photo in two tabs')
         gallery=self.open_image_library()
-        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElEQVQIHWP4z8AAAAMBAQD3mGvBAAAAAElFTkSuQmCC')
+        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
         gallery.locator('input[accept^="image/png"]').set_input_files({
             'name':'two-tabs-reference.png','mimeType':'image/png','buffer':payload})
         expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
@@ -3963,7 +3963,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             change=second_studio.get_by_label('Project name')
             change.fill('Tab B photo edits')
             change.press('Tab')
-            second.wait_for_function("""id => 
+            second.wait_for_function("""id =>
                 CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
                     .then(c=>c?.workspaces.some(w=>w.id===id &&
                         w.checkpoint.draft.name==='Tab B photo edits'))
