@@ -3453,7 +3453,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(picker).to_be_visible()
         expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
         choice=picker.locator('.modern-image-picker-choice')
-        self.assertEqual(choice.get_attribute('aria-label'),'Select image storyboard-photo.png (Local)')
+        self.assertEqual(choice.get_attribute('aria-label'),'Select image storybook-photo.png (Local)')
         expect(choice).to_be_visible()
         choice.click()
         picker.get_by_role('button',name='Attach selected').click()
