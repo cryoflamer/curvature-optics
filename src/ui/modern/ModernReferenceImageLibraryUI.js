@@ -78,6 +78,20 @@
         return ingestSource(blob,'Clipboard image');
       });
     });
+    var returnToCalibration=button('Return to Calibration',toolbar,function(){
+      if(busy)return;
+      var tab=doc.getElementById('ModernPhotoCalibrationOpen');
+      if(!tab)return;
+      tab.click();
+      if(env.CurvatureModernApp?.getWorkspaceMode?.()==='calibration'){
+        env.CurvatureImageLibraryReturnToCalibration=false;
+        syncReturnNavigation();
+      }
+    });
+    function syncReturnNavigation(){
+      returnToCalibration.hidden=!env.CurvatureImageLibraryReturnToCalibration;
+    }
+    syncReturnNavigation();
     var backup=button('Download full backup',toolbar,function(){run(async function(){
       var payload=await library.exportBackup(db),
         blob=new env.Blob([JSON.stringify(payload)],{type:'application/json'});
@@ -145,7 +159,8 @@
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;
       search.disabled=value;sourceFilter.disabled=value;kindFilter.disabled=value;
       backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;
-      urlInput.disabled=value;addUrl.disabled=value;paste.disabled=value;gallery.inert=value;
+      urlInput.disabled=value;addUrl.disabled=value;paste.disabled=value;
+      returnToCalibration.disabled=value;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
@@ -325,7 +340,11 @@
         dirty=false;await reload(saved.id);
       },'Observation metadata saved.');});
     // Library edits never change the camera or open Animation/Calibration projects.
-    host.addEventListener('toggle',function(){if(host.open&&!loaded)run(function(){return reload(null);});});
+    host.addEventListener('curvature-library-navigation',syncReturnNavigation);
+    host.addEventListener('toggle',function(){
+      syncReturnNavigation();
+      if(host.open&&!loaded)run(function(){return reload(null);});
+    });
     if(host.open)run(function(){return reload(null);});
   }
   // Loaded only by Modern. The collapsed Library does no storage work at startup.
