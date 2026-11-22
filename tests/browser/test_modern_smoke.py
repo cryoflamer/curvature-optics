@@ -3589,7 +3589,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         where=panel.locator('.modern-image-usage')
         expect(where.get_by_text('Saved animations (1)')).to_be_visible()
         expect(where).to_contain_text('Usage graph bridge project')
-        go=where.get_by_role('button',name='Open Usage graph bridge project frame 1')
+        go=where.get_by_role('button',name='Open animation Usage graph bridge project frame 1 · saved')
         expect(go).to_be_visible()
         prompts=[]
         def approve_navigation(dialog):
