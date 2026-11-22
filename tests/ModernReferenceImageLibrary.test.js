@@ -371,3 +371,49 @@ test('invalid or corrupted classification fails closed without changing original
   assert.equal(restored.kind,'unclassified');
   assert.deepEqual(db.records.get('photo'),before);
 });
+
+test('complete backup restores verified originals and tags without clobbering conflicting local aliases',async()=>{
+  const source=memoryIndexedDB(),target=memoryIndexedDB();
+  await library.create(source,{...record('shared'),author:'Source credit'});
+  await library.enableAnnotations(source);
+  await library.setAnnotation(source,'shared',0,{kind:'map',tags:['Soundly'],collections:['Research']});
+  const backup=await library.exportBackup(source);
+  await library.create(target,{...record('shared'),author:'Existing credit'});
+  await library.enableAnnotations(target);
+  const out=await library.restoreBackup(target,backup,{randomUUID:()=> 'restore_test'},verifyOriginal);
+  assert.equal(out.created,1);
+  assert.equal(out.annotationsAdded,1);
+  assert.equal(out.mapping.get('shared'),'reference_restore_test');
+  const old=await library.get(target,'shared'),fresh=await library.get(target,'reference_restore_test');
+  assert.equal(old.record.author,'Existing credit');
+  assert.equal(old.kind,'unclassified');
+  assert.equal(fresh.record.author,'Source credit');
+  assert.equal(fresh.kind,'map');
+  assert.deepEqual(fresh.tags,['Soundly']);
+  assert.deepEqual(fresh.record.original,record().original);
+  const second=await library.restoreBackup(target,backup,{randomUUID:()=> 'restore_test_2'},verifyOriginal);
+  assert.equal(second.created,0);
+  assert.equal(second.annotationsAdded,0);
+  assert.deepEqual((await library.get(target,'reference_restore_test')).record.original,record().original);
+});
+test('malformed backup and missing v2 classification store fail before mutation',async()=>{
+  const source=memoryIndexedDB(),target=memoryIndexedDB();
+  await library.create(source,record('origin'));
+  await library.enableAnnotations(source);
+  await library.setAnnotation(source,'origin',0,{kind:'photograph',tags:['bridge']});
+  const backup=await library.exportBackup(source);
+  const sourceBefore=structuredClone(backup.observations[0].record);
+  await library.create(target,record('untouched'));
+  await assert.rejects(library.restoreBackup(target,backup,{randomUUID:()=> 'new'},verifyOriginal),/Enable image classification/);
+  assert.equal((await library.list(target)).length,1);
+  const invalid=structuredClone(backup);invalid.annotations[0].id='nonexistent';
+  await assert.rejects(library.restoreBackup(target,invalid,{randomUUID:()=> 'new'},verifyOriginal),/orphaned/);
+  await library.enableAnnotations(target);
+  const corruption=structuredClone(backup);corruption.observations[0].record.original.dataUrl='data:image/png;base64,AAAA';
+  await assert.rejects(library.restoreBackup(target,corruption,{randomUUID:()=> 'new'},verifyOriginal),/MIME|signature/);
+  await assert.rejects(library.restoreBackup(target,backup,{randomUUID:()=> 'new'},
+    async()=>{throw Error('Corrupted image decoder');}),/Corrupted image decoder/);
+  assert.deepEqual(backup.observations[0].record,sourceBefore);
+  assert.equal((await library.list(target)).length,1);
+  assert.equal(target.annotations.size,0);
+});
