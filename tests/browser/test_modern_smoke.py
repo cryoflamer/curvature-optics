@@ -3225,6 +3225,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertGreater(len(before['observations']),0)
         expect(workspace.locator('#ModernCalibrationFile')).to_have_count(0)
+        # Loaded photos collapse the Reference Tools disclosure on purpose.
+        workspace.locator('#ModernCalibrationReferenceTools summary').click()
         workspace.locator('#ModernCalibrationOpenImageLibrary').click()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
         panel=self.page.locator('#ModernReferenceImageLibrary')
