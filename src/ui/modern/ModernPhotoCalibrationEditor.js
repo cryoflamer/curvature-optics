@@ -1862,6 +1862,7 @@
       env.CurvatureImageLibraryReturnToCalibration=true;
       if(libraryView)libraryView.click();
       imageLibrary.open=true;
+      imageLibrary.dispatchEvent(new Event('curvature-library-navigation'));
       imageLibrary.scrollIntoView({block:'start',behavior:'instant'});
     };
     async function useExistingPhoto(key){
