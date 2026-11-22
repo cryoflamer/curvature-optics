@@ -4127,8 +4127,15 @@
       if(keyframeEditSession!==session)return;
       var durable=await persistStudioWorkspace({requireDurable:true,
         unchangedDraft:{id:session.projectId,serializedDraft:keyframeEditDraftAtEntry}});
-      if(!durable)
-        throw Error('The Animation Studio draft changed elsewhere or could not be saved durably');
+      if(!durable){
+        // Distinguish another tab's admitted project revision from an
+        // IndexedDB error. No keyframe changes have been committed yet.
+        var latest=await studioDraftAutosave.readCollection(root.indexedDB);
+        var current=latest&&studioDraftAutosave.getWorkspace(latest,session.projectId);
+        if(!current||JSON.stringify(current.draft)!==keyframeEditDraftAtEntry)
+          throw Error('The working project changed in another tab; no keyframe was updated');
+        throw Error('The Animation Studio draft could not be saved durably');
+      }
       if(keyframeEditSession!==session)return;
       var second=session.prepareApply(expected);
       if(JSON.stringify(first.experiment)!==JSON.stringify(second.experiment))

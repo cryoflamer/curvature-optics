@@ -4408,6 +4408,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         expect(banner.get_by_role('button',name='Apply & Return')).to_be_enabled()
+        self.assertTrue(banner.get_attribute('data-workspace-id').startswith('project_'))
         self.page.locator('#ModernHeight').fill(str(prior_height+3))
         self.page.locator('#ModernHeight').press('Tab')
         self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
