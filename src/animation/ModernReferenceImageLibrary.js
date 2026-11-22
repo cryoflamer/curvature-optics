@@ -311,7 +311,7 @@
           var existing=all.find(function(row){return row.id===id;});
           if((existing?existing.revision:0)!==expectedAnnotation)
             throw Error('Image classification changed in another tab. Reload before saving.');
-          var unchanged=JSON.stringify(annotation(existing||{}))===JSON.stringify(wanted);
+          var unchanged=JSON.stringify(annotation(existing?{kind:existing.kind,tags:existing.tags,collections:existing.collections}:{}))===JSON.stringify(wanted);
           var classified=unchanged?existing:
             {id:id,revision:expectedAnnotation+1,...wanted};
           var annRows=unchanged?all:all.filter(function(row){return row.id!==id;}).concat([classified]);
