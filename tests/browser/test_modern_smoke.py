@@ -3357,10 +3357,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
             await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
         }""")
-        # Pasting on a non-editable Gallery element imports an image.
-        refresh=panel.get_by_role('button',name='Refresh')
-        refresh.focus()
-        refresh.press('Control+v')
+        # The gallery itself is keyboard-focusable and owns the scoped paste.
+        gallery=panel.locator('.modern-image-library-gallery')
+        gallery.focus()
+        gallery.press('Control+v')
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         rows=self.page.evaluate("""async () =>
             await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
