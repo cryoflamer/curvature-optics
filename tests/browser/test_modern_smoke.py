@@ -3517,8 +3517,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         editor=self.page.locator('#ModernAnimationStudio')
         links=editor.locator('.modern-studio-reference-links')
         before=self.page.evaluate("""() => {
-            const draft=CurvatureModernApp.getAnimationStudioDraft().draft;
-            return {name:draft.name,keys:draft.frames.map(f=>f.key)};
+            const state=CurvatureModernApp.getAnimationStudioDraft(),draft=state.draft;
+            return {name:draft.name,keys:draft.frames.map(f=>f.key),selectedKey:state.selectedKey};
         }""")
         links.get_by_text('Open Image Library',exact=True).click()
         panel=self.page.locator('#ModernReferenceImageLibrary')
@@ -3534,8 +3534,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_hidden()
         expect(editor).to_be_visible()
         after=self.page.evaluate("""() => {
-            const draft=CurvatureModernApp.getAnimationStudioDraft().draft;
-            return {name:draft.name,keys:draft.frames.map(f=>f.key)};
+            const state=CurvatureModernApp.getAnimationStudioDraft(),draft=state.draft;
+            return {name:draft.name,keys:draft.frames.map(f=>f.key),selectedKey:state.selectedKey};
         }""")
         self.assertEqual(after,before)
         expect(links).to_contain_text('Reference photographs (0)')
