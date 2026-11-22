@@ -6838,6 +6838,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         links.get_by_text('Browse photographs', exact=True).click()
         picker=self.page.locator('dialog.modern-image-picker')
         expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
+        expect(picker.get_by_role('button',name='Attach selected')).to_be_disabled()
         picker.get_by_role('button',name='Select image Stale source.png (Local)').click()
         self.page.evaluate("""() => {
             window.__realImageLibrary=CurvatureModernReferenceImageLibrary;
@@ -6861,6 +6863,57 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
             ['stale_source'])
+
+
+    def test_shared_image_picker_multiple_frame_attach_and_undo(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Picker multiple originals')
+        self.page.evaluate("""async () => {
+            for(const [id,title,color] of [
+                ['multiple_first','First source.png','#ac3119'],
+                ['multiple_second','Second source.png','#27c4a1']]){
+                const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+                const context=canvas.getContext('2d');
+                context.fillStyle=color;context.fillRect(0,0,2,2);
+                const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+                const record=await CurvatureModernReferenceImageImport.ingest(
+                    new File([blob],title,{type:'image/png'}),id,window);
+                await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            }
+        }""")
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        expect(links).to_contain_text('Reference photographs (0)')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(2)
+        first=picker.get_by_role('button',name='Select image First source.png (Local)')
+        second=picker.get_by_role('button',name='Select image Second source.png (Local)')
+        first.click()
+        second.click()
+        expect(first).to_have_attribute('aria-pressed','true')
+        expect(second).to_have_attribute('aria-pressed','true')
+        expect(picker.get_by_role('status')).to_contain_text('2 selected')
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        expect(links).to_contain_text('Reference photographs (2)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['multiple_first','multiple_second'])
+        editor.locator('.modern-studio-edit-undo').last.click()
+        expect(links).to_contain_text('Reference photographs (0)')
+        editor.locator('.modern-studio-edit-redo').last.click()
+        expect(links).to_contain_text('Reference photographs (2)')
+        links.get_by_role('button',name='Unlink reference photograph 1').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['multiple_second'])
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(r=>r.id).sort()"""),
+            ['multiple_first','multiple_second'])
 
 if __name__ == '__main__':
     unittest.main()
