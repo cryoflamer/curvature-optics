@@ -3940,6 +3940,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 .then(c => c?.workspaces.some(w=>w.id===id &&
                     w.checkpoint.draft.frames.some(f=>f.referenceImageIds?.includes(photo))));
         }""",arg={'id':workspace,'photo':image_id},timeout=30000)
+        # The initial file/link autosave is debounced. Both tabs must start
+        # from a settled shared checkpoint before making divergent edits.
+        self.page.wait_for_timeout(750)
 
         second=self.context.new_page()
         errors=[]
@@ -3955,6 +3958,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(second.evaluate("""() =>
                 CurvatureModernApp.getAnimationStudioDraft().draft.frames[0]
                     .referenceImageIds?.length"""),1)
+            second.wait_for_timeout(750)
 
             # Tab A inspects the real persisted checkpoint before B changes it.
             gallery=self.open_image_library()
@@ -3980,13 +3984,24 @@ class ModernBrowserSmoke(unittest.TestCase):
                     .then(c=>c?.workspaces.some(w=>w.id===id &&
                         w.checkpoint.draft.name==='Tab B photo edits'))
             """,arg=workspace,timeout=30000)
+            # Do not mistake a transient read for durability when another
+            # tab still has a queued 450 ms autosave.
+            second.wait_for_timeout(800)
             changed=self.page.evaluate("""async id => {
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
                 const checkpoint=c.workspaces.find(w=>w.id===id).checkpoint;
                 return {savedAt:checkpoint.savedAt,
                     content:JSON.stringify(checkpoint.draft),name:checkpoint.draft.name};
             }""",workspace)
-            self.assertEqual(changed['name'],'Tab B photo edits')
+            if changed['name']!='Tab B photo edits':
+                diagnostic={
+                    'A':self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                    'B':second.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                    'A_status':self.page.locator('#ModernPersistenceStatus').inner_text(),
+                    'B_status':second.locator('#ModernPersistenceStatus').inner_text(),
+                    'stored':changed
+                }
+                self.fail('Second-tab checkpoint was replaced after autosave: '+str(diagnostic))
             self.assertNotEqual(changed['content'],initial['content'],
                 'Concurrent drafts must be compared by content, not only timestamp')
             self.assertGreaterEqual(changed['savedAt'],initial['savedAt'])
