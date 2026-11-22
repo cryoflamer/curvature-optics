@@ -868,6 +868,12 @@
       projectsStatus=$('ModernCalibrationProjectsStatus'),
       projectsList=$('ModernCalibrationProjectsList');
     const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
+    const DELETED_PROJECT_HANDOFF_KEY='curvature-calibration-deleted-project-handoff-v1';
+    // A single explicit Delete may request exactly one startup handoff.
+    // Never auto-open an arbitrary last-used project on an ordinary F5.
+    let deletedProjectHandoff=null;
+    try{deletedProjectHandoff=env.sessionStorage?.getItem(DELETED_PROJECT_HANDOFF_KEY)??null;}
+    catch(_ignored){/* Optional handoff storage. */}
     let projectRows=[],projectListBusy=false,projectListToken=0,projectInspection=null;
     // A UI-only selection, deliberately independent of the active project.
     // Never persist this into the editor draft or the project summary.
@@ -1329,7 +1335,14 @@
         }
         await storage.remove(env.indexedDB,entry.id,revision);
         if(active){
-          try{env.sessionStorage?.removeItem(LAST_PROJECT_KEY);}catch(_ignored){}
+          // Only this explicit Delete may reopen the next remaining project.
+          // Empty string means a clean standalone editor, not an old draft.
+          const remaining=await storage.list(env.indexedDB);
+          const next=remaining.find(row=>row.id!==entry.id)?.id||'';
+          try{
+            env.sessionStorage?.removeItem(LAST_PROJECT_KEY);
+            env.sessionStorage?.setItem(DELETED_PROJECT_HANDOFF_KEY,next);
+          }catch(_ignored){/* Reload must still be safe without optional storage. */}
           projectsMessage('Opened project deleted. Reloading the editor…');
           env.location.reload();return;
         }
@@ -1465,6 +1478,9 @@
       return saved;
     }
     async function restoreDraft(){
+      // A deleted project's reload must not resurrect the unrelated retained
+      // legacy draft and present it as though another project were opened.
+      if(deletedProjectHandoff!==null)return;
       restoring=true;
       try{
         const d=await readDraft();
@@ -1585,7 +1601,7 @@
         // Never move away from the live editor until its most recent
         // outgoing state has a durable acknowledgement, not just an enqueued
         // promise. A failed IndexedDB write aborts the switch.
-        if(scene){
+        if(scene&&deletedProjectHandoff===null){
           const ack=persist(true);
           if(ack)await ack;
         }
@@ -1652,6 +1668,31 @@
         projectSwitchBusy=false;workspace.inert=formerInert;
         if(!activated&&switchInterference&&scene)void persist();
         syncFitControls();
+      }
+    }
+    async function resumeAfterDeletedProject(){
+      if(deletedProjectHandoff===null)return;
+      const requested=deletedProjectHandoff;
+      // Consume the one-shot request even when the target disappeared or
+      // decoding failed. Normal reloads never auto-activate a saved project.
+      try{env.sessionStorage?.removeItem(DELETED_PROJECT_HANDOFF_KEY);}catch(_ignored){}
+      try{
+        if(requested){
+          const existing=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,requested);
+          if(!existing)throw Error('The next project is no longer available');
+          const opened=await openCalibrationProject(requested);
+          projectSelectedId=opened.project.id;
+          try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
+          projectsMessage('Opened remaining Calibration Project: '+opened.project.title+'.');
+        }else{
+          projectsMessage('Deleted project closed. No other saved project was available; choose New or Open.');
+        }
+      }catch(error){
+        projectsMessage('Deleted project closed. Could not open the next project: '+
+          error.message+'. Choose Open to retry; retained drafts were not deleted.',true);
+      }finally{
+        deletedProjectHandoff=null;
+        if(!projectsPanel.hidden)await refreshProjectList();
       }
     }
     async function prepareVisualProject(prepared){
@@ -2139,7 +2180,8 @@
         try{showScene(prepareScene(snapshot));blockedFlatDraft=false;}
         catch(e){scene=null;env.alert(e.message);return false;}
       }
-      void refreshSources();persist();
+      void refreshSources();
+      if(deletedProjectHandoff===null)persist();
       // The parent Modern workspace already owns the persisted navigation
       // preference. Restore this subview only when Calibration is entered;
       // do not auto-open or bind any stored project.
@@ -2566,7 +2608,7 @@
       });
     syncFitControls();syncPairToolbar();
     mounted={enter,restore:restoreDraft,inspectProjectStartup,
-      projectStartupStatus:()=>({...projectStartupStatus}),
+      projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,
       projectBinding,linkArchivedResult,
