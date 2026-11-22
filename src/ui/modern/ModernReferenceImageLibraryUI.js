@@ -429,7 +429,7 @@
       run(pasteClipboardImage);
     });
     host.addEventListener('paste',function(event){
-      if(busy||!host.open||event.defaultPrevented)return;
+      if(busy||env.CurvatureModernApp?.getWorkspaceMode?.()!=='images'||event.defaultPrevented)return;
       var target=event.target;
       if(target&&target.closest&&target.closest('input,textarea,[contenteditable]'))return;
       var items=event.clipboardData&&event.clipboardData.items;
