@@ -6651,7 +6651,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio.locator('.modern-studio-edit-redo').first.click()
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(10)
         studio.locator('.modern-studio-filmstrip-item').nth(4).get_by_role(
-            'button', name='Edit 05').click()
+            'button', name='Edit '+new_frame['name']).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         self.page.locator('#ModernHeight').fill(str(original_height+3))

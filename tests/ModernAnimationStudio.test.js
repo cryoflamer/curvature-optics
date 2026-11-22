@@ -305,15 +305,18 @@ test('Timeline thumbnail Preview, Properties and contract-aware Edit remain dist
     previewFrame:key=>calls.push(['preview',key]),
     select:key=>calls.push(['properties',key]),
     canEditKeyframe:()=>true,
-    editKeyframe:key=>calls.push(['edit',key])
+    editKeyframe:key=>calls.push(['edit',key]),
+    duplicateEditKeyframe:key=>calls.push(['duplicate',key])
   },false,{selectedKey:'history-1'});
   const items=collect(host,n=>n.className==='modern-studio-filmstrip-item');
   items[1].children[0].listeners.click();
   const controls=collect(items[1],n=>n.className==='modern-studio-card-actions')[0].children;
-  assert.deepEqual(controls.map(c=>c.textContent),['☷','✎']);
+  assert.deepEqual(controls.map(c=>c.textContent),['☷','✎','⧉']);
   assert.match(controls[0]['aria-label'],/Properties for/);
   assert.match(controls[1]['aria-label'],/Edit .* in Scene/);
+  assert.match(controls[2]['aria-label'],/Duplicate and edit/);
   assert.equal(controls[1].disabled,false);
+  assert.equal(controls[2].disabled,false);
   assert.ok(controls.every(c=>c.draggable===false&&c['data-no-thumbnail-preview']==='true'));
   let prevented=0,stopped=0;
   controls.forEach(c=>{
@@ -323,8 +326,8 @@ test('Timeline thumbnail Preview, Properties and contract-aware Edit remain dist
     c.listeners.dblclick({stopPropagation(){stopped++;}});
     c.listeners.click({stopPropagation(){stopped++;}});
   });
-  assert.equal(stopped,10);assert.equal(prevented,4,'card icons never initiate the parent card drag');
-  assert.deepEqual(calls,[['preview','history-2'],['properties','history-2'],['edit','history-2']]);
+  assert.equal(stopped,15);assert.equal(prevented,6,'card icons never initiate the parent card drag');
+  assert.deepEqual(calls,[['preview','history-2'],['properties','history-2'],['edit','history-2'],['duplicate','history-2']]);
 });
 
 test('Keyframe card × removes its own frame without selecting, dragging or touching History',()=>{
