@@ -650,9 +650,21 @@ draft only*. Updating an existing named Library project is a separate
 deliberate Library Save action; a saved project remains independent of
 History, and its embedded values survive reload and missing History entries.
 Apply never silently writes a new History record or rewrites an existing
-snapshot. Any future explicit “save as History snapshot”, duplicate-keyframe
-or linked-History replacement action must retain those separate user intents
-and complete their own conflict/recovery checks.
+snapshot. The separate **Apply + Save to History** action first applies the
+contract-validated frame to the working Studio draft, then confirms its
+durable workspace checkpoint before deliberately recording the canonical
+embedded frame with `ModernExperimentHistory.record(..., 'manual', ...)`.
+Manual History deduplication reuses an exact existing snapshot and pins it;
+no new ID is promised. The returned History ID becomes provenance on only
+the selected frame, with a second confirmed Studio checkpoint. Snapshot
+playback never reads History by ID. If the History or provenance step fails,
+the already-applied keyframe remains in the working draft and the UI reports
+the partial result; a retry must first inspect History. Cross-tab revision
+guards are preserved, and the session's entry draft is serialized through
+the same canonical draft checkpoint normalization as IndexedDB, avoiding
+spurious conflicts caused only by JavaScript property order.
+**Duplicate & Edit** and **replace linked History snapshot** remain separate
+unimplemented actions, not hidden variants of Apply.
 
 # Experimental Effective Radius Preview (Animation Studio)
 
