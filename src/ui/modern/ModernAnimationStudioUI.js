@@ -1169,12 +1169,14 @@
     var browse=button(doc,'Browse photographs','Browse and attach local reference photographs',browseImages);
     tools.appendChild(browse);
     var openLibrary=button(doc,'Open Image Library','Add reference photographs in the shared gallery',function(){
-      var libraryTab=doc.getElementById('ModernAnimationViewLibrary'),
+      var libraryTab=doc.getElementById('ModernImageLibraryTab'),
         imageLibrary=doc.getElementById('ModernReferenceImageLibrary'),win=doc.defaultView;
       if(!libraryTab||!imageLibrary||!win){status.textContent='Image Library navigation unavailable';return;}
       libraryTab.click();
+      if(win.CurvatureModernApp?.getWorkspaceMode?.()!=='images'){
+        status.textContent='Cannot open Image Library during the current edit';return;
+      }
       win.CurvatureImageLibraryReturnToStoryboard=true;
-      imageLibrary.open=true;
       imageLibrary.dispatchEvent(new win.Event('curvature-library-navigation'));
       imageLibrary.scrollIntoView({block:'start',behavior:'instant'});
     });
