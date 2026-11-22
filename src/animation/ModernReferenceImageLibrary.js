@@ -161,7 +161,7 @@
     value.annotations.forEach(function(row){
       if(!row||!ids.has(row.id)||annotations.has(row.id)||!Number.isSafeInteger(row.revision)||row.revision<1)
         throw RangeError('Invalid or orphaned backup classification');
-      annotations.set(row.id,{...annotation(row),revision:row.revision,id:row.id});
+      annotations.set(row.id,{...annotation({kind:row.kind,tags:row.tags,collections:row.collections}),revision:row.revision,id:row.id});
     });
     quota(rows);annotationQuota([...annotations.values()]);
     return {rows:rows,annotations:annotations};
@@ -210,7 +210,7 @@
           inspected.annotations.forEach(function(row,sourceId){
             var target=mapped.get(sourceId);
             if(!anno.has(target)){
-              var incoming={id:target,revision:1,...annotation(row)};
+              var incoming={id:target,revision:1,...annotation({kind:row.kind,tags:row.tags,collections:row.collections})};
               pending.push(incoming);anno.set(target,incoming);
             }
           });
