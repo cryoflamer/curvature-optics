@@ -4201,6 +4201,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Create copy', exact=True).click()
         studio = self.page.locator('#ModernAnimationStudio')
         library = self.page.locator('#ModernAnimationLibrary')
+        expect(studio).to_be_visible()
+        self.page.wait_for_function("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB)).length === 1
+        """, timeout=30000)
         project_id = self.page.evaluate("""async () => {
             const saved = await CurvatureModernAnimationLibrary.list(indexedDB);
             return saved.length === 1 ? saved[0].id : null;
