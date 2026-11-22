@@ -3292,6 +3292,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioView()'),'editor')
         self.page.locator('#ModernAnimationTab').click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.page.reload(wait_until='load')
