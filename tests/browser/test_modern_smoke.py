@@ -3719,6 +3719,3853 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(saved,{'a':13,'b':14,'samePhoto':True,'libraryCount':1})
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_where_used_current_storyboard_checks_exact_checkpoint(self):
+        import base64
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Current Storyboard usage')
+        panel=self.open_image_library()
+        image=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'current-usage.png','mimeType':'image/png','buffer':image})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        links=self.page.locator('#ModernAnimationStudio .modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image current-usage.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        before=self.page.evaluate("""() => {
+            const app=CurvatureModernApp,checkpoint=app.getAnimationStudioDraft();
+            return {workspaceId:app.getAnimationStudioWorkspaceId(),
+                selectedKey:checkpoint.selectedKey,
+                savedAt:checkpoint.savedAt,
+                imageId:checkpoint.draft.frames[0].referenceImageIds[0]};
+        }""")
+        self.assertTrue(before['workspaceId'])
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',name='Inspect current-usage.png (Local original)').click()
+        where=gallery.locator('.modern-image-usage')
+        current=where.get_by_role('button',name=re.compile(
+            r'^Open draft Current Storyboard usage frame 1 · current
+        import base64
+        self.open_modern()
+        panel=self.open_image_library()
+        image=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'stale-usage.png','mimeType':'image/png','buffer':image})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.evaluate("""() => {
+            const graph=window.CurvatureModernImageUsageGraph;
+            window.CurvatureModernImageUsageGraph={...graph,discover:async()=>({
+                uses:[{type:'calibration',ownerId:'removed-owner',title:'Gone calibration',
+                    revision:2,source:'saved'}],
+                count:1,complete:true,unavailable:[],note:'Local test owner.'
+            })};
+            const store=window.CurvatureModernCalibrationProjectStore;
+            window.CurvatureModernCalibrationProjectStore={...store,get:async()=>null};
+        }""")
+        panel.get_by_role('button',name='Refresh uses').click()
+        where=panel.locator('.modern-image-usage')
+        go=where.get_by_role('button',name='Open calibration Gone calibration · saved')
+        expect(go).to_be_visible()
+        go.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text(
+            'Cannot open use: Calibration project was deleted')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        # A second-tab revision change is rejected before navigating as well.
+        self.page.evaluate("""() => {
+            CurvatureModernCalibrationProjectStore.get=async()=>({revision:3});
+        }""")
+        go.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text(
+            'Calibration project changed since usage inspection')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_keyframe_reference_links_roundtrip(self):
+        import base64
+        payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('CI Reference Links')
+        observations = self.open_image_library()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        expect(self.page.locator('#ModernImageLibraryTab')).to_have_attribute('aria-pressed','true')
+        observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        links = editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs', exact=True).click()
+        expect(links.get_by_role('status')).to_contain_text('Local library loaded')
+        photo_id = self.page.evaluate("async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id")
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker.get_by_label('Source', exact=True)).to_have_value('all')
+        expect(picker.get_by_label('Kind', exact=True)).to_have_value('all')
+        expect(picker.locator('.modern-image-picker-choice img')).to_be_visible()
+        picker.get_by_label('Kind', exact=True).select_option('unclassified')
+        picker.get_by_role('button',name='Select image observation.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        expect(links).to_contain_text('Reference photographs (1)')
+        expect(links.locator('.modern-studio-reference-row')).to_contain_text('observation.png')
+        expect(links.locator('.modern-studio-reference-row img')).to_be_visible()
+        links.get_by_role('button', name='View original photograph 1').click()
+        expect(links.locator('dialog img')).to_be_visible()
+        links.get_by_text('Close photograph', exact=True).click()
+        editor.locator('.modern-studio-edit-undo').last.click()
+        expect(links).to_contain_text('Reference photographs (0)')
+        editor.locator('.modern-studio-edit-redo').last.click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernAnimationLibrary').get_by_text('Save changes', exact=True).click()
+        self.page.wait_for_function("async id => (await CurvatureModernAnimationLibrary.list(indexedDB))[0].project.keyframes[0].referenceImageIds?.[0] === id", arg=photo_id)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(links.locator('.modern-studio-reference-row')).to_contain_text('observation.png')
+        links.get_by_text('Unlink', exact=True).click()
+        expect(links).to_contain_text('Reference photographs (0)')
+        self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 1)
+
+    def test_reference_portable_bundle_import_and_export(self):
+        self.open_modern()
+        self.open_animation()
+        # A complete synthetic bundle from another browser, with a conflicting local ID.
+        wire = self.page.evaluate("""async () => {
+            const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC';
+            const original = {dataUrl: png, width: 1, height: 1};
+            const asset = {version: 1, id: 'portable_photo', title: 'Imported observation',
+                           author: 'Observer', original};
+            await CurvatureModernReferenceImageLibrary.create(indexedDB, {...asset, title: 'Local observation'});
+            const draft = structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            draft.keyframes[0].referenceImageIds = [asset.id];
+            draft.keyframes[1].referenceImageIds = [asset.id];
+            const entry = CurvatureModernAnimationLibrary.record(draft, 'auto', draft.id, 1, 1);
+            return CurvatureModernAnimationLibrary.exportPortable([entry], undefined, {referenceImages: [asset]});
+        }""")
+        library = self.page.locator('#ModernAnimationLibrary')
+        def import_bundle():
+            library.get_by_label('Import animation JSON file').set_input_files({
+                'name': 'portable.json', 'mimeType': 'application/json', 'buffer': wire.encode('utf-8')})
+        import_bundle()
+        expect(library.get_by_text('My Projects · 1', exact=True)).to_be_visible()
+        result = self.page.evaluate("""async () => {
+            const projects = await CurvatureModernAnimationLibrary.list(indexedDB);
+            const ids = projects[0].project.keyframes.slice(0, 2).map(f => f.referenceImageIds[0]);
+            return {ids, incoming: (await CurvatureModernReferenceImageLibrary.get(indexedDB, ids[0])).record,
+                local: (await CurvatureModernReferenceImageLibrary.get(indexedDB, 'portable_photo')).record};
+        }""")
+        self.assertEqual(result['ids'][0], result['ids'][1])
+        self.assertNotEqual(result['ids'][0], 'portable_photo')
+        self.assertEqual(result['local']['title'], 'Local observation')
+        self.assertEqual(result['incoming']['title'], 'Imported observation')
+        with self.page.expect_download() as download:
+            library.get_by_text('Export all', exact=True).click()
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(exported['version'], 2)
+        self.assertEqual(exported['referenceImages'], [result['incoming']])
+        import_bundle()
+        expect(library).to_contain_text('Imported 0 animations; 1 already present')
+        self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 2)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def assert_preview_fills_panels(self):
+        # CSS pixels, not the DPR-scaled backing dimensions.
+        self.page.wait_for_function("""() => ['A', 'B'].every(side => {
+            const host = document.getElementById('ModernAnimationCanvas' + side);
+            const graph = window.CurvatureModernAnimationGraphs?.[side];
+            const width = host.getBoundingClientRect().width;
+            if (width < 2) return true;
+            const canvas = graph?.Canvas;
+            const rect = canvas?.getBoundingClientRect();
+            return rect && rect.width > 2 && Math.abs(width - rect.width - 2*graph.BorderWidth) <= 2
+                && Math.abs(rect.height/rect.width - 0.6667) < 0.01
+                && Math.abs(canvas.height/canvas.width - 0.6667) < 0.01
+                && document.getElementById('ModernAnimationFrameLoading' + side).hidden;
+        })""", timeout=30000)
+
+    def test_soundly_reference_presentation_layout(self):
+        import base64
+        payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        observations = self.open_image_library()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        expect(self.page.locator('#ModernImageLibraryTab')).to_have_attribute('aria-pressed','true')
+        observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
+        editor.locator('.modern-studio-keyframe').first.click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
+        links = editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs', exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker.locator('.modern-image-picker-choice img')).to_be_visible()
+        picker.get_by_role('button',name='Select image observation.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        editor.locator('.modern-studio-keyframe').first.click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        ref_panel = self.page.locator('#ModernAnimationReferencePanel')
+        layout = self.page.locator('#ModernAnimationReferenceLayout')
+        expect(ref_panel.locator('img')).to_be_visible(timeout=30000)
+        self.assert_preview_fills_panels()
+        layout.select_option('below')
+        expect(self.page.locator('#ModernAnimationPlaybackPanels')).to_have_class(re.compile('has-reference-below'))
+        self.assert_preview_fills_panels()
+        layout.select_option('hidden')
+        expect(ref_panel).to_be_hidden()
+        self.assert_preview_fills_panels()
+        layout.select_option('side')
+        expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
+        self.page.locator('#ModernAnimationPresent').click()
+        expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
+        chapter = self.page.locator('#ModernAnimationNarrativeNavigation')
+        chapter.select_option('6')
+        expect(ref_panel).to_be_hidden()
+        self.assert_preview_fills_panels()
+        chapter.select_option('0')
+        expect(ref_panel.locator('img')).to_be_visible()
+        self.assert_preview_fills_panels()
+        ref_panel.get_by_text('View original & details').click()
+        expect(self.page.locator('#ModernAnimationPlaybackStage dialog img')).to_be_visible()
+        self.page.locator('#ModernAnimationPlaybackStage dialog').get_by_text('Close photograph').click()
+        self.page.locator('#ModernAnimationPresentationExit').click()
+        splitter = self.page.locator('#ModernAnimationReferenceSplitter')
+        splitter.focus()
+        self.page.keyboard.press('ArrowRight')
+        expect(splitter).to_have_attribute('aria-valuenow', '35')
+        self.assert_preview_fills_panels()
+        self.page.locator('#ModernAnimationPlaybackSeek').evaluate("el => {el.value=100;el.dispatchEvent(new Event('input',{bubbles:true}));}")
+        expect(ref_panel.locator('img')).to_be_hidden()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        editor.locator('.modern-studio-keyframe').first.click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(ref_panel.locator('img')).to_be_visible()
+        # Real Studio copy, reference import/attachment and HTTP worker imports.
+        export = self.page.locator('#ModernAnimationFrameExportStart').locator('xpath=ancestor::details[1]')
+        if export.get_attribute('open') is None:
+            export.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportMode').select_option('presentation')
+        self.page.locator('#ModernAnimationFrameExportPresentationSize').select_option('1280')
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('25')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
+        self.page.locator('#ModernAnimationFrameExportStart').click()
+        status = self.page.locator('#ModernAnimationFrameExportStatus')
+        expect(status).to_contain_text('1479 requested; maximum 751')
+        self.page.locator('#ModernAnimationFrameExportPreview').click()
+        expect(status).to_contain_text('Presentation preview ready', timeout=120000)
+        expect(self.page.locator('#ModernAnimationFrameExportPreviewImage')).to_be_visible()
+        with self.page.expect_download() as download:
+            self.page.locator('#ModernAnimationFrameExportPreviewSave').click()
+        self.assertTrue(download.value.suggested_filename.endswith('.zip'))
+
+    def test_shipped_demo_catalog_http(self):
+        self.open_modern()
+        self.assert_shipped_demo_catalog()
+
+    def test_shipped_demo_catalog_file(self):
+        # Local classic script resources must work without fetch(file://).
+        self.page.goto((ROOT / 'CurvatureModern.html').as_uri(), wait_until='load', timeout=30000)
+        self.assert_shipped_demo_catalog()
+
+    def test_soundly_compare_playback_seek_and_restart(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        stage = self.page.locator('#ModernAnimationPlaybackStage')
+        expect(stage).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · vacuum')
+        expect(self.page.locator('#ModernAnimationPlaybackLabelB')).to_have_text('Model B · Flat · vacuum')
+        expect(self.page.locator('#ModernAnimationPlaybackViewB')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackOptics')).to_have_value('canvas-direct')
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('B: canvas-direct', timeout=30000)
+        seek = self.page.locator('#ModernAnimationPlaybackSeek')
+        seek.evaluate("el => { el.value = 400; el.dispatchEvent(new Event('input', {bubbles:true})); }")
+        expect(diag).to_contain_text('Rendered t=23.64s')
+        self.page.locator('#ModernAnimationPlaybackPlay').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback().positionMs > 23640')
+        self.page.locator('#ModernAnimationPlaybackPause').click()
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        self.page.locator('#ModernAnimationPlaybackStop').click()
+        expect(diag).to_contain_text('Rendered t=0.00s')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 0)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_keyframe_navigation_and_personal_auto_prepare(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        cards = self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')
+        # The first jump must paint before Play has ever been clicked.
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        cards.nth(1).click()
+        expect(diag).to_contain_text('Rendered t=8.50s')
+        self.page.locator('#ModernAnimationPlaybackPlay').click()
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95 / 59.10 s')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        cards.nth(0).click()
+        expect(diag).to_contain_text('Rendered t=0.00s')
+        self.page.locator('#ModernAnimationPlaybackStop').click()
+        cards.nth(5).click()
+        expect(diag).to_contain_text('Rendered t=35.40s')
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        expect(cards).to_have_count(9)
+        self.page.wait_for_function('CurvatureModernApp.getBuiltInDemo() === null')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        editor = self.page.locator('#ModernAnimationStudio')
+        timeline = editor.locator('.modern-studio-filmstrip')
+        inspector = editor.locator('.modern-studio-inspector-pane')
+        expect(timeline).to_be_visible()
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        inspector.get_by_role('button', name='Inspect project settings').click()
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        cards.nth(2).click()
+        expect(diag).to_contain_text('Rendered t=15.00s')
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(timeline).to_be_visible()
+        expect(timeline.locator('.modern-studio-keyframe').nth(2)).to_have_attribute('aria-pressed', 'true')
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        name = editor.get_by_label('Project name')
+        name.fill('Soundly navigation check')
+        name.press('Tab')
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() === null')
+        self.page.locator('#ModernAnimationStudio .modern-studio-keyframe').nth(3).click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_presentation_reuses_player_and_storyboard(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        stage = self.page.locator('#ModernAnimationPlaybackStage')
+        self.page.locator('#ModernAnimationPresent').click()
+        expect(stage).to_have_class(re.compile('is-presenting'))
+        expect(self.page.locator('#ModernAnimationPresentationTitle')).to_contain_text('Soundly')
+        expect(self.page.locator('#ModernAnimationPlaybackOptics')).not_to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackQuality')).to_be_visible()
+        self.assertTrue(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
+        story = self.page.locator('#ModernAnimationStoryboard')
+        cards = story.locator('.modern-animation-storyboard-card')
+        settings = self.page.locator('#ModernAnimationPresentationSettingsToggle')
+        toggle = self.page.locator('#ModernAnimationPresentationStoryboardToggle')
+        expect(story).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationPlaybackRetry')).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationPlaybackStatus')).to_be_hidden()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_hidden()
+        settings.click()
+        expect(settings).to_have_attribute('aria-expanded', 'true')
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
+        self.assert_preview_fills_panels()
+        settings.click()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_hidden()
+        toggle.click()
+        expect(toggle).to_have_attribute('aria-expanded', 'true')
+        self.assert_preview_fills_panels()
+        expect(cards).to_have_count(9)
+        for name in ('Capture all keyframes', 'Regenerate all thumbnails', 'Export with thumbnails', 'Export without thumbnails'):
+            author_action = story.get_by_text(name, exact=True)
+            expect(author_action).to_have_count(1)
+            expect(author_action).to_be_hidden()
+        expect(story.locator('.modern-animation-author-only').first).to_be_hidden()
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        expect(self.page.locator('#ModernAnimationPresentationFrame')).to_contain_text('4 / 9')
+        toggle.click()
+        expect(story).to_be_hidden()
+        # Exercise the conditional recovery chrome without changing the renderer.
+        self.assertTrue(stage.evaluate("""el => {
+            const notice = el.querySelector('#ModernAnimationFrameLoadingA');
+            const status = el.querySelector('#ModernAnimationPlaybackStatus');
+            const old = status.getAttribute('data-status-kind'), hidden = notice.hidden;
+            notice.classList.add('is-failed'); notice.hidden = false;
+            status.setAttribute('data-status-kind', 'warning');
+            const visible = id => getComputedStyle(el.querySelector('#'+id)).display !== 'none';
+            const result = visible('ModernAnimationPlaybackRetry') && visible('ModernAnimationPlaybackStatus');
+            notice.classList.remove('is-failed'); notice.hidden = hidden;
+            if (old === null) status.removeAttribute('data-status-kind'); else status.setAttribute('data-status-kind', old);
+            return result;
+        }"""))
+        self.page.set_viewport_size({'width': 1200, 'height': 800})
+        self.assert_preview_fills_panels()
+        expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
+        self.page.keyboard.press('Escape')
+        expect(stage).not_to_have_class(re.compile('is-presenting'))
+        self.assert_preview_fills_panels()
+        expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
+        self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
+        expect(story.get_by_role('button', name='Export without thumbnails', exact=True)).to_be_visible()
+        expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackRetry')).to_be_visible()
+        expect(settings).to_be_hidden()
+        self.page.locator('#ModernAnimationPresent').click()
+        expect(story).to_be_hidden()
+        self.page.locator('#ModernAnimationPresentationExit').click()
+
+    def test_soundly_atmosphere_switch_preserves_authored_project_and_playhead(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        cards = self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        switch = self.page.locator('#ModernAnimationAtmosphere')
+        authored = self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()')
+        expect(switch).to_have_value('vacuum')
+        self.page.locator('#ModernAnimationPresent').click()
+        self.page.locator('#ModernAnimationPresentationSettingsToggle').click()
+        expect(switch).to_be_visible()
+        switch.select_option('standard')
+        expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · standard', timeout=30000)
+        expect(self.page.locator('#ModernAnimationPlaybackLabelB')).to_have_text('Model B · Flat · standard')
+        expect(diag).to_contain_text('Rendered t=20.95s')
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        self.assertEqual(cards.nth(3).locator('img').count(), 0)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()'), authored)
+        self.page.locator('#ModernAnimationPresentationExit').click()
+        story = self.page.locator('#ModernAnimationStoryboard')
+        with self.page.expect_download(timeout=60000) as download:
+            story.get_by_role('button', name='Export with thumbnails (standard)', exact=True).click()
+        self.assertIn('-standard-', download.value.suggested_filename)
+        variant = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))['animations'][0]
+        self.assertEqual(len(variant['keyframeThumbnails']), 9)
+        self.assertEqual(variant['project']['baseExperiment']['compare']['A']['atmosphere'], 'standard')
+        self.assertEqual(variant['project']['baseExperiment']['compare']['B']['atmosphere'], 'standard')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioProject()'), authored)
+        switch.select_option('vacuum')
+        expect(self.page.locator('#ModernAnimationPlaybackLabelA')).to_have_text('Model A · Globe · vacuum')
+        expect(cards.nth(3).locator('img')).to_have_count(1)
+        expect(switch).to_have_value('vacuum')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_copy_narrative_follows_storyboard_and_is_plain_text(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
+        editor.locator('.modern-studio-keyframe').nth(3).click()
+        heading = editor.get_by_label('Presentation title (optional)')
+        heading.fill('Real observation')
+        heading.press('Tab')
+        caption = editor.get_by_label('Frame explanation (optional)')
+        literal = '<b>Low view</b>\nBridge explanation'
+        caption.fill(literal)
+        caption.press('Tab')
+        editor.locator('.modern-studio-keyframe').nth(3).click()
+        # A hidden Preview retains the playhead, but optical painting waits
+        # until its mounted viewport becomes visible again.
+        self.page.locator('#ModernAnimationViewPreview').click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.page.locator('#ModernAnimationPresent').click()
+        narrative = self.page.locator('#ModernAnimationPresentationNarrative')
+        text = self.page.locator('#ModernAnimationPresentationNarrativeText')
+        expect(narrative).to_be_visible()
+        expect(text).to_have_text(literal)
+        expect(text.locator('b')).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationPresentationNarrativeLabel')).to_have_text('4 / 9 · Real observation')
+        self.page.locator('#ModernAnimationPresentationSettingsToggle').click()
+        visibility = self.page.get_by_label('Show explanations')
+        visibility.uncheck()
+        expect(narrative).not_to_be_visible()
+        visibility.check()
+        expect(narrative).to_be_visible()
+        navigation = self.page.get_by_label('Presentation chapter')
+        navigation.select_option('4')
+        expect(text).to_be_empty()
+        navigation.select_option('3')
+        expect(text).to_have_text(literal)
+        self.page.keyboard.press('Escape')
+        expect(narrative).not_to_be_visible()
+
+    def test_soundly_lazy_keyframe_thumbnails(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        story = self.page.locator('#ModernAnimationStoryboard')
+        cards = story.locator('.modern-animation-storyboard-card')
+        expect(cards.locator('img')).to_have_count(0)
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        image = cards.nth(3).locator('img')
+        expect(image).to_have_attribute('src', re.compile(r'^data:image/(webp|png);base64,'))
+        expect(cards.locator('img')).to_have_count(1)
+        story.get_by_label('Capture selected keyframe thumbnail').click()
+        expect(image).to_be_visible()
+        cards.nth(1).click()
+        expect(diag).to_contain_text('Rendered t=8.50s')
+        expect(cards.locator('img')).to_have_count(2)
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_complete_storyboard_export_preserves_playhead(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=0.00s', timeout=30000)
+        story = self.page.locator('#ModernAnimationStoryboard')
+        cards = story.locator('.modern-animation-storyboard-card')
+        cards.nth(3).click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        before = self.page.evaluate('CurvatureModernApp.getStudioPlayback()')
+        with self.page.expect_download(timeout=60000) as download:
+            story.get_by_role('button', name='Export with thumbnails', exact=True).click()
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(len(exported['animations'][0]['keyframeThumbnails']), 9)
+        expect(cards.locator('img')).to_have_count(9)
+        after = self.page.evaluate('CurvatureModernApp.getStudioPlayback()')
+        self.assertEqual(after['positionMs'], before['positionMs'])
+        self.assertEqual(after['playing'], before['playing'])
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        with self.page.expect_download() as download:
+            story.get_by_role('button', name='Export without thumbnails', exact=True).click()
+        compact = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertNotIn('keyframeThumbnails', compact['animations'][0])
+        self.assertEqual(compact['animations'][0]['project'], exported['animations'][0]['project'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_keyframe_thumbnails_survive_reload_and_copy(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        demo.get_by_text('Open demo', exact=True).click()
+        cards = self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')
+        expect(cards).to_have_count(9)
+        cards.nth(3).click()
+        image = cards.nth(3).locator('img')
+        expect(image).to_have_attribute('src', re.compile(r'^data:image/(webp|png);base64,'))
+        original = image.get_attribute('src')
+        self.page.wait_for_function("""async () => {
+            const rows = await CurvatureModernExperimentThumbnail.createKeyframePersistence(indexedDB).read();
+            return rows.some(row => row.image.dataUrl === %s);
+        }""" % json.dumps(original))
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        demo.get_by_text('Open demo', exact=True).click()
+        expect(image).to_have_attribute('src', original)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        demo.get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getBuiltInDemo() === null')
+        expect(image).to_have_attribute('src', original)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_builtin_demo_readonly_copy_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        studio = self.page.locator('#ModernAnimationStudio')
+        library = self.page.locator('#ModernAnimationLibrary')
+        self.page.locator('#ModernAnimationViewEditor').click()
+        name = studio.get_by_label('Project name')
+        name.fill('Retained user draft')
+        expect(name).to_have_value('Retained user draft')
+        self.page.wait_for_timeout(750)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        expect(self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')).to_have_count(9)
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(0)
+        expect(studio.get_by_label('Project name')).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationPlaybackInterpolation')).to_be_disabled()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB)).length"""), 0)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.get_by_text('Close demo', exact=True).click()
+        expect(studio.get_by_label('Project name')).to_have_value('Retained user draft')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertTrue(self.page.evaluate("""async () => {
+            const rows = await CurvatureModernAnimationLibrary.list(indexedDB);
+            const demo = CurvatureModernDemoCatalog.load()[0];
+            return rows.length === 1 && rows[0].id !== demo.project.id &&
+                rows[0].cover.startsWith('data:image/png;base64,');
+        }"""))
+        # Reloading while viewing a demo restores the last user project, not
+        # a serialized editable version of the built-in.
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.locator('[data-demo-id="soundly"]').get_by_text('Open demo', exact=True).click()
+        expect(studio).to_contain_text('Built-in demo · Read-only')
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_demo_catalog_cards_and_direct_copy(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        studio = self.page.locator('#ModernAnimationStudio')
+        demo = library.locator('[data-demo-id="soundly"]')
+        expect(library.get_by_text('Built-in Demos · 1', exact=True)).to_be_visible()
+        expect(library.get_by_text('My Projects · 0', exact=True)).to_be_visible()
+        expect(demo.locator('.modern-animation-library-cover-image')).to_be_visible()
+        expect(demo.locator('img')).to_have_js_property('complete', True)
+        self.assertGreater(demo.locator('img').evaluate('(img) => img.naturalWidth'), 0)
+        expect(demo.locator('.modern-card-delete')).to_have_count(0)
+        expect(demo.get_by_role('button', name='Rename')).to_have_count(0)
+        with self.page.expect_download() as download:
+            demo.get_by_text('Export demo', exact=True).click()
+        self.assertRegex(download.value.suggested_filename, r'^soundly-causeway-bridge-camera-study-vacuum-\d{8}-\d{6}-\d{3}(?:-with-thumbnails)?\.json$')
+        exported = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))['animations'][0]
+        self.assertEqual(exported['project']['baseExperiment']['compare']['A']['atmosphere'], 'vacuum')
+        self.assertEqual(exported['project']['baseExperiment']['compare']['B']['atmosphere'], 'vacuum')
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio.get_by_label('Project name').fill('Keep original work')
+        self.page.wait_for_timeout(750)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        copy = demo.get_by_text('Create copy', exact=True)
+        copy.focus()
+        copy.press('Enter')
+        expect(studio.get_by_label('Project name')).to_have_value(
+            'Soundly Causeway · Bridge Camera Study (copy)')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(library.get_by_text('My Projects · 1', exact=True)).to_be_visible()
+        personal = library.locator('[data-animation-id]')
+        expect(personal).to_have_count(1)
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/png;base64,'))
+        expect(demo.locator('.modern-demo-card-status')).to_have_text('Built-in · Read-only')
+        expect(library).to_contain_text('Keep original work')
+        personal.click()
+        expect(demo).not_to_have_class(re.compile('is-selected'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_personal_cover_editor_and_default_demo_optics(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        optics = self.page.locator('#ModernAnimationPlaybackOptics')
+        demo.get_by_text('Open demo', exact=True).click()
+        expect(optics).to_have_value('canvas-direct')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        demo.get_by_text('Create copy', exact=True).click()
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        personal = library.locator('[data-animation-id]')
+        expect(personal).to_have_count(1)
+        expect(optics).to_have_value('canvas-direct')
+        expect(personal.get_by_text('Remove cover', exact=True)).to_be_enabled()
+        original = personal.locator('.modern-animation-library-cover-image').get_attribute('src')
+        personal.get_by_text('Remove cover', exact=True).click()
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_count(0)
+        personal.locator('input[type=file]').set_input_files(str(ROOT / 'demos/modern/covers/soundly.png'))
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/jpeg;base64,'))
+        expect(personal.get_by_text('Capture frame', exact=True)).to_be_enabled()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        # Wait for the initial paused preview to complete before capturing.
+        expect(self.page.locator('#ModernAnimationFrameLoadingA')).to_be_hidden(timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        personal.get_by_text('Capture frame', exact=True).click()
+        expect(personal.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', re.compile('^data:image/(webp|png);base64,'))
+        self.assertTrue(self.page.evaluate("""async () => {
+            const rows = await CurvatureModernAnimationLibrary.list(indexedDB);
+            return rows.length === 1 && rows[0].quality === 'canvas-direct' &&
+              /^data:image\\/(webp|png);base64,/.test(rows[0].cover);
+        }"""))
+        self.assertIsNotNone(original)
+        expect(demo.locator('.modern-animation-library-cover-image')).to_have_attribute(
+            'src', 'demos/modern/covers/soundly.png')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_studio_view_url_back_forward_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationViewLibrary')
+        editor = self.page.locator('#ModernAnimationViewEditor')
+        preview = self.page.locator('#ModernAnimationViewPreview')
+        expect(library).to_have_attribute('aria-selected', 'true')
+        editor.click()
+        self.assertEqual(self.page.evaluate("new URL(location.href).searchParams.get('studioView')"), 'editor')
+        self.page.locator('#ModernAnimationStudio').get_by_label('Project name').fill('URL view retention')
+        preview.click()
+        self.assertEqual(self.page.evaluate("new URL(location.href).searchParams.get('studioView')"), 'preview')
+        self.page.go_back()
+        expect(editor).to_have_attribute('aria-selected', 'true')
+        expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value('URL view retention')
+        self.page.go_forward()
+        expect(preview).to_have_attribute('aria-selected', 'true')
+        self.page.reload()
+        expect(preview).to_have_attribute('aria-selected', 'true')
+        editor.click()
+        expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value('URL view retention')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_studio_editor_field_focus_survives_view_navigation(self):
+        self.open_modern()
+        self.open_animation()
+        editor_tab = self.page.locator('#ModernAnimationViewEditor')
+        preview_tab = self.page.locator('#ModernAnimationViewPreview')
+        editor_tab.click()
+        field = self.page.locator('#ModernAnimationStudio').get_by_label('Project name')
+        field.fill('Focus and caret survive')
+        field.focus()
+        field.evaluate('el => el.setSelectionRange(5, 5)')
+        preview_tab.click()
+        editor_tab.click()
+        expect(field).to_have_value('Focus and caret survive')
+        self.assertTrue(field.evaluate('el => document.activeElement === el'))
+        self.assertEqual(field.evaluate('el => el.selectionStart'), 5)
+        editor_tab.focus()
+        self.page.keyboard.press('ArrowRight')
+        expect(preview_tab).to_have_attribute('aria-selected', 'true')
+        self.assertTrue(preview_tab.evaluate('el => document.activeElement === el'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_studio_route_priority_and_selected_keyframe_history(self):
+        self.open_modern()
+        self.page.goto(self.base_url + '?mode=scene&studioView=preview', wait_until='load')
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        self.page.goto(self.base_url + '?studioView=editor', wait_until='load')
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_be_visible()
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        strip = self.page.locator('#ModernAnimationStudio .modern-studio-keyframe')
+        expect(strip).to_have_count(9)
+        strip.nth(3).click()
+        key = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey')
+        self.assertIsNotNone(key)
+        self.page.locator('#ModernAnimationViewPreview').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback().positionMs === 20950')
+        self.page.go_back()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        self.page.go_forward()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_preview_tab_prepares_compatible_draft_without_editor_button(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-preview-bar')).to_have_count(0)
+        editor_tab = self.page.locator('#ModernAnimationViewEditor')
+        preview_tab = self.page.locator('#ModernAnimationViewPreview')
+        studio.get_by_label('Frame name').fill('Changed keyframe for lazy preview')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getStudioPlayback()'))
+        preview_tab.click()
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() !== null')
+        self.page.wait_for_function('document.querySelector("#ModernAnimationPlaybackStatus")?.textContent.includes("ready")')
+        position = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+        editor_tab.click()
+        preview_tab.click()
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_preview_short_png_and_webm_exports_produce_real_files(self):
+        import struct
+        import zipfile
+
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        # A short, compatible, two-keyframe real project keeps this browser
+        # acceptance focused; no long 59-second video render is started.
+        for _ in range(7):
+            editor.locator('.modern-studio-filmstrip-item').nth(2).locator(
+                '.modern-card-delete').click(force=True)
+        expect(editor.locator('.modern-studio-filmstrip-item')).to_have_count(2)
+        editor.get_by_label('Hold after arrival (s)').fill('0.1')
+        editor.get_by_label('Hold after arrival (s)').press('Tab')
+        editor.locator('.modern-studio-card-actions').nth(1).get_by_role(
+            'button', name='Properties for').click()
+        editor.get_by_label('Travel to frame (s)').fill('0.2')
+        editor.get_by_label('Travel to frame (s)').press('Tab')
+        editor.get_by_label('Hold after arrival (s)').fill('0.1')
+        editor.get_by_label('Hold after arrival (s)').press('Tab')
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() !== null')
+        before = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+
+        png = self.page.locator('#ModernAnimationFrameExportSection')
+        png.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('5')
+        self.page.locator('#ModernAnimationFrameExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationFrameExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationFrameExportWorkers').select_option('1')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
+        with self.page.expect_download(timeout=120000) as download:
+            self.page.locator('#ModernAnimationFrameExportStart').click()
+        archive = Path(download.value.path())
+        self.assertTrue(download.value.suggested_filename.endswith('.zip'))
+        with zipfile.ZipFile(archive) as z:
+            self.assertIsNone(z.testzip(), 'every ZIP member passes CRC verification')
+            names = z.namelist()
+            frames = [name for name in names if name.endswith('.png')]
+            self.assertGreaterEqual(len(frames), 2)
+            first = z.read(frames[0])
+            self.assertEqual(first[:8], b'\x89PNG\r\n\x1a\n')
+            self.assertEqual(struct.unpack('>II', first[16:24]), (640, 360))
+            self.assertGreater(len(first), 1000)
+        expect(self.page.locator('#ModernAnimationFrameExportStatus')).to_contain_text(
+            'PNG archive ready')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), before)
+
+        video = self.page.locator('#ModernAnimationVideoExportSection')
+        video.locator('summary').click()
+        self.page.locator('#ModernAnimationVideoExportFormat').select_option('webm')
+        self.page.locator('#ModernAnimationVideoExportFps').select_option('5')
+        self.page.locator('#ModernAnimationVideoExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationVideoExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationVideoExportWorkers').select_option('1')
+        with self.page.expect_download(timeout=120000) as download:
+            self.page.locator('#ModernAnimationVideoExportStart').click()
+        video_file = Path(download.value.path())
+        self.assertTrue(download.value.suggested_filename.endswith('.webm'))
+        video_bytes = video_file.read_bytes()
+        self.assertTrue(video_bytes.startswith(b'\x1a\x45\xdf\xa3'), 'valid WebM EBML header')
+        self.assertGreater(len(video_bytes), 1000)
+        expect(self.page.locator('#ModernAnimationVideoExportStatus')).to_contain_text(
+            'export ready:')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), before)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_preview_png_video_cancellation_and_keyboard_focus(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() !== null')
+        downloads = []
+        self.page.on('download', lambda item: downloads.append(item.suggested_filename))
+
+        png = self.page.locator('#ModernAnimationFrameExportSection')
+        png.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('5')
+        self.page.locator('#ModernAnimationFrameExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationFrameExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
+        self.page.locator('#ModernAnimationFrameExportStart').click()
+        cancel_png = self.page.locator('#ModernAnimationFrameExportCancel')
+        expect(cancel_png).to_be_enabled()
+        cancel_png.click()
+        expect(self.page.locator('#ModernAnimationFrameExportStatus')).to_contain_text(
+            'cancelled', timeout=30000)
+        expect(self.page.locator('#ModernAnimationFrameExportStart')).to_be_enabled(timeout=30000)
+
+        video = self.page.locator('#ModernAnimationVideoExportSection')
+        video.locator('summary').click()
+        self.page.locator('#ModernAnimationVideoExportFps').select_option('5')
+        self.page.locator('#ModernAnimationVideoExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationVideoExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationVideoExportStart').click()
+        cancel_video = self.page.locator('#ModernAnimationVideoExportCancel')
+        expect(cancel_video).to_be_enabled()
+        cancel_video.click()
+        expect(self.page.locator('#ModernAnimationVideoExportStatus')).to_contain_text(
+            'cancelled', timeout=30000)
+        expect(self.page.locator('#ModernAnimationVideoExportStart')).to_be_enabled(timeout=30000)
+        self.assertEqual(downloads, [], 'cancelled exports must not produce a file')
+
+        preview_tab = self.page.locator('#ModernAnimationViewPreview')
+        preview_tab.focus()
+        self.page.keyboard.press('ArrowLeft')
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_have_attribute(
+            'aria-selected', 'true')
+        self.page.keyboard.press('ArrowRight')
+        expect(preview_tab).to_have_attribute('aria-selected', 'true')
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.assertIsNotNone(self.page.evaluate('CurvatureModernApp.getStudioPlayback()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_preview_reuses_painted_frame_and_preserves_render_export_controls(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-keyframe').nth(3).click()
+        preview = self.page.locator('#ModernAnimationPreviewView')
+        expect(preview).to_be_visible()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.page.locator('#ModernAnimationViewEditor').click()
+        # Properties is selection only: it must not invalidate the prepared frame.
+        studio.locator('.modern-studio-card-actions').nth(3).get_by_role('button', name='Properties for').click()
+        self.assertIsNotNone(self.page.evaluate('CurvatureModernApp.getStudioPlayback()'))
+        studio.locator('.modern-studio-keyframe').nth(3).click()
+        expect(preview).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        expect(diag).to_contain_text('Rendered t=20.95s')
+        # Explicit retry and quality changes must still repaint the paused frame.
+        self.page.locator('#ModernAnimationPlaybackRetry').click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        optics = self.page.locator('#ModernAnimationPlaybackOptics')
+        optics.select_option('fast')
+        expect(diag).to_contain_text('Requested optics: Fast if supported · Effective: Fast Preview', timeout=30000)
+        optics.select_option('canvas-direct')
+        expect(diag).to_contain_text('Requested optics: Canvas Direct', timeout=30000)
+        storyboard = self.page.locator('#ModernAnimationStoryboard')
+        expect(storyboard.locator('.modern-animation-storyboard-card')).to_have_count(9)
+        refresh = storyboard.get_by_role('button', name='Capture selected keyframe thumbnail', exact=True)
+        refresh.click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        with self.page.expect_download() as download:
+            storyboard.get_by_role('button', name='Export without thumbnails', exact=True).click()
+        portable = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(len(portable['animations']), 1)
+        self.assertEqual(len(portable['animations'][0]['project']['keyframes']), 9)
+        for section, action in (
+            ('ModernAnimationFrameExportSection', 'Render PNG ZIP'),
+            ('ModernAnimationVideoExportSection', 'Render video'),
+        ):
+            details = self.page.locator('#' + section)
+            details.locator('summary').click()
+            expect(details.get_by_role('button', name=action)).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_timeline_thumbnail_opens_preview_at_frame_and_edit_cancel_restores(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        timeline = studio.locator('.modern-studio-keyframe')
+        expect(timeline).to_have_count(9)
+        expect(studio.locator('.modern-studio-preview-bar')).to_have_count(0)
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        controls = card.locator('.modern-studio-card-actions')
+        expect(controls.locator('button')).to_have_count(2)
+        self.assertEqual(self.page.evaluate('''() => {
+            const card=document.querySelectorAll('.modern-studio-filmstrip-item')[3];
+            const info=card.querySelector('.modern-card-info-button').getBoundingClientRect();
+            const controls=[...card.querySelectorAll('.modern-studio-card-icon')].map(b=>b.getBoundingClientRect());
+            const remove=card.querySelector('.modern-card-delete').getBoundingClientRect();
+            return controls.length===2 && info.right<=controls[0].left &&
+                   controls[0].right<=controls[1].left && controls[1].right<=remove.left;
+        }'''), True, 'Info, Properties, Edit and Remove must not overlap')
+        card.get_by_role('button', name='Show details for').click()
+        expect(self.page.get_by_role('dialog', name='Saved snapshot or animation details')).to_be_visible()
+        self.page.get_by_role('button', name='Close details').click()
+        controls.get_by_role('button', name='Properties for').click()
+        expect(studio.get_by_label('Frame name')).to_have_value('04 · Low view, hidden spans')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        before = self.page.evaluate("""() => ({
+            mode: CurvatureModernApp.getMode(),
+            height: CurvatureModernApp.getModel().Height,
+            draft: JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft),
+            saved: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
+        })""")
+        controls.get_by_role('button', name='Edit 04').click()
+        banner = self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        expect(banner).to_contain_text('04 · Low view, hidden spans')
+        expect(banner.get_by_role('button', name='Apply & Return')).to_be_enabled()
+        expect(banner).to_contain_text('Animation Studio / Keyframe Editor')
+        expect(banner).to_contain_text('Only camera controls can change')
+        self.assertNotIn('camera.CameraEast',banner.inner_text())
+        self.assertTrue(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        self.assertEqual(self.page.evaluate(
+            "getComputedStyle(document.body).backgroundColor"),'rgb(240, 237, 250)')
+        styles=banner.evaluate("""el => {
+            const cancel=getComputedStyle(el.querySelector('.modern-keyframe-edit-cancel'));
+            const apply=getComputedStyle(el.querySelector('.modern-keyframe-edit-apply'));
+            return {cancelBackground:cancel.backgroundColor,applyBackground:apply.backgroundColor,
+                cancelRadius:cancel.borderRadius,applyRadius:apply.borderRadius,
+                cancelHeight:el.querySelector('.modern-keyframe-edit-cancel').getBoundingClientRect().height,
+                applyHeight:el.querySelector('.modern-keyframe-edit-apply').getBoundingClientRect().height};
+        }""")
+        self.assertNotEqual(styles['cancelBackground'],styles['applyBackground'])
+        self.assertEqual(styles['cancelRadius'],styles['applyRadius'])
+        self.assertEqual(styles['cancelHeight'],styles['applyHeight'])
+        self.assertFalse(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
+        expect(self.page.locator('#ModernHeight')).to_be_enabled()
+        expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
+        expect(self.page.locator('#ModernRender')).to_be_disabled()
+        expected_mode = self.page.evaluate('''() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.display.mode''')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'), expected_mode)
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        old_height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old_height+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height === h',
+                                    arg=old_height+2)
+        self.page.wait_for_timeout(700)
+        self.assertEqual(self.page.evaluate("""() =>
+            localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)"""), before['saved'])
+        banner.get_by_role('button', name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        self.assertFalse(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before['mode'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before['height'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""), before['draft'])
+        timeline.nth(3).click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs > 0')
+        position = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+        expected = self.page.evaluate('''() => {
+            const checkpoint=CurvatureModernApp.getAnimationStudioDraft();
+            const frame=checkpoint.draft.frames[3];
+            return CurvatureModernAnimationStudio.keyframeArrival(
+                checkpoint.draft,CurvatureModernApp.getAnimationStudioProject(),frame.key);
+        }''')
+        self.assertEqual(position, expected, 'Preview must seek to the exact fourth-keyframe arrival')
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_keyframe_temporary_undo_redo_and_shortcuts(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        draft_before=self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
+        undo=banner.get_by_role('button',name='Undo',exact=True)
+        redo=banner.get_by_role('button',name='Redo',exact=True)
+        expect(undo).to_be_disabled()
+        expect(redo).to_be_disabled()
+        self.page.locator('#ModernModelTabA').click()
+        self.page.locator('#ModernModelTabB').click()
+        expect(undo).to_be_disabled()  # navigation is not an edit
+        before=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(before+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+3)
+        expect(undo).to_be_enabled()
+        expect(redo).to_be_disabled()
+        expect(banner).to_contain_text('Unsaved changes')
+        undo.click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before)
+        expect(redo).to_be_enabled()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""),draft_before)
+        redo.click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+3)
+        # Undo via shortcut outside native input and then branch the history.
+        redo.focus()
+        self.page.keyboard.press('Control+z')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before)
+        self.page.locator('#ModernHeight').fill(str(before+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+5)
+        expect(redo).to_be_disabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""),draft_before)
+
+    def test_animation_keyframe_edit_session_f5_recovers_undo_redo(self):
+        self.open_modern()
+        before_mode = self.page.evaluate('CurvatureModernApp.getMode()')
+        before_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        self.assertTrue(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        starting=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(starting+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+3)
+        self.page.locator('#ModernHeight').fill(str(starting+6))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+6)
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Undo',exact=True).click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+3)
+        expect(banner.get_by_role('button',name='Redo',exact=True)).to_be_enabled()
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        try:
+            expect(banner).to_be_visible(timeout=12000)
+        except AssertionError:
+            diagnostic=self.page.evaluate("""async () => {
+                const key='curvature-modern-keyframe-edit-recovery-v1';
+                const raw=sessionStorage.getItem(key);
+                const saved=raw?JSON.parse(raw):null;
+                const current=CurvatureModernApp.getAnimationStudioDraft();
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const remote=saved&&c?CurvatureModernAnimationDraftAutosave.getWorkspace(
+                    c,saved.session.projectId):null;
+                const frame=current?.draft?.frames?.find(f=>f.key===saved?.session?.frameKey);
+                return {stored:!!saved,tabId:saved?.tabId,
+                    libraryId:saved?.libraryId,libraryRevision:saved?.libraryRevision,
+                    projectId:saved?.session?.projectId,activeId:c?.activeId,
+                    draftEqual:JSON.stringify(current?.draft)===saved?.draftAtEntry,
+                    remoteEqual:JSON.stringify(remote?.draft)===saved?.draftAtEntry,
+                    frameEqual:JSON.stringify(frame?.experiment)===JSON.stringify(saved?.session?.original),
+                    appMode:CurvatureModernApp.getWorkspaceMode(),
+                    message:document.getElementById('ModernAnimationDraftStatus')?.textContent,
+                    view:CurvatureModernApp.getAnimationStudioView(),
+                    url:location.href};
+            }""")
+            self.fail('F5 editor recovery failed: '+str(diagnostic))
+        expect(banner).to_contain_text('Recovered unsaved keyframe edits')
+        self.assertTrue(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),starting+3)
+        banner.get_by_role('button',name='Redo',exact=True).click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=starting+6)
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before_mode)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before_height)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames.length'), 9)
+        self.assertIsNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+    def test_animation_keyframe_f5_restores_pending_numeric_input(self):
+        self.open_modern()
+        workspace_height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        previous=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(previous+17))
+        # Reload immediately, without blur or the 420 ms input debounce.
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=previous+17)
+        expect(banner.get_by_role('button',name='Undo',exact=True)).to_be_enabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),workspace_height)
+
+    def test_animation_keyframe_f5_physical_compare_b_and_cancel_cleanup(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('B','Earth curvature','CI F5 Physical B')
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        before=self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        slider=self.page.locator('#ModernModelCurvature')
+        slider.evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==value""",
+            arg=before['B'])
+        edited=self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),before['A'])
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        try:
+            expect(banner).to_be_visible(timeout=12000)
+        except AssertionError:
+            diag=self.page.evaluate("""async () => {
+                const raw=sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1');
+                const saved=raw?JSON.parse(raw):null;
+                const current=CurvatureModernApp.getAnimationStudioDraft();
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const remote=saved&&c?CurvatureModernAnimationDraftAutosave.getWorkspace(
+                    c,saved.session.projectId):null;
+                const frame=current?.draft?.frames?.find(f=>f.key===saved?.session?.frameKey);
+                return {saved:!!saved,windowName:window.name,windowId:saved?.windowId,
+                    libraryId:saved?.libraryId,projectId:saved?.session?.projectId,
+                    activeId:c?.activeId,
+                    current:current?.draft?.name,
+                    draftEqual:JSON.stringify(current?.draft)===saved?.draftAtEntry,
+                    remoteEqual:JSON.stringify(remote?.draft)===saved?.draftAtEntry,
+                    frameEqual:JSON.stringify(frame?.experiment)===JSON.stringify(saved?.session?.original),
+                    normalizedEqual:(() => {
+                        try {
+                            const canonical=d=>CurvatureModernAnimationDraftAutosave.checkpoint({
+                                draft:d,selectedKey:null,quality:'auto',prepared:false,positionMs:0},1).draft;
+                            return JSON.stringify(canonical(current.draft))===
+                                JSON.stringify(canonical(JSON.parse(saved.draftAtEntry)));
+                        }catch(e){return 'invalid: '+e.message;}
+                    })(),
+                    message:document.getElementById('ModernAnimationDraftStatus')?.textContent,
+                    appMode:CurvatureModernApp.getWorkspaceMode()};
+            }""")
+            self.fail('Physical B recovery not visible: '+str(diag))
+        expect(banner).to_contain_text('Recovered unsaved keyframe edits')
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),edited)
+        self.page.locator('#ModernModelTabA').click()
+        expect(slider).to_be_disabled()
+        self.page.locator('#ModernModelTabB').click()
+        expect(slider).to_be_enabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertIsNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+    def test_animation_keyframe_f5_checkpoint_is_not_inherited_by_popup(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        token=self.page.evaluate("""() => {
+            const raw=sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1');
+            return {session:raw?JSON.parse(raw).tabId:null,window:window.name,
+                notice:document.querySelector('.modern-keyframe-edit-hint')?.textContent};
+        }""")
+        self.assertIsNotNone(token['session'],'No F5 checkpoint: '+str(token))
+        self.assertTrue(token['window'],'Original browser window requires a stable identity')
+        with self.page.expect_popup() as info:
+            self.page.evaluate("window.open(location.href,'_blank')")
+        popup=info.value
+        try:
+            popup.wait_for_load_state('load')
+            popup.wait_for_function("""() =>
+                document.getElementById('ModernSceneTab').disabled===false""")
+            self.assertNotEqual(popup.evaluate('window.name'),token['window'])
+            expect(popup.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            self.assertNotEqual(token['session'],'',
+                'original tab session marker must be stable and nonempty')
+            # A cloned recovery slot must not be consumed in the child tab.
+            popup.wait_for_timeout(1200)
+            expect(popup.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            expect(banner).to_be_visible()
+        finally:
+            popup.close()
+        # The opener still owns its clean editing checkpoint across F5.
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        banner.get_by_role('button',name='Cancel & Return').click()
+
+    def test_animation_keyframe_f5_recovery_does_not_overwrite_other_tab(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        project_id=self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].id""")
+        workspace_id='project_'+project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return !!c?.workspaces.find(w=>w.id===id);
+        }""",arg=workspace_id,timeout=30000)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        before=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(before+13))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+13)
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        other=self.context.new_page()
+        try:
+            response=other.goto(self.base_url,wait_until='load')
+            self.assertEqual(response.status,200)
+            other.locator('#ModernAnimationTab').click()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card=other.locator('#ModernAnimationLibrary [data-animation-id="'+project_id+'"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button',name='Open saved animation').click()
+            other.locator('#ModernAnimationViewEditor').click()
+            other_studio=other.locator('#ModernAnimationStudio')
+            other_studio.get_by_role('button',name='Inspect project settings').click()
+            name=other_studio.get_by_label('Project name')
+            name.fill('Other tab owns this revision')
+            name.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name===
+                    'Other tab owns this revision';
+            }""",arg=workspace_id,timeout=30000)
+        finally:
+            other.close()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            document.getElementById('ModernAnimationDraftStatus')?.textContent
+                ?.includes('Keyframe recovery was not applied')""",timeout=30000)
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""),
+            'the rejected session remains available in this tab')
+        remote_name=self.page.evaluate("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name;
+        }""",workspace_id)
+        self.assertEqual(remote_name,'Other tab owns this revision')
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name;
+        }""",workspace_id),'Other tab owns this revision')
+
+    def test_animation_keyframe_edit_back_forward_and_second_tab_isolation(self):
+        self.open_modern()
+        normal_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
+        normal_mode = self.page.evaluate('CurvatureModernApp.getMode()')
+        self.open_animation()
+        # Establish a same-document Library history entry before opening the
+        # copied project. Back from Editor must stay within Studio.
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            new URL(location.href).searchParams.get('studioView')"""), 'library')
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        self.page.wait_for_function("""() =>
+            new URL(location.href).searchParams.get('studioView') === 'editor'""")
+        draft_before = self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertTrue(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
+        self.assertTrue(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
+        self.assertTrue(self.page.locator('#ModernHistoryPanel').evaluate('(el) => el.inert'))
+
+        # A fresh tab does not inherit any active editing session or transient
+        # camera/physical preview from this page.
+        other = self.context.new_page()
+        try:
+            response = other.goto(self.base_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            expect(other.locator('#ModernSceneTab')).to_be_visible()
+            expect(other.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            # Another tab may open directly in Animation per saved preferences.
+            # Wait for physical-session startup, not a particular visible tab.
+            other.wait_for_function("""() =>
+                document.getElementById('ModernSceneTab').disabled === false""")
+            self.assertEqual(other.evaluate('CurvatureModernApp.getModel().Height'), normal_height)
+            self.assertEqual(other.evaluate('CurvatureModernApp.getMode()'), normal_mode)
+        finally:
+            other.close()
+
+        # Back consumes the destination Studio route, rather than leaving the
+        # live editor on a different page from the browser address.
+        self.page.go_back()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
+        self.assertFalse(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioView()'),
+                         'library')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), normal_height)
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""), draft_before)
+        self.page.go_forward()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+
+    def test_animation_keyframe_contract_locks_secondary_camera_and_compare_actions(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
+        for locked in ['ModernModelRadius','ModernModelCurvature','ModernAtmosphere',
+                       'ModernViewAngle','ModernCameraAim',
+                       'ModernResetPreset','ModernRender']:
+            expect(self.page.locator('#'+locked)).to_be_disabled()
+        expect(self.page.locator('#ModernModelTabA')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabB')).to_be_enabled()
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelTabA')).to_have_attribute('aria-pressed','true')
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelTabB')).to_have_attribute('aria-pressed','true')
+        expect(self.page.locator('#ModernPan')).to_be_enabled()
+        self.assertEqual(self.page.locator('#ModernRender').evaluate(
+            'el => getComputedStyle(el).cursor'),'not-allowed')
+        self.assertLess(float(self.page.locator('#ModernRender').evaluate(
+            'el => getComputedStyle(el).opacity')),0.8)
+        pan=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        # A disallowed programmatic DOM event must not bypass delegated locking.
+        self.page.evaluate("""() => {
+            const el=document.getElementById('ModernAtmosphere');
+            el.value='vacuum';
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Pan'),pan)
+        self.page.locator('#ModernPan').fill(str(pan+1))
+        self.page.locator('#ModernPan').press('Tab')
+        self.page.wait_for_function('p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',
+                                    arg=pan+1)
+        expect(self.page.locator('#ModernModelRadius')).to_be_disabled()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
+
+
+    def test_animation_camera_keyframe_mouse_rotation_apply_and_cancel(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        original=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        canvas=self.page.locator('#ModernWorkspace canvas.modern-camera-draggable:visible').first
+        box=canvas.bounding_box()
+        self.assertIsNotNone(box)
+        x=box['x']+box['width']*0.5
+        y=box['y']+box['height']*0.5
+        self.page.mouse.move(x,y)
+        self.page.mouse.down()
+        self.page.mouse.move(x+min(90,box['width']*0.2),y,steps=6)
+        self.page.mouse.up()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)>0.0001',
+            arg=original)
+        changed=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        undo=banner.get_by_role('button',name='Undo',exact=True)
+        redo=banner.get_by_role('button',name='Redo',exact=True)
+        expect(undo).to_be_enabled()
+        undo.click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',arg=original)
+        expect(undo).to_be_disabled()  # a full drag is exactly one action
+        redo.click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',arg=changed)
+        expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',
+            arg=original)
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+
+
+    def create_physical_keyframe_project(self, scope, channel, name):
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.get_by_text('New project', exact=True).click()
+        wizard = self.page.locator('#ModernAnimationProjectWizard')
+        wizard.get_by_role('button', name='Physics Transition — one physical channel changes; camera stays fixed').click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_role('button', name='Use current Scene/Compare as reference').click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_role('button', name=scope+' · '+channel, exact=True).click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_label('Include reference as first keyframe').check()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_label('Project name').fill(name)
+        wizard.get_by_role('button', name='Create project').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(1,timeout=30000)
+        studio.locator('.modern-studio-filmstrip-item').get_by_role('button',name='Edit ',exact=False).click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        return studio
+
+    def test_animation_keyframe_physical_scene_gradient_only(self):
+        self.open_modern()
+        self.page.locator('#ModernSettingsAtmosphere').click()
+        self.page.locator('#ModernAtmosphere').select_option('temperature-lapse')
+        self.open_animation()
+        self.create_physical_keyframe_project('scene','Temperature gradient','CI Scene Gradient')
+        expect(self.page.locator('#ModernTemperatureSceneGradient')).to_be_enabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        expect(self.page.locator('#ModernRadiusKm')).to_be_disabled()
+        initial = self.page.locator('#ModernTemperatureSceneGradient').input_value()
+        proposed = -5.0 if float(initial)!=-5.0 else -4.0
+        self.page.locator('#ModernTemperatureSceneGradient').fill(str(proposed))
+        self.page.locator('#ModernTemperatureSceneGradient').press('Tab')
+        self.page.wait_for_function("""p => Math.abs(
+            CurvatureModernApp.getPhotoCalibrationScene().physics.temperatureProfile.gradientKPerKm-p)<0.001""",
+            arg=proposed)
+        # A numeric edit must not silently enable the unrelated surface controls.
+        expect(self.page.locator('#ModernRadiusKm')).to_be_disabled()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertFalse(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
+
+    def test_animation_keyframe_physical_compare_a_curvature_only(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('A','Earth curvature','CI Compare A curvature')
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabA')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabB')).to_be_enabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        expect(self.page.locator('#ModernTemperatureCompareGradient')).to_be_disabled()
+        prior = self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_disabled()
+        self.assertEqual(self.page.locator('#ModernModelCurvature').evaluate(
+            'el => getComputedStyle(el).cursor'),'not-allowed')
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)!==value""",arg=prior['A'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+
+    def test_animation_keyframe_physical_compare_b_curvature_only(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('B','Earth curvature','CI Compare B curvature')
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        expect(self.page.locator('#ModernHeight')).to_be_disabled()
+        prior = self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_disabled()
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==value""",arg=prior['B'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+
+
+    def test_animation_keyframe_apply_one_frame_undo_redo_and_no_history_write(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            physical: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        fourth=before['draft']['frames'][3]
+        prior_height=fourth['experiment']['scene']['camera']['Height']
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        expect(banner.get_by_role('button',name='Apply & Return')).to_be_enabled()
+        self.assertTrue(banner.get_attribute('data-workspace-id').startswith('project_'))
+        self.page.locator('#ModernHeight').fill(str(prior_height+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=prior_height+3)
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        after=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            physical: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(after['draft']['frames'][3]['experiment']['scene']['camera']['Height'],
+                         prior_height+3)
+        self.assertEqual(after['draft']['frames'][:3],before['draft']['frames'][:3])
+        self.assertEqual(after['draft']['frames'][4:],before['draft']['frames'][4:])
+        self.assertEqual(after['physical'],before['physical'])
+        self.assertEqual(after['history'],before['history'])
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            prior_height)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            prior_height+3)
+
+
+    def test_animation_keyframe_apply_persists_in_library_and_survives_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        original=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        height=self.page.locator('#ModernHeight')
+        height.fill(str(original+6))
+        height.press('Tab')
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Apply & Return').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0,timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernAnimationLibrary').get_by_text(
+            'Save changes',exact=True).click()
+        self.page.wait_for_function("""async expected => {
+            const rows=await CurvatureModernAnimationLibrary.list(indexedDB);
+            return rows.length===1 && rows[0].project.keyframes[3].value.Height===expected;
+        }""",arg=original+6,timeout=30000)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationStudio .modern-studio-filmstrip-item')).to_have_count(9)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            original+6)
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].project.keyframes[3].value.Height"""),
+            original+6, 'persisted embedded value must survive F5 without History')
+
+    def test_animation_keyframe_apply_rejects_stale_two_tab_workspace(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        project_id=self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].id""")
+        workspace_id='project_'+project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.some(w=>w.id===id);
+        }""",arg=workspace_id,timeout=30000)
+        unchanged=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        height=self.page.locator('#ModernHeight')
+        height.fill(str(unchanged+8))
+        height.press('Tab')
+        self.page.wait_for_function('v => CurvatureModernApp.getModel().Height===v',arg=unchanged+8)
+
+        other=self.context.new_page()
+        try:
+            response=other.goto(self.base_url,wait_until='load')
+            self.assertEqual(response.status,200)
+            other.locator('#ModernAnimationTab').click()
+            expect(other.locator('#ModernAnimationLibrary')).to_be_visible()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card=other.locator('#ModernAnimationLibrary [data-animation-id="'+project_id+'"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button',name='Open saved animation').click()
+            other.locator('#ModernAnimationViewEditor').click()
+            other_studio=other.locator('#ModernAnimationStudio')
+            expect(other_studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+            other_studio.get_by_role('button',name='Inspect project settings').click()
+            name=other_studio.get_by_label('Project name')
+            name.fill('Competing tab project edit')
+            name.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.some(w=>w.id===id &&
+                    w.checkpoint.draft.name==='Competing tab project edit');
+            }""",arg=workspace_id,timeout=30000)
+            other.wait_for_timeout(700)  # flush stale debounces before comparing
+
+            banner=self.page.locator('#ModernKeyframeEditBanner')
+            self.assertEqual(banner.get_attribute('data-workspace-id'),workspace_id,
+                             'temporary keyframe editor must share the edited workspace')
+            remote_before=self.page.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const w=c.workspaces.find(w=>w.id===id);
+                return {id,remoteName:w?.checkpoint?.draft?.name,
+                    localName:CurvatureModernApp.getAnimationStudioDraft().draft.name};
+            }""",workspace_id)
+            self.assertEqual(remote_before['remoteName'],'Competing tab project edit',
+                             'hidden keyframe session must not replay a stale autosave')
+            self.assertNotEqual(remote_before['localName'],remote_before['remoteName'])
+            banner.get_by_role('button',name='Apply & Return').click()
+            self.page.wait_for_timeout(1100)
+            if banner.count()==0:
+                after=self.page.evaluate("""async id => {
+                    const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                    return {remoteName:c.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name,
+                        localName:CurvatureModernApp.getAnimationStudioDraft().draft.name,
+                        currentView:CurvatureModernApp.getAnimationStudioView()};
+                }""",workspace_id)
+                self.fail('Stale keyframe Apply unexpectedly returned: '+str({
+                    'before':remote_before,'after':after}))
+            expect(banner).to_contain_text('Apply blocked',timeout=30000)
+            expect(banner).to_contain_text('changed in another tab')
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),
+                             unchanged+8, 'a blocked Apply retains the candidate for Cancel')
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+                unchanged)
+            self.assertEqual(other.evaluate("""() =>
+                CurvatureModernApp.getAnimationStudioDraft().draft.name"""),
+                'Competing tab project edit')
+            remote=other.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const entry=c.workspaces.find(w=>w.id===id);
+                return {name:entry.checkpoint.draft.name,
+                    height:entry.checkpoint.draft.frames[3].experiment.scene.camera.Height};
+            }""",workspace_id)
+            self.assertEqual(remote['name'],'Competing tab project edit')
+            self.assertEqual(remote['height'],unchanged)
+        finally:
+            other.close()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+
+
+    def test_animation_keyframe_apply_compare_b_curvature_preserves_a_and_undo(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        studio=self.create_physical_keyframe_project(
+            'B','Earth curvature','CI Compare B Apply')
+        before=self.page.evaluate("""() => {
+            const f=CurvatureModernApp.getAnimationStudioDraft().draft.frames[0];
+            return {A:JSON.stringify(f.experiment.compare.A),
+                    B:JSON.stringify(f.experiment.compare.B)};
+        }""")
+        slider=self.page.locator('#ModernModelCurvature')
+        expect(slider).to_be_enabled()
+        slider.evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""old =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==old""",arg=before['B'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Apply & Return').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        changed=self.page.evaluate("""() => {
+            const f=CurvatureModernApp.getAnimationStudioDraft().draft.frames[0];
+            return {A:JSON.stringify(f.experiment.compare.A),
+                    B:JSON.stringify(f.experiment.compare.B)};
+        }""")
+        self.assertEqual(changed['A'],before['A'])
+        self.assertNotEqual(changed['B'],before['B'])
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].experiment.compare.B)"""),
+            before['B'])
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].experiment.compare.B)"""),
+            changed['B'])
+
+    def test_animation_editor_timeline_inspector_and_responsive_layout(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio = self.page.locator('#ModernAnimationStudio')
+        timeline = studio.locator('.modern-studio-timeline-pane')
+        strip = timeline.locator('.modern-studio-keyframe')
+        inspector = studio.locator('.modern-studio-inspector-pane')
+        expect(strip).to_have_count(9)
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        expect(inspector.get_by_role('button', name='Inspect selected keyframe')).to_have_attribute(
+            'aria-pressed', 'true')
+        layout = self.page.evaluate("""() => {
+            const t=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const i=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {timelineTop:t.top,inspectorTop:i.top,timelineRight:t.right,inspectorLeft:i.left};
+        }""")
+        self.assertLess(abs(layout['timelineTop'] - layout['inspectorTop']), 12)
+        self.assertLessEqual(layout['timelineRight'], layout['inspectorLeft'])
+
+        selected_name = studio.get_by_label('Frame name')
+        selected_name.fill('Stage 3 editable keyframe')
+        inspector.get_by_role('button', name='Inspect project settings').click()
+        expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        expect(timeline).to_be_visible()
+        studio.get_by_label('Project name').fill('Stage 3 project settings')
+        inspector.get_by_role('button', name='Inspect selected keyframe').click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 3 editable keyframe')
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getAnimationStudioDraft().draft.name"), 'Stage 3 project settings')
+
+        self.page.set_viewport_size({'width': 700, 'height': 850})
+        expect(strip).to_have_count(9)
+        narrow = self.page.evaluate("""() => {
+            const t=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const i=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {timelineTop:t.top,inspectorTop:i.top};
+        }""")
+        self.assertGreater(narrow['inspectorTop'], narrow['timelineTop'])
+        studio.locator('.modern-studio-card-actions').nth(1).get_by_role('button', name='Properties for').click()
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        expect(strip.nth(1)).to_have_attribute('aria-pressed', 'true')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_stage5_two_tabs_divergent_drafts_are_forked_and_survive_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        library = self.page.locator('#ModernAnimationLibrary')
+        expect(studio).to_be_visible()
+        self.page.wait_for_function("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB)).length === 1
+        """, timeout=30000)
+        project_id = self.page.evaluate("""async () => {
+            const saved = await CurvatureModernAnimationLibrary.list(indexedDB);
+            return saved.length === 1 ? saved[0].id : null;
+        }""")
+        self.assertIsNotNone(project_id)
+        workspace_id = 'project_' + project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.some(w => w.id===id);
+        }""", arg=workspace_id, timeout=30000)
+
+        other = self.context.new_page()
+        other_errors = []
+        other.on('pageerror', lambda err: other_errors.append(str(err)))
+        try:
+            response = other.goto(self.base_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            other.locator('#ModernAnimationTab').click()
+            expect(other.locator('#ModernAnimationLibrary')).to_be_visible()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card = other.locator('#ModernAnimationLibrary [data-animation-id="' + project_id + '"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button', name='Open saved animation').click()
+            # If recovery already owns this project, Open is intentionally a
+            # no-op; selecting Editor is still a separate navigation action.
+            other.locator('#ModernAnimationViewEditor').click()
+            other_studio = other.locator('#ModernAnimationStudio')
+            expect(other_studio).to_be_visible()
+            original = studio.locator('.modern-studio-header').inner_text()
+            self.assertIn('Working draft', original)
+            initial = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name')
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             initial)
+
+            # Both tabs now have the same baseline. Write A first, with B
+            # intentionally keeping its old optimistic concurrency baseline.
+            studio.get_by_role('button', name='Inspect project settings').click()
+            name_a = studio.get_by_label('Project name')
+            name_a.fill('Stage 5 protected change A')
+            name_a.press('Tab')
+            self.page.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.some(w => w.id===id &&
+                    w.checkpoint.draft.name==='Stage 5 protected change A');
+            }""", arg=workspace_id, timeout=30000)
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             initial)
+
+            other_studio.get_by_role('button', name='Inspect project settings').click()
+            name_b = other_studio.get_by_label('Project name')
+            name_b.fill('Stage 5 protected change B')
+            name_b.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.some(w => w.id===id &&
+                    w.checkpoint.draft.name==='Stage 5 protected change A') &&
+                    c.workspaces.some(w => w.id!==id && w.id.startsWith('draft_') &&
+                    w.checkpoint.draft.name==='Stage 5 protected change B');
+            }""", arg=workspace_id, timeout=30000)
+            # Give any previously queued 450 ms autosave an opportunity to
+            # finish. The durable state must remain stable after A/B fork.
+            other.wait_for_timeout(700)
+            names = other.evaluate("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.map(w => [w.id,w.checkpoint.draft.name,w.checkpoint.savedAt]);
+            }""")
+            diagnostic = {'remote': names,
+                'A_live': self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                'B_live': other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                'A_status': self.page.locator('#ModernPersistenceStatus').inner_text(),
+                'B_status': other.locator('#ModernPersistenceStatus').inner_text()}
+            self.assertEqual(sum(1 for _, value, _ in names if value=='Stage 5 protected change A'), 1,
+                             str(diagnostic))
+            self.assertEqual(sum(1 for _, value, _ in names if value=='Stage 5 protected change B'), 1)
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change A')
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change B')
+
+            # Reload must not manufacture additional same-content recovery forks.
+            count_before = len(names)
+            for _ in range(2):
+                other.reload(wait_until='load')
+                expect(other.locator('#ModernAnimationWorkspace')).to_be_visible()
+                expect(other.locator('#ModernAnimationEditorView')).to_be_visible()
+                self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                                 'Stage 5 protected change B',
+                                 'the divergent tab must restore its own active recovery fork')
+                other.wait_for_function("""async () => {
+                    const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                    return c && c.workspaces.some(w => w.checkpoint.draft.name==='Stage 5 protected change A')
+                       && c.workspaces.some(w => w.checkpoint.draft.name==='Stage 5 protected change B');
+                }""", timeout=30000)
+            stable = other.evaluate("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.map(w => w.checkpoint.draft.name);
+            }""")
+            self.assertEqual(len(stable), count_before,
+                             'reloading a conflict must not multiply recovery drafts')
+            self.assertEqual(stable.count('Stage 5 protected change A'), 1)
+            self.assertEqual(stable.count('Stage 5 protected change B'), 1)
+
+            # A recovered fork remains writable after reload. A fresh edit
+            # belongs only to B's independent draft, never to A or Library.
+            other_studio = other.locator('#ModernAnimationStudio')
+            other_studio.get_by_role('button', name='Inspect project settings').click()
+            followup = other_studio.get_by_label('Project name')
+            followup.fill('Stage 5 follow-up on recovered B')
+            followup.press('Tab')
+            other.wait_for_function("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.some(w=>w.checkpoint.draft.name==='Stage 5 protected change A')
+                  && c.workspaces.some(w=>w.id.startsWith('draft_') &&
+                      w.checkpoint.draft.name==='Stage 5 follow-up on recovered B');
+            }""", timeout=30000)
+            # Inspect settled durable/session identities, not a transient
+            # successful read that a later queued writer could still undo.
+            other.wait_for_timeout(800)
+            after = other.evaluate("""async () => {
+                const api=CurvatureModernAnimationDraftAutosave;
+                const c=await api.readCollection(indexedDB);
+                const session=api.workspaceSessionId(sessionStorage,crypto,window);
+                const local=localStorage.getItem(api.SESSION_LOCAL_PREFIX+session);
+                const backup=local?JSON.parse(local):null;
+                return {
+                  active:c.activeId,savedAt:c.savedAt,
+                  workspaces:c.workspaces.map(w=>({id:w.id,name:w.checkpoint.draft.name,
+                      savedAt:w.checkpoint.savedAt})),
+                  localActive:backup?.activeId,
+                  localWorkspaces:backup?.workspaces.map(w=>({id:w.id,name:w.checkpoint.draft.name}))
+                };
+            }""")
+            recovered = [w['name'] for w in after['workspaces']]
+            self.assertEqual(len(recovered), count_before, str(after))
+            self.assertEqual(recovered.count('Stage 5 protected change A'), 1, str(after))
+            self.assertEqual(recovered.count('Stage 5 follow-up on recovered B'), 1, str(after))
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change A')
+            other.reload(wait_until='load')
+            expect(other.locator('#ModernAnimationEditorView')).to_be_visible()
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 follow-up on recovered B',
+                             'later edits to the recovery fork must themselves survive F5')
+            other.wait_for_function("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.filter(w=>w.checkpoint.draft.name==='Stage 5 protected change A').length===1
+                    && c.workspaces.filter(w=>w.checkpoint.draft.name==='Stage 5 follow-up on recovered B').length===1;
+            }""", timeout=30000)
+            self.assertEqual(other_errors, [])
+            self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+        finally:
+            other.close()
+
+    def test_animation_stage5_maximum_200_keyframes_import_scroll_and_recovery(self):
+        self.open_modern()
+        self.open_animation()
+        # Exercise the supported upper bound through the public import path,
+        # not by bypassing the app's private editor state.
+        wire = self.page.evaluate("""() => {
+            const base=structuredClone(CurvatureModernDemoCatalog.load().find(d => d.id==='soundly').project);
+            const template=base.keyframes.map(frame => structuredClone(frame));
+            base.id='stage5_large_timeline';
+            base.name='Stage 5 maximum timeline';
+            base.keyframes=Array.from({length:200},(_,i) => {
+                const frame=structuredClone(template[i%template.length]);
+                frame.sourceSnapshotId=null;
+                frame.name='Long timeline frame '+String(i+1).padStart(3,'0');
+                frame.travelMs=i===0?0:200;
+                frame.holdMs=0;
+                return frame;
+            });
+            return JSON.stringify(CurvatureModernAnimationProject.validate(base));
+        }""")
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.get_by_label('Import animation JSON file').set_input_files({
+            'name':'large-timeline.json', 'mimeType':'application/json',
+            'buffer':wire.encode('utf-8')})
+        expect(library.locator('[data-animation-id]')).to_have_count(1, timeout=30000)
+        library.locator('[data-animation-id]').get_by_role(
+            'button', name='Open saved animation').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        cards = studio.locator('.modern-studio-keyframe')
+        expect(cards).to_have_count(200, timeout=30000)
+        strip = studio.locator('.modern-studio-filmstrip')
+        self.assertGreater(strip.evaluate('el => el.scrollWidth / el.clientWidth'), 3)
+        last = studio.locator('.modern-studio-filmstrip-item').nth(199)
+        last.get_by_role('button', name='Properties for').focus()
+        last.get_by_role('button', name='Properties for').press('Enter')
+        expect(cards.nth(199)).to_have_attribute('aria-pressed', 'true')
+        expect(studio.locator('.modern-studio-selected-heading')).to_contain_text('200 / 200')
+        start = strip.evaluate('el => el.scrollLeft')
+        self.assertGreater(start, 1000)
+        old_keys = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        studio.get_by_role('button', name='Move animation frame 200 earlier').click()
+        moved = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        self.assertEqual(moved[198], old_keys[199])
+        self.assertEqual(moved[199], old_keys[198])
+        self.assertAlmostEqual(strip.evaluate('el => el.scrollLeft'), start, delta=3)
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), old_keys)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(200, timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'),
+                         old_keys[199])
+        self.assertEqual(self.page.evaluate("""async () => {
+            const saved=await CurvatureModernAnimationLibrary.list(indexedDB);
+            return saved.length===1 ? saved[0].project.keyframes.length : -1;
+        }"""), 200, 'draft reordering must not mutate the original Library project')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_stage5_end_to_end_narrow_history_and_state_recovery(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        editor = self.page.locator('#ModernAnimationViewEditor')
+        preview = self.page.locator('#ModernAnimationViewPreview')
+        library = self.page.locator('#ModernAnimationViewLibrary')
+        filmstrip = studio.locator('.modern-studio-filmstrip')
+        inspector = studio.locator('.modern-studio-inspector-pane')
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+
+        self.page.set_viewport_size({'width': 390, 'height': 780})
+        expect(filmstrip).to_be_visible()
+        expect(inspector).to_be_visible()
+        position = self.page.evaluate("""() => {
+            const left=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const right=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {left: left.top, right: right.top,
+              bodyWidth: document.documentElement.scrollWidth,
+              viewportWidth: window.innerWidth};
+        }""")
+        self.assertGreater(position['right'], position['left'],
+                           'narrow layout stacks Inspector after the timeline')
+        self.assertLessEqual(position['bodyWidth'], position['viewportWidth'] + 3,
+                             'narrow mode tabs and Studio must not create page-wide scrolling')
+        self.assertLessEqual(self.page.locator('#ModernDemosTab').evaluate(
+            'el => el.getBoundingClientRect().right'), 393,
+            'Demos tab must stay inside the 390 px viewport')
+
+        studio.get_by_role('button', name='Open saved experiments to select animation keyframes').click()
+        picker = self.page.locator('.modern-studio-picker-head')
+        expect(picker.get_by_text('Snapshot Picker')).to_be_visible()
+        self.assertTrue(self.page.locator('#ModernAnimationWorkspace').evaluate(
+            "el => el.classList.contains('has-snapshot-picker')"))
+        picker.get_by_role('button', name='Close Snapshot Picker').click()
+        expect(picker).to_have_count(0)
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        card.get_by_role('button', name='Properties for').click()
+        frame = studio.get_by_label('Frame name')
+        frame.fill('Stage 5 selected camera position')
+        frame.press('Tab')
+        key = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey')
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        card.get_by_role('button', name='Edit 04').click()
+        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        card.locator('.modern-studio-keyframe').click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs === 20950')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+
+        editor.click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
+        library.click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        editor.click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_editor_undo_redo_scroll_and_persistence_after_reorder(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio = self.page.locator('#ModernAnimationStudio')
+        strip = studio.locator('.modern-studio-filmstrip')
+        cards = strip.locator('.modern-studio-keyframe')
+        expect(cards).to_have_count(9)
+        cards.nth(4).click()
+        original = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        strip.evaluate('(el) => { el.scrollLeft = 260; }')
+        scroll_before = strip.evaluate('(el) => el.scrollLeft')
+        self.assertGreater(scroll_before, 0)
+        studio.get_by_role('button', name='Move animation frame 5 earlier').click()
+        moved = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        self.assertEqual(moved[3], original[4])
+        self.assertEqual(moved[4], original[3])
+        self.assertAlmostEqual(strip.evaluate('(el) => el.scrollLeft'), scroll_before, delta=2)
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), original)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+
+        studio.get_by_role('button', name='Inspect project settings').click()
+        expect(strip).to_be_visible()
+        name = studio.get_by_label('Project name')
+        name.fill('Reordered timeline checkpoint')
+        name.press('Tab')
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+        studio.get_by_role('button', name='Inspect project settings').click()
+        expect(studio.get_by_label('Project name')).to_have_value('Reordered timeline checkpoint')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_editor_sequence_disclosure_retains_open_state(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        inspector = studio.locator('.modern-studio-project-panel')
+        expect(inspector).to_be_visible()
+        disclosure = inspector.locator('.modern-studio-sequences-disclosure')
+        expect(disclosure).to_be_visible()
+        expect(disclosure).not_to_have_attribute('open', '')
+        disclosure.locator('summary').click()
+        expect(disclosure).to_have_attribute('open', '')
+        # A valid project field commit rerenders the Studio, but should not
+        # collapse the user's open compatibility choices.
+        name = inspector.get_by_label('Project name')
+        name.fill('Sequence inspector disclosure')
+        name.press('Tab')
+        expect(disclosure).to_have_attribute('open', '')
+        expect(studio.locator('.modern-studio-filmstrip')).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_opened_project_identity_survives_views_selection_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        current = self.page.locator('#ModernAnimationOpenedProject')
+        show = self.page.locator('#ModernAnimationShowInLibrary')
+        expect(current).to_contain_text('Soundly Causeway')
+        expect(current).to_contain_text('Saved Library project')
+        expect(show).to_be_visible()
+        opened = library.locator('.modern-animation-library-card.is-editing')
+        expect(opened).to_have_count(1)
+        opened_id = opened.get_attribute('data-animation-id')
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(current).to_contain_text('Soundly Causeway')
+        show.click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-inspector-pane').get_by_role(
+            'button', name='Inspect project settings').click()
+        studio.get_by_label('Project name').fill('Local project rename')
+        studio.get_by_label('Project name').press('Tab')
+        expect(current).to_contain_text('Unsaved working edits')
+        expect(current).to_contain_text('Soundly Causeway')
+        show.click()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        expect(current).to_contain_text('Soundly Causeway')
+        expect(current).to_contain_text('Unsaved working edits')
+        show.click()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_studio_views_share_draft_and_playback(self):
+        self.open_modern()
+        self.open_animation()
+        library_view = self.page.locator('#ModernAnimationLibraryView')
+        editor_view = self.page.locator('#ModernAnimationEditorView')
+        preview_view = self.page.locator('#ModernAnimationPreviewView')
+        library_tab = self.page.locator('#ModernAnimationViewLibrary')
+        editor_tab = self.page.locator('#ModernAnimationViewEditor')
+        preview_tab = self.page.locator('#ModernAnimationViewPreview')
+        expect(library_view).to_be_visible()
+        expect(editor_view).to_be_hidden()
+        expect(preview_view).to_be_hidden()
+        expect(library_tab).to_have_attribute('aria-selected', 'true')
+        editor_tab.click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        editor.get_by_label('Project name').fill('View navigation survives')
+        library_tab.click()
+        editor_tab.click()
+        expect(editor.get_by_label('Project name')).to_have_value('View navigation survives')
+        editor_tab.focus()
+        self.page.keyboard.press('ArrowRight')
+        expect(preview_tab).to_have_attribute('aria-selected', 'true')
+        expect(self.page.locator('#ModernAnimationPreviewEmpty')).to_contain_text('at least two compatible keyframes')
+        library_tab.click()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Open demo', exact=True).click()
+        expect(preview_view).to_be_visible()
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        seek = self.page.locator('#ModernAnimationPlaybackSeek')
+        seek.evaluate("el => {el.value=400;el.dispatchEvent(new Event('input',{bubbles:true}));}")
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback().positionMs > 20000')
+        position = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+        editor_tab.click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
+        preview_tab.click()
+        expect(preview_view).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
+        self.page.locator('#ModernAnimationPlaybackPlay').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback().playing')
+        editor_tab.click()
+        self.assertFalse(self.page.evaluate('CurvatureModernApp.getStudioPlayback().playing'))
+        preview_tab.click()
+        expect(preview_view).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_navigation_and_studio_bootstrap(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.open_animation()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_calibration_origin_session_and_preset_recovery(self):
+        self.open_modern()
+        project = json.loads((ROOT/'demos/modern/soundly.json').read_text(encoding='utf-8'))['animations'][0]['project']
+        link = self.page.evaluate("""project => {
+            const codec=CurvatureModernExperimentState, e=codec.validate(project.baseExperiment);
+            e.display.mode='scene';e.scene.preset='custom';e.scene.resetPreset='pontchartrain';
+            e.scene.objects.NObjects=[1,0];
+            const digest='a'.repeat(64);
+            e.calibrationOrigin={version:1,target:'B',resultId:'calibration-result-v1-'+digest,
+                resultDigest:digest,photo:{version:1,sha256:'b'.repeat(64),width:1176,height:791},
+                baselineCamera:{Height:42.8,FocalLengthField:1996,Pan:.61,Nick:-.29,Roll:-.11,
+                    CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+                historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+                    rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+            const a=codec.validate(e), ordinary=structuredClone(a);delete ordinary.calibrationOrigin;
+            for(const side of ['Scene','A','B']){
+                if(CurvatureModernExperimentThumbnail.viewKey(a,side)!==CurvatureModernExperimentThumbnail.viewKey(ordinary,side))
+                    throw Error('Origin changed thumbnail view identity');
+            }
+            return codec.urlWithExperiment(location.href,a);
+        }""", project)
+        self.page.goto(link, wait_until='load')
+        preset=self.page.locator('#ModernPreset')
+        expect(preset).to_have_value('custom', timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.display.mode==='compare'&&saved.experiment.calibrationOrigin?.target==='B';
+        }""", timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed','true')
+        self.page.locator('#ModernSceneTab').click()
+        expect(preset).to_be_enabled(timeout=30000)
+        preset.select_option('chicago')
+        expect(preset).to_have_value('chicago', timeout=30000)
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.scene.preset==='chicago'&&!saved.experiment.calibrationOrigin;
+        }""", timeout=30000)
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('custom', timeout=30000)
+        self.page.wait_for_function("""async () => {
+            const saved=await CurvatureModernSessionAutosave.read(indexedDB);
+            return saved?.experiment?.scene.preset==='custom'&&saved.experiment.calibrationOrigin?.target==='B';
+        }""", timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_chicago_preset_compare_and_history_return(self):
+        self.open_modern()
+        preset = self.page.locator('#ModernPreset')
+        expect(preset).to_have_value('pontchartrain')
+        preset.select_option('chicago')
+        expect(preset).to_have_value('chicago', timeout=30000)
+        expect(self.page.locator('#ModernSceneTitle')).to_contain_text('Chicago Skyline')
+        self.assertEqual(self.page.evaluate('''() => ({
+            types: window.CurvatureModernApp.getModel().ObjType,
+            counts: window.CurvatureModernApp.getModel().NObjects,
+            atmosphere: document.getElementById('ModernAtmosphere').value,
+        })'''), {'types': [4, 3], 'counts': [6, 0], 'atmosphere': 'standard'})
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('pontchartrain', timeout=30000)
+        self.assertEqual(self.page.evaluate('window.CurvatureModernApp.getModel().ObjType'), [3, 3])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_causeway_preset_and_compare_return(self):
+        self.open_modern()
+        preset = self.page.locator('#ModernPreset')
+        preset.select_option('causeway')
+        expect(preset).to_have_value('causeway', timeout=30000)
+        expect(self.page.locator('#ModernSceneTitle')).to_contain_text('Pontchartrain Causeway')
+        self.assertEqual(self.page.evaluate("""() => ({
+            types: window.CurvatureModernApp.getModel().ObjType,
+            counts: window.CurvatureModernApp.getModel().NObjects,
+            atmosphere: document.getElementById('ModernAtmosphere').value,
+        })"""), {'types': [6, 3], 'counts': [41, 0], 'atmosphere': 'vacuum'})
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('pontchartrain', timeout=30000)
+
+    def test_tensas_preset_compare_and_history_return(self):
+        self.open_modern()
+        preset = self.page.locator('#ModernPreset')
+        preset.select_option('tensas')
+        expect(preset).to_have_value('tensas', timeout=30000)
+        expect(self.page.locator('#ModernSceneTitle')).to_contain_text('Little Tensas Bayou')
+        self.assertEqual(self.page.evaluate("""() => ({
+            types: window.CurvatureModernApp.getModel().ObjType,
+            counts: window.CurvatureModernApp.getModel().NObjects,
+            atmosphere: document.getElementById('ModernAtmosphere').value,
+        })"""), {'types': [7, 3], 'counts': [87, 0], 'atmosphere': 'vacuum'})
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('pontchartrain', timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_soundly_preset_compare_and_history_return(self):
+        self.open_modern()
+        preset = self.page.locator('#ModernPreset')
+        preset.select_option('soundly')
+        expect(preset).to_have_value('soundly', timeout=30000)
+        expect(self.page.locator('#ModernSceneTitle')).to_contain_text('Soundly Causeway')
+        self.assertEqual(self.page.evaluate("""() => ({
+            types: window.CurvatureModernApp.getModel().ObjType,
+            counts: window.CurvatureModernApp.getModel().NObjects,
+            atmosphere: document.getElementById('ModernAtmosphere').value,
+        })"""), {'types': [8, 3], 'counts': [128, 0], 'atmosphere': 'vacuum'})
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernCompareTab')).to_have_attribute('aria-pressed', 'true')
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernPreviousExperiment').click()
+        expect(preset).to_have_value('pontchartrain', timeout=30000)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_wizard_can_be_opened_and_cancelled(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True).click()
+        wizard = self.page.locator('#ModernAnimationProjectWizard')
+        expect(wizard).to_be_visible()
+        expect(wizard).to_contain_text('Step 1 of 5')
+        wizard.get_by_role('button', name='Cancel').click()
+        expect(wizard).to_be_hidden()
+
+    def test_working_draft_survives_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_hidden()
+        studio = self.page.locator('#ModernAnimationStudio')
+        name = studio.get_by_label('Project name')
+        name.fill('CI autosave workspace')
+        expect(name).to_have_value('CI autosave workspace')
+        # Give the IndexedDB debounce a chance, but the pagehide/localStorage
+        # checkpoint must also protect the edit when reloading.
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value(
+            'CI autosave workspace'
+        )
+
+    def create_camera_project(self, name):
+        """Create a real v2 project through the five-step wizard."""
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.get_by_text('New project', exact=True).click()
+        wizard = self.page.locator('#ModernAnimationProjectWizard')
+        wizard.get_by_role('button', name='Next').click()  # Camera Motion (default)
+        wizard.get_by_role('button', name='Use current Scene/Compare as reference').click()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_role('button', name='Next').click()  # Allowed changes
+        wizard.get_by_label('Include reference as first keyframe').check()
+        wizard.get_by_role('button', name='Next').click()
+        wizard.get_by_label('Project name').fill(name)
+        wizard.get_by_role('button', name='Create project').click()
+        expect(library).to_contain_text('1 saved project', timeout=20000)
+
+    def test_wizard_creates_persisted_project(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('CI Camera Motion')
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        expect(self.page.locator('#ModernAnimationLibrary')).to_contain_text('CI Camera Motion')
+
+    def test_keyframe_undo_redo_after_focus_leaves_editor(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('CI Undo Camera Motion')
+        editor = self.page.locator('#ModernAnimationStudio')
+        frame_name = editor.get_by_label('Frame name')
+        original = frame_name.input_value()
+        self.assertTrue(original)
+        frame_name.fill('CI renamed keyframe')
+        expect(frame_name).to_have_value('CI renamed keyframe')
+        # The old regression only listened for Ctrl+Z inside the Studio node.
+        # Moving focus out of the editor must not lose keyboard undo.
+        editor.locator('.modern-studio-header').click()
+        self.page.keyboard.press('Control+z')
+        expect(editor.get_by_label('Frame name')).to_have_value(original)
+        self.page.keyboard.press('Control+y')
+        expect(editor.get_by_label('Frame name')).to_have_value('CI renamed keyframe')
+
+
+
+    def test_calibration_projects_distinct_photos_history_and_reload_isolation(self):
+        # Two independently imported originals must not exchange correspondence
+        # history, calibration stage or photo binding across switches and F5.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');
+            c.width=1176;c.height=791;
+            const ctx=c.getContext('2d');
+            ctx.fillStyle='#2855a5';ctx.fillRect(0,0,c.width,c.height);
+            ctx.fillStyle='#edbc42';ctx.fillRect(65,90,200,150);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Distinct second original.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        self.assertNotEqual(first['referenceImage']['original']['dataUrl'],
+                            second['referenceImage']['original']['dataUrl'])
+        # Keep valid fixture topology while giving B an observably distinct
+        # observation bank, even when the reference scene is the same.
+        self.assertGreater(len(second['observations']),1)
+        second['observations']=second['observations'][:-1]
+        expected_counts=[len(first['observations']),len(second['observations'])]
+        self.assertNotEqual(*expected_counts)
+
+        toggle.click()
+        for count,(filename,data) in enumerate(
+                [('first-original.json',first),('second-original.json',second)],start=1):
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+            # The file input's import handler is asynchronous; do not start
+            # the next import until the first project has been committed.
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                count,timeout=30000)
+        entries=self.page.evaluate("""async () => {
+            const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
+            return Promise.all(rows.filter(r=>r.photo).map(async r=>{
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,r.id);
+                return {id:p.id,sha:p.photo.identity.sha256,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }));
+        }""")
+        self.assertEqual(len(entries),2,'two imported photos must produce two distinct project rows')
+        by_count={r['count']:r for r in entries}
+        self.assertTrue(all(n in by_count for n in expected_counts),entries)
+        a,b=(by_count[n] for n in expected_counts)
+        self.assertNotEqual(a['id'],b['id'])
+        self.assertNotEqual(a['sha'],b['sha'])
+
+        def open_project(project):
+            if panel.is_hidden():
+                toggle.click()
+            panel.locator('[data-calibration-project-id="'+project['id']+'"] '
+                          '[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectPersistenceStatus().projectId"""),project['id'])
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=project['id'],timeout=30000)
+            # The correspondence list and editing toolbar are disclosure
+            # panels; make them visible before clicking their real controls.
+            self.page.evaluate("""() => {
+                document.getElementById('ModernCalibrationPairList').open=true;
+                document.getElementById('ModernCalibrationManualPairs').open=true;
+            }""")
+
+        def live_state():
+            return self.page.evaluate("""() => {
+                const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+                const photo=editor.exportExperiment().referenceImage;
+                return {stage:document.querySelector('#ModernPhotoCalibration').dataset.calibrationStage,
+                    count:editor.exportExperiment().observations.length,
+                    image:photo.original.dataUrl};
+            }""")
+
+        open_project(a)
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0],timeout=30000)
+        workspace.locator('#ModernCalibrationPairs tr').first.get_by_role(
+            'button',name='Delete').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        workspace.locator('#ModernCalibrationRedo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        state_a=live_state()
+        self.assertEqual((state_a['stage'],state_a['count']),
+                         ('correspondences',expected_counts[0]))
+
+        open_project(b)
+        state_b=live_state()
+        self.assertEqual(state_b['count'],expected_counts[1])
+        self.assertNotEqual(state_a['image'],state_b['image'])
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        self.page.wait_for_function("""id => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s.projectId===id && s.pending===0 && !s.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        state_b=live_state()
+        self.assertEqual(state_b['stage'],'calibration')
+
+        open_project(a)
+        self.assertEqual(live_state(),state_a)
+        # A's history remains usable even after B's independent save.
+        # Every Undo/Redo must be acknowledged at a *new* durable revision;
+        # matching an older checkpoint with the same row count is insufficient.
+        revision=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a['id'])
+        def await_revision(count,previous):
+            self.page.wait_for_function("""async ({id,count,previous}) => {
+                const status=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return status.projectId===id && !status.unsaved && status.pending===0 &&
+                    row?.revision>previous && row.checkpoint.payload.draft.rows.length===count;
+            }""",arg={'id':a['id'],'count':count,'previous':previous},timeout=30000)
+            return self.page.evaluate("""async id =>
+                (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a['id'])
+        workspace.locator('#ModernCalibrationRedo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        revision=await_revision(expected_counts[0]-1,revision)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        revision=await_revision(expected_counts[0],revision)
+        self.assertEqual(live_state(),state_a)
+
+        stored=lambda: self.page.evaluate("""async ids => Promise.all(
+            ids.map(async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {id,revision:p.revision,sha:p.photo.identity.sha256,
+                    stage:p.checkpoint.payload.draft.stage,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }))""",[a['id'],b['id']])
+        before_reload=stored()
+        self.assertEqual([p['count'] for p in before_reload],expected_counts,
+                         'both checkpoint row counts must be durable before F5')
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        self.assertIsNone(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        after_reload=stored()
+        self.assertEqual(after_reload,before_reload,
+                         'IndexedDB rows must remain byte-logically unchanged by F5')
+        for project,expected in [(b,state_b),(a,state_a)]:
+            open_project(project)
+            live=live_state()
+            durable=stored()
+            self.assertEqual({k:v for k,v in live.items() if k!='image'},
+                             {k:v for k,v in expected.items() if k!='image'},
+                             f'editor rehydration mismatch for {project["id"]}; durable={durable}')
+            self.assertEqual(live['image'],expected['image'],
+                             'project photo original must remain unchanged')
+            active=next(p for p in durable if p['id']==project['id'])
+            self.assertEqual((active['sha'],active['stage'],active['count']),
+                             (project['sha'],expected['stage'],expected['count']))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_calibration_projects_two_real_fits_apply_without_cross_binding(self):
+        # Real Chromium Worker fits and Apply for two separate project IDs,
+        # with independent verified originals and preserved outgoing drafts.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=1176;c.height=791;
+            const g=c.getContext('2d');g.fillStyle='#334f8c';
+            g.fillRect(0,0,c.width,c.height);
+            g.fillStyle='#efc650';g.fillRect(100,110,190,110);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Second fit original.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        self.assertNotEqual(first['referenceImage']['original']['dataUrl'],
+                            second['referenceImage']['original']['dataUrl'])
+        toggle.click()
+        for index,(filename,data) in enumerate(
+                [('fit-a.json',first),('fit-b.json',second)],start=1):
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                index,timeout=30000)
+        records=self.page.evaluate("""async () => {
+            const store=CurvatureModernCalibrationProjectStore;
+            const summaries=await store.list(indexedDB);
+            return Promise.all(summaries.map(async r=>{
+                const p=await store.get(indexedDB,r.id);
+                return {id:p.id,sha:p.photo?.identity.sha256,results:p.resultIds,
+                    observations:p.checkpoint.payload.draft.rows.length};
+            }));
+        }""")
+        self.assertEqual(len(records),2)
+        originals=self.page.evaluate("""async photos => Promise.all(
+            photos.map(async p => (await CurvatureModernReferenceImageImport.identify(
+                p,window)).sha256))""",[first['referenceImage'],second['referenceImage']])
+        by_sha={p['sha']:p for p in records}
+        self.assertEqual(len(by_sha),2)
+        a,b=(by_sha[sha] for sha in originals)
+        self.assertNotEqual(a['sha'],b['sha'])
+        self.assertEqual((a['observations'],b['observations']),(14,14))
+        self.assertEqual((a['results'],b['results']),([],[]))
+        original_b=self.page.evaluate("""async id => {
+            const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return {checkpoint:p.checkpoint,photo:p.photo,resultIds:p.resultIds};
+        }""",b['id'])
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def saved(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {photo:p.photo,checkpoint:p.checkpoint,resultIds:p.resultIds};
+            }""",id)
+
+        results={}
+        for index,project in enumerate((a,b)):
+            if index:
+                expect(self.page.locator('#ModernSceneTab')).to_have_attribute(
+                    'aria-pressed','true',timeout=30000)
+                self.page.locator('#ModernPhotoCalibrationOpen').click()
+                expect(workspace).to_be_visible(timeout=30000)
+            open_project(project['id'])
+            expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_be_visible()
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectBinding()?.projectId"""),project['id'])
+            self.assertEqual(saved(project['id'])['photo']['identity']['sha256'],
+                             project['sha'])
+            workspace.locator('[data-calibration-stage="calibration"]').click()
+            run=workspace.locator('#ModernCalibrationRunFit')
+            expect(run).to_be_enabled(timeout=30000)
+            run.click()
+            button=workspace.locator('#ModernCalibrationApplyScene')
+            expect(button).to_be_enabled(timeout=120000)
+            fitted=self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+            fit=fitted['fit']['result']
+            self.assertTrue(fit['evaluation']['valid'])
+            self.assertGreater(fit['acceptedSteps'],0)
+            self.assertEqual(len(fit['evaluation']['points']),14)
+            self.assertLess(fit['evaluation']['rmsPx'],15)
+            self.assertEqual(fitted['observations'],first['observations'])
+            self.assertEqual(fitted['referenceImage']['original'],
+                             (first if index==0 else second)['referenceImage']['original'])
+            if index==0:
+                self.assertEqual(saved(b['id'])['checkpoint'],original_b['checkpoint'])
+                self.assertEqual(saved(b['id'])['resultIds'],[])
+            self.page.once('dialog',lambda prompt:prompt.accept())
+            button.click()
+            expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+                'Applied to Scene',timeout=30000)
+            self.page.wait_for_function("""id => {
+                const a=CurvatureModernApp;
+                return a.getWorkspaceMode()==='scene' &&
+                    document.querySelector('#ModernSceneTab')?.getAttribute('aria-pressed')==='true';
+            }""",arg=project['id'],timeout=30000)
+            self.page.wait_for_function("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return p?.resultIds.length===1;
+            }""",arg=project['id'],timeout=30000)
+            applied=saved(project['id'])
+            results[project['id']]=applied['resultIds'][0]
+            self.assertEqual(applied['photo']['identity']['sha256'],project['sha'])
+            self.assertEqual(len(applied['checkpoint']['payload']['draft']['rows']),14)
+            self.assertEqual(applied['checkpoint']['payload']['draft']['fitBest']['evaluation']['valid'],True)
+            if index==0:
+                # Applying A must not create a link or change B's checkpoint.
+                self.assertEqual(saved(b['id'])['checkpoint'],original_b['checkpoint'])
+                self.assertEqual(saved(b['id'])['resultIds'],[])
+        self.assertNotEqual(results[a['id']],results[b['id']])
+        archive=self.page.evaluate("""async ids => {
+            const store=CurvatureModernCalibrationResultArchive;
+            const rows=await Promise.all(ids.map(id=>store.get(indexedDB,id)));
+            return rows.map(x=>({
+                photo:x.record.payload.photo.sha256,
+                project:x.record.provenance.projectId,
+                valid:x.record.payload.fit.result.evaluation.valid}));
+        }""",[results[a['id']],results[b['id']]])
+        self.assertEqual([row['project'] for row in archive],[a['id'],b['id']])
+        self.assertEqual([row['valid'] for row in archive],[True,True])
+        self.assertEqual([row['photo'] for row in archive],[a['sha'],b['sha']])
+        self.page.reload(wait_until='load',timeout=30000)
+        after=[saved(a['id']),saved(b['id'])]
+        self.assertEqual([v['resultIds'] for v in after],
+                         [[results[a['id']]],[results[b['id']]]])
+        self.assertEqual([v['photo']['identity']['sha256'] for v in after],
+                         [a['sha'],b['sha']])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_calibration_project_apply_preserves_exact_history_and_portable_exports(self):
+        # Qualification: the *outgoing* Scene, not the fitted replacement,
+        # survives Apply in pinned History; project JSON exports remain
+        # self-contained and independent across switch and F5.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        workspace.locator('#ModernCalibrationClose').click()
+        self.page.locator('#ModernRender').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        outgoing=self.page.evaluate("""async () =>
+            (await CurvatureModernSessionAutosave.read(indexedDB)).experiment""")
+        self.assertEqual(outgoing['display']['mode'],'scene')
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible(timeout=30000)
+        fixture=self.soundly_calibration_experiment()
+        toggle.click()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'portable-history-a.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        original=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(original).to_have_count(1,timeout=30000)
+        a=original.get_attribute('data-calibration-project-id')
+        original.locator('[data-calibration-project-duplicate]').click()
+        duplicate=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png (copy)')
+        expect(duplicate).to_have_count(1,timeout=30000)
+        b=duplicate.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(a,b)
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            # Active projects intentionally do not expose a redundant Open
+            # button. Keep the existing live editor rather than reopening it.
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def export_file():
+            with self.page.expect_download() as downloaded:
+                workspace.locator('#ModernCalibrationExportExperiment').click()
+            with open(downloaded.value.path(),encoding='utf-8') as stream:
+                data=json.load(stream)
+            self.assertEqual(data['format'],'curvature-photo-calibration')
+            self.assertEqual(data['referenceImage']['original'],
+                             fixture['referenceImage']['original'])
+            self.assertEqual(data['observations'],fixture['observations'])
+            self.assertFalse(data['fit']['running'])
+            return data
+
+        def history():
+            return self.page.evaluate("""async () =>
+                CurvatureModernApp.getHistoryStore().list()""")
+
+        def durable(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {resultIds:p.resultIds,rows:p.checkpoint.payload.draft.rows,
+                    photo:p.photo.identity.sha256};
+            }""",id)
+
+        open_project(b)
+        export_b=export_file()
+        snapshot_b=durable(b)
+        self.assertEqual(snapshot_b['resultIds'],[])
+        open_project(a)
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        fit=workspace.locator('#ModernCalibrationRunFit')
+        expect(fit).to_be_enabled(timeout=30000)
+        fit.click()
+        apply=workspace.locator('#ModernCalibrationApplyScene')
+        expect(apply).to_be_enabled(timeout=120000)
+        fitted=export_file()
+        self.assertTrue(fitted['fit']['result']['evaluation']['valid'])
+        self.assertGreater(fitted['fit']['result']['acceptedSteps'],0)
+        self.assertLess(fitted['fit']['result']['evaluation']['rmsPx'],15)
+        self.assertEqual(durable(b),snapshot_b,
+                         'fitting A must not mutate B or its original photo')
+        before_history=history()
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        apply.click()
+        expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+            'Applied to Scene',timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute(
+            'aria-pressed','true',timeout=30000)
+        self.page.wait_for_function("""async id => {
+            const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return p?.resultIds.length===1;
+        }""",arg=a,timeout=30000)
+        result_id=durable(a)['resultIds'][0]
+        self.assertEqual(durable(b),snapshot_b)
+        after_history=history()
+        recovery=[row for row in after_history
+                  if row['pinned'] and row['source']=='recovery'
+                  and row['experiment']==outgoing]
+        self.assertEqual(len(recovery),1,
+                         'Apply must pin the exact outgoing Scene, not the fitted Scene')
+        recovery_id=recovery[0]['id']
+        self.assertFalse(any(
+            (row['experiment'].get('calibrationOrigin') or {}).get('resultId')==result_id
+            for row in after_history),
+            'outgoing History must not be rewritten with fitted attribution')
+        self.assertGreaterEqual(len(after_history),len(before_history))
+
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible(timeout=30000)
+        open_project(a)
+        export_a=export_file()
+        self.assertEqual(export_a,fitted)
+        open_project(b)
+        self.assertEqual(export_file(),export_b)
+        self.assertEqual(durable(b),snapshot_b)
+
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        current_history=history()
+        pinned=[row for row in current_history if row['id']==recovery_id]
+        self.assertEqual(len(pinned),1)
+        self.assertTrue(pinned[0]['pinned'])
+        self.assertEqual(pinned[0]['source'],'recovery')
+        self.assertEqual(pinned[0]['experiment'],outgoing)
+        self.assertEqual(durable(a)['resultIds'],[result_id])
+        self.assertEqual(durable(b),snapshot_b)
+        for id,expected in [(a,export_a),(b,export_b)]:
+            open_project(id)
+            self.assertEqual(export_file(),expected,
+                             'portable export changed after project switch/F5')
+        archived=self.page.evaluate("""async id => {
+            const p=await CurvatureModernCalibrationResultArchive.get(indexedDB,id);
+            return {project:p.record.provenance.projectId,
+                original:p.record.payload.photo.sha256,
+                valid:p.record.payload.fit.result.evaluation.valid};
+        }""",result_id)
+        self.assertEqual(archived['project'],a)
+        self.assertTrue(archived['valid'])
+        self.assertEqual(archived['original'],durable(a)['photo'])
+        self.assertFalse([x for x in self.console if x.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_calibration_project_missing_original_rejects_open_and_restores_after_reimport(self):
+        # Simulate external damage to the image DB, not the application's
+        # protected (non-deleting) Library API. Opening the damaged project
+        # must fail closed while the other project's editor and portable
+        # export remain intact. Re-ingesting the exact original restores it.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');
+            canvas.width=1176;canvas.height=791;
+            const context=canvas.getContext('2d');
+            context.fillStyle='#2a578b';
+            context.fillRect(0,0,canvas.width,canvas.height);
+            context.fillStyle='#f8b94f';
+            context.fillRect(50,65,165,120);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Unrelated intact photo.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        second['observations']=second['observations'][:-1]
+        toggle.click()
+        for count,(filename,data) in enumerate(
+                [('missing-original-a.json',first),('intact-original-b.json',second)],start=1):
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                count,timeout=30000)
+        projects=self.page.evaluate("""async () => {
+            const store=CurvatureModernCalibrationProjectStore;
+            const summaries=await store.list(indexedDB);
+            return Promise.all(summaries.map(async item=>{
+                const p=await store.get(indexedDB,item.id);
+                return {id:p.id,sha:p.photo.identity.sha256,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }));
+        }""")
+        self.assertEqual(len(projects),2)
+        by_count={p['count']:p for p in projects}
+        a,b=by_count[14],by_count[13]
+        self.assertNotEqual(a['sha'],b['sha'])
+
+        def stored():
+            return self.page.evaluate("""async ids => Promise.all(ids.map(async id=>{
+                const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {id,photo:row.photo,checkpoint:row.checkpoint,
+                    resultIds:row.resultIds};
+            }))""",[a['id'],b['id']])
+
+        def active():
+            return self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectPersistenceStatus()?.projectId""")
+
+        panel.locator('[data-calibration-project-id="'+b['id']+'"] '
+                      '[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id => {
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus();
+            return status?.projectId===id && status.pending===0 && !status.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        self.assertEqual(active(),b['id'])
+        baseline=stored()
+        before_export=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(before_export['observations'],second['observations'])
+        self.assertEqual(before_export['referenceImage']['original'],
+                         second['referenceImage']['original'])
+
+        # Bypass disabled user deletion deliberately to model a damaged or
+        # externally cleared IndexedDB photo row; leave project rows intact.
+        damage=self.page.evaluate("""async identity => {
+            const lib=CurvatureModernReferenceImageLibrary;
+            const found=await lib.findOriginal(indexedDB,identity,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            if(!found)throw Error('Fixture original was never stored');
+            const blocked=await lib.remove(indexedDB,found.id).then(
+                ()=>false,error=>/disabled/.test(error.message));
+            if(!blocked)throw Error('Public reference deletion unexpectedly permitted');
+            await new Promise((resolve,reject)=>{
+                const request=indexedDB.open(lib.DATABASE,1);
+                request.onerror=()=>reject(request.error);
+                request.onsuccess=()=>{
+                    const db=request.result,tx=db.transaction(lib.STORE,'readwrite');
+                    tx.objectStore(lib.STORE).delete(found.id);
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=()=>{db.close();reject(tx.error);};
+                    tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            const missing=await lib.findOriginal(indexedDB,identity,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            return {blocked,missing:missing===null,removed:found.id};
+        }""",baseline[0]['photo']['identity'])
+        self.assertEqual((damage['blocked'],damage['missing']),(True,True))
+        self.assertEqual(stored(),baseline,
+                         'missing Library original must not delete any project checkpoint')
+
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        toggle.click()
+        expect(panel).to_be_visible(timeout=30000)
+        damaged=panel.locator('[data-calibration-project-id="'+a['id']+'"]')
+        intact=panel.locator('[data-calibration-project-id="'+b['id']+'"]')
+        expect(damaged).to_contain_text('Photograph unavailable',timeout=30000)
+        expect(intact.locator('img[alt="Reference photograph"]')).to_be_visible(
+            timeout=30000)
+        intact.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id => {
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus();
+            return status?.projectId===id && status.pending===0 && !status.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        before_failed_open=stored()
+        self.assertEqual(before_failed_open[0],baseline[0],
+                         'a missing original must not alter its owning project')
+        toggle.click()
+        damaged=panel.locator('[data-calibration-project-id="'+a['id']+'"]')
+        damaged.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_visible(timeout=30000)
+        expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'Cannot open project: Verified original photograph unavailable',
+            timeout=30000)
+        expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'The current editor was retained.',timeout=30000)
+        self.assertEqual(active(),b['id'])
+        after_failed_open=stored()
+        self.assertEqual(after_failed_open[0],baseline[0],
+                         'missing-photo project must never be activated or rewritten')
+        self.assertEqual(after_failed_open[1]['photo'],before_failed_open[1]['photo'])
+        self.assertEqual(after_failed_open[1]['resultIds'],
+                         before_failed_open[1]['resultIds'])
+        # Guarded switching is allowed (and required) to durably flush the
+        # outgoing B editor, including its newly fitted view/inline state.
+        # That valid checkpoint flush must not be mistaken for A corruption.
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()"""),
+            before_export)
+
+        # The unaffected B editor still allows a complete portable download.
+        toggle.click()
+        with self.page.expect_download() as exported:
+            workspace.locator('#ModernCalibrationExportExperiment').click()
+        with open(exported.value.path(),encoding='utf-8') as stream:
+            portable_b=json.load(stream)
+        self.assertEqual(portable_b,before_export)
+        toggle.click()
+        # Re-ingest only the known genuine original through the public
+        # verified content-addressed Library API. No synthetic replacement
+        # or mutation of A's project rows is permitted.
+        restored=self.page.evaluate("""async image => {
+            const lib=CurvatureModernReferenceImageLibrary;
+            const result=await lib.ensureOriginal(indexedDB,image,crypto,
+                record=>CurvatureModernReferenceImageImport.verifyOriginal(record,window));
+            return {sha:(await CurvatureModernReferenceImageImport.identify(image,window)).sha256,
+                rowId:result.row.id};
+        }""",first['referenceImage'])
+        self.assertEqual(restored['sha'],a['sha'])
+        self.assertEqual(stored(),after_failed_open)
+        panel.locator('[data-calibration-project-id="'+a['id']+'"] '
+                      '[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id =>
+            CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus()?.projectId===id""",
+            arg=a['id'],timeout=30000)
+        recovered=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+        self.assertEqual(recovered['observations'],first['observations'])
+        self.assertEqual(recovered['referenceImage']['original'],
+                         first['referenceImage']['original'])
+        self.assertEqual(active(),a['id'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_calibration_projects_independent_photo_viewports_survive_reload(self):
+        # Real wheel zoom must durably save each independently bound project
+        # without requiring a project switch to flush its viewport.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        fixture=self.soundly_calibration_experiment()
+        toggle.click()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'viewport-source.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        source=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(source).to_have_count(1,timeout=30000)
+        a=source.get_attribute('data-calibration-project-id')
+        source.locator('[data-calibration-project-duplicate]').click()
+        duplicate=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png (copy)')
+        expect(duplicate).to_have_count(1,timeout=30000)
+        b=duplicate.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(a,b)
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            # Active projects intentionally do not expose a redundant Open
+            # button. Keep the existing live editor rather than reopening it.
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def stored(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,view:p.checkpoint.payload.draft.view,
+                    sha:p.photo.identity.sha256};
+            }""",id)
+
+        def live_view():
+            return self.page.evaluate("""async () =>
+                (await CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .captureProjectCheckpoint()).checkpoint.payload.draft.view""")
+
+        def zoom_and_save(id,delta):
+            before=stored(id)
+            photo=workspace.locator('#ModernCalibrationPhoto')
+            expect(photo).to_be_visible()
+            photo.hover(position={'x':80,'y':65})
+            self.page.mouse.wheel(0,delta)
+            expected=live_view()
+            self.assertIsNotNone(expected,'wheel zoom must update the live photo viewport')
+            self.assertNotEqual(expected,before['view'])
+            # An unrelated autosave may advance the revision before the wheel
+            # snapshot is committed: wait for these exact viewport values.
+            self.page.wait_for_function("""async ({id,revision,expected}) => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return p.revision>revision && s.projectId===id && !s.unsaved && s.pending===0 &&
+                    JSON.stringify(p.checkpoint.payload.draft.view)===JSON.stringify(expected);
+            }""",arg={'id':id,'revision':before['revision'],'expected':expected},timeout=30000)
+            after=stored(id)
+            self.assertEqual(after['view'],expected)
+            self.assertEqual(live_view(),after['view'])
+            self.assertEqual(after['sha'],before['sha'])
+            return after
+
+        open_project(a)
+        self.assertIsNotNone(live_view(),
+                             'imported photo must start with a fitted viewport')
+        view_a=zoom_and_save(a,-490)
+        # A real Shift+drag pans the photo canvas rather than moving a
+        # correspondence marker. Pan must persist without a project switch.
+        before_pan=view_a
+        photo=workspace.locator('#ModernCalibrationPhoto')
+        bounds=photo.bounding_box()
+        self.assertIsNotNone(bounds)
+        start_x=bounds['x']+90
+        start_y=bounds['y']+90
+        self.page.keyboard.down('Shift')
+        try:
+            self.page.mouse.move(start_x,start_y)
+            self.page.mouse.down()
+            self.page.mouse.move(start_x+42,start_y+27,steps=5)
+            self.page.mouse.up()
+        finally:
+            self.page.keyboard.up('Shift')
+        panned=live_view()
+        self.assertNotEqual(panned,before_pan['view'],
+                            'dragging the canvas must change the photo position')
+        self.assertEqual(panned['scale'],before_pan['view']['scale'])
+        self.page.wait_for_function("""async ({id,revision,expected}) => {
+            const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return row.revision>revision && status.projectId===id &&
+                !status.unsaved && status.pending===0 &&
+                JSON.stringify(row.checkpoint.payload.draft.view)===JSON.stringify(expected);
+        }""",arg={'id':a,'revision':before_pan['revision'],'expected':panned},timeout=30000)
+        view_a=stored(a)
+        self.assertEqual(view_a['view'],panned)
+        open_project(b)
+        self.assertIsNotNone(live_view(),
+                             'duplicate photo must have a valid initial viewport')
+        self.assertNotEqual(live_view(),view_a['view'],
+                            'a duplicate starts with the original fit viewport')
+        view_b=zoom_and_save(b,370)
+        self.assertNotEqual(view_a['view'],view_b['view'])
+        open_project(a)
+        self.assertEqual(live_view(),view_a['view'])
+        saved_b=stored(b)
+        self.assertEqual((saved_b['view'],saved_b['sha']),
+                         (view_b['view'],view_b['sha']),
+                         'switch may advance revision but must not alter B viewport')
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        self.assertIsNone(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        for id,expected in [(b,view_b),(a,view_a)]:
+            open_project(id)
+            self.assertEqual(live_view(),expected['view'])
+            current=stored(id)
+            self.assertEqual(current['view'],expected['view'])
+            self.assertEqual(current['sha'],expected['sha'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        data=self.soundly_calibration_experiment()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'photo-project.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')})
+        entry=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(entry).to_have_count(1,timeout=30000)
+        image=entry.locator('.modern-calibration-project-preview img')
+        expect(image).to_be_visible(timeout=30000)
+        self.assertTrue(image.evaluate('(node) => node.complete && node.naturalWidth > 0'))
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage).workspace.calibrationView"""),
+            'projects')
+        self.page.reload(wait_until='load')
+        expect(panel).to_be_visible(timeout=30000)
+        expect(workspace.locator('.modern-calibration-stages')).to_be_visible()
+        expect(image).to_be_visible(timeout=30000)
+        self.assertTrue(image.evaluate('(node) => node.complete && node.naturalWidth > 0'))
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""),None)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel).to_be_hidden()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage).workspace.calibrationView"""),
+            'editor')
+        self.page.reload(wait_until='load')
+        expect(workspace).to_be_visible(timeout=30000)
+        expect(panel).to_be_hidden()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+
+
+    def test_animation_keyframe_explicit_history_save_and_dedup(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        initial=self.page.evaluate("""async () => ({
+            count: (await CurvatureModernApp.getHistoryStore().list()).length,
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft
+        })""")
+        original=initial['draft']['frames'][3]
+        old_height=original['experiment']['scene']['camera']['Height']
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        workspace_id=banner.get_attribute('data-workspace-id')
+        expect(banner.get_by_role('button',name='Apply + Save to History')).to_be_enabled()
+        self.page.locator('#ModernHeight').fill(str(old_height+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        self.page.wait_for_function("""async count =>
+            (await CurvatureModernApp.getHistoryStore().list()).length > count""",
+            arg=initial['count'],timeout=30000)
+        first=self.page.evaluate("""async () => ({
+            entries: await CurvatureModernApp.getHistoryStore().list(),
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft
+        })""")
+        durable=self.page.evaluate("""async id => {
+            const api=CurvatureModernAnimationDraftAutosave;
+            return api.getWorkspace(await api.readCollection(indexedDB),id).draft;
+        }""",workspace_id)
+        self.assertEqual(durable,first['draft'],'History provenance and frame must be durable')
+        frame=first['draft']['frames'][3]
+        self.assertEqual(frame['experiment']['scene']['camera']['Height'],old_height+7)
+        self.assertIsInstance(frame['sourceSnapshotId'],int)
+        self.assertEqual(next(x for x in first['entries'] if x['id']==frame['sourceSnapshotId'])['experiment'],
+                         frame['experiment'])
+        self.assertEqual(first['draft']['frames'][:3],initial['draft']['frames'][:3])
+        self.assertEqual(first['draft']['frames'][4:],initial['draft']['frames'][4:])
+        # Immediate identical explicit save must reuse History after durable reconciliation.
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        try:
+            expect(banner).to_have_count(0,timeout=6000)
+        except AssertionError:
+            diagnostic=self.page.evaluate("""async id => {
+                const api=CurvatureModernAnimationDraftAutosave;
+                const collection=await api.readCollection(indexedDB);
+                const saved=api.getWorkspace(collection,id);
+                const live=CurvatureModernApp.getAnimationStudioDraft().draft;
+                const a=JSON.stringify(saved&&saved.draft),b=JSON.stringify(live);
+                const rec=JSON.parse(sessionStorage.getItem(
+                    'curvature-modern-keyframe-edit-recovery-v1')||'null');
+                const entry=rec&&rec.draftAtEntry||'';
+                let i=0;while(i<a.length&&i<entry.length&&a[i]===entry[i])i++;
+                return {same:a===b,storedLength:a.length,liveLength:b.length,
+                    entryLength:entry.length,entrySame:a===entry,
+                    mismatch:i,stored:a.slice(Math.max(0,i-130),i+180),
+                    entry:entry.slice(Math.max(0,i-130),i+180)};
+            }""",banner.get_attribute('data-workspace-id'))
+            self.fail('Second Apply remained open: '+banner.locator('p').inner_text()+
+                      ' diagnostic='+str(diagnostic))
+        self.page.wait_for_function("""id =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId===id""",
+            arg=frame['sourceSnapshotId'])
+        second=self.page.evaluate("""async () => ({
+            entries: await CurvatureModernApp.getHistoryStore().list(),
+            frame: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3]
+        })""")
+        self.assertEqual(len(second['entries']),len(first['entries']))
+        self.assertEqual(second['frame']['sourceSnapshotId'],frame['sourceSnapshotId'])
+
+
+    def test_animation_duplicate_edit_adjacent_frame_cancel_and_apply(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        original=before['draft']['frames'][3]
+        original_height=original['experiment']['scene']['camera']['Height']
+        # Duplicate is an explicit Studio draft edit, and its editor is isolated.
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Duplicate and edit '+original['name']).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        duplicated=self.page.evaluate("""() => CurvatureModernApp.getAnimationStudioDraft().draft""")
+        self.assertEqual(len(duplicated['frames']),10)
+        new_frame=duplicated['frames'][4]
+        self.assertEqual(duplicated['frames'][3],original)
+        self.assertEqual(duplicated['frames'][5:],before['draft']['frames'][4:])
+        self.assertEqual(new_frame['sourceSnapshotId'],None)
+        self.assertEqual(new_frame['travelMs'],1000)
+        self.assertEqual(new_frame['holdMs'],0)
+        self.assertEqual(new_frame['experiment'],original['experiment'])
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        self.assertEqual(len(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames""")),10,
+            'Cancel discards temporary changes but retains the explicit duplicate')
+        studio.locator('.modern-studio-edit-undo').first.click()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(10)
+        studio.locator('.modern-studio-filmstrip-item').nth(4).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        self.page.locator('#ModernHeight').fill(str(original_height+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        after=self.page.evaluate("""async () => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            history: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(after['draft']['frames'][4]['experiment']['scene']['camera']['Height'],
+                         original_height+3)
+        self.assertEqual(after['draft']['frames'][3],original)
+        self.assertEqual(after['draft']['frames'][5:],before['draft']['frames'][4:])
+        self.assertEqual(after['history'],before['history'],
+                         'duplicating and editing a frame never implicitly writes History')
+
+
+    def test_animation_keyframe_camera_live_canvas_pixels_and_cancel_restoration(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""() => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            model: JSON.stringify(CurvatureModernApp.getModel())
+        })""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        canvas=self.page.locator('#ModernWorkspace canvas.modern-camera-draggable:visible').first
+        expect(canvas).to_be_visible()
+        # Real rendered canvas pixels, not merely model field values. The
+        # comparison is on the same viewport before/after a camera adjustment.
+        canvas.evaluate("""canvas => {
+            if(!canvas.width || !canvas.height)
+                throw Error('No initialized visible camera render canvas');
+            window.__keyframePixelCanvas=canvas;
+            window.__keyframePixelBaseline=canvas.toDataURL('image/png');
+        }""")
+        height=self.page.locator('#ModernHeight')
+        value=float(height.input_value())
+        height.fill(str(value+45))
+        height.press('Tab')
+        self.page.wait_for_function("""v =>
+            Math.abs(CurvatureModernApp.getModel().Height-v)<0.0001""",arg=value+45)
+        self.page.wait_for_function("""() => {
+            const c=window.__keyframePixelCanvas;
+            return c&&c.toDataURL('image/png')!==window.__keyframePixelBaseline;
+        }""",timeout=30000)
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft"""),before['draft'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getModel())"""),before['model'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_animation_keyframe_deleted_history_provenance_remains_editable(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        original=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        saved=self.page.evaluate("""async () => ({
+            key: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].key,
+            id: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId,
+            count: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertIsInstance(saved['id'],int)
+        self.assertTrue(self.page.evaluate("""async id =>
+            CurvatureModernApp.getHistoryStore().remove(id)""",saved['id']))
+        count=self.page.evaluate("""async () =>
+            (await CurvatureModernApp.getHistoryStore().list()).length""")
+        self.assertEqual(count,saved['count']-1)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        self.page.locator('#ModernHeight').fill(str(original+11))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        result=self.page.evaluate("""async () => ({
+            frame: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3],
+            count: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(result['frame']['experiment']['scene']['camera']['Height'],original+11)
+        self.assertEqual(result['frame']['sourceSnapshotId'],saved['id'],
+                         'History provenance is informative, never a live dependency')
+        self.assertEqual(result['count'],count,
+                         'default Apply must not recreate missing source History')
+
+
+    def test_shared_image_picker_cancel_filters_and_no_browser_mutation(self):
+        self.open_modern()
+        self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")
+        before=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=40;c.height=30;
+            c.getContext('2d').fillRect(0,0,40,30);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Picker source.png',{type:'image/png'}),'picker-original',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            return {record:JSON.stringify((await CurvatureModernReferenceImageLibrary.get(indexedDB,record.id)).record)};
+        }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace.locator('#ModernCalibrationUsePhoto')).to_be_enabled()
+        snapshot=self.page.evaluate("""() => ({
+            count:CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow(),
+            calibration:CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()
+        })""")
+        workspace.locator('#ModernCalibrationUsePhoto').click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        picker.get_by_label('Source', exact=True).select_option('demo')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(0)
+        picker.get_by_label('Source', exact=True).select_option('library')
+        picker.get_by_label('Search images').fill('not-an-original')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(0)
+        picker.get_by_label('Search images').fill('Picker source')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
+        picker.get_by_role('button',name='Select image Picker source.png (Local)').click()
+        picker.get_by_role('button',name='Cancel').click()
+        expect(picker).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""() => ({
+            count:CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow(),
+            calibration:CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()
+        })"""),snapshot)
+        self.assertEqual(self.page.evaluate("""async () =>
+            JSON.stringify((await CurvatureModernReferenceImageLibrary.get(indexedDB,'picker-original')).record)"""),
+            before['record'])
+        workspace.locator('#ModernCalibrationClose').click()
+
+
+    def test_shared_image_picker_missing_original_does_not_attach(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Picker missing original')
+        self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+            canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Stale source.png',{type:'image/png'}),'stale_source',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+        }""")
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs', exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
+        expect(picker.get_by_role('button',name='Attach selected')).to_be_disabled()
+        picker.get_by_role('button',name='Select image Stale source.png (Local)').click()
+        self.page.evaluate("""() => {
+            window.__realImageLibrary=CurvatureModernReferenceImageLibrary;
+            window.CurvatureModernReferenceImageLibrary={
+                ...window.__realImageLibrary,
+                get:async(idb,id)=>id==='stale_source'?null:window.__realImageLibrary.get(idb,id)
+            };
+        }""")
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker.get_by_role('status')).to_contain_text('Original image missing')
+        expect(links).to_contain_text('Reference photographs (0)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds||[]"""),[])
+        self.page.evaluate("""() => {
+            window.CurvatureModernReferenceImageLibrary=window.__realImageLibrary;
+            delete window.__realImageLibrary;
+        }""")
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['stale_source'])
+
+
+    def test_shared_image_picker_multiple_frame_attach_and_undo(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Picker multiple originals')
+        self.page.evaluate("""async () => {
+            for(const [id,title,color] of [
+                ['multiple_first','First source.png','#ac3119'],
+                ['multiple_second','Second source.png','#27c4a1']]){
+                const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+                const context=canvas.getContext('2d');
+                context.fillStyle=color;context.fillRect(0,0,2,2);
+                const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+                const record=await CurvatureModernReferenceImageImport.ingest(
+                    new File([blob],title,{type:'image/png'}),id,window);
+                await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            }
+        }""")
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        expect(links).to_contain_text('Reference photographs (0)')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(2)
+        first=picker.get_by_role('button',name='Select image First source.png (Local)')
+        second=picker.get_by_role('button',name='Select image Second source.png (Local)')
+        first.click()
+        second.click()
+        expect(first).to_have_attribute('aria-pressed','true')
+        expect(second).to_have_attribute('aria-pressed','true')
+        expect(picker.get_by_role('status')).to_contain_text('2 selected')
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        expect(links).to_contain_text('Reference photographs (2)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['multiple_first','multiple_second'])
+        editor.locator('.modern-studio-edit-undo').last.click()
+        expect(links).to_contain_text('Reference photographs (0)')
+        editor.locator('.modern-studio-edit-redo').last.click()
+        expect(links).to_contain_text('Reference photographs (2)')
+        links.get_by_role('button',name='Unlink reference photograph 1').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['multiple_second'])
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(r=>r.id).sort()"""),
+            ['multiple_first','multiple_second'])
+
+
+    def test_image_library_built_in_demos_are_read_only_and_not_imported(self):
+        self.open_modern()
+        self.open_animation()
+        # Inject an explicit shipped-asset fixture with the SAME bare ID as
+        # a local observation; demo and local namespaces must stay distinct.
+        self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+            canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Local same ID.png',{type:'image/png'}),'shared_test_id',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            const catalog=window.CurvatureModernDemoCatalog;
+            const load=catalog.load;
+            const shipped={id:'test-shipped-source',name:'Fixture demo',
+                referenceImages:[{...record,title:'Built-in same ID.png'}]};
+            window.CurvatureModernDemoCatalog={...catalog,
+                load:()=>[...load(),shipped]};
+        }""")
+        panel=self.open_image_library()
+        expect(self.page.locator('#ModernImageLibraryTab')).to_have_attribute('aria-pressed','true')
+        local_before=self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length""")
+        self.assertEqual(local_before,1)
+        panel.get_by_label('Source',exact=True).select_option('demo')
+        card=panel.get_by_role('button',name='Inspect Built-in same ID.png (Built-in demo)')
+        expect(card).to_be_visible()
+        card.click()
+        expect(panel.locator('.modern-image-library-demo')).to_contain_text('Read-only demo original')
+        expect(panel.locator('.modern-image-library-demo img')).to_be_visible()
+        expect(panel.locator('.modern-reference-editor')).to_be_hidden()
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),
+            local_before,'Browsing built-in/demo assets must never create a local alias')
+        panel.get_by_label('Source',exact=True).select_option('library')
+        expect(panel.get_by_role('button',name='Inspect Local same ID.png (Local original)')).to_be_visible()
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(row=>row.id)"""),
+            ['shared_test_id'])
+
+if __name__ == '__main__':
+    unittest.main()
+))
+        expect(current).to_be_visible(timeout=30000)
+        current.click()
+        self.page.wait_for_function("""expected => {
+            const app=CurvatureModernApp,checkpoint=app.getAnimationStudioDraft();
+            const failed=document.querySelector('.modern-image-usage-status')
+                ?.textContent?.startsWith('Cannot open use:');
+            return (app.getWorkspaceMode()==='animation' &&
+                checkpoint.selectedKey===expected.selectedKey) || failed;
+        }""",arg=before,timeout=30000)
+        after=self.page.evaluate("""() => {
+            const app=CurvatureModernApp,checkpoint=app.getAnimationStudioDraft();
+            return {workspaceId:app.getAnimationStudioWorkspaceId(),
+                selectedKey:checkpoint.selectedKey,
+                imageId:checkpoint.draft.frames[0].referenceImageIds[0],
+                mode:app.getWorkspaceMode(),
+                status:document.querySelector('.modern-image-usage-status')?.textContent};
+        }""")
+        self.assertEqual(after['mode'],'animation',after)
+        self.assertEqual(after['workspaceId'],before['workspaceId'],after)
+        self.assertEqual(after['selectedKey'],before['selectedKey'],after)
+        self.assertEqual(after['imageId'],before['imageId'],after)
+        # A previous backup of the same workspace must not silently open
+        # the current version just because its frame key still exists.
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',name='Inspect current-usage.png (Local original)').click()
+        self.page.evaluate("""data => {
+            const graph=CurvatureModernImageUsageGraph;
+            CurvatureModernImageUsageGraph={...graph,discover:async()=>({
+                uses:[{type:'draft',ownerId:data.workspaceId,
+                    title:'Stale checkpoint',frameKey:data.selectedKey,
+                    frameIndex:1,frameName:'Old frame',revision:1,source:'recoverable'}],
+                count:1,complete:true,unavailable:[],note:'Test snapshot.'
+            })};
+        }""",before)
+        gallery.get_by_role('button',name='Refresh uses').click()
+        stale=where.get_by_role('button',name='Open draft Stale checkpoint frame 1 · recoverable')
+        expect(stale).to_be_visible()
+        stale.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text(
+            'Recoverable Storyboard changed or is not loaded')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

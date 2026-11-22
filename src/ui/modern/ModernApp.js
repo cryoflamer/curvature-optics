@@ -8718,6 +8718,7 @@
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
     getAnimationStudioView:function(){return studioView;},
+    getAnimationStudioWorkspaceId:function(){return studioWorkspaceId||null;},
     // A verified saved owner can be opened without relying on visible Library
     // cards (which may be filtered). Existing switch guards own unsaved drafts.
     openImageUsageAnimation:async function(id,frameKey,expectedUpdatedAt,frameIndex,imageId){
@@ -8758,23 +8759,42 @@
     },
     // Recoverable drafts are opened through the existing guarded workspace
     // switch; unavailable snapshots are never silently reconstructed by ID.
-    openImageUsageDraft:async function(workspaceId,frameKey){
-      if(!studioWorkspaces||!studioWorkspaces.workspaces.some(function(w){return w.id===workspaceId;}))
-        throw Error('Recoverable draft is not in the current local workspace; inspect recovery before opening');
+    openImageUsageDraft:async function(workspaceId,frameKey,expectedSavedAt,imageId,source){
+      if(!studioDraftAutosave||!studioWorkspaces)
+        throw Error('Recoverable Storyboards are not ready; inspect recovery before opening');
+      if(typeof imageId!=='string'||!imageId)
+        throw Error('Select an original photograph before opening its usage');
+      // Different backups can share a workspace ID but represent different
+      // checkpoints. Only open the exact version available to this editor.
+      var active=studioWorkspaceId===workspaceId;
+      if(source==='current'&&!active)
+        throw Error('Current Storyboard changed; refresh Where used?');
+      var saved=source==='current'?
+        {draft:studioDraft,savedAt:Math.max(1,studioDraftSavedAt||Date.now())}:
+        studioDraftAutosave.getWorkspace(studioWorkspaces,workspaceId);
+      if(!saved||saved.savedAt!==expectedSavedAt)
+        throw Error('Recoverable Storyboard changed or is not loaded; refresh Where used?');
+      if(active&&source!=='current'&&studioDraftSavedAt!==saved.savedAt)
+        throw Error('Current Storyboard differs from this recovery checkpoint; refresh Where used?');
+      function referenced(draft){
+        return draft?.frames?.find(function(f){return f.key===frameKey&&
+          Array.isArray(f.referenceImageIds)&&f.referenceImageIds.includes(imageId);})||null;
+      }
+      var target=referenced(saved.draft);
+      if(!target)throw Error('Referenced draft keyframe or photograph changed; refresh Where used?');
       var tab=newUiEl('ModernAnimationTab');
       if(!tab)throw Error('Animation workspace unavailable');
       tab.click();
       if(currentWorkspaceMode()!=='animation')throw Error('Animation workspace navigation blocked');
       if(studioWorkspaceId!==workspaceId)await requestStudioSwitch('draft',workspaceId);
       if(studioWorkspaceId!==workspaceId)throw Error('Draft switch was cancelled or blocked');
-      if(frameKey!==null&&frameKey!==undefined){
-        if(!studioDraft.frames.some(function(frame){return frame.key===frameKey;}))
-          throw Error('Referenced keyframe is missing from this recovered draft');
-        studioSelectedKey=frameKey;
-      }
+      var current=referenced(studioDraft);
+      if(!current||current.name!==target.name)
+        throw Error('Selected Storyboard keyframe changed during navigation; refresh Where used?');
+      studioSelectedKey=frameKey;
       setStudioView('editor',true,'push');
       renderAnimationStudio(studioHistoryEntries);
-      return {workspaceId:workspaceId,frameKey:frameKey||null};
+      return {workspaceId:workspaceId,frameKey:frameKey};
     },
     getCalibrationView:function(){return workspaceState.calibrationView;},
     rememberCalibrationView:rememberCalibrationView,

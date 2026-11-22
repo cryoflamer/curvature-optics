@@ -58,9 +58,9 @@
     if(sources.currentCalibration&&sources.currentCalibration.referenceImageId===selectedId)
       add({type:'calibration-draft',ownerId:sources.currentCalibration.projectId||'current',
         title:'Current Calibration working session',revision:null,source:'current'});
-    if(sources.currentStudio&&sources.currentStudio.draft){
+    if(sources.currentStudio&&sources.currentStudio.draft&&sources.currentStudioWorkspaceId){
       imagesFromFrames(sources.currentStudio.draft.frames,selectedId,'draft',
-        sources.currentStudio.libraryId?'project_'+sources.currentStudio.libraryId:'current',
+        sources.currentStudioWorkspaceId,
         sources.currentStudio.draft.name||'Current Storyboard',sources.currentStudio.savedAt,
         'current').forEach(add);
     }
@@ -106,8 +106,12 @@
         sources.drafts=all;
       }
     }catch(error){failures.push('Local workspace recovery: '+error.message);}
-    try{sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;}
-    catch(error){failures.push('Current Storyboard: '+error.message);}
+    try{
+      sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;
+      sources.currentStudioWorkspaceId=env.CurvatureModernApp?.getAnimationStudioWorkspaceId?.()||null;
+      if(sources.currentStudio&&!sources.currentStudioWorkspaceId)
+        failures.push('Current Storyboard workspace identity unavailable');
+    }catch(error){failures.push('Current Storyboard: '+error.message);}
     try{
       var calibration=env.CurvatureModernPhotoCalibrationEditor?.mount?.(env.document);
       var current=calibration?.snapshot?.(),binding=calibration?.projectBinding?.();

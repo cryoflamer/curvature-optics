@@ -482,3 +482,17 @@ test('Where used distinguishes recoverable revisions for the same keyframe',()=>
   assert.equal(result.count,2);
   assert.deepEqual(result.uses.map(x=>x.revision),[11,12]);
 });
+
+test('Where used uses the real active Storyboard workspace identity',()=>{
+  const image='local_photo',frame={key:'kf_live',name:'Unpublished',
+    referenceImageIds:[image]};
+  const current={draft:{name:'Live project',frames:[frame]},savedAt:71};
+  const result=usageGraph.report(image,null,{
+    currentStudio:current,currentStudioWorkspaceId:'draft_real_workspace'
+  });
+  assert.equal(result.count,1);
+  assert.deepEqual(result.uses.map(u=>[u.ownerId,u.frameKey,u.revision,u.source]),
+    [['draft_real_workspace','kf_live',71,'current']]);
+  const missing=usageGraph.report(image,null,{currentStudio:current});
+  assert.equal(missing.count,0,'a placeholder current ID must never become a navigation link');
+});
