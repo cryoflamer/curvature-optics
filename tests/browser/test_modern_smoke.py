@@ -5500,7 +5500,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Create copy', exact=True).click()
         studio=self.page.locator('#ModernAnimationStudio')
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         draft_before=self.page.evaluate("""() =>
@@ -5552,7 +5552,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Create copy', exact=True).click()
         studio = self.page.locator('#ModernAnimationStudio')
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         self.assertIsNotNone(self.page.evaluate("""() =>
             sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
@@ -5624,7 +5624,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio=self.page.locator('#ModernAnimationStudio')
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         previous=self.page.evaluate('CurvatureModernApp.getModel().Height')
         self.page.locator('#ModernHeight').fill(str(previous+17))
@@ -5715,7 +5715,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio=self.page.locator('#ModernAnimationStudio')
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         token=self.page.evaluate("""() => {
@@ -5763,7 +5763,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             return !!c?.workspaces.find(w=>w.id===id);
         }""",arg=workspace_id,timeout=30000)
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         before=self.page.evaluate('CurvatureModernApp.getModel().Height')
         self.page.locator('#ModernHeight').fill(str(before+13))
         self.page.locator('#ModernHeight').press('Tab')
@@ -5833,7 +5833,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         draft_before = self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         self.assertTrue(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
         self.assertTrue(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
@@ -5881,7 +5881,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio=self.page.locator('#ModernAnimationStudio')
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
         for locked in ['ModernModelRadius','ModernModelCurvature','ModernAtmosphere',
@@ -5926,7 +5926,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio=self.page.locator('#ModernAnimationStudio')
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         original=self.page.evaluate('CurvatureModernApp.getModel().Pan')
@@ -5957,7 +5957,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         banner.get_by_role('button',name='Cancel & Return').click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         self.page.wait_for_function(
             'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',
             arg=original)
@@ -5981,7 +5981,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         wizard.get_by_role('button', name='Create project').click()
         studio = self.page.locator('#ModernAnimationStudio')
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(1,timeout=30000)
-        studio.locator('.modern-studio-filmstrip-item').get_by_role('button',name='Edit ',exact=False).click()
+        studio.locator('.modern-studio-filmstrip-item').get_by_role('button',name=re.compile(r'^Edit ')).click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         return studio
 
@@ -6097,7 +6097,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         fourth=before['draft']['frames'][3]
         prior_height=fourth['experiment']['scene']['camera']['Height']
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         expect(banner.get_by_role('button',name='Apply & Return')).to_be_enabled()
@@ -6140,7 +6140,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         original=self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         height=self.page.locator('#ModernHeight')
         height.fill(str(original+6))
         height.press('Tab')
@@ -6182,7 +6182,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         unchanged=self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+            'button',name=re.compile(r'^Edit ')).click()
         height=self.page.locator('#ModernHeight')
         height.fill(str(unchanged+8))
         height.press('Tab')
@@ -6626,8 +6626,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         frame.press('Tab')
         key = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey')
         card = studio.locator('.modern-studio-filmstrip-item').nth(3)
-        card.get_by_role('button', name='Edit 04').click()
-        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
+        card.get_by_role('button', name=re.compile(r'^Edit ')).click()
+        banner = self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        banner.get_by_role('button', name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
         card.locator('.modern-studio-keyframe').click()
         expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
@@ -7930,7 +7934,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         original=initial['draft']['frames'][3]
         old_height=original['experiment']['scene']['camera']['Height']
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         workspace_id=banner.get_attribute('data-workspace-id')
         expect(banner.get_by_role('button',name='Apply + Save to History')).to_be_enabled()
@@ -7959,7 +7963,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(first['draft']['frames'][4:],initial['draft']['frames'][4:])
         # Immediate identical explicit save must reuse History after durable reconciliation.
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button', name='Edit 04').click()
+            'button', name=re.compile(r'^Edit ')).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         banner.get_by_role('button',name='Apply + Save to History').click()
         try:
