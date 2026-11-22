@@ -760,12 +760,12 @@ test('project activation preflight rejects a newer remote revision before any ed
   assert.equal(session.recovery(),null);
 });
 
-test('editor provides an explicit guarded project switch without automatic startup activation',()=>{
+test('editor guards explicit switches and clean same-tab reload restoration',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const source=fs.readFileSync(path.resolve(__dirname,
     '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
   const app=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(source,/async function openCalibrationProject\(id\)/);
+  assert.match(source,/async function openCalibrationProject\(id,\{cleanReload=false\}=\{\}\)/);
   assert.match(source,/if\(projectSwitchBusy\|\|restoring\|\|fitWorker\|\|applyBusy\|\|pendingPhotoLoads/);
   assert.match(source,/workspace\.inert=true/);
   assert.match(source,/const ack=persist\(true\);/);
@@ -775,8 +775,12 @@ test('editor provides an explicit guarded project switch without automatic start
   assert.match(source,/const incoming=await prepareVisualProject\(prepared\)/);
   assert.match(source,/activateVisualProject\(oldView\)/);
   assert.match(source,/session\.bind\(prepared\.project\)/);
-  assert.match(source,/openCalibrationProject,adoptLegacyCalibrationDraft,\s*refreshProjectList,projectPersistenceStatus:/);
+  assert.match(source,/openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,\s*refreshProjectList,projectPersistenceStatus:/);
   assert.match(source,/if\(projectSession\?\.project\(\)\)\{\s*if\(!fromPersist\)\{/);
+  assert.match(source,/if\(!session\.project\(\)&&!cleanReload\)/);
+  assert.match(source,/openCalibrationProject\(id,\{cleanReload:true\}\)/);
+  assert.match(source,/sessionStorage\?\.setItem\(RELOAD_PROJECT_KEY,s\.projectId\)/);
+  assert.match(app,/\.resumeCleanProjectAfterReload\(\)/);
   assert.doesNotMatch(app,/\.openCalibrationProject\(/);
 });
 test('an incoming project keeps both independent photo and model views plus inline state',()=>{
