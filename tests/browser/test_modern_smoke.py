@@ -4012,6 +4012,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
             expected_counts[0])
         self.assertEqual(live_state(),state_a)
+        # Undo updates the editor synchronously, but the checkpoint is
+        # serialized asynchronously. F5 must follow its durable acknowledgement.
+        self.page.wait_for_function("""async ({id,count}) => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return s.projectId===id && !s.unsaved && s.pending===0 &&
+                row?.checkpoint.payload.draft.rows.length===count;
+        }""",arg={'id':a['id'],'count':expected_counts[0]},timeout=30000)
 
         self.page.reload(wait_until='load',timeout=30000)
         expect(workspace).to_be_visible(timeout=30000)
