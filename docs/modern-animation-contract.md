@@ -552,6 +552,64 @@ race-free browser implementation.
 
 ---
 
+## Contract-locked keyframe edit-session lifecycle
+
+Animation Studio owns its editable `ModernAnimationStudio` draft independently
+of History and the normal physical Scene/Compare working session. A keyframe's
+embedded experiment is the source of truth; its `sourceSnapshotId` is optional
+History provenance, not a dependency. A project must have a validated,
+non-Experimental v2 contract before the canonical Scene or Compare editor is
+made available for that keyframe. Built-in demonstrations must first be copied
+to a user's Library project. Legacy and Experimental projects must not be
+silently treated as safely editable contracted projects.
+
+**Temporary session.** `ModernAnimationKeyframeEditSession` captures the
+project workspace identity, its generation, the keyframe identity, the selected
+physical editor mode, the original candidate and a deep copy of the physical
+workspace to restore. During the session, ordinary Scene/Compare
+autosave/History, header Reset/History actions, mode switches, unrestricted
+camera gestures and Animation Studio background draft checkpoints are
+suppressed. In particular, a hidden tab must not replay an old Studio
+checkpoint through `visibilitychange` or `pagehide`. Browser refresh drops
+the temporary candidate and recovers the last durable ordinary physical
+workspace and independent Studio draft; browser Back cancels the session.
+
+**Allowed controls.** `ModernAnimationContract.allowedPaths()` is the
+authoritative channel allowlist: camera pose and zoom for Camera Motion or
+the selected Scene/Compare A/B physical target. The separate
+`ModernAnimationKeyframeControlLocks` maps those paths to *existing*
+Scene/Compare inputs; this mapping defines UI bindings, not new permitted
+physics. It disables every other physical control, preset, model switch,
+bulk action and alternate gesture path, and restores the previous disabled
+state on exit. Each candidate is also checked by
+`ModernAnimationContract.inspectCandidate()` before a physical redraw;
+rejected changes restore the last valid preview.
+
+**Apply.** `Apply & Return` checks the session's project/keyframe identity
+and generation, the persisted Library revision (if linked), and the Studio
+workspace draft observed at entry. The latter comparison runs inside the
+same IndexedDB readwrite transaction that reconciles the draft collection,
+rather than accepting a no-op stale checkpoint after another tab changes the
+project. A stale revision blocks Apply without overwriting the competing
+project and leaves the temporary candidate visible for cancellation.
+When accepted, `ModernAnimationStudio.replaceFrameExperiment()` validates
+the entire contracted v2 project and reconstructs the selected frame from
+the immutable base, so disallowed presentation or physics changes cannot
+leak into saved keyframes. The result updates **only** that frame's embedded
+experiment, preserving frame timing, notes, source provenance, order and
+all other frames, through the existing Studio Undo/Redo checkpoint path.
+`Cancel & Return` restores the original physical Scene/Compare workspace
+and leaves the animation unchanged.
+
+**Persistence and History.** The default Apply edits the *working Studio
+draft only*. Updating an existing named Library project is a separate
+deliberate Library Save action; a saved project remains independent of
+History, and its embedded values survive reload and missing History entries.
+Apply never silently writes a new History record or rewrites an existing
+snapshot. Any future explicit “save as History snapshot”, duplicate-keyframe
+or linked-History replacement action must retain those separate user intents
+and complete their own conflict/recovery checks.
+
 # Experimental Effective Radius Preview (Animation Studio)
 
 ## Purpose
