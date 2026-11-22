@@ -12,6 +12,8 @@
     statusMessages=require('./ModernStatusMessage');
     thumbnailApi=require('./ModernExperimentThumbnail');
   }
+  var imagePicker=root.CurvatureModernImagePicker;
+  if(typeof module==='object'&&module.exports)imagePicker=require('./ModernImagePicker');
   var refs=root.CurvatureModernAnimationPresentation;
   if(typeof module==='object'&&module.exports)refs=require('../../animation/ModernAnimationPresentation');
   var api=factory(snapshotPresentation,thumbnailPreview,statusMessages,thumbnailApi,refs);
@@ -1079,18 +1081,16 @@
       else if(card.right>bounds.right)list.scrollLeft+=card.right-bounds.right+4;
     }
   }
-  // Selected-frame authoring only. Originals load only on explicit inspection.
+  // Stage 2: one shared picker; only explicit confirmation edits frame links.
   function renderReferenceLinks(doc,panel,frame,actions,list,get){
     var ids=frame.referenceImageIds||[],rows=null,busy=false;
     var section=el(doc,'section','modern-studio-reference-links');
     section.appendChild(el(doc,'strong','','Reference photographs ('+ids.length+')'));
     section.appendChild(el(doc,'p','modern-studio-hint',
-      'Local observation links only. JSON exports retain IDs, not photographs yet. Unlinking never deletes the original.'));
+      'Only local originals may be attached. Linked project JSON backups include their originals. Unlinking never deletes the shared asset.'));
     var status=el(doc,'p','modern-studio-hint');status.setAttribute('role','status');
     var linked=el(doc,'div','modern-studio-reference-list');
     var tools=el(doc,'div','modern-studio-toolbar');
-    var picker=el(doc,'div','modern-studio-reference-gallery');picker.setAttribute('role','group');picker.setAttribute('aria-label','Reference photograph to attach');
-    var selectedId='',choices=[];
     function thumb(row){
       var visual=el(doc,'span','modern-reference-thumb');
       if(row&&row.thumbnail){var img=el(doc,'img');img.src=row.thumbnail.dataUrl;img.alt=row.title;img.loading='lazy';visual.appendChild(img);}
@@ -1098,48 +1098,79 @@
       return visual;
     }
     function inspect(id){if(refs&&get)refs.showReference(doc,section,id,get);}
-    function pick(id){selectedId=id;choices.forEach(function(c){c.button.setAttribute('aria-pressed',String(c.id===id));});attach.disabled=!id||busy||ids.length>=100;}
     function change(next){if(section.isConnected===false)return;actions.frame(frame.key,'referenceImageIds',next);}
     function move(i,step){var next=ids.slice(),other=next[i+step];next[i+step]=next[i];next[i]=other;change(next);}
-    var attach=button(doc,'Attach','Attach selected reference photograph',function(){
-      var id=selectedId;if(rows&&rows.some(function(row){return row.id===id;})&&!ids.includes(id)&&ids.length<100)change(ids.concat([id]));
-    });
-    var refresh=button(doc,'Load photographs','Load local reference photographs',load);
     function paint(){
-      linked.textContent='';picker.textContent='';choices=[];
+      linked.textContent='';
       if(!ids.length)linked.appendChild(el(doc,'p','modern-studio-hint','No reference photographs linked.'));
       ids.forEach(function(id,i){
         var row=rows&&rows.find(function(item){return item.id===id;});
         var item=el(doc,'div','modern-studio-reference-row');
         var label=el(doc,'span','',row?row.title:rows?'Missing local photograph: '+id:'Unresolved local photograph: '+id);
         var visual=button(doc,'','View original photograph '+(i+1),function(){inspect(id);});
-        visual.className+=' modern-reference-thumb-button';visual.appendChild(thumb(row));visual.disabled=!row||typeof get!=='function';
+        visual.className+=' modern-reference-thumb-button';visual.appendChild(thumb(row));
+        visual.disabled=!row||typeof get!=='function';
         item.appendChild(visual);label.title=id;item.appendChild(label);
-        var up=button(doc,'↑','Move reference photograph '+(i+1)+' earlier',function(){move(i,-1);});up.disabled=i===0;item.appendChild(up);
-        var down=button(doc,'↓','Move reference photograph '+(i+1)+' later',function(){move(i,1);});down.disabled=i===ids.length-1;item.appendChild(down);
+        var up=button(doc,'↑','Move reference photograph '+(i+1)+' earlier',function(){move(i,-1);});
+        up.disabled=i===0;item.appendChild(up);
+        var down=button(doc,'↓','Move reference photograph '+(i+1)+' later',function(){move(i,1);});
+        down.disabled=i===ids.length-1;item.appendChild(down);
         item.appendChild(button(doc,'Unlink','Unlink reference photograph '+(i+1),function(){change(ids.filter(function(x){return x!==id;}));}));
         linked.appendChild(item);
       });
-      var candidates=(rows||[]).filter(function(row){return !ids.includes(row.id);});
-      if(!candidates.length)picker.appendChild(el(doc,'p','modern-studio-hint',rows?'No unlinked photographs.':'Load the local library first'));
-      candidates.forEach(function(row){
-        var option=button(doc,'','Select photograph '+row.title,function(){pick(row.id);});
-        option.className+=' modern-reference-choice';choices.push({id:row.id,button:option});option.disabled=busy||ids.length>=100;
-        option.appendChild(thumb(row));option.appendChild(el(doc,'span','',row.title));option.title=row.id;picker.appendChild(option);
-      });
-      pick('');refresh.disabled=busy||typeof list!=='function';
+      browse.disabled=busy||!imagePicker||typeof list!=='function'||typeof get!=='function'||ids.length>=100;
     }
     async function load(){
-      if(busy||typeof list!=='function')return;
-      busy=true;refresh.disabled=true;choices.forEach(function(c){c.button.disabled=true;});attach.disabled=true;status.textContent='Loading local photographs…';
-      try{var found=await list();if(section.isConnected===false)return;rows=found;
-        status.textContent=rows.length?'Local library loaded.':'No local photographs. Import one in Reference Image Library.';
-      }catch(error){rows=null;status.textContent='Cannot resolve local photographs: '+(error.message||error);}
-      finally{busy=false;if(section.isConnected!==false)paint();}
+      if(typeof list!=='function')throw Error('Image Library unavailable');
+      busy=true;paint();status.textContent='Loading local originals…';
+      try{
+        var found=await list();
+        if(section.isConnected===false)throw Error('Keyframe editor changed before photo selection');
+        rows=found;
+        status.textContent=rows.length?'Local library loaded.':'No local photographs. Import one in Image Library.';
+        return found;
+      }catch(error){
+        rows=null;status.textContent='Cannot resolve local originals: '+(error.message||error);
+        throw error;
+      }finally{busy=false;if(section.isConnected!==false)paint();}
     }
-    tools.appendChild(refresh);tools.appendChild(attach);
-    section.appendChild(status);section.appendChild(linked);section.appendChild(tools);section.appendChild(picker);panel.appendChild(section);paint();
-    if(ids.length)load();
+    async function browseImages(){
+      if(busy||!imagePicker||ids.length>=100)return;
+      try{
+        var found=await load(),available=found.filter(function(row){return !ids.includes(row.id);});
+        imagePicker.open({document:doc,mode:'multiple',max:100-ids.length,
+          title:'Attach reference photographs',applyLabel:'Attach selected',
+          choices:available.map(function(row){
+            return {key:JSON.stringify(['library',row.id]),source:'library',kind:'unclassified',
+              title:row.title,width:row.width,height:row.height,author:row.author||'',
+              thumbnail:row.thumbnail||null};
+          }),
+          onApply:async function(keys){
+            if(section.isConnected===false)throw Error('Keyframe changed while choosing references');
+            var selected=keys.map(function(key){
+              var tuple=JSON.parse(key);
+              if(!Array.isArray(tuple)||tuple.length!==2||tuple[0]!=='library')
+                throw Error('Only local original images can be linked to a keyframe');
+              return tuple[1];
+            });
+            if(selected.length+ids.length>100||new Set(selected.concat(ids)).size!==selected.length+ids.length)
+              throw Error('Too many or duplicate reference images');
+            for(var id of selected){
+              var row=await get(id);
+              if(!row||row.id!==id||!row.record||row.record.id!==id)
+                throw Error('Original image missing or changed: '+id);
+            }
+            if(section.isConnected===false)throw Error('Keyframe editor changed before attachment');
+            change(ids.concat(selected));
+          }
+        });
+      }catch(error){status.textContent='Cannot browse local originals: '+(error.message||error);}
+    }
+    var browse=button(doc,'Browse photographs','Browse and attach local reference photographs',browseImages);
+    tools.appendChild(browse);
+    section.appendChild(status);section.appendChild(linked);section.appendChild(tools);
+    panel.appendChild(section);paint();
+    if(ids.length)load().catch(function(){});
   }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
