@@ -4028,13 +4028,21 @@
       stopStudioPlayback(true);
       studioPrepared=project;studioPlayback=player;
     }
-    // A pending paint must not be mistaken for the selected frame's pixels.
-    studioPlaybackRenderedAt=null;
     if(studioPreviewNavigation)studioPreviewNavigation.cancel();
     if(studioKeyframeThumbnails){
       var frame=studioApi.activeFrames(studioDraft).find(function(f){return f.key===key;});
       studioKeyframeThumbnails.request(studioPlayback,frame,arrival,studioKeyframeExperiment(frame),studioHistoryEntries,refresh);
     }
+    // Re-selecting an already painted, paused frame is navigation, not a new
+    // physical render. A missing/refreshed thumbnail still needs a capture,
+    // while pending/failed paints, running playback and resized canvases must
+    // go through the normal exact-time jump and invalidation path.
+    var reused=!newlyPrepared&&!refresh&&studioPlaybackRenderedAt===arrival&&
+      !studioRestorePreviewPending&&!studioPlayback.status().playing&&
+      !(studioPreviewLifecycle&&studioPreviewLifecycle.hasFrame())&&
+      !(studioKeyframeThumbnails&&studioKeyframeThumbnails.hasPending());
+    if(reused)return false;
+    studioPlaybackRenderedAt=null;
     ensureStudioPlaybackControls().jumpTo(arrival);
     return newlyPrepared;
   }

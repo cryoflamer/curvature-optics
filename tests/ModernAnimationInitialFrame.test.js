@@ -268,6 +268,40 @@ test('a paused render that produces no pixels is not announced as ready',()=>{
   assert.equal(h.node('ModernAnimationFrameLoadingA').hidden,false);
 });
 
+test('reselecting a rendered paused keyframe reuses pixels unless capture, refresh or playback requires repaint',()=>{
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const projects=require('../src/animation/ModernAnimationProject');
+  const playback=require('../src/animation/ModernAnimationPlayback');
+  const [demo]=require('../src/animation/ModernDemoCatalog').load();
+  const draft=studio.fromProject(demo.project),player=playback.create(demo.project);
+  const frame=draft.frames[3],arrival=studio.keyframeArrival(draft,demo.project,frame.key);
+  player.seek(arrival,1000);
+  let jumps=0,pending=false;
+  const context={studioApi:studio,studioProjects:projects,studioPlaybackApi:playback,
+    studioDraft:draft,studioPrepared:demo.project,studioPlayback:player,
+    studioActiveDemo:demo,studioPlaybackRenderedAt:arrival,studioRestorePreviewPending:false,
+    studioPreviewNavigation:{cancel(){}},studioHistoryEntries:[],
+    studioKeyframeThumbnails:{cancel(){pending=false;},request(){},hasPending(){return pending;}},
+    studioKeyframeExperiment(){return demo.project.baseExperiment;},
+    studioPreviewLifecycle:{hasFrame(){return false;}},
+    ensureStudioPlaybackControls(){return {jumpTo(ms){jumps++;player.seek(ms,1000);}};}};
+  const begin=app.indexOf('  function navigateStudioKeyframe('),end=app.indexOf('  // Animation Studio owns',begin);
+  vm.runInNewContext(app.slice(begin,end),context);
+  assert.equal(context.navigateStudioKeyframe(frame.key,false),false);
+  assert.equal(jumps,0,'same rendered arrival must not trigger a second physical paint');
+  pending=true;
+  context.studioKeyframeThumbnails.cancel=function(){};
+  assert.equal(context.navigateStudioKeyframe(frame.key,false),false);
+  assert.equal(jumps,1,'missing thumbnail still requires an exact-frame capture');
+  context.studioPlaybackRenderedAt=arrival;pending=false;
+  context.navigateStudioKeyframe(frame.key,true);
+  assert.equal(jumps,2,'explicit thumbnail refresh must not reuse old pixels');
+  context.studioPlaybackRenderedAt=arrival;context.studioRestorePreviewPending=true;
+  context.navigateStudioKeyframe(frame.key,false);
+  assert.equal(jumps,3,'in-flight/invalidated render must not be reused');
+  assert.equal(context.studioPlaybackRenderedAt,null);
+});
+
 test('Soundly explicit jump requests and captures an exact paused thumbnail through ModernApp',()=>{
   const studio=require('../src/animation/ModernAnimationStudio');
   const projects=require('../src/animation/ModernAnimationProject');

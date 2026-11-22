@@ -3935,6 +3935,43 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_animation_preview_reuses_painted_frame_and_preserves_render_export_controls(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-keyframe').nth(3).click()
+        preview = self.page.locator('#ModernAnimationPreviewView')
+        expect(preview).to_be_visible()
+        diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.page.locator('#ModernAnimationViewEditor').click()
+        # Properties is selection only: it must not invalidate the prepared frame.
+        studio.locator('.modern-studio-card-actions').nth(3).get_by_role('button', name='Properties for').click()
+        self.assertIsNotNone(self.page.evaluate('CurvatureModernApp.getStudioPlayback()'))
+        studio.locator('.modern-studio-keyframe').nth(3).click()
+        expect(preview).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        expect(diag).to_contain_text('Rendered t=20.95s')
+        # Explicit retry and quality changes must still repaint the paused frame.
+        self.page.locator('#ModernAnimationPlaybackRetry').click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        optics = self.page.locator('#ModernAnimationPlaybackOptics')
+        optics.select_option('canvas-direct')
+        expect(diag).to_contain_text('Requested optics: Canvas Direct', timeout=30000)
+        storyboard = self.page.locator('#ModernAnimationStoryboard')
+        expect(storyboard.locator('.modern-animation-storyboard-card')).to_have_count(9)
+        expect(storyboard.get_by_role('button', name='Capture thumbnail', exact=True)).to_have_count(1)
+        for section, action in (
+            ('ModernAnimationFrameExportSection', 'Render PNG ZIP'),
+            ('ModernAnimationVideoExportSection', 'Render video'),
+        ):
+            details = self.page.locator('#' + section)
+            details.locator('summary').click()
+            expect(details.get_by_role('button', name=action)).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_timeline_thumbnail_opens_preview_at_frame_and_edit_is_stub(self):
         self.open_modern()
         self.open_animation()
