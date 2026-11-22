@@ -86,3 +86,36 @@ test('restoring a mounted input returns editor caret focus, but arrows retain ta
   controller.show('editor',false);
   assert.equal(field.restores,1,'a rerendered/detached field is never refocused');
 });
+
+test('view changes leave background export and the active draft untouched',()=>{
+  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
+  const start=source.indexOf('  function setStudioView(');
+  const end=source.indexOf('  function bindStudioViews()',start);
+  assert.ok(start>0&&end>start,'actual Studio view routing function');
+  let halts=0,cancels=0,backups=0,paints=0,sizes=0;
+  const exportTask={cancel(){throw Error('navigation must not cancel video export');}};
+  const frameTask={cancel(){throw Error('navigation must not cancel frame export');}};
+  const project={id:'retained-project'},history={past:[1]},selectedKey='frame-4';
+  const ctx={studioView:'preview',studioVideoExportTask:exportTask,
+    studioFrameExportTask:frameTask,studioPrepared:project,studioEditHistory:history,
+    studioSelectedKey:selectedKey,studioRouteReady:false,animationWorkspaceOpen:true,
+    studioRestorePreviewPending:true,studioPlaybackRenderedAt:null,
+    studioPlayback:{status(){return {positionMs:20950,playing:false};}},
+    studioPlaybackControls:{halt(){halts++;}},
+    studioPreviewLifecycle:{cancel(){cancels++;},checkSize(){sizes++;return true;}},
+    syncStudioPlaybackControls(){},saveStudioDraft(){backups++;return true;},
+    studioViewController:{show(){}},scheduleStudioInitialPaint(){paints++;}
+  };
+  vm.runInNewContext(source.slice(start,end)+'\nthis.changeView=setStudioView;',ctx);
+  assert.equal(ctx.changeView('editor',false),true);
+  assert.equal(cancels,1);assert.equal(halts,1);assert.equal(backups,1);
+  assert.equal(ctx.changeView('preview',false),true);
+  assert.equal(sizes,1);assert.equal(paints,0,
+    'a resize-triggered initial paint must not be scheduled twice');
+  assert.strictEqual(ctx.studioVideoExportTask,exportTask);
+  assert.strictEqual(ctx.studioFrameExportTask,frameTask);
+  assert.strictEqual(ctx.studioPrepared,project);
+  assert.strictEqual(ctx.studioEditHistory,history);
+  assert.equal(ctx.studioSelectedKey,selectedKey);
+});

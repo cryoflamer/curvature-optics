@@ -33,7 +33,7 @@ function harness(){
       finish(target){if(!pending)return false;pending=false;navigation.push(target);return true;},
       isPending(){return pending;}},
     studioPlayback:{status(){return {positionMs:position,playing};}},
-    studioPrepared:{mode:'physical'},
+    studioPrepared:{mode:'physical'},studioView:'preview',
     newUiEl:node,
     document:{get hidden(){return !visible;}},
     requestAnimationFrame(fn){const key=++id;queue.set(key,fn);return key;},
