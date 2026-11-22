@@ -1100,9 +1100,9 @@
       deletion.type='button';
       deletion.className='modern-animation-library-delete modern-card-delete';
       deletion.dataset.calibrationProjectDelete=entry.id;
-      deletion.disabled=projectListBusy||active;
+      deletion.disabled=projectListBusy;
       deletion.setAttribute('aria-label','Delete calibration '+entry.title);
-      deletion.title=active?'Open another project before deleting this active project':
+      deletion.title=active?'Delete the currently opened calibration project':
         'Delete calibration '+entry.title;
       deletion.onclick=event=>{event.stopPropagation();void deleteFromProjects(entry);};
       ['pointerdown','mousedown','dblclick','dragstart'].forEach(type=>
@@ -1296,19 +1296,51 @@
     }
     async function deleteFromProjects(entry){
       if(projectListBusy)return;
-      if(projectSession?.project()?.id===entry.id){
-        projectsMessage('Open another project before deleting the active project.',true);return;
+      const active=projectSession?.project()?.id===entry.id;
+      if(active&&(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+          photoGestures.active||resultGestures.active)){
+        projectsMessage('Finish fitting, applying or editing endpoints before deleting the opened project.',true);
+        return;
       }
-      if(!env.confirm('Delete Calibration Project "'+entry.title+'"? The reference photo, archived results, and old recovery draft will be retained.'))return;
+      const warning=active?' The currently opened editor will be closed and the page reloaded.':'';
+      if(!env.confirm('Delete Calibration Project "'+entry.title+'"?'+warning+
+          ' The reference photo, archived results, and old recovery draft will be retained.'))return;
       projectListBusy=true;renderProjects();
       projectsMessage('Checking project revision before deletion…');
+      const previousInert=workspace.inert;
+      if(active){projectSwitchBusy=true;switchInterference=false;workspace.inert=true;}
       try{
         const {storage}=projectActions();
-        await storage.remove(env.indexedDB,entry.id,entry.revision);
+        let revision=entry.revision;
+        if(active){
+          // The active project must reach a durable checkpoint before removal.
+          // Do not leave a live session bound to a deleted ID: reload after the
+          // acknowledged CAS deletion, as on a normal browser restart.
+          const session=projectSession;
+          const ack=persist(true);if(ack)await ack;
+          await writeQueue;
+          if(switchInterference||session!==projectSession||
+             session.project()?.id!==entry.id)
+            throw Error('Calibration changed during project deletion');
+          const current=session.state();
+          if(current.unsaved||current.pending||current.error)
+            throw Error('Active calibration has unsaved work');
+          revision=current.revision;
+        }
+        await storage.remove(env.indexedDB,entry.id,revision);
+        if(active){
+          try{env.sessionStorage?.removeItem(LAST_PROJECT_KEY);}catch(_ignored){}
+          projectsMessage('Opened project deleted. Reloading the editor…');
+          env.location.reload();return;
+        }
         projectListBusy=false;await refreshProjectList();
         projectsMessage('Deleted project "'+entry.title+'". Photos and archived results were retained.');
       }catch(error){projectActionMessage(error,'Delete failed');}
-      finally{projectListBusy=false;renderProjects();}
+      finally{
+        projectListBusy=false;
+        if(active){projectSwitchBusy=false;workspace.inert=previousInert;}
+        renderProjects();
+      }
     }
     async function importAsNewFromProjects(file){
       if(projectListBusy)return;
