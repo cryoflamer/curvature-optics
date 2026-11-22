@@ -3359,6 +3359,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         # The gallery itself is keyboard-focusable and owns the scoped paste.
         gallery=panel.locator('.modern-image-library-gallery')
+        expect(gallery).to_have_attribute('tabindex','0')
         gallery.focus()
         gallery.press('Control+v')
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
