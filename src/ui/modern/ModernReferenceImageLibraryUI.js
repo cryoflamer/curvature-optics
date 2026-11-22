@@ -138,6 +138,7 @@
     library.KINDS.forEach(function(k){el('option',k==='unclassified'?'Unclassified (legacy)':k,kindFilter).value=k;});
     var gallery=el('div',undefined,body);gallery.className='modern-image-library-gallery';
     gallery.setAttribute('aria-label','Image Library gallery');
+    gallery.tabIndex=0; // A reliable focus target for Ctrl+V outside editable fields.
     var demoDetails=el('aside',undefined,body);demoDetails.className='modern-image-library-demo';demoDetails.hidden=true;
     var chooser=field(body,'Saved observations','select');
     chooser.parentElement.hidden=true;chooser.setAttribute('aria-hidden','true');chooser.tabIndex=-1;
