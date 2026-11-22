@@ -54,11 +54,11 @@
     var status=el('p','Open to load observations.',body);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     var galleryControls=el('div',undefined,body);galleryControls.className='modern-image-library-filters';
     var search=field(galleryControls,'Search images & tags','input');search.type='search';search.placeholder='Title, author, tags…';
-    var sourceFilter=field(galleryControls,'Source','select');
+    var sourceFilter=field(galleryControls,'Source','select');sourceFilter.setAttribute('aria-label','Source');
     [['all','All sources'],['library','Local originals'],['demo','Built-in demos']].forEach(function(p){
       el('option',p[1],sourceFilter).value=p[0];
     });
-    var kindFilter=field(galleryControls,'Kind','select');
+    var kindFilter=field(galleryControls,'Kind','select');kindFilter.setAttribute('aria-label','Kind');
     el('option','All kinds',kindFilter).value='all';
     library.KINDS.forEach(function(k){el('option',k==='unclassified'?'Unclassified (legacy)':k,kindFilter).value=k;});
     var gallery=el('div',undefined,body);gallery.className='modern-image-library-gallery';
