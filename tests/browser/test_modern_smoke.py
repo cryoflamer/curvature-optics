@@ -3962,7 +3962,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(diag).to_contain_text('Requested optics: Canvas Direct', timeout=30000)
         storyboard = self.page.locator('#ModernAnimationStoryboard')
         expect(storyboard.locator('.modern-animation-storyboard-card')).to_have_count(9)
-        expect(storyboard.get_by_role('button', name='Capture thumbnail', exact=True)).to_have_count(1)
+        expect(storyboard.get_by_role('button', name='Capture selected keyframe thumbnail', exact=True)).to_have_count(1)
         for section, action in (
             ('ModernAnimationFrameExportSection', 'Render PNG ZIP'),
             ('ModernAnimationVideoExportSection', 'Render video'),
