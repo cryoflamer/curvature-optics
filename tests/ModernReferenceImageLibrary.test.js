@@ -10,36 +10,53 @@ const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAA
 const raster={dataUrl:png,width:1,height:1};
 const record=(id='one')=>({version:1,id,title:'Observation '+id,original:{...raster},thumbnail:{...raster}});
 function memoryIndexedDB(){
-  const records=new Map();let exists=false;
-  return {records,open(name,version){
-    assert.equal(name,library.DATABASE);assert.equal(version,1);
+  const records=new Map(),annotations=new Map(),known=new Set();
+  let version=0;
+  const stores={observations:records,annotations:annotations};
+  return {records,annotations,get version(){return version;},open(name,requested){
+    assert.equal(name,library.DATABASE);
+    const target=requested===undefined?Math.max(1,version):requested;
     const request={result:null,error:null};
     queueMicrotask(()=>{
-      const db={objectStoreNames:{contains:()=>exists},
-        createObjectStore(name,opts){assert.equal(name,library.STORE);assert.equal(opts.keyPath,'id');exists=true;},
-        close(){},transaction(name,mode){
-          assert.equal(name,library.STORE);
+      const db={version:target,close(){},
+        objectStoreNames:{contains:n=>known.has(n)},
+        createObjectStore(name,opts){
+          assert.equal(opts.keyPath,'id');assert.ok(name in stores);known.add(name);
+          return {name};
+        },
+        transaction(names,mode){
+          const included=Array.isArray(names)?names:[names];
+          included.forEach(n=>assert.ok(known.has(n),'Missing store '+n));
           let pending=0,finished=false;
+          const copies=Object.fromEntries(included.map(n=>[n,
+            new Map([...stores[n]].map(([k,v])=>[k,structuredClone(v)]))]));
           const tx={oncomplete:null,onabort:null,onerror:null,error:null,
-            abort(){finished=true;queueMicrotask(()=>tx.onabort&&tx.onabort());},
-            objectStore(){
+            abort(){if(finished)return;finished=true;queueMicrotask(()=>tx.onabort&&tx.onabort());},
+            objectStore(name){
+              assert.ok(included.includes(name));const data=copies[name];
               function operation(method,key,value){
                 const r={result:undefined,error:null,onsuccess:null};pending++;
                 queueMicrotask(()=>{
                   if(finished)return;
-                  if(method==='get')r.result=records.get(key)?structuredClone(records.get(key)):undefined;
-                  if(method==='all')r.result=[...records.values()].map(v=>structuredClone(v));
+                  if(method==='get')r.result=data.has(key)?structuredClone(data.get(key)):undefined;
+                  if(method==='all')r.result=[...data.values()].map(v=>structuredClone(v));
                   if(method==='put'||method==='add'){
                     assert.equal(mode,'readwrite');
                     const id=value.id;
-                    if(method==='add'&&records.has(id)){
+                    if(method==='add'&&data.has(id)){
                       finished=true;tx.error=Error('Constraint');tx.onerror&&tx.onerror();return;
                     }
-                    records.set(id,structuredClone(value));
+                    data.set(id,structuredClone(value));
                   }
-                  if(method==='delete')records.delete(key);
+                  if(method==='delete'){assert.equal(mode,'readwrite');data.delete(key);}
                   r.onsuccess&&r.onsuccess();pending--;
-                  if(pending===0&&!finished){finished=true;queueMicrotask(()=>tx.oncomplete&&tx.oncomplete());}
+                  if(pending===0&&!finished){
+                    finished=true;
+                    if(mode==='readwrite')included.forEach(n=>{
+                      stores[n].clear();for(const [k,v]of copies[n])stores[n].set(k,v);
+                    });
+                    queueMicrotask(()=>tx.oncomplete&&tx.oncomplete());
+                  }
                 });return r;
               }
               return {get:k=>operation('get',k),getAll:()=>operation('all'),
@@ -49,9 +66,16 @@ function memoryIndexedDB(){
           return tx;
         }};
       request.result=db;
-      if(!exists)request.onupgradeneeded();
-      request.onsuccess();
-    });return request;
+      if(target>version){
+        request.oldVersion=version;
+        if(request.onupgradeneeded)request.onupgradeneeded();
+        version=target;
+      }else if(target<version){
+        request.error=Error('VersionError');if(request.onerror)request.onerror();return;
+      }
+      if(request.onsuccess)request.onsuccess();
+    });
+    return request;
   }};
 }
 
@@ -239,4 +263,71 @@ test('calibration ingestion rechecks changed originals and retries without dupli
   const out=await library.ensureOriginal(db,source,crypto,verifyOriginal);
   assert.ok(inserted);assert.equal(out.reused,true);assert.equal(out.row.id,'concurrent');
   assert.equal((await library.list(db)).length,2);
+});
+
+test('legacy v1 rows remain byte-identical through explicit opt-in annotation upgrade',async()=>{
+  const db=memoryIndexedDB();
+  await library.create(db,{...record('legacy'),author:'Attribution'});
+  assert.equal(db.version,1);
+  const backup=await library.exportBackup(db);
+  assert.equal(backup.version,1);assert.equal(backup.format,'curvature-image-library-backup');
+  assert.deepEqual(backup.observations[0].record,{...record('legacy'),author:'Attribution'});
+  assert.deepEqual(backup.annotations,[]);
+  assert.equal((await library.annotationStatus(db)).enabled,false);
+  assert.equal((await library.list(db))[0].kind,'unclassified');
+  assert.equal(db.version,1,'ordinary browsing must not upgrade the database');
+  await assert.rejects(library.setAnnotation(db,'legacy',0,
+    {kind:'photograph',tags:['bridge']}),/Enable/);
+  await library.enableAnnotations(db);
+  assert.equal(db.version,2);
+  assert.equal((await library.annotationStatus(db)).enabled,true);
+  assert.deepEqual((await library.get(db,'legacy')).record,backup.observations[0].record);
+  assert.deepEqual((await library.list(db))[0].tags,[]);
+  const annotation=await library.setAnnotation(db,'legacy',0,
+    {kind:'photograph',tags:['bridge','Soundly'],collections:['Research']});
+  assert.equal(annotation.annotationRevision,1);
+  assert.equal((await library.get(db,'legacy')).kind,'photograph');
+  const prior=await library.get(db,'legacy');
+  await library.update(db,'legacy',prior.revision,{title:'Renamed legacy'});
+  const changed=await library.get(db,'legacy');
+  assert.equal(changed.kind,'photograph');
+  assert.equal(changed.annotationRevision,1);
+  assert.equal(changed.record.title,'Renamed legacy');
+  assert.deepEqual(changed.record.original,record('legacy').original);
+  const afterBackup=await library.exportBackup(db);
+  assert.deepEqual(afterBackup.annotations[0].tags,['bridge','Soundly']);
+  assert.equal(afterBackup.observations[0].record.original.dataUrl,backup.observations[0].record.original.dataUrl);
+});
+test('annotation metadata validates bounds, optimistic revisions and missing originals',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record());
+  await library.enableAnnotations(db);
+  assert.throws(()=>library.annotation({kind:'unverified-photo',tags:[]}),/kind/);
+  assert.throws(()=>library.annotation({kind:'map',tags:['Bridge','bridge']}),/Duplicate/);
+  assert.throws(()=>library.annotation({kind:'graph',tags:['a'.repeat(65)]}),/tags/);
+  assert.throws(()=>library.annotation({kind:'map',tags:['x'.repeat(2)],original:record().original}),/classification/);
+  const saved=await library.setAnnotation(db,'one',0,
+    {kind:'graph',tags:['Atmosphere'],collections:['Study']});
+  assert.equal(saved.annotationRevision,1);
+  await assert.rejects(library.setAnnotation(db,'one',0,
+    {kind:'map',tags:[]}),/another tab/);
+  await assert.rejects(library.setAnnotation(db,'missing',0,
+    {kind:'map',tags:[]}),/Original image/);
+  const next=await library.get(db,'one');
+  assert.equal(next.kind,'graph');
+  assert.deepEqual(next.tags,['Atmosphere']);
+  assert.equal(next.annotationRevision,1);
+});
+test('annotations never alter imported originals, IDs, attribution or legacy transport',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('original'));
+  await library.enableAnnotations(db);
+  await library.setAnnotation(db,'original',0,{kind:'diagram',tags:['optics']});
+  const mapping=await library.importAssets(db,[{...record('original'),title:'Imported alias'}],
+    {randomUUID:()=> 'fresh'});
+  assert.equal(mapping.get('original'),'reference_fresh');
+  assert.equal((await library.get(db,'reference_fresh')).kind,'unclassified');
+  assert.equal((await library.get(db,'original')).kind,'diagram');
+  assert.equal((await library.get(db,'original')).record.title,'Observation original');
+  assert.equal((await library.get(db,'reference_fresh')).record.title,'Imported alias');
+  assert.equal((await library.get(db,'original')).record.original.dataUrl,png);
+  await assert.rejects(library.remove(db,'original',1),/disabled/);
 });
