@@ -23,6 +23,8 @@
       return {key:item.key,source:item.source,kind:kind,title:item.title,
         width:item.width,height:item.height,author:item.author||'',
         license:item.license||'',links:Array.isArray(item.links)?item.links.slice(0,100):[],
+        tags:Array.isArray(item.tags)?item.tags.slice(0,20):[],
+        collections:Array.isArray(item.collections)?item.collections.slice(0,12):[],
         thumbnail:item.thumbnail&&item.thumbnail.dataUrl||null};
     });
   }
@@ -30,7 +32,7 @@
     var needle=String(query).trim().toLocaleLowerCase();
     return items.filter(function(item){
       return (source==='all'||source===item.source)&&(kind==='all'||kind===item.kind)&&
-        (!needle||[item.title,item.author,item.license,item.source,item.kind].concat(item.links)
+        (!needle||[item.title,item.author,item.license,item.source,item.kind].concat(item.links,item.tags,item.collections)
           .some(function(v){return String(v).toLocaleLowerCase().includes(needle);}));
     }).sort(function(a,b){
       return sort==='source'?
@@ -105,6 +107,8 @@
       el('p','','Kind: '+(item.kind==='unclassified'?'Unclassified (legacy)':item.kind),inspector);
       if(item.author)el('p','','Author: '+item.author,inspector);
       if(item.license)el('p','','License: '+item.license,inspector);
+      if(item.tags.length)el('p','','Tags: '+item.tags.join(', '),inspector);
+      if(item.collections.length)el('p','','Collections: '+item.collections.join(', '),inspector);
       if(item.links.length)el('p','','Known animation references: '+item.links.slice(0,8).join('; '),inspector);
       else el('p','','No use asserted by this picker; full usage audit is a separate feature.',inspector);
     }

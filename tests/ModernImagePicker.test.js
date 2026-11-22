@@ -110,3 +110,15 @@ test('confirmation passes namespaced keys once, and failures keep picker open',a
   assert.deepEqual(received,[received[0],received[0]]);
   assert.equal(received[0].length,1);
 });
+
+test('classification tags and collections are searched without changing source IDs',()=>{
+  const original=structuredClone(sample[0]);
+  original.kind='diagram';original.tags=['bridge','atmosphere'];original.collections=['Research'];
+  const normalized=picker.checkedChoices([original]);
+  assert.deepEqual(picker.visible(normalized,{query:'atmosphere'}).map(x=>x.key),[original.key]);
+  assert.deepEqual(picker.visible(normalized,{query:'research'}).map(x=>x.key),[original.key]);
+  assert.deepEqual(picker.visible(normalized,{kind:'diagram'}).map(x=>x.key),[original.key]);
+  assert.deepEqual(picker.visible(normalized,{kind:'photograph'}),[]);
+  assert.equal(normalized[0].source,'library');
+  assert.deepEqual(sample[0].tags,undefined);
+});

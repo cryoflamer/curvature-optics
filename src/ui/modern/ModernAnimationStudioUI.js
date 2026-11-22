@@ -1141,9 +1141,9 @@
         imagePicker.open({document:doc,mode:'multiple',max:100-ids.length,
           title:'Attach reference photographs',applyLabel:'Attach selected',
           choices:available.map(function(row){
-            return {key:JSON.stringify(['library',row.id]),source:'library',kind:'unclassified',
+            return {key:JSON.stringify(['library',row.id]),source:'library',kind:row.kind||'unclassified',
               title:row.title,width:row.width,height:row.height,author:row.author||'',
-              thumbnail:row.thumbnail||null};
+              tags:row.tags||[],collections:row.collections||[],thumbnail:row.thumbnail||null};
           }),
           onApply:async function(keys){
             if(section.isConnected===false)throw Error('Keyframe changed while choosing references');

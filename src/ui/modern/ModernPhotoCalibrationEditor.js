@@ -231,7 +231,7 @@
     const choices=libraryRows.map(row=>({
       key:JSON.stringify(['library',row.id]),id:row.id,source:'library',
       title:row.title,width:row.width,height:row.height,author:row.author||'',
-      thumbnail:row.thumbnail||null,kind:'unclassified',
+      thumbnail:row.thumbnail||null,kind:row.kind||'unclassified',tags:row.tags||[],collections:row.collections||[],
       links:[...new Set(linked.get(row.id)||[])]
     }));
     for(const demo of demos){
