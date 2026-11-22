@@ -50,6 +50,8 @@
       await library.enableAnnotations(db);
       await reload(selected&&selected.id);
     },'Image classification enabled. Old originals and references were preserved.');});
+    var restoreFile=field(toolbar,'Restore complete backup (merge)','input');
+    restoreFile.type='file';restoreFile.accept='application/json,.json';
     var refresh=button('Refresh',toolbar,function(){if(allowDiscard())run(async function(){await reload(selected&&selected.id);});});
     var status=el('p','Open to load observations.',body);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     var galleryControls=el('div',undefined,body);galleryControls.className='modern-image-library-filters';
@@ -97,7 +99,7 @@
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;
       search.disabled=value;sourceFilter.disabled=value;kindFilter.disabled=value;
-      backup.disabled=value;enable.disabled=value||classificationReady;gallery.inert=value;
+      backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
@@ -214,6 +216,21 @@
       input.addEventListener('change',renderGallery);
     });
     chooser.addEventListener('change',function(){});
+    restoreFile.addEventListener('change',function(){
+      var chosen=restoreFile.files[0];restoreFile.value='';
+      if(!chosen||!allowDiscard())return;
+      run(async function(){
+        if(chosen.size>library.MAX_CHARS*2+1024*1024)
+          throw RangeError('Image Library backup file exceeds allowed size');
+        var payload=JSON.parse(await chosen.text());
+        library.validateBackup(payload);
+        if(!env.confirm('Merge this Image Library backup? Existing originals and classifications will not be overwritten. Conflicting image IDs are remapped. No images will be deleted.'))return;
+        var result=await library.restoreBackup(db,payload,env.crypto,
+          function(record){return importer.verifyOriginal(record,env);});
+        await reload(null);
+        status.textContent='Restored '+result.created+' original images and '+result.annotationsAdded+' classification records.';
+      });
+    });
     file.addEventListener('change',function(){var chosen=file.files[0];file.value='';if(!chosen||!allowDiscard())return;
       run(async function(){var record=await importer.ingest(chosen,library.makeId(env.crypto),env);
         await library.create(db,record);await reload(record.id);},'Photograph imported. Original bytes retained.');});
