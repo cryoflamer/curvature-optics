@@ -164,15 +164,19 @@ test('metadata editor differentiates missing / unknown / known numeric zero and 
   assert.deepEqual(ui.metadataFact('reported','Marriott','','',false),{status:'reported',value:'Marriott'});
   assert.throws(()=>ui.metadataFact('estimated','','','',true),/value/);
 });
-test('library scripts and collapsed panel are isolated to Modern, before Studio playback',()=>{
+test('library scripts and standalone tab are isolated to Modern and outside Animation Studio',()=>{
   const root=path.resolve(__dirname,'..'),modern=fs.readFileSync(path.join(root,'CurvatureModern.html'),'utf8');
   for(const file of ['ModernReferenceImageLibrary.js','ModernReferenceImageImport.js','ModernReferenceImageLibraryUI.js']){
     assert.ok(modern.includes(file));for(const legacy of ['CurvatureApp.html','CurvatureDemosHost.html']){
       assert.ok(!fs.readFileSync(path.join(root,legacy),'utf8').includes(file));
     }
   }
-  assert.match(modern,/<details id="ModernReferenceImageLibrary"[^>]*><summary>Image Library/);
-  assert.ok(modern.indexOf('id="ModernReferenceImageLibrary"')<modern.indexOf('id="ModernAnimationPlaybackStage"'));
+  assert.match(modern,/<button[^>]*id="ModernImageLibraryTab"[^>]*>Image Library<\/button>/);
+  assert.match(modern,/<section id="ModernImageLibraryWorkspace"[^>]*hidden>/);
+  assert.match(modern,/<section id="ModernReferenceImageLibrary"[^>]*><\/section>/);
+  assert.equal((modern.match(/id="ModernReferenceImageLibrary"/g)||[]).length,1);
+  assert.ok(modern.indexOf('id="ModernReferenceImageLibrary"')<modern.indexOf('id="ModernAnimationWorkspace"'),
+    'Image Library must be mounted separately from Animation Studio');
 });
 
 test('portable observations are imported atomically, conflicts remapped and repeated imports reused',async()=>{
