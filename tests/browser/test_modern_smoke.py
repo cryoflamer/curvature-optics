@@ -3917,10 +3917,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertNotEqual(*expected_counts)
 
         toggle.click()
-        for filename,data in [('first-original.json',first),('second-original.json',second)]:
+        for count,(filename,data) in enumerate(
+                [('first-original.json',first),('second-original.json',second)],start=1):
             panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
                 'name':filename,'mimeType':'application/json',
                 'buffer':json.dumps(data).encode('utf-8')})
+            # The file input's import handler is asynchronous; do not start
+            # the next import until the first project has been committed.
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                count,timeout=30000)
         entries=self.page.evaluate("""async () => {
             const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
             return Promise.all(rows.filter(r=>r.photo).map(async r=>{
