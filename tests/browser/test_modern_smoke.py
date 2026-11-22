@@ -4274,6 +4274,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['count'],1)
         self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_stage5_second_tab_revision_disables_deletion_review(self):
+        import base64
+        self.open_modern()
+        gallery=self.open_image_library()
+        image=base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        gallery.locator('input[accept^="image/png"]').set_input_files({
+            'name':'stale-lifecycle.png','mimeType':'image/png','buffer':image})
+        expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        gallery.get_by_role('button',name='Inspect stale-lifecycle.png (Local original)').click()
+        baseline=self.page.evaluate("""async () => {
+            const row=(await CurvatureModernReferenceImageLibrary.list(indexedDB))[0];
+            return await CurvatureModernReferenceImageLibrary.get(indexedDB,row.id);
+        }""")
+        second=self.context.new_page()
+        try:
+            self.assertEqual(second.goto(self.base_url,wait_until='load').status,200)
+            second.wait_for_function('window.CurvatureModernReferenceImageLibrary != null')
+            second.evaluate("""async id => {
+                const library=CurvatureModernReferenceImageLibrary;
+                const row=await library.get(indexedDB,id);
+                await library.update(indexedDB,id,row.revision,
+                    {title:'Changed from another tab'});
+            }""",baseline['id'])
+            gallery.get_by_role('button',name='Check deletion safety').click()
+            message=gallery.locator(
+                '.modern-reference-editor .modern-image-usage-warning').first
+            expect(message).to_contain_text('Original changed during inspection')
+            expect(message).to_contain_text('Deletion blocked')
+            expect(gallery.get_by_role('button',name='Delete observation')).to_be_disabled()
+            after=self.page.evaluate("""async id => {
+                const library=CurvatureModernReferenceImageLibrary;
+                return await library.get(indexedDB,id);
+            }""",baseline['id'])
+            self.assertEqual(after['revision'],baseline['revision']+1)
+            self.assertEqual(after['record']['title'],'Changed from another tab')
+            self.assertEqual(after['record']['original'],baseline['record']['original'])
+            self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],
+                             self.console)
+        finally:
+            second.close()
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

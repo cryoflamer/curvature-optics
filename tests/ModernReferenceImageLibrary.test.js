@@ -707,3 +707,36 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   assert.match(review.reasons.join('; '),/Original changed during inspection/);
   assert.equal((await library.get(db,'other')).record.title,'Tab B');
 });
+
+test('Stage 5 concurrent metadata edit during ownership scan cannot authorize deletion',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('concurrent_image'));
+  const selected=await library.get(db,'concurrent_image'),preserved=selected.record.original;
+  let changed=false;
+  const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernAnimationLibrary:{list:async()=>{
+      if(!changed){
+        changed=true;
+        await library.update(db,'concurrent_image',1,{title:'New title from second tab'});
+      }
+      return [];
+    }},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{
+      COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
+      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+    },
+    CurvatureModernReferenceImageImport:{identify:async()=>({
+      version:1,sha256:'b'.repeat(64),width:1,height:1})}
+  };
+  const result=await usageGraph.deletionReview(env,selected);
+  assert.equal(result.safe,false);
+  assert.equal(result.complete,false);
+  assert.match(result.reasons.join('; '),/Original changed during inspection/);
+  const after=await library.get(db,'concurrent_image');
+  assert.equal(after.revision,2);
+  assert.equal(after.record.title,'New title from second tab');
+  assert.deepEqual(after.record.original,preserved);
+  await assert.rejects(library.remove(db,'concurrent_image',2),/deletion is disabled/);
+});
