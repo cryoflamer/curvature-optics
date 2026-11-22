@@ -1656,7 +1656,7 @@
     }
     // The only editor-side project switch entry point. The library UI added
     // in 8F.7p.6 will invoke this explicit operation; startup never does.
-    async function openCalibrationProject(id){
+    async function openCalibrationProject(id,{cleanReload=false}={}){
       const storage=env.CurvatureModernCalibrationProjectStore;
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!storage||!migration)throw Error('Calibration Projects are unavailable');
@@ -1680,7 +1680,7 @@
         // Never move away from the live editor until its most recent
         // outgoing state has a durable acknowledgement, not just an enqueued
         // promise. A failed IndexedDB write aborts the switch.
-        if(scene&&deletedProjectHandoff===null){
+        if(!cleanReload&&scene&&deletedProjectHandoff===null){
           const ack=persist(true);
           if(ack)await ack;
         }
@@ -1690,9 +1690,12 @@
 
         const session=persistenceSession();
         if(!session.project()){
-          // Upgrade requires the singleton editor's old DB connection to
-          // be closed. inspect/migrate preserve the raw v1/v2 draft.
+          // Close the legacy reader before opening the v2 Project database.
           if(dbPromise){const open=await dbPromise;open.close();dbPromise=null;}
+        }
+        // A clean F5 reopen must not adopt or rewrite the independent legacy
+        // draft. Only an explicit Open may run one-time migration.
+        if(!session.project()&&!cleanReload){
           const check=await migration.inspect(env);
           requireGuard();
           if(check.status==='recovery-required')
@@ -1762,7 +1765,7 @@
       if(!id)return;
       try{
         env.CurvatureModernCalibrationProject.id(id);
-        const opened=await openCalibrationProject(id);
+        const opened=await openCalibrationProject(id,{cleanReload:true});
         projectSelectedId=opened.project.id;
         projectStartupStatus={status:'active',projectId:opened.project.id};
         if(!projectsPanel.hidden)await refreshProjectList();

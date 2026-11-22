@@ -7816,6 +7816,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             history.replaceState(history.state,'',url.href);
         }""")
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        before_count=self.page.evaluate("""async () =>
+            (await CurvatureModernCalibrationProjectStore.list(indexedDB)).length""")
         self.page.reload(wait_until='load',timeout=30000)
         self.page.wait_for_function("""id => {
             return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
@@ -7832,6 +7834,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         opened=panel.locator('[data-calibration-project-id="'+project_id+'"]')
         expect(opened).to_have_attribute('data-project-active','true',timeout=30000)
         expect(opened).to_contain_text('Opened')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernCalibrationProjectStore.list(indexedDB)).length"""),
+            before_count,'F5 must not silently migrate a standalone draft')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
