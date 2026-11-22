@@ -4194,14 +4194,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         normal_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
         normal_mode = self.page.evaluate('CurvatureModernApp.getMode()')
         self.open_animation()
+        # Establish a same-document Library history entry before opening the
+        # copied project. Back from Editor must stay within Studio.
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            new URL(location.href).searchParams.get('studioView')"""), 'library')
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
             'Create copy', exact=True).click()
+        self.assertEqual(self.page.evaluate("""() =>
+            new URL(location.href).searchParams.get('studioView')"""), 'editor')
         studio = self.page.locator('#ModernAnimationStudio')
         draft_before = self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Edit 04').click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertTrue(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
+        self.assertTrue(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
+        self.assertTrue(self.page.locator('#ModernHistoryPanel').evaluate('(el) => el.inert'))
 
         # A fresh tab does not inherit any active editing session or transient
         # camera/physical preview from this page.
@@ -4224,6 +4234,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         # live editor on a different page from the browser address.
         self.page.go_back()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
+        self.assertFalse(self.page.locator('.modern-tabs').evaluate('(el) => el.inert'))
         expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioView()'),
                          'library')

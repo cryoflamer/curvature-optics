@@ -580,7 +580,7 @@
   var studioSelectedKey=null;
   // Temporary Scene/Compare sessions are read-only until Stage 2 locks inputs.
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
-  var keyframeEditReturnView=null;
+  var keyframeEditReturnView=null,keyframeEditShellLocks=null;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -4054,6 +4054,21 @@
     ensureStudioPlaybackControls().jumpTo(arrival);
     return newlyPrepared;
   }
+  // Header actions and the History modal live outside #ModernWorkspace.
+  // Lock them too: Reset, Copy URL or manual History must not capture a
+  // temporary keyframe. Restore any pre-existing inert state on cancellation.
+  function lockKeyframeShell(){
+    var nodes=['.modern-tabs','.modern-share-actions','#ModernHistoryPanel']
+      .map(function(selector){return document.querySelector(selector);})
+      .filter(Boolean);
+    keyframeEditShellLocks=nodes.map(function(node){return {node:node,inert:!!node.inert};});
+    nodes.forEach(function(node){node.inert=true;});
+  }
+  function unlockKeyframeShell(){
+    if(!keyframeEditShellLocks)return;
+    keyframeEditShellLocks.forEach(function(item){item.node.inert=item.inert;});
+    keyframeEditShellLocks=null;
+  }
   // Stage 1 uses the real Scene/Compare renderer with all physical controls
   // inert. Stage 2 must implement the full contract-based control allowlist
   // before any editable input or Apply action is enabled.
@@ -4100,8 +4115,9 @@
       keyframeEditEntering=true;
       if(setMode(session.mode,false)===false)throw Error('Cannot open keyframe editor');
       physical.inert=true;
+      lockKeyframeShell();
     }catch(error){
-      physical.inert=false;
+      physical.inert=false;unlockKeyframeShell();
       if(banner.parentNode)banner.parentNode.removeChild(banner);
       keyframeEditSession=null;keyframeEditBanner=null;
       keyframeEditEntering=false;
@@ -4117,6 +4133,7 @@
     keyframeEditSession=null;
     var physical=newUiEl('ModernWorkspace');
     if(physical)physical.inert=false;
+    unlockKeyframeShell();
     if(keyframeEditBanner&&keyframeEditBanner.parentNode)
       keyframeEditBanner.parentNode.removeChild(keyframeEditBanner);
     keyframeEditBanner=null;
