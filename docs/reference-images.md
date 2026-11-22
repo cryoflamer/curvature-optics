@@ -128,13 +128,16 @@ external conversion.
 ## Keyframe references (7C.3)
 
 Select a keyframe in the editable Keyframe Editor in Animation Studio. Under
-**Reference photographs**, click **Load photographs**, select an existing
-observation and **Attach**. Multiple photos are ordered, using arrow buttons;
-**Unlink** removes only this use. One observation may be attached to any
-number of distinct frames or projects. Read-only demo authoring is disabled.
+**Reference photographs**, click **Browse photographs** to open the shared
+context-aware Image Picker. Select one or several **local** originals and
+confirm **Attach selected**. Selected IDs are verified against fresh Library
+rows before the one-frame change; browsing or Cancel does not modify the draft.
+Multiple linked photos are ordered, using arrow buttons; **Unlink** removes
+only this use. One original may be attached to any number of frames or
+projects. Read-only demo authoring is disabled.
 The list displays titles when the local library resolves an ID, `Missing
 local photograph` after a successful lookup without a match, and `Unresolved
-local photograph` before lookup or if storage fails. Retry with Load photographs.
+local photograph` before lookup or if storage fails. Retry with Browse photographs.
 No replacement by title, no automatic remote download. Import a photograph
 first using the independent Reference Image Library.
 
@@ -170,9 +173,11 @@ interim limitation, especially near the library quota.
 
 ## Reference presentation (7C.4)
 
-The selected-frame editor's **Load photographs** action shows a scrollable
-thumbnail gallery of unlinked local observations. Select a thumbnail then
-**Attach**; linked rows retain the thumbnail, reorder and Unlink actions.
+The selected-frame editor's **Browse photographs** action opens the shared
+Image Picker, showing thumbnails of unlinked local observations with search,
+kind/source filters and metadata preview. Explicit **Attach selected** adds
+all chosen references in one undoable Studio edit; linked rows retain their
+thumbnail, reorder and Unlink actions.
 Click a linked thumbnail to open the original, dimensions, provenance,
 license, recorded metadata with status/uncertainty, source and download.
 Missing images/thumbnails have labeled placeholders; no automatic remote
@@ -288,6 +293,57 @@ Existing quota and portable Studio import semantics are unchanged. Scans are
 bounded by existing library limits; no persistent digest index or schema migration
 is introduced. This API is not yet called by an Apply UI.
 
+## Shared context-aware Image Picker (#26 Stage 2)
+
+Stage 2 replaces the two different selection surfaces with the single
+`src/ui/modern/ModernImagePicker.js` Classic Script/CommonJS module. It loads
+from the **existing** `CurvatureModern.html` entrypoint before the Studio
+and Photo Calibration consumers; there is **no new database**, schema bump,
+independent copy of originals or new HTML entrypoint.
+
+- **Browse:** a native modal `<dialog>` with focus restoration, Escape/Cancel,
+  thumbnail cards (or explicit no-thumbnail placeholders), search by title,
+  author, license and known animation labels, source filter (local/demo),
+  kind filter and title/source sorting. The choice inspector shows available
+  title, dimensions, source, author, license and existing animation link labels.
+  It does **not** claim to enumerate all local usages; `Where used?` remains
+  Stage 4. Since v1 observations have no persisted classification, their
+  kind is displayed honestly as **Unclassified (legacy)** until Stage 3.
+- **Context-specific selection:** Photo Calibration passes `mode: 'single'`
+  and namespaced `['library', id]` or `['demo', demoId, id]` keys. Its
+  `photoChoices()` still preserves links and demo provenance, but the old
+  long selection dropdown is hidden and no longer the user-facing browser.
+  The confirmed selection follows the existing `confirmReplacement()`,
+  `acceptPhoto()` verified decode/SHA-256/oriented-dimension flow and
+  `ensureOriginal()`. A declined replacement leaves the Picker open and
+  preserves correspondence rows and the active photo.
+- **Frame attachment:** Animation Studio passes `mode: 'multiple'` for
+  **unlinked local observations only**, capped by the existing 100-reference
+  per-frame bound. The caller re-reads each selected local original through
+  the existing validated Library `get()` before changing
+  `referenceImageIds`. One confirmation creates one undoable change to
+  the selected frame. Unlinking/reordering remains frame-local and never
+  deletes an original. Built-in demo IDs are not accepted as local links;
+  importing a demo remains an explicit, independent action.
+- **Safety:** opening/searching/selecting/canceling the modal only touches
+  in-memory UI selection. There is no implicit local photo import, IndexedDB
+  write, calibration reset, physics change, preview capture or project save.
+  A missing/changed original fails visibly **inside** the Picker and permits
+  retry after the issue is resolved. The image library's physical `remove()`
+  API remains deliberately disabled.
+- **Scope boundaries:** source filtering is real today, but kind metadata,
+  tags and unified Library classification still await Stage 3. Full local
+  ownership reconciliation, per-owner `Where used?` navigation and deletion
+  eligibility await Stages 4–5; no UI usage label authorizes deletion.
+
+Targeted regression evidence includes Node selection/namespace/filter/Cancel
+and confirmation contracts, Studio DOM contracts, and Chromium scenarios for
+Calibration local/demo identity collision, selected original reuse, declined
+replacement, search/source/kind filters, Cancel without mutation, one/multiple
+Studio reference attachment, Undo/Redo, missing originals and retry. These
+tests do not replace a manual Opera acceptance pass or test every external
+browser's archive/restore behavior.
+
 ## Unified Image Library architecture and migration contract (#26)
 
 This section fixes the ownership, identity, migration and safety requirements
@@ -305,7 +361,7 @@ exists.
 | Saved Animation Library | `curvature-modern-animation-library` IndexedDB v1 `projects`; `project.keyframes[].referenceImageIds` addresses **local** observation aliases | Scan all saved projects and their exact frame references. Project keyframes have **no independent stable frame ID** in the current portable v1/v2 format; ordinal/name are not long-lived identity. |
 | Animation Studio working state | `curvature-modern-animation-draft` IndexedDB v1, version-2 collection, saved checkpoints, removals/tombstones; tab-local session recovery and bounded editor Undo/Redo | Active and inactive persisted workspaces are distinct from the saved Library. Recoverable tab-local/other-tab edits may not be enumerable by another tab; never call a partial scan exhaustive. Studio draft frames have their own `key`. |
 | Built-in demos | `ModernDemoCatalog` bundles carry their own `referenceImages` alongside read-only projects | Shipped assets belong to `(demo, catalog ID, observation ID)`, not `(local, observation ID)`. Browsing a demo does not import its originals; explicit Create copy uses collision-aware import. |
-| Photo Calibration working editor | `ModernPhotoCalibrationEditor` carries a verified original and working correspondence/Undo state; `photoChoices()` currently combines local observation rows, saved animation project labels and built-in demos into a long dropdown | Selection alone does not create a local alias. `acceptPhoto()` calls `ensureOriginal()` before committing a new photograph and discards correspondences only through its existing confirmation path. |
+| Photo Calibration working editor | `ModernPhotoCalibrationEditor` carries a verified original and working correspondence/Undo state; `photoChoices()` combines local observation rows, saved animation project labels and built-in demos using namespaced picker entries (the older long dropdown was replaced in Stage 2) | Selection alone does not create a local alias. `acceptPhoto()` calls `ensureOriginal()` before committing a new photograph and discards correspondences only through its existing confirmation path. |
 | Saved Calibration Projects | `curvature-photo-calibration` IndexedDB v2 `projects` plus summaries; `project.photo.identity={version:1,sha256,width,height}`, with separate `aliasId` and source; image bytes are **not** stored in project checkpoints | Find the asset by **verified digest + oriented dimensions**, not by alias or thumbnail; the stored alias is provenance, not a guaranteed current local row ID. Scan active *and inactive* projects, including conflict forks and their retained checkpoints. |
 | Calibration result archive | `curvature-modern-calibration-results` IndexedDB v1 `results`; the immutable result payload refers to verified photo identity | Results are separate durable users of an original, even when a Calibration Project is deleted or inactive. Do not deduce use from the current editor alone. |
 | Compare registration and presentation | Existing Compare/reference display and calibration-result navigation resolve originals through their owning archive or animation frame; generated simulation thumbnails live in separate caches | Count only actual durable photo links in the underlying owner, **not** image previews, temporary rendered pixels or repeated UI displays. New independently persisted presentation links require their own later relation adapter. |
@@ -428,7 +484,7 @@ relation only**, and never deletes or recodes the original.
    Include demos separately. Test partial/read errors, unverified aliases,
    cloned or stale tabs, removed owners and missing originals. Keep global
    deletion disabled.
-2. **Shared picker contract next, before replacing either UI:** context
+2. **Shared picker contract (implemented in Stage 2):** context
    supplied by caller (`calibration` single-select verified original versus
    `animation-reference` bounded multiselect local alias), namespaced choice
    keys, thumbnails, search and metadata, explicit Apply/Cancel and a
