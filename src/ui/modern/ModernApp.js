@@ -810,8 +810,13 @@
       if(mode===null)delete entry[WORKSPACE_ENTRY_KEY];
       else {
         var urlMode=new URLSearchParams(root.location.search||'').get('mode');
-        if(!persistence.explicitUrl&&!['scene','compare','demos'].includes(urlMode))return;
-        entry[WORKSPACE_ENTRY_KEY]=mode;
+        if(!persistence.explicitUrl&&!['scene','compare','demos'].includes(urlMode)){
+          // An Image Library choice must survive F5 even if a stale Studio
+          // subview route remains in the URL. Clear that override on exit.
+          if(mode==='images')entry[WORKSPACE_ENTRY_KEY]='images';
+          else if(entry[WORKSPACE_ENTRY_KEY]==='images')delete entry[WORKSPACE_ENTRY_KEY];
+          else return;
+        }else entry[WORKSPACE_ENTRY_KEY]=mode;
       }
       root.history.replaceState(entry,'',root.location.href);
     }catch(ignore){/* Browser-local preferences still work without history state. */}
@@ -8617,9 +8622,10 @@
       var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
       var initialStudioRoute=studioViewsApi&&studioViewsApi.route&&
         studioViewsApi.route(root.location&&root.location.href);
-      var allowStudioRoute=!!initialStudioRoute&&!persistence.explicitUrl&&
-        !['scene','compare','demos'].includes(explicitMode);
       var historyEntry=root.history&&root.history.state;
+      var allowStudioRoute=!!initialStudioRoute&&!persistence.explicitUrl&&
+        !['scene','compare','demos'].includes(explicitMode)&&
+        !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='images');
       var startupMode=applicationPreferences&&applicationPreferences.startupWorkspace?
         applicationPreferences.startupWorkspace(workspaceState.mode,state.mode,explicitMode,
           persistence.explicitUrl,historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]):
