@@ -6689,10 +6689,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(canvas).to_be_visible()
         # Real rendered canvas pixels, not merely model field values. The
         # comparison is on the same viewport before/after a camera adjustment.
-        self.page.evaluate("""() => {
-            const canvas=document.querySelector('#ModernWorkspace canvas.modern-camera-draggable:not([hidden])');
-            if(!canvas || !canvas.width || !canvas.height)
-                throw Error('No initialized camera render canvas');
+        canvas.evaluate("""canvas => {
+            if(!canvas.width || !canvas.height)
+                throw Error('No initialized visible camera render canvas');
+            window.__keyframePixelCanvas=canvas;
             window.__keyframePixelBaseline=canvas.toDataURL('image/png');
         }""")
         height=self.page.locator('#ModernHeight')
@@ -6702,7 +6702,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.wait_for_function("""v =>
             Math.abs(CurvatureModernApp.getModel().Height-v)<0.0001""",arg=value+45)
         self.page.wait_for_function("""() => {
-            const c=document.querySelector('#ModernWorkspace canvas.modern-camera-draggable:not([hidden])');
+            const c=window.__keyframePixelCanvas;
             return c&&c.toDataURL('image/png')!==window.__keyframePixelBaseline;
         }""",timeout=30000)
         banner.get_by_role('button',name='Cancel & Return').click()
