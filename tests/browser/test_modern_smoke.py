@@ -3655,12 +3655,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(copy).to_have_count(1,timeout=30000)
         copy_id=copy.get_attribute('data-calibration-project-id')
         self.assertNotEqual(original_id,copy_id)
+        original=projects.locator('[data-calibration-project-id="'+original_id+'"]')
         original.locator('[data-calibration-project-open]').click()
         expect(projects).to_be_hidden(timeout=30000)
         expect(workspace.locator('#ModernCalibrationCount')).to_have_text('14 correspondences')
         # A real editor mutation is pending/autosaved when leaving for Library.
         pairs=workspace.locator('#ModernCalibrationPairList')
-        if not pairs.is_visible():
+        if pairs.get_attribute('open') is None:
             pairs.locator('summary').click()
         workspace.locator('#ModernCalibrationPairs tr').first.get_by_role(
             'button',name='Delete',exact=True).click()
