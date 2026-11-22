@@ -3241,14 +3241,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             return (await CurvatureModernReferenceImageLibrary.get(indexedDB,rows[0].id)).record;
         }""")
         self.assertEqual(first['sourceUrl'],'https://images.example.test/field-photo.png')
-        self.assertEqual([first['original']['width'],first['record']['original']['height']],[15,11])
+        self.assertEqual([first['original']['width'],first['original']['height']],[15,11])
         panel.get_by_label('Image URL').fill('https://images.example.test/field-photo.png')
         panel.get_by_role('button',name='Import URL').click()
         expect(panel.get_by_role('status')).to_contain_text('Existing original reused')
         saved=self.page.evaluate("""async () => await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
         self.assertEqual(len(saved),1)
         self.assertEqual(saved[0]['id'],first['id'])
-        self.assertEqual(saved[0]['record']['original'],first['record']['original'])
+        duplicate=self.page.evaluate("""async id =>
+            (await CurvatureModernReferenceImageLibrary.get(indexedDB,id)).record""",first['id'])
+        self.assertEqual(duplicate['original'],first['original'])
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_image_library_clipboard_button_imports_without_text_field_side_effects(self):
