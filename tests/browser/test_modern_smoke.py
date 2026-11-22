@@ -4138,7 +4138,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         banner = self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         expect(banner).to_contain_text('04 · Low view, hidden spans')
-        expect(banner.get_by_role('button', name='Apply & Return')).to_be_disabled()
+        expect(banner.get_by_role('button', name='Apply & Return')).to_be_enabled()
         self.assertFalse(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
         expect(self.page.locator('#ModernHeight')).to_be_enabled()
         expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
@@ -4326,7 +4326,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernTemperatureSceneGradient').fill(str(proposed))
         self.page.locator('#ModernTemperatureSceneGradient').press('Tab')
         self.page.wait_for_function("""p => Math.abs(
-            Number(document.getElementById('ModernTemperatureSceneGradient').value)-p)<0.001""",
+            CurvatureModernApp.getPhotoCalibrationScene().physics.temperatureProfile.gradientKPerKm-p)<0.001""",
             arg=proposed)
         # A numeric edit must not silently enable the unrelated surface controls.
         expect(self.page.locator('#ModernRadiusKm')).to_be_disabled()
@@ -4407,7 +4407,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'button',name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
-        banner.get_by_role('button',name='Apply & Return').is_enabled()
+        expect(banner.get_by_role('button',name='Apply & Return')).to_be_enabled()
         self.page.locator('#ModernHeight').fill(str(prior_height+3))
         self.page.locator('#ModernHeight').press('Tab')
         self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
@@ -4434,6 +4434,108 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
             prior_height+3)
+
+
+    def test_animation_keyframe_apply_persists_in_library_and_survives_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        original=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        height=self.page.locator('#ModernHeight')
+        height.fill(str(original+6))
+        height.press('Tab')
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Apply & Return').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0,timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernAnimationLibrary').get_by_text(
+            'Save changes',exact=True).click()
+        self.page.wait_for_function("""async expected => {
+            const rows=await CurvatureModernAnimationLibrary.list(indexedDB);
+            return rows.length===1 && rows[0].project.keyframes[3].value.Height===expected;
+        }""",arg=original+6,timeout=30000)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationStudio .modern-studio-filmstrip-item')).to_have_count(9)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+            original+6)
+
+    def test_animation_keyframe_apply_rejects_stale_two_tab_workspace(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        project_id=self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].id""")
+        workspace_id='project_'+project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.some(w=>w.id===id);
+        }""",arg=workspace_id,timeout=30000)
+        unchanged=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        height=self.page.locator('#ModernHeight')
+        height.fill(str(unchanged+8))
+        height.press('Tab')
+        self.page.wait_for_function('v => CurvatureModernApp.getModel().Height===v',arg=unchanged+8)
+
+        other=self.context.new_page()
+        try:
+            response=other.goto(self.base_url,wait_until='load')
+            self.assertEqual(response.status,200)
+            other.locator('#ModernAnimationTab').click()
+            expect(other.locator('#ModernAnimationLibrary')).to_be_visible()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card=other.locator('#ModernAnimationLibrary [data-animation-id="'+project_id+'"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button',name='Open saved animation').click()
+            other.locator('#ModernAnimationViewEditor').click()
+            other_studio=other.locator('#ModernAnimationStudio')
+            expect(other_studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+            other_studio.get_by_role('button',name='Inspect project settings').click()
+            name=other_studio.get_by_label('Project name')
+            name.fill('Competing tab project edit')
+            name.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.some(w=>w.id===id &&
+                    w.checkpoint.draft.name==='Competing tab project edit');
+            }""",arg=workspace_id,timeout=30000)
+
+            banner=self.page.locator('#ModernKeyframeEditBanner')
+            banner.get_by_role('button',name='Apply & Return').click()
+            expect(banner).to_contain_text('Apply blocked',timeout=30000)
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
+                unchanged)
+            self.assertEqual(other.evaluate("""() =>
+                CurvatureModernApp.getAnimationStudioDraft().draft.name"""),
+                'Competing tab project edit')
+            remote=other.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const entry=c.workspaces.find(w=>w.id===id);
+                return {name:entry.checkpoint.draft.name,
+                    height:entry.checkpoint.draft.frames[3].experiment.scene.camera.Height};
+            }""",workspace_id)
+            self.assertEqual(remote['name'],'Competing tab project edit')
+            self.assertEqual(remote['height'],unchanged)
+        finally:
+            other.close()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
 
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
