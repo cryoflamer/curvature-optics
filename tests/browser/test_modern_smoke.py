@@ -3413,6 +3413,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         panel.get_by_label('Source',exact=True).select_option('demo')
         expect(panel.locator('.modern-image-library-card[aria-pressed=true]')).to_have_count(0)
 
+    def test_storyboard_image_library_roundtrip_keeps_draft_and_links_original(self):
+        import base64
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Storyboard gallery roundtrip')
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        before=self.page.evaluate("""() => {
+            const draft=CurvatureModernApp.getAnimationStudioDraft().draft;
+            return {name:draft.name,keys:draft.frames.map(f=>f.key)};
+        }""")
+        links.get_by_text('Open Image Library',exact=True).click()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        expect(panel.get_by_role('button',name='Return to Storyboard')).to_be_visible()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'storybook-photo.png','mimeType':'image/png','buffer':payload})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        panel.get_by_role('button',name='Return to Storyboard').click()
+        expect(editor).to_be_visible()
+        after=self.page.evaluate("""() => {
+            const draft=CurvatureModernApp.getAnimationStudioDraft().draft;
+            return {name:draft.name,keys:draft.frames.map(f=>f.key)};
+        }""")
+        self.assertEqual(after,before)
+        expect(links).to_contain_text('Reference photographs (0)')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image storyboard-photo.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_keyframe_reference_links_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
