@@ -3208,7 +3208,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         panel = self.page.locator('#ModernReferenceImageLibrary')
         panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
-        panel.locator('input[type=file]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        panel.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         panel.get_by_label('Title', exact=True).fill('Causeway test')
         panel.get_by_label('Author', exact=True).fill('Observer')
@@ -3235,7 +3235,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         panel=self.page.locator('#ModernReferenceImageLibrary')
         panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
-        panel.locator('input[type=file]').set_input_files(
+        panel.locator('input[accept^="image/png"]').set_input_files(
             {'name':'original-photo.png','mimeType':'image/png','buffer':payload})
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         before=self.page.evaluate("""async () => ({
@@ -3309,7 +3309,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         observations = self.page.locator('#ModernReferenceImageLibrary')
         observations.locator('summary').first.click()
         expect(observations.get_by_role('status')).to_contain_text('ready')
-        observations.locator('input[type=file]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
         self.page.locator('#ModernAnimationViewEditor').click()
         editor = self.page.locator('#ModernAnimationStudio')
@@ -3413,7 +3413,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         observations = self.page.locator('#ModernReferenceImageLibrary')
         observations.locator('summary').first.click()
         expect(observations.get_by_role('status')).to_contain_text('ready')
-        observations.locator('input[type=file]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
+        observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
         self.page.locator('#ModernAnimationViewEditor').click()
         editor = self.page.locator('#ModernAnimationStudio')
