@@ -4211,9 +4211,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(response.status, 200)
             expect(other.locator('#ModernSceneTab')).to_be_visible()
             expect(other.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            # Another tab may open directly in Animation per saved preferences.
+            # Wait for physical-session startup, not a particular visible tab.
             other.wait_for_function("""() =>
-                CurvatureModernApp.getWorkspaceMode() === 'scene' ||
-                CurvatureModernApp.getWorkspaceMode() === 'compare'""")
+                document.getElementById('ModernSceneTab').disabled === false""")
             self.assertEqual(other.evaluate('CurvatureModernApp.getModel().Height'), normal_height)
             self.assertEqual(other.evaluate('CurvatureModernApp.getMode()'), normal_mode)
         finally:
