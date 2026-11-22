@@ -3556,6 +3556,46 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_where_used_saved_animation_and_working_draft(self):
+        import base64
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Usage graph bridge project')
+        panel=self.open_image_library()
+        image=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'usage-photo.png','mimeType':'image/png','buffer':image})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        expect(panel.locator('.modern-image-usage')).to_be_visible()
+        expect(panel.locator('.modern-image-usage [role=status]')).to_contain_text('known local use')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image usage-photo.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernAnimationLibrary').get_by_text('Save changes',exact=True).click()
+        self.page.wait_for_function("""async () => {
+            const rows=await CurvatureModernAnimationLibrary.list(indexedDB);
+            return rows.some(r=>r.project.name==='Usage graph bridge project'&&
+                r.project.keyframes.some(f=>f.referenceImageIds?.length));
+        }""")
+        self.open_image_library()
+        panel.get_by_role('button',name='Inspect usage-photo.png (Local original)').click()
+        where=panel.locator('.modern-image-usage')
+        expect(where.get_by_text('Saved animations (1)')).to_be_visible()
+        expect(where).to_contain_text('Usage graph bridge project')
+        expect(where.get_by_role('button',name='Open Usage graph bridge project frame 1')).to_be_visible()
+        self.assertEqual(self.page.evaluate("""async () => {
+            const rows=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            return rows.length;
+        }"""),1)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_keyframe_reference_links_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
