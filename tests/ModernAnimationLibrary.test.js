@@ -1280,11 +1280,11 @@ test('detached demo autosave returns before reading or writing workspace storage
   const source=fs.readFileSync(path.join(__dirname,'../src/ui/modern/ModernApp.js'),'utf8');
   const start=source.indexOf('  function saveStudioDraft(throttled){');
   const end=source.indexOf('  function restoreStudioDraft(record){',start);
-  const ctx={studioActiveDemo:{id:'soundly'}};
+  const ctx={studioActiveDemo:{id:'soundly'},keyframeEditSession:null};
   vm.runInNewContext(source.slice(start,end),ctx);
   assert.equal(ctx.saveStudioDraft(false),true);
   assert.equal(ctx.saveStudioDraft(true),true);
-  assert.deepEqual(Object.keys(ctx).sort(),['saveStudioDraft','studioActiveDemo']);
+  assert.deepEqual(Object.keys(ctx).sort(),['keyframeEditSession','saveStudioDraft','studioActiveDemo']);
 });
 
 test('read-only Studio shows keyframes without mutation controls and offers independent copy and export',()=>{

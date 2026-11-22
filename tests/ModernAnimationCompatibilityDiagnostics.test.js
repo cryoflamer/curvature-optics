@@ -87,7 +87,8 @@ test('Compatibility diagnosis shows exact values, a separate transition, and a w
   assert.match(frames[1].className,/is-transition-from/);
   assert.match(frames[2].className,/is-transition-to/);
   assert.doesNotMatch(frames[0].className,/is-transition-to/);
-  assert.equal(find(host,n=>n.tagName==='details'&&n.open===true).length,1);
+  assert.equal(find(host,n=>n.tagName==='details'&&n.className==='modern-studio-diagnostics-disclosure'&&n.open===true).length,1);
+  assert.equal(find(host,n=>n.tagName==='details'&&n.className==='modern-studio-transition-details'&&n.open===true).length,1);
   assert.equal(find(host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled,true);
 });
 

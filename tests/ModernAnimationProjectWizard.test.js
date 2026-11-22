@@ -262,6 +262,7 @@ function switchHarness(libraryFails=false,draftFails=false){
     studioDragSession:null,studioRemovedFrameUndo:null,studioRestorePreviewPending:false,
     studioPrepared:null,studioPlayback:null,studioFilmstripScroll:0,
     studioDiagnosticTransition:null,studioWizard:{step:4},studioWizardError:'',
+    studioView:'library',setStudioView(view){ctx.studioView=view;},
     cameraHudAppearance:{opacity:90,position:'top-left',size:100},
     root:{crypto:{},indexedDB:{}},studioApi:studio,studioPlaybackApi:null,
     studioDraftAutosave:{makeWorkspaceId(){return 'draft_'+(++drafts);},
@@ -297,6 +298,7 @@ test('Wizard switches only after old draft is persisted, then saves a named V2 L
   assert.equal(h.records[0].project.name,'New project');
   assert.equal(h.ctx.studioWorkspaceId,'project_wizard_saved');
   assert.equal(h.ctx.studioLibraryActive.id,'wizard_saved');
+  assert.equal(h.ctx.studioView,'editor');
   assert.equal(h.ctx.studioLibraryBusy,false);
   assert.deepEqual(h.checkpoints.map(x=>x.name),['Old work','New project','New project']);
   assert.ok(h.checkpoints[0].contract===null);
@@ -309,6 +311,7 @@ test('Wizard leaves old editor intact on checkpoint failure and retains new draf
   assert.equal(failedDraft.records.length,0);
   assert.equal(failedDraft.ctx.studioDraft.name,'Old work');
   assert.equal(failedDraft.ctx.studioWorkspaceId,'draft_old');
+  assert.equal(failedDraft.ctx.studioView,'library');
   const failedLibrary=switchHarness(true,false);
   failedLibrary.ctx.requestStudioSwitch('wizard',p);await failedLibrary.flush();
   assert.equal(failedLibrary.records.length,0);

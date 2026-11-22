@@ -130,7 +130,8 @@ test('UI exposes usable groups, marks excluded frames and keeps all five cards',
   const cards=collect(otherHost.host,n=>n.tagName==='button'&&n.className.includes('modern-studio-keyframe'));
   assert.equal(cards.length,5);
   assert.equal(cards.filter(n=>n.className.includes('is-outside-sequence')).length,2);
-  assert.ok(collect(otherHost.host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled===false);
+  assert.equal(collect(otherHost.host,n=>n.tagName==='button'&&n.textContent==='Preview animation').length,0,
+    'Preview playback is now reached through the separate Studio Preview view');
   collect(otherHost.host,n=>n.tagName==='button'&&n.textContent==='Use all keyframes')[0].listeners.click();
   assert.equal(actions.at(-1),'clear');
 });
@@ -163,7 +164,7 @@ test('Timeline visually distinguishes preview membership from edit selection wit
   assert.equal(collect(host,n=>n.className==='modern-studio-editing-status').length,1);
   assert.ok(cards[4].className.includes('is-active'),'excluded frame can be the editing target');
   assert.equal(cards[4]['aria-pressed'],'true');
-  assert.match(cards[4]['aria-label'],/excluded from preview.*currently editing/);
+  assert.match(cards[4]['aria-label'],/excluded from preview.*selected/);
   assert.equal(collect(host,n=>n.className==='modern-studio-filmstrip-legend').length,1);
   assert.equal(collect(host,n=>n.className==='modern-studio-legend-included')[0].textContent,'✓ 3 in preview');
   assert.equal(collect(host,n=>n.className==='modern-studio-legend-excluded')[0].textContent,'− 2 excluded');
