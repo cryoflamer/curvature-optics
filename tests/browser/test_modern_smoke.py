@@ -7001,27 +7001,43 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_image_library_built_in_demos_are_read_only_and_not_imported(self):
         self.open_modern()
         self.open_animation()
+        # Inject an explicit shipped-asset fixture with the SAME bare ID as
+        # a local observation; demo and local namespaces must stay distinct.
+        self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+            canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Local same ID.png',{type:'image/png'}),'shared_test_id',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            const catalog=window.CurvatureModernDemoCatalog;
+            const load=catalog.load;
+            const shipped={id:'test-shipped-source',name:'Fixture demo',
+                referenceImages:[{...record,title:'Built-in same ID.png'}]};
+            window.CurvatureModernDemoCatalog={...catalog,
+                load:()=>[...load(),shipped]};
+        }""")
         panel=self.page.locator('#ModernReferenceImageLibrary')
         panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         local_before=self.page.evaluate("""async () =>
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length""")
+        self.assertEqual(local_before,1)
         panel.get_by_label('Source',exact=True).select_option('demo')
-        expect(panel.locator('.modern-image-library-card').first).to_be_visible()
-        card=panel.locator('.modern-image-library-card').first
-        expect(card).to_contain_text('Built-in demo · read-only')
+        card=panel.get_by_role('button',name='Inspect Built-in same ID.png (Built-in demo)')
+        expect(card).to_be_visible()
         card.click()
         expect(panel.locator('.modern-image-library-demo')).to_contain_text('Read-only demo original')
         expect(panel.locator('.modern-image-library-demo img')).to_be_visible()
         expect(panel.locator('.modern-reference-editor')).to_be_hidden()
         self.assertEqual(self.page.evaluate("""async () =>
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),
-            local_before,'Browsing shipped demo assets must never import originals')
+            local_before,'Browsing built-in/demo assets must never create a local alias')
         panel.get_by_label('Source',exact=True).select_option('library')
-        expect(panel.locator('.modern-image-library-demo')).to_be_visible()
+        expect(panel.get_by_role('button',name='Inspect Local same ID.png (Local original)')).to_be_visible()
         self.assertEqual(self.page.evaluate("""async () =>
-            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),
-            local_before)
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(row=>row.id)"""),
+            ['shared_test_id'])
 
 if __name__ == '__main__':
     unittest.main()
