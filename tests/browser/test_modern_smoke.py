@@ -7821,11 +7821,27 @@ class ModernBrowserSmoke(unittest.TestCase):
         before_count=self.page.evaluate("""async () =>
             (await CurvatureModernCalibrationProjectStore.list(indexedDB)).length""")
         self.page.reload(wait_until='load',timeout=30000)
-        self.page.wait_for_function("""id => {
-            return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
-              CurvatureModernPhotoCalibrationEditor.mount(document)
-                .projectPersistenceStatus()?.projectId===id;
-        }""",arg=project_id,timeout=30000)
+        try:
+            self.page.wait_for_function("""id => {
+                return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
+                  CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectPersistenceStatus()?.projectId===id;
+            }""",arg=project_id,timeout=12000)
+        except Exception:
+            diagnostic=self.page.evaluate("""() => {
+                const e=CurvatureModernPhotoCalibrationEditor.mount(document);
+                return {mode:CurvatureModernApp.getWorkspaceMode(),
+                    preferred:CurvatureModernApplicationPreferences.read(localStorage).workspace.mode,
+                    url:location.href,history:history.state,
+                    reloadKey:sessionStorage.getItem('curvature-calibration-clean-reload-project-v1'),
+                    lastKey:sessionStorage.getItem('curvature-calibration-last-opened-project-v1'),
+                    project:e.projectPersistenceStatus(),
+                    startup:e.projectStartupStatus(),
+                    status:document.getElementById('ModernCalibrationProjectsStatus').textContent,
+                    storage:document.getElementById('ModernCalibrationStorage').textContent};
+            }""")
+            print('CALIBRATION_RELOAD_DIAGNOSTIC:',diagnostic,flush=True)
+            raise
         workspace=self.page.locator('#ModernPhotoCalibration')
         expect(workspace).to_be_visible()
         expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
