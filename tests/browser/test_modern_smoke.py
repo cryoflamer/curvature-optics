@@ -4484,8 +4484,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
             'The current editor was retained.',timeout=30000)
         self.assertEqual(active(),b['id'])
-        self.assertEqual(stored(),before_failed_open,
-                         'failed activation must not rewrite either checkpoint')
+        after_failed_open=stored()
+        self.assertEqual(after_failed_open[0],baseline[0],
+                         'missing-photo project must never be activated or rewritten')
+        self.assertEqual(after_failed_open[1]['photo'],before_failed_open[1]['photo'])
+        self.assertEqual(after_failed_open[1]['resultIds'],
+                         before_failed_open[1]['resultIds'])
+        # Guarded switching is allowed (and required) to durably flush the
+        # outgoing B editor, including its newly fitted view/inline state.
+        # That valid checkpoint flush must not be mistaken for A corruption.
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()"""),
             before_export)
@@ -4509,7 +4516,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 rowId:result.row.id};
         }""",first['referenceImage'])
         self.assertEqual(restored['sha'],a['sha'])
-        self.assertEqual(stored(),before_failed_open)
+        self.assertEqual(stored(),after_failed_open)
         panel.locator('[data-calibration-project-id="'+a['id']+'"] '
                       '[data-calibration-project-open]').click()
         expect(panel).to_be_hidden(timeout=30000)
