@@ -3923,11 +3923,11 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'buffer':json.dumps(data).encode('utf-8')})
         entries=self.page.evaluate("""async () => {
             const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
-            return Promise.all(rows.filter(r=>r.photo).map(async r=>({
-                id:r.id,sha:r.photo.identity.sha256,
-                count:(await CurvatureModernCalibrationProjectStore.get(indexedDB,r.id))
-                    .checkpoint.payload.draft.rows.length
-            })));
+            return Promise.all(rows.filter(r=>r.photo).map(async r=>{
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,r.id);
+                return {id:p.id,sha:p.photo.identity.sha256,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }));
         }""")
         by_count={r['count']:r for r in entries}
         self.assertTrue(all(n in by_count for n in expected_counts),entries)
