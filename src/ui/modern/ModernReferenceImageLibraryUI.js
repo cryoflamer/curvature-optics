@@ -165,15 +165,20 @@
         await env.CurvatureModernApp.openImageUsageAnimation(
           use.ownerId,use.frameKey,use.revision,use.frameIndex,selected&&selected.id);
       }else if(use.type==='calibration'){
-        tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
-        tab.click();
-        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')throw Error('Calibration navigation was blocked');
+        // Check a saved owner before changing tabs. A deleted/stale row must
+        // not disturb the current Image Library or the outgoing editor.
         var store=env.CurvatureModernCalibrationProjectStore;
         if(!store?.get)throw Error('Calibration Projects unavailable');
+        var inspectedImageId=selected&&selected.id,inspectedEpoch=usageEpoch;
         var owner=await store.get(env.indexedDB,use.ownerId);
         if(!owner)throw Error('Calibration project was deleted');
         if(owner.revision!==use.revision)
           throw Error('Calibration project changed since usage inspection; refresh Where used?');
+        if(inspectedEpoch!==usageEpoch||!selected||selected.id!==inspectedImageId)
+          throw Error('Image selection changed while checking Calibration; refresh Where used?');
+        tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
+        tab.click();
+        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')throw Error('Calibration navigation was blocked');
         var editorApi=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
         if(!editorApi?.openCalibrationProject)throw Error('Calibration Projects unavailable');
         await editorApi.openCalibrationProject(use.ownerId);

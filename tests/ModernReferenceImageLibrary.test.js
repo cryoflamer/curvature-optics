@@ -457,3 +457,28 @@ test('Where used reports failed stores as incomplete and never joins different n
   assert.equal(result.complete,false);
   assert.deepEqual(result.unavailable,['Animation Library unavailable']);
 });
+
+test('Where used keeps separate saved keyframes without Studio-only frame keys',()=>{
+  const image='original_1',identity={version:1,sha256:'a'.repeat(64),width:1176,height:791};
+  const result=usageGraph.report(image,identity,{animations:[{
+    id:'stored',updatedAt:42,project:{name:'Two positions',keyframes:[
+      {name:'First',referenceImageIds:[image,image]},
+      {name:'Middle',referenceImageIds:['other']},
+      {name:'Last',referenceImageIds:[image]}
+    ]}
+  }]});
+  assert.equal(result.count,2);
+  assert.deepEqual(result.uses.map(x=>[x.ownerId,x.frameKey,x.frameIndex,x.frameName]),
+    [['stored',null,1,'First'],['stored',null,3,'Last']]);
+});
+test('Where used distinguishes recoverable revisions for the same keyframe',()=>{
+  const frame={key:'frame_a',name:'Draft frame',referenceImageIds:['original_1']};
+  const snapshots=[11,12].map(savedAt=>({
+    id:'workspace',source:'recoverable',checkpoint:{savedAt,draft:{
+      name:'Unsaved frames',frames:[frame]
+    }}
+  }));
+  const result=usageGraph.report('original_1',null,{drafts:snapshots});
+  assert.equal(result.count,2);
+  assert.deepEqual(result.uses.map(x=>x.revision),[11,12]);
+});

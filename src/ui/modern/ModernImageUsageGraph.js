@@ -33,7 +33,10 @@
     sources=sources||{};
     var uses=[],seen=new Set();
     function add(use){
-      var key=[use.type,use.ownerId,use.frameKey||'',use.source].join('|');
+      // Saved project frames have ordered indices, not Studio draft keys.
+      // Recovery checkpoints at different revisions are independent uses.
+      var key=JSON.stringify([use.type,use.ownerId,use.frameIndex??null,
+        use.frameKey??null,use.source,use.revision??null]);
       if(!seen.has(key)){seen.add(key);uses.push(use);}
     }
     (sources.animations||[]).forEach(function(row){

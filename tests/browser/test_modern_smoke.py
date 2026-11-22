@@ -3636,6 +3636,44 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""),1)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
+        import base64
+        self.open_modern()
+        panel=self.open_image_library()
+        image=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'stale-usage.png','mimeType':'image/png','buffer':image})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.evaluate("""() => {
+            const graph=window.CurvatureModernImageUsageGraph;
+            window.CurvatureModernImageUsageGraph={...graph,discover:async()=>({
+                uses:[{type:'calibration',ownerId:'removed-owner',title:'Gone calibration',
+                    revision:2,source:'saved'}],
+                count:1,complete:true,unavailable:[],note:'Local test owner.'
+            })};
+            const store=window.CurvatureModernCalibrationProjectStore;
+            window.CurvatureModernCalibrationProjectStore={...store,get:async()=>null};
+        }""")
+        panel.get_by_role('button',name='Refresh uses').click()
+        where=panel.locator('.modern-image-usage')
+        go=where.get_by_role('button',name='Open calibration Gone calibration · saved')
+        expect(go).to_be_visible()
+        go.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text(
+            'Cannot open use: Calibration project was deleted')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        # A second-tab revision change is rejected before navigating as well.
+        self.page.evaluate("""() => {
+            CurvatureModernCalibrationProjectStore.get=async()=>({revision:3});
+        }""")
+        go.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text(
+            'Calibration project changed since usage inspection')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_keyframe_reference_links_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
