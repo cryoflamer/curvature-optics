@@ -180,6 +180,8 @@
           });
         });
         card.className='modern-image-library-card';
+        card.setAttribute('data-image-key',entry.key);
+        if(entry.source==='library')card.setAttribute('data-image-id',entry.id);
         card.setAttribute('aria-label','Inspect '+entry.title+' ('+
           (entry.source==='demo'?'Built-in demo':'Local original')+')');
         card.setAttribute('aria-pressed',String(entry.key===key));

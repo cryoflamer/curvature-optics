@@ -3282,8 +3282,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             'name':'curvature-image-library-backup.json','mimeType':'application/json',
             'buffer':backup.path().read_bytes()})
         expect(panel.get_by_role('status')).to_contain_text('Reference Image Library ready')
-        self.assertEqual(self.page.evaluate("""async () =>
-            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
+        # The older backup has different attribution fields than the newer
+        # metadata. Non-destructive restore retains both as separate aliases.
+        rows=self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual(len(rows),2)
+        imported=next(row for row in rows if row['id']!=before['row']['id'])
+        self.assertEqual(imported['kind'],'unclassified')
+        self.assertEqual(self.page.evaluate("""async id =>
+            (await CurvatureModernReferenceImageLibrary.get(indexedDB,id)).record.original.dataUrl""",
+            imported['id']),before['row']['record']['original']['dataUrl'])
         self.assertEqual(self.page.evaluate("""async id =>
             (await CurvatureModernReferenceImageLibrary.get(indexedDB,id)).kind""",
             before['row']['id']),'diagram')
@@ -3291,7 +3299,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
-        panel.get_by_role('button',name='Inspect original-photo.png (Local original)').click()
+        panel.locator('.modern-image-library-card[data-image-id="'+before['row']['id']+'"]').click()
         expect(panel.get_by_label('Image kind')).to_have_value('diagram')
         expect(panel.get_by_label('Tags (comma separated')).to_have_value('Soundly, horizon')
         panel.get_by_label('Search images & tags').fill('horizon')
