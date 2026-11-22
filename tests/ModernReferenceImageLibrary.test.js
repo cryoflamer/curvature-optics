@@ -334,3 +334,40 @@ test('annotations never alter imported originals, IDs, attribution or legacy tra
   assert.equal((await library.get(db,'original')).record.original.dataUrl,png);
   await assert.rejects(library.remove(db,'original',1),/disabled/);
 });
+
+test('details + classification save commits atomically under both optimistic revisions',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('atomic'));
+  await library.enableAnnotations(db);
+  const first=await library.updateDetails(db,'atomic',1,0,
+    {title:'New caption',author:'Scientific source'},{kind:'map',tags:['horizon'],collections:['Project']});
+  assert.equal(first.revision,2);assert.equal(first.annotationRevision,1);
+  assert.deepEqual((await library.get(db,'atomic')).record.original,raster);
+  const unchanged=await library.updateDetails(db,'atomic',2,1,
+    {title:'Renamed map'}, {kind:'map',tags:['horizon'],collections:['Project']});
+  assert.equal(unchanged.annotationRevision,1,'unchanged labels must not advance classification revision');
+  assert.equal(unchanged.record.title,'Renamed map');
+  await assert.rejects(library.updateDetails(db,'atomic',2,1,{title:'Lost update'},
+    {kind:'diagram',tags:['new'],collections:[]}),/changed/);
+  await assert.rejects(library.updateDetails(db,'atomic',3,0,{title:'Lost classification'},
+    {kind:'diagram',tags:['new'],collections:[]}),/another tab/);
+  const final=await library.get(db,'atomic');
+  assert.equal(final.revision,3);
+  assert.equal(final.annotationRevision,1);
+  assert.equal(final.record.title,'Renamed map');
+  assert.deepEqual(final.tags,['horizon']);
+  assert.deepEqual(final.record.original,raster);
+});
+test('invalid or corrupted classification fails closed without changing originals',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('photo'));
+  await library.enableAnnotations(db);
+  const before=structuredClone(db.records.get('photo'));
+  await assert.rejects(library.setAnnotation(db,'photo',0,
+    {kind:'graph',tags:Array.from({length:21},(_,i)=>'tag'+i)}),/tags/);
+  assert.equal(db.annotations.size,0);
+  db.annotations.set('photo',{id:'photo',revision:1,kind:'invalid-kind',tags:[],collections:[]});
+  await assert.rejects(library.get(db,'photo'),/image kind/);
+  db.annotations.clear();
+  const restored=await library.get(db,'photo');
+  assert.equal(restored.kind,'unclassified');
+  assert.deepEqual(db.records.get('photo'),before);
+});
