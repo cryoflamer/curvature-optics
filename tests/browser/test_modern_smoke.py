@@ -4278,7 +4278,30 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(banner.get_by_role('button',name='Redo',exact=True)).to_be_enabled()
         self.page.reload(wait_until='load')
         banner=self.page.locator('#ModernKeyframeEditBanner')
-        expect(banner).to_be_visible(timeout=30000)
+        try:
+            expect(banner).to_be_visible(timeout=12000)
+        except AssertionError:
+            diagnostic=self.page.evaluate("""async () => {
+                const key='curvature-modern-keyframe-edit-recovery-v1';
+                const raw=sessionStorage.getItem(key);
+                const saved=raw?JSON.parse(raw):null;
+                const current=CurvatureModernApp.getAnimationStudioDraft();
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const remote=saved&&c?CurvatureModernAnimationDraftAutosave.getWorkspace(
+                    c,saved.session.projectId):null;
+                const frame=current?.draft?.frames?.find(f=>f.key===saved?.session?.frameKey);
+                return {stored:!!saved,tabId:saved?.tabId,
+                    libraryId:saved?.libraryId,libraryRevision:saved?.libraryRevision,
+                    projectId:saved?.session?.projectId,activeId:c?.activeId,
+                    draftEqual:JSON.stringify(current?.draft)===saved?.draftAtEntry,
+                    remoteEqual:JSON.stringify(remote?.draft)===saved?.draftAtEntry,
+                    frameEqual:JSON.stringify(frame?.experiment)===JSON.stringify(saved?.session?.original),
+                    appMode:CurvatureModernApp.getWorkspaceMode(),
+                    message:document.getElementById('ModernAnimationDraftStatus')?.textContent,
+                    view:CurvatureModernApp.getAnimationStudioView(),
+                    url:location.href};
+            }""")
+            self.fail('F5 editor recovery failed: '+str(diagnostic))
         expect(banner).to_contain_text('Recovered unsaved keyframe edits')
         self.assertTrue(self.page.locator('body').evaluate(
             "(el) => el.classList.contains('modern-keyframe-edit-active')"))
