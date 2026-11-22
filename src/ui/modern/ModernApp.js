@@ -4443,7 +4443,6 @@
         }finally{keyframeEditRestoring=false;}
         explanation.textContent='Recovered unsaved keyframe edits after F5 · Apply or Cancel to finish';
       }
-      saveKeyframeEditRecovery();
     }catch(error){
       document.body.classList.remove('modern-keyframe-edit-active');
       unlockKeyframeControls();
@@ -4459,6 +4458,7 @@
       if(!recovered)clearKeyframeEditRecovery();
       throw error;
     }finally{keyframeEditEntering=false;}
+    saveKeyframeEditRecovery();
     return true;
   }
   function cancelStudioKeyframeEdit(routeAction){

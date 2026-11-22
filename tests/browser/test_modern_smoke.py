@@ -4260,6 +4260,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Edit 04').click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
         self.assertTrue(self.page.locator('body').evaluate(
             "(el) => el.classList.contains('modern-keyframe-edit-active')"))
         starting=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -4322,6 +4324,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernCompareTab').click()
         self.open_animation()
         self.create_physical_keyframe_project('B','Earth curvature','CI F5 Physical B')
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
         before=self.page.evaluate("""() => ({
             A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
             B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
