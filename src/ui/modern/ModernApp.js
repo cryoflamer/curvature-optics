@@ -4197,17 +4197,22 @@
     var title=document.createElement('strong');
     title.textContent='Editing keyframe · '+frame.name;banner.appendChild(title);
     var explanation=document.createElement('p');
-    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. Other controls and gestures are locked. Apply updates only the selected working-draft keyframe; Library saves are separate.';
+    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. Camera mouse and keyboard navigation are available when permitted by this contract; unrelated controls stay locked. Apply updates only this working-draft keyframe; Library saves are separate.';
     banner.appendChild(explanation);
+    var actions=document.createElement('div');
+    actions.className='modern-keyframe-edit-actions';
     var cancel=document.createElement('button');
-    cancel.type='button';cancel.textContent='Cancel & Return';
+    cancel.type='button';cancel.className='modern-keyframe-edit-cancel';
+    cancel.textContent='Cancel & Return';
     cancel.addEventListener('click',function(){cancelStudioKeyframeEdit('replace');});
-    banner.appendChild(cancel);
+    actions.appendChild(cancel);
     var apply=document.createElement('button');
-    apply.type='button';apply.textContent='Apply & Return';
+    apply.type='button';apply.className='modern-keyframe-edit-apply';
+    apply.textContent='Apply & Return';
     apply.title='Validate and update this keyframe only; History remains unchanged';
     apply.addEventListener('click',function(){applyStudioKeyframeEdit(apply,commit);});
-    banner.appendChild(apply);
+    actions.appendChild(apply);
+    banner.appendChild(actions);
     keyframeEditReturnView=studioView;
     keyframeEditDraftAtEntry=JSON.stringify(studioDraft);
     keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,

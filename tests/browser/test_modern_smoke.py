@@ -4139,6 +4139,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(banner).to_be_visible()
         expect(banner).to_contain_text('04 · Low view, hidden spans')
         expect(banner.get_by_role('button', name='Apply & Return')).to_be_enabled()
+        expect(banner).to_contain_text('Camera mouse and keyboard navigation are available')
+        styles=banner.evaluate("""el => {
+            const cancel=getComputedStyle(el.querySelector('.modern-keyframe-edit-cancel'));
+            const apply=getComputedStyle(el.querySelector('.modern-keyframe-edit-apply'));
+            return {cancelBackground:cancel.backgroundColor,applyBackground:apply.backgroundColor,
+                cancelRadius:cancel.borderRadius,applyRadius:apply.borderRadius,
+                cancelHeight:el.querySelector('.modern-keyframe-edit-cancel').getBoundingClientRect().height,
+                applyHeight:el.querySelector('.modern-keyframe-edit-apply').getBoundingClientRect().height};
+        }""")
+        self.assertNotEqual(styles['cancelBackground'],styles['applyBackground'])
+        self.assertEqual(styles['cancelRadius'],styles['applyRadius'])
+        self.assertEqual(styles['cancelHeight'],styles['applyHeight'])
         self.assertFalse(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
         expect(self.page.locator('#ModernHeight')).to_be_enabled()
         expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
