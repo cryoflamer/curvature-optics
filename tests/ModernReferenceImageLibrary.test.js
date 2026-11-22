@@ -171,7 +171,7 @@ test('library scripts and collapsed panel are isolated to Modern, before Studio 
       assert.ok(!fs.readFileSync(path.join(root,legacy),'utf8').includes(file));
     }
   }
-  assert.match(modern,/<details id="ModernReferenceImageLibrary"[^>]*><summary>Reference Image Library/);
+  assert.match(modern,/<details id="ModernReferenceImageLibrary"[^>]*><summary>Image Library/);
   assert.ok(modern.indexOf('id="ModernReferenceImageLibrary"')<modern.indexOf('id="ModernAnimationPlaybackStage"'));
 });
 

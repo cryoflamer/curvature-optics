@@ -3218,12 +3218,74 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
-        panel.get_by_label('Saved observations').select_option(label='Causeway test (1 × 1)')
+        panel.get_by_role('button',name='Inspect Causeway test (Local original)').click()
         expect(panel.get_by_label('Author', exact=True)).to_have_value('Observer')
         self.assertEqual(panel.get_by_text('Download original').get_attribute('href'),
                          'data:image/png;base64,' + base64.b64encode(payload).decode())
         expect(panel.get_by_text('Delete observation', exact=True)).to_be_disabled()
         expect(panel.get_by_text('Deletion is temporarily disabled', exact=False)).to_be_visible()
+
+
+    def test_image_library_classification_migrates_v1_with_explicit_backup(self):
+        import base64
+        import json
+        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        panel.locator('input[type=file]').set_input_files(
+            {'name':'original-photo.png','mimeType':'image/png','buffer':payload})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        before=self.page.evaluate("""async () => ({
+            row:await CurvatureModernReferenceImageLibrary.get(indexedDB,
+                (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id),
+            schema:await CurvatureModernReferenceImageLibrary.annotationStatus(indexedDB)
+        })""")
+        self.assertEqual(before['schema']['version'],1)
+        expect(panel.get_by_label('Image kind')).to_be_disabled()
+        with self.page.expect_download() as download:
+            panel.get_by_role('button',name='Download full backup').click()
+        backup=download.value
+        self.assertEqual(backup.suggested_filename,'curvature-image-library-backup.json')
+        content=json.loads(backup.path().read_text(encoding='utf-8'))
+        self.assertEqual(content['observations'][0]['record'],before['row']['record'])
+        self.assertEqual(content['annotations'],[])
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        panel.get_by_role('button',name='Enable kind & tags').click()
+        expect(panel.get_by_role('status')).to_contain_text('classification enabled')
+        expect(panel.get_by_label('Image kind')).to_be_enabled()
+        panel.get_by_label('Image kind').select_option('diagram')
+        panel.get_by_label('Tags (comma separated)').fill('Soundly, horizon')
+        panel.get_by_label('Collections (comma separated)').fill('Research')
+        panel.get_by_role('button',name='Save details').click()
+        expect(panel.get_by_role('status')).to_contain_text('metadata saved')
+        after=self.page.evaluate("""async id => ({
+            row:await CurvatureModernReferenceImageLibrary.get(indexedDB,id),
+            schema:await CurvatureModernReferenceImageLibrary.annotationStatus(indexedDB)
+        })""",before['row']['id'])
+        self.assertEqual(after['schema']['version'],2)
+        self.assertEqual(after['row']['kind'],'diagram')
+        self.assertEqual(after['row']['tags'],['Soundly','horizon'])
+        self.assertEqual(after['row']['collections'],['Research'])
+        self.assertEqual(after['row']['record']['original'],before['row']['record']['original'])
+        self.assertEqual(after['row']['record']['id'],before['row']['record']['id'])
+        with self.page.expect_download() as new_backup:
+            panel.get_by_role('button',name='Download full backup').click()
+        updated=json.loads(new_backup.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(updated['annotations'][0]['kind'],'diagram')
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        panel.get_by_role('button',name='Inspect original-photo.png (Local original)').click()
+        expect(panel.get_by_label('Image kind')).to_have_value('diagram')
+        expect(panel.get_by_label('Tags (comma separated')).to_have_value('Soundly, horizon')
+        panel.get_by_label('Search images & tags').fill('horizon')
+        expect(panel.locator('.modern-image-library-card')).to_have_count(1)
+        panel.get_by_label('Source',exact=True).select_option('demo')
+        expect(panel.locator('.modern-image-library-card[aria-pressed=true]')).to_have_count(0)
 
     def test_keyframe_reference_links_roundtrip(self):
         import base64
