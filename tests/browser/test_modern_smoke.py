@@ -4541,6 +4541,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                     'before':remote_before,'after':after}))
             expect(banner).to_contain_text('Apply blocked',timeout=30000)
             expect(banner).to_contain_text('changed in another tab')
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),
+                             unchanged+8, 'a blocked Apply retains the candidate for Cancel')
             self.assertEqual(self.page.evaluate("""() =>
                 CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
                 unchanged)
