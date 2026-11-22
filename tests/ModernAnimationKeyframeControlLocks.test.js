@@ -1,7 +1,6 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const contract=require('../src/animation/ModernAnimationContract');
 const locks=require('../src/animation/ModernAnimationKeyframeControlLocks');
 
 test('camera channel maps all seven validated contract fields, no FOV shortcut',()=>{
