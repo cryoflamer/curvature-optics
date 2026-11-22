@@ -3445,8 +3445,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(after,before)
         expect(links).to_contain_text('Reference photographs (0)')
+        present=self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual([row['title'] for row in present],['storybook-photo.png'])
         links.get_by_text('Browse photographs',exact=True).click()
         picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
         picker.get_by_role('button',name='Select image storyboard-photo.png (Local)').click()
         picker.get_by_role('button',name='Attach selected').click()
         expect(links).to_contain_text('Reference photographs (1)')
