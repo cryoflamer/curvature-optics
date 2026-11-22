@@ -40,13 +40,16 @@
   function collect(selectedId,selectedIdentity,sources){
     if(typeof selectedId!=='string'||!selectedId)throw TypeError('Selected original ID required');
     sources=sources||{};
-    var uses=[],seen=new Set();
+    var uses=[],seen=new Map();
     function add(use){
-      // Saved project frames have ordered indices, not Studio draft keys.
-      // Recovery checkpoints at different revisions are independent uses.
+      // Distinct snapshots can share an ID AND timestamp across tabs.
+      // The dedup key identifies a relation; the draft contents distinguish
+      // divergent checkpoints even when their savedAt values coincide.
       var key=JSON.stringify([use.type,use.ownerId,use.frameIndex??null,
         use.frameKey??null,use.source,use.revision??null]);
-      if(!seen.has(key)){seen.add(key);uses.push(use);}
+      if(!seen.has(key))seen.set(key,new Set());
+      var variants=seen.get(key),content=use.draftContent||'';
+      if(!variants.has(content)){variants.add(content);uses.push(use);}
     }
     (sources.animations||[]).forEach(function(row){
       if(!row||!row.project)return;
@@ -56,8 +59,10 @@
     (sources.drafts||[]).forEach(function(row){
       if(!row||!row.checkpoint||!row.checkpoint.draft)return;
       var draft=row.checkpoint.draft;
+      var content=JSON.stringify(draft);
       imagesFromFrames(draft.frames,selectedId,'draft',row.id,
-        draft.name||row.id,row.checkpoint.savedAt,row.source||'recoverable').forEach(add);
+        draft.name||row.id,row.checkpoint.savedAt,row.source||'recoverable')
+        .forEach(function(use){use.draftContent=content;add(use);});
     });
     var target=identityKey(selectedIdentity);
     if(target){
@@ -76,10 +81,11 @@
       add({type:'calibration-draft',ownerId:sources.currentCalibration.projectId||'current',
         title:'Current Calibration working session',revision:null,source:'current'});
     if(sources.currentStudio&&sources.currentStudio.draft&&sources.currentStudioWorkspaceId){
+      var draftContent=JSON.stringify(sources.currentStudio.draft);
       imagesFromFrames(sources.currentStudio.draft.frames,selectedId,'draft',
         sources.currentStudioWorkspaceId,
         sources.currentStudio.draft.name||'Current Storyboard',sources.currentStudio.savedAt,
-        'current').forEach(add);
+        'current').forEach(function(use){use.draftContent=draftContent;add(use);});
     }
     uses.sort(function(a,b){
       var groups=['animation','calibration','archive','draft','calibration-draft'];

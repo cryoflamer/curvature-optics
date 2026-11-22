@@ -613,7 +613,12 @@ and either navigate to that confirmed frame or show **moved/changed**, without
 silently opening another frame. Adding stable frame IDs later requires its own
 versioned project-migration design; do not repurpose `sourceSnapshotId` (History
 provenance) as a frame key. Studio working drafts already have frame `key`,
-but a stored checkpoint or a concurrent tab may supersede them.
+but a stored checkpoint or a concurrent tab may supersede them. A checkpoint's
+`savedAt` alone is not a complete identity: two divergent tab snapshots may
+carry an equal timestamp. Navigation re-reads IndexedDB and compares the full
+captured draft content in addition to the timestamp and frame/photo link.
+If the requested historical snapshot is not loaded and current, fail closed
+instead of silently choosing a newer workspace with the same ID.
 
 Calibration links match photo identity, **not** just `aliasId`. Saved
 Calibration Projects and separately archived results can both reference the

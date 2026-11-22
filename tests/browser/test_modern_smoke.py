@@ -3779,7 +3779,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             CurvatureModernImageUsageGraph={...graph,discover:async()=>({
                 uses:[{type:'draft',ownerId:data.workspaceId,
                     title:'Stale checkpoint',frameKey:data.selectedKey,
-                    frameIndex:1,frameName:'Old frame',revision:1,source:'recoverable'}],
+                    frameIndex:1,frameName:'Old frame',revision:1,source:'recoverable',
+                    draftContent:JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)}],
                 count:1,complete:true,unavailable:[],note:'Test snapshot.'
             })};
         }""",before)
@@ -3972,7 +3973,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
                 return c.workspaces.find(w=>w.id===id).checkpoint.savedAt;
             }""",workspace)
-            self.assertGreater(changed,initial)
+            self.assertGreaterEqual(changed,initial)
+            # A matching timestamp alone is not proof that the indexed
+            # checkpoint still has the same content.
             stale.click()
             expect(where.locator('.modern-image-usage-status')).to_contain_text(
                 'Recoverable Storyboard changed in another tab')

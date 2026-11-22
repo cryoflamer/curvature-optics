@@ -8759,11 +8759,13 @@
     },
     // Recoverable drafts are opened through the existing guarded workspace
     // switch; unavailable snapshots are never silently reconstructed by ID.
-    openImageUsageDraft:async function(workspaceId,frameKey,expectedSavedAt,imageId,source){
+    openImageUsageDraft:async function(workspaceId,frameKey,expectedSavedAt,imageId,source,expectedDraftContent){
       if(!studioDraftAutosave||!studioWorkspaces)
         throw Error('Recoverable Storyboards are not ready; inspect recovery before opening');
       if(typeof imageId!=='string'||!imageId)
         throw Error('Select an original photograph before opening its usage');
+      if(typeof expectedDraftContent!=='string'||!expectedDraftContent)
+        throw Error('Recovery snapshot identity unavailable; refresh Where used?');
       // Different backups can share a workspace ID but represent different
       // checkpoints. Only open the exact version available to this editor.
       var active=studioWorkspaceId===workspaceId;
@@ -8772,7 +8774,8 @@
       var saved=source==='current'?
         {draft:studioDraft,savedAt:Math.max(1,studioDraftSavedAt||Date.now())}:
         studioDraftAutosave.getWorkspace(studioWorkspaces,workspaceId);
-      if(!saved||saved.savedAt!==expectedSavedAt)
+      if(!saved||saved.savedAt!==expectedSavedAt||
+         JSON.stringify(saved.draft)!==expectedDraftContent)
         throw Error('Recoverable Storyboard changed or is not loaded; refresh Where used?');
       if(active&&source!=='current'&&studioDraftSavedAt!==saved.savedAt)
         throw Error('Current Storyboard differs from this recovery checkpoint; refresh Where used?');
@@ -8791,7 +8794,8 @@
         var latest=await studioDraftAutosave.readCollection(root.indexedDB);
         var durable=latest&&studioDraftAutosave.getWorkspace(latest,workspaceId);
         if((source==='recoverable'&&!durable)||
-           (durable&&durable.savedAt!==expectedSavedAt))
+           (durable&&(durable.savedAt!==expectedSavedAt||
+             JSON.stringify(durable.draft)!==expectedDraftContent)))
           throw Error('Recoverable Storyboard changed in another tab; refresh Where used?');
         if(studioDraftGeneration!==inspectedGeneration||studioWorkspaceId!==inspectedWorkspace)
           throw Error('Storyboard changed during recovery check; refresh Where used?');
@@ -8803,7 +8807,8 @@
       if(studioWorkspaceId!==workspaceId)await requestStudioSwitch('draft',workspaceId);
       if(studioWorkspaceId!==workspaceId)throw Error('Draft switch was cancelled or blocked');
       var current=referenced(studioDraft);
-      if(!current||current.name!==target.name)
+      if(!current||current.name!==target.name||
+         JSON.stringify(studioDraft)!==expectedDraftContent)
         throw Error('Selected Storyboard keyframe changed during navigation; refresh Where used?');
       studioSelectedKey=frameKey;
       setStudioView('editor',true,'push');

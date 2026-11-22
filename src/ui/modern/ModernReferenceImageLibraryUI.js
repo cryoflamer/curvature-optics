@@ -186,7 +186,8 @@
         if(!env.CurvatureModernApp?.openImageUsageDraft)
           throw Error('Guarded Storyboard navigation unavailable');
         await env.CurvatureModernApp.openImageUsageDraft(
-          use.ownerId,use.frameKey,use.revision,selected&&selected.id,use.source);
+          use.ownerId,use.frameKey,use.revision,selected&&selected.id,
+          use.source,use.draftContent);
       }else if(use.type==='calibration-draft'){
         var calibrationTab=doc.getElementById('ModernPhotoCalibrationOpen');
         if(!calibrationTab)throw Error('Calibration workspace unavailable');

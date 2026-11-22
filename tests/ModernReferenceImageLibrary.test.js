@@ -566,3 +566,19 @@ test('Where used retains both local photo owners after a separate Storyboard for
   assert.equal(new Set(result.uses.map(u=>u.frameKey)).size,1,
     'equal frame keys do not collapse independent recovery owners');
 });
+
+test('Where used retains same-ID and same-timestamp divergent recovery snapshots',()=>{
+  const image='original_local',frame={key:'key1',name:'Photo view',
+    referenceImageIds:[image]};
+  const rows=['Revision from A','Revision from B'].map(name=>({
+    id:'project_named',source:'recoverable',checkpoint:{savedAt:77,draft:{
+      name,frames:[frame]
+    }}
+  }));
+  const report=usageGraph.report(image,null,{drafts:rows});
+  assert.equal(report.count,2);
+  assert.deepEqual(report.uses.map(use=>use.title),['Revision from A','Revision from B']);
+  assert.equal(new Set(report.uses.map(use=>use.draftContent)).size,2);
+  assert.deepEqual(report.uses.map(use=>JSON.parse(use.draftContent).frames[0].key),
+    ['key1','key1']);
+});
