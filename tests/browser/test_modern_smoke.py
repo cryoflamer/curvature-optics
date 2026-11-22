@@ -756,6 +756,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         opened=panel.locator('[data-calibration-project-id="'+first.get_attribute('data-calibration-project-id')+'"]')
         expect(opened).to_contain_text('Opened')
+        expect(opened).to_have_attribute('data-project-active','true')
+        expect(opened).to_have_class(re.compile(r'is-editing'))
+        expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
+        expect(opened.locator('.modern-animation-library-status-editing')).to_be_visible()
+        other=panel.locator('[data-calibration-project-id]').filter(has_text='Second calibration')
+        expect(other.locator('[data-calibration-project-open]')).to_be_visible()
+        # Selection is independent of the opened editor, as in Animation Studio.
+        other.click()
+        expect(other).to_have_class(re.compile(r'is-selected'))
+        expect(opened.locator('.modern-animation-library-status-editing')).to_be_visible()
+        expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
         expect(opened.locator('[data-calibration-project-delete]')).to_be_disabled()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
