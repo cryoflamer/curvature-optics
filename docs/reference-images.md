@@ -656,6 +656,31 @@ Navigation must pass the owner’s existing unsaved-changes, revision and
 workspace-routing guards. Missing owners or unresolved images get actionable
 error states; no title-based or nearest-match substitution.
 
+### Stage 5 lifecycle review and fail-closed deletion policy
+
+The Image Library offers **Check deletion safety** as a read-only diagnostic
+on a selected original. It re-reads the original record, scans the supported
+accessible ownership sources, and re-reads the original revision to detect
+interleaved changes. The review reports the known local link count, missing
+sources and concrete reasons deletion is still blocked. It does **not** grant
+a deletion token, weaken the protected `ReferenceImageLibrary.remove()` API,
+or mutate linked projects, backed-up photos, Undo history or recovery records.
+
+A valid unlink removes **one frame-reference relation** through the existing
+Storyboard editing/Undo path. It leaves the Library original unchanged and
+does not revoke other project, calibration, archive or recoverable uses.
+Repeated imports/restores still use verified-original deduplication and
+their established ID-remapping contract; shipped-demo aliases remain separate.
+
+An empty and complete read of accessible local sources means **zero known
+local uses at that moment**, not globally unreferenced or safe to delete.
+Even two identical scans are non-atomic against other IndexedDB databases
+and open tabs; older Undo buffers and exported copies remain inaccessible.
+Consequently no original-delete operation is enabled in this stage without
+a stronger cross-store ownership/writer protocol and validated migration
+plan. Failed/stale scans and changes to the selected original are reported
+explicitly, never converted to deletion authorization.
+
 **Delete remains disabled** until the system has a defensible deletion
 protocol across all durable stores *and* pending/in-memory/recoverable state
 in other tabs. Different IndexedDB databases do not share a transaction.

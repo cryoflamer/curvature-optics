@@ -278,13 +278,34 @@
     var actions=el('div',undefined,editor);actions.className='modern-reference-toolbar';
     var save=el('button','Save details',actions);save.type='submit';
     var remove=el('button','Delete observation',actions);remove.type='button';remove.disabled=true;
-    remove.title='Disabled until all saved, draft and Undo references can be checked safely.';
-    el('p','Deletion is temporarily disabled to protect linked originals in saved projects, drafts and other tabs.',editor);
+    remove.title='Disabled: separate databases and other-tab Undo/recovery cannot be revalidated atomically.';
+    var deletionCheck=button('Check deletion safety',actions,function(){
+      if(!selected)return;
+      run(async function(){
+        var inspectedId=selected.id,revision=selected.revision;
+        var graph=env.CurvatureModernImageUsageGraph;
+        if(!graph?.deletionReview)throw Error('Deletion inspection is unavailable');
+        var outcome=await graph.deletionReview(env,selected);
+        if(!selected||selected.id!==inspectedId||selected.revision!==revision)
+          throw Error('Image selection changed during deletion inspection; refresh Library');
+        deletionStatus.textContent=(outcome.knownUses===null?
+          'Available local uses could not be determined.':
+          outcome.knownUses+' known local use'+(outcome.knownUses===1?'':'s')+
+            ' at inspection time.')+' Deletion blocked. '+outcome.reasons.join(' · ');
+        void showUses(selected);
+        return 'Deletion was not performed. Review the safety explanation below.';
+      });
+    });
+    var deletionStatus=el('p','Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.',editor);
+    deletionStatus.className='modern-image-usage-warning';
+    deletionStatus.setAttribute('role','status');
+    deletionStatus.setAttribute('aria-live','polite');
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;
       search.disabled=value;sourceFilter.disabled=value;kindFilter.disabled=value;
       backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;
       urlInput.disabled=value;addUrl.disabled=value;paste.disabled=value;
+      deletionCheck.disabled=value||!selected;
       returnToCalibration.disabled=value;returnToStoryboard.disabled=value;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
@@ -294,6 +315,8 @@
       finally{setBusy(false);}}
     function fill(row){selected=row;dirty=false;editor.hidden=!row;preview.replaceChildren();
       ++usageEpoch;usageGroups.replaceChildren();
+      deletionCheck.disabled=!row;
+      deletionStatus.textContent='Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.';
       if(!row)return;
       void showUses(row);
       kind.disabled=!classificationReady;tags.disabled=!classificationReady;

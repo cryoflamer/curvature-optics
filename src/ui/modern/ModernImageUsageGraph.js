@@ -164,6 +164,43 @@
     if(!identity)failures.push('Original identity unavailable; Calibration matches were not checked');
     return report(row.id,identity,sources,failures);
   }
+  // Deletion review is explicitly informational and read-only. Independent
+  // IDB databases, foreign tabs' Undo buffers and portable exports cannot
+  // participate in the Image Library transaction. Even a second zero-use
+  // scan can never issue a physical-delete authorization.
+  async function deletionReview(env,selected){
+    if(!selected||typeof selected.id!=='string'||!selected.id)
+      throw TypeError('Select an original photograph before checking deletion');
+    var source=env.CurvatureModernReferenceImageLibrary,issues=[],report=null,
+      before=null,after=null;
+    if(!source||typeof source.get!=='function')
+      issues.push('Original store unavailable for revision recheck');
+    else{
+      try{before=await source.get(env.indexedDB,selected.id);}
+      catch(error){issues.push('Original read failed: '+(error.message||error));}
+      if(!before)issues.push('Original missing or inaccessible; refresh Image Library');
+      else{
+        try{report=await discover(env,before);}
+        catch(error){issues.push('Usage scan failed: '+(error.message||error));}
+        try{after=await source.get(env.indexedDB,selected.id);}
+        catch(error){issues.push('Original recheck failed: '+(error.message||error));}
+        if(!after||before.revision!==selected.revision||
+           after.revision!==before.revision)
+          issues.push('Original changed during inspection; refresh Image Library');
+      }
+    }
+    if(report){
+      if(report.count)issues.push(report.count+' known linked use'+
+        (report.count===1?'':'s')+' must be preserved');
+      if(!report.complete)issues.push('Some sources could not be checked: '+
+        report.unavailable.join('; '));
+    }
+    issues.push('Deletion is disabled: cross-database writes, unsaved Undo/recovery in other tabs and external backups cannot be atomically excluded');
+    return {safe:false,knownUses:report?report.count:null,
+      complete:!!report&&report.complete&&issues.length===1,
+      reasons:issues,unavailable:report?report.unavailable.slice():[]};
+  }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,
-    demoReferences:demoReferences,collect:collect,report:report,discover:discover});
+    demoReferences:demoReferences,collect:collect,report:report,discover:discover,
+    deletionReview:deletionReview});
 }));

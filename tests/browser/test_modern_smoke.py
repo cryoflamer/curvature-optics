@@ -4215,6 +4215,63 @@ class ModernBrowserSmoke(unittest.TestCase):
             await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
         self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_stage5_deletion_review_fails_closed_before_and_after_unlink(self):
+        import base64
+        self.open_modern()
+        gallery=self.open_image_library()
+        image=base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        gallery.locator('input[accept^="image/png"]').set_input_files({
+            'name':'lifecycle-photo.png','mimeType':'image/png','buffer':image})
+        expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        gallery.get_by_role('button',name='Inspect lifecycle-photo.png (Local original)').click()
+        reviewer=gallery.get_by_role('button',name='Check deletion safety')
+        deletion=gallery.locator('.modern-reference-editor .modern-image-usage-warning').first
+        remove=gallery.get_by_role('button',name='Delete observation')
+        expect(remove).to_be_disabled()
+        reviewer.click()
+        expect(deletion).to_contain_text('0 known local uses')
+        expect(deletion).to_contain_text('Deletion blocked')
+        before=self.page.evaluate("""async () => {
+            const row=(await CurvatureModernReferenceImageLibrary.list(indexedDB))[0];
+            const entry=await CurvatureModernReferenceImageLibrary.get(indexedDB,row.id);
+            return {id:row.id,revision:row.revision,original:entry.record.original};
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.create_camera_project('Lifecycle ownership')
+        studio=self.page.locator('#ModernAnimationStudio')
+        links=studio.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image lifecycle-photo.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',name='Inspect lifecycle-photo.png (Local original)').click()
+        gallery.get_by_role('button',name='Check deletion safety').click()
+        expect(deletion).to_contain_text('known local use')
+        expect(deletion).to_contain_text('Deletion blocked')
+        expect(remove).to_be_disabled()
+        self.page.locator('#ModernAnimationTab').click()
+        links=studio.locator('.modern-studio-reference-links')
+        expect(links).to_contain_text('Reference photographs (1)')
+        links.get_by_role('button',name='Unlink reference photograph 1').click()
+        expect(links).to_contain_text('Reference photographs (0)')
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',name='Inspect lifecycle-photo.png (Local original)').click()
+        gallery.get_by_role('button',name='Check deletion safety').click()
+        expect(deletion).to_contain_text('Deletion blocked')
+        expect(remove).to_be_disabled()
+        after=self.page.evaluate("""async id => {
+            const entry=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+            return {revision:entry.revision,original:entry.record.original,
+                count:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length};
+        }""",before['id'])
+        self.assertEqual(after['revision'],before['revision'])
+        self.assertEqual(after['original'],before['original'])
+        self.assertEqual(after['count'],1)
+        self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

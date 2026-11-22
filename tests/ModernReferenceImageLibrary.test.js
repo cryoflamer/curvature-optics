@@ -644,3 +644,66 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
   assert.equal(denied.complete,false);
   assert.match(denied.unavailable.join('; '),/Storage access denied/);
 });
+
+test('Stage 5 deletion review fails closed with zero local uses and preserves bytes',async()=>{
+  const db=memoryIndexedDB(),asset=record('lifecycle_photo');
+  await library.create(db,asset);
+  let reads=0;
+  const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernReferenceImageLibrary:{get:async (idb,id)=>{reads++;return library.get(idb,id);}},
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{
+      COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
+      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+    },
+    CurvatureModernReferenceImageImport:{identify:async()=>({
+      version:1,sha256:'a'.repeat(64),width:1,height:1})}
+  };
+  const original=await library.get(db,asset.id);
+  const empty=await usageGraph.deletionReview(env,original);
+  assert.equal(empty.safe,false);
+  assert.equal(empty.knownUses,0);
+  assert.equal(empty.complete,true,'accessible local stores may be scanned without granting deletion');
+  assert.equal(reads,2,'must recheck original after scanning other stores');
+  assert.match(empty.reasons.join('; '),/cannot be atomically excluded/);
+  await assert.rejects(library.remove(db,asset.id,1),/deletion is disabled/);
+  assert.deepEqual((await library.get(db,asset.id)).record.original,original.record.original);
+  env.CurvatureModernAnimationLibrary.list=async()=>[{
+    id:'saved',updatedAt:1,project:{name:'Linked',
+      keyframes:[{name:'First',referenceImageIds:[asset.id]}]}
+  }];
+  const used=await usageGraph.deletionReview(env,original);
+  assert.equal(used.safe,false);
+  assert.equal(used.knownUses,1);
+  assert.match(used.reasons.join('; '),/1 known linked use/);
+  env.CurvatureModernCalibrationProjectStore.list=async()=>{throw Error('Store inaccessible');};
+  const missing=await usageGraph.deletionReview(env,original);
+  assert.equal(missing.safe,false);
+  assert.equal(missing.complete,false);
+  assert.match(missing.reasons.join('; '),/Store inaccessible/);
+  assert.equal((await library.list(db)).length,1);
+});
+test('Stage 5 stale original revision rejects review even when no local owner is found',async()=>{
+  const db=memoryIndexedDB();await library.create(db,record('other'));
+  const current=await library.get(db,'other'),updated=await library.update(db,'other',1,{title:'Tab B'});
+  const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{
+      COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
+      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+    },
+    CurvatureModernReferenceImageImport:{identify:async()=>({
+      version:1,sha256:'a'.repeat(64),width:1,height:1})}
+  };
+  assert.equal(updated.revision,2);
+  const review=await usageGraph.deletionReview(env,current);
+  assert.equal(review.safe,false);
+  assert.equal(review.complete,false);
+  assert.match(review.reasons.join('; '),/Original changed during inspection/);
+  assert.equal((await library.get(db,'other')).record.title,'Tab B');
+});
