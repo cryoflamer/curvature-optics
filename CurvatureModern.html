@@ -158,6 +158,7 @@
       <button class="modern-tab" id="ModernCompareTab" type="button" disabled aria-pressed="false">Compare</button>
       <button class="modern-tab" id="ModernAnimationTab" type="button" disabled aria-pressed="false">Animation</button>
       <button class="modern-tab" id="ModernPhotoCalibrationOpen" type="button" aria-pressed="false" aria-controls="ModernPhotoCalibration" disabled>Photo Calibration</button>
+      <button class="modern-tab" id="ModernImageLibraryTab" type="button" aria-pressed="false" aria-controls="ModernImageLibraryWorkspace" disabled>Image Library</button>
       <button class="modern-tab" id="ModernDemosTab" type="button" disabled aria-pressed="false">Demos</button>
     </nav>
     <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
@@ -451,6 +452,13 @@
     </form>
   </dialog>
   <div class="modern-persistence-status modern-status-message" id="ModernPersistenceStatus" role="status" aria-live="polite"></div>
+  <section id="ModernImageLibraryWorkspace" class="modern-image-library-workspace" aria-labelledby="ModernImageLibraryTitle" hidden>
+    <header class="modern-image-library-heading">
+      <h1 id="ModernImageLibraryTitle">Image Library</h1>
+      <p>Shared original images for calibration, animation references and other tools. Add images here, then select them where needed.</p>
+    </header>
+    <section id="ModernReferenceImageLibrary" class="modern-reference-library" aria-label="Local and built-in reference image gallery"></section>
+  </section>
   <section id="ModernAnimationWorkspace" class="modern-animation-workspace" aria-label="Animation workspace" hidden>
     <div class="modern-animation-workspace-heading">
       <div><h1>Animation Studio</h1><p>New project → Edit keyframes → Preview tab or click a keyframe → Save project in Library → Export PNG/video in Preview. Preview never adds an entry to Animation Library; your working draft autosaves separately. Scene / Compare remains unchanged.</p></div>
@@ -475,7 +483,6 @@
       <button type="button" id="ModernAnimationLegacyDismiss">Discard selection</button>
     </div>
     <section id="ModernAnimationLibrary" class="modern-animation-library" aria-label="Saved animation projects"></section>
-    <details id="ModernReferenceImageLibrary" class="modern-reference-library"><summary>Image Library</summary></details>
     <section id="ModernAnimationProjectWizard" class="modern-project-wizard" aria-label="New Animation Project wizard" hidden></section>
     </section>
     <section id="ModernAnimationPreviewView" class="modern-animation-view" role="tabpanel" aria-labelledby="ModernAnimationViewPreview" tabindex="0" hidden>
