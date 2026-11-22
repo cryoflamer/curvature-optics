@@ -640,7 +640,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         selected=workspace.locator('[data-project-active="true"]')
         expect(selected).to_have_count(1)
         expect(selected).to_contain_text('Opened')
-        expect(selected.locator('[data-calibration-project-delete]')).to_be_disabled()
+        expect(selected.locator('[data-calibration-project-delete]')).to_be_enabled()
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         expect(panel).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
@@ -660,7 +660,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         active_row=panel.locator('[data-calibration-project-id="'+active+'"]')
         expect(active_row).to_contain_text('Independent scene',timeout=30000)
         expect(active_row).to_have_class(re.compile(r'is-selected'))
-        expect(active_row.locator('[data-calibration-project-delete]')).to_be_disabled()
+        expect(active_row.locator('[data-calibration-project-delete]')).to_be_enabled()
         self.page.once('dialog',lambda dialog:dialog.accept('Renamed independent'))
         active_row.locator('[data-calibration-project-rename]').click()
         expect(active_row).to_contain_text('Renamed independent',timeout=30000)
@@ -865,7 +865,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(other).to_have_class(re.compile(r'is-selected'))
         expect(opened.locator('.modern-animation-library-status-editing')).to_be_visible()
         expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
-        expect(opened.locator('[data-calibration-project-delete]')).to_be_disabled()
+        expect(opened.locator('[data-calibration-project-delete]')).to_be_enabled()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_project_photo_selection_retains_verified_library_original(self):
@@ -4225,8 +4225,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         def open_project(id):
             if panel.is_hidden():
                 toggle.click()
-            panel.locator('[data-calibration-project-id="'+id+'"] '
-                          '[data-calibration-project-open]').click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
             expect(panel).to_be_hidden(timeout=30000)
             self.page.wait_for_function("""id => {
                 const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
