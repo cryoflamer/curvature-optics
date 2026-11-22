@@ -8720,15 +8720,19 @@
     getAnimationStudioView:function(){return studioView;},
     // A verified saved owner can be opened without relying on visible Library
     // cards (which may be filtered). Existing switch guards own unsaved drafts.
-    openImageUsageAnimation:async function(id,frameKey,expectedUpdatedAt){
+    openImageUsageAnimation:async function(id,frameKey,expectedUpdatedAt,frameIndex,imageId){
       if(!studioLibrary||!root.indexedDB)throw Error('Animation Library unavailable');
       var record=await studioLibrary.get(root.indexedDB,id);
       if(!record)throw Error('Saved animation no longer exists');
       if(expectedUpdatedAt!==undefined&&record.updatedAt!==expectedUpdatedAt)
         throw Error('Saved animation changed since usage inspection; refresh Where used?');
-      if(frameKey!==null&&frameKey!==undefined&&
-         !record.project.keyframes.some(function(f){return f.key===frameKey;}))
-        throw Error('Referenced keyframe is missing from the current project revision');
+      // Persisted animation keyframes have no UI key (their identity is the
+      // project plus ordered index). Working drafts assign transient frame keys.
+      var savedFrame=Number.isSafeInteger(frameIndex)&&frameIndex>=1?
+        record.project.keyframes[frameIndex-1]:null;
+      if(!savedFrame||!Array.isArray(savedFrame.referenceImageIds)||
+         !savedFrame.referenceImageIds.includes(imageId))
+        throw Error('Referenced saved keyframe changed; refresh Where used?');
       var tab=newUiEl('ModernAnimationTab');
       if(!tab)throw Error('Animation workspace unavailable');
       tab.click();
@@ -8742,14 +8746,15 @@
         await requestStudioSwitch('open',id);
       if(!sameWorkspace&&(!studioLibraryActive||studioLibraryActive.id!==id))
         throw Error('Animation switch was cancelled or blocked; refresh the saved projects');
-      if(frameKey!==null&&frameKey!==undefined){
-        if(!studioDraft.frames.some(function(f){return f.key===frameKey;}))
-          throw Error('Keyframe changed during animation switch');
-        studioSelectedKey=frameKey;
-        setStudioView('editor',true,'push');
-        renderAnimationStudio(studioHistoryEntries);
-      }
-      return {id:id,frameKey:frameKey||null};
+      var candidate=studioDraft?.frames?.[frameIndex-1];
+      if(!candidate||candidate.name!==savedFrame.name||
+         !Array.isArray(candidate.referenceImageIds)||
+         !candidate.referenceImageIds.includes(imageId))
+        throw Error('Current working keyframe differs from saved usage; review the draft or refresh Where used?');
+      studioSelectedKey=candidate.key;
+      setStudioView('editor',true,'push');
+      renderAnimationStudio(studioHistoryEntries);
+      return {id:id,frameKey:candidate.key,frameIndex:frameIndex};
     },
     // Recoverable drafts are opened through the existing guarded workspace
     // switch; unavailable snapshots are never silently reconstructed by ID.
