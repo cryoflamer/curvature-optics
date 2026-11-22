@@ -162,11 +162,17 @@
       if(use.type==='animation'){
         if(!env.CurvatureModernApp?.openImageUsageAnimation)
           throw Error('Guarded Animation navigation is unavailable');
-        await env.CurvatureModernApp.openImageUsageAnimation(use.ownerId,use.frameKey);
+        await env.CurvatureModernApp.openImageUsageAnimation(use.ownerId,use.frameKey,use.revision);
       }else if(use.type==='calibration'){
         tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
         tab.click();
         if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')throw Error('Calibration navigation was blocked');
+        var store=env.CurvatureModernCalibrationProjectStore;
+        if(!store?.get)throw Error('Calibration Projects unavailable');
+        var owner=await store.get(env.indexedDB,use.ownerId);
+        if(!owner)throw Error('Calibration project was deleted');
+        if(owner.revision!==use.revision)
+          throw Error('Calibration project changed since usage inspection; refresh Where used?');
         var editorApi=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
         if(!editorApi?.openCalibrationProject)throw Error('Calibration Projects unavailable');
         await editorApi.openCalibrationProject(use.ownerId);
