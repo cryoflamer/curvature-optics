@@ -4194,6 +4194,167 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_stage5_two_tabs_divergent_drafts_are_forked_and_survive_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        library = self.page.locator('#ModernAnimationLibrary')
+        project_id = self.page.evaluate("""async () => {
+            const saved = await CurvatureModernAnimationLibrary.list(indexedDB);
+            return saved.length === 1 ? saved[0].id : null;
+        }""")
+        self.assertIsNotNone(project_id)
+        workspace_id = 'project_' + project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.some(w => w.id===id);
+        }""", arg=workspace_id, timeout=30000)
+
+        other = self.context.new_page()
+        other_errors = []
+        other.on('pageerror', lambda err: other_errors.append(str(err)))
+        try:
+            response = other.goto(self.base_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            other.locator('#ModernAnimationTab').click()
+            expect(other.locator('#ModernAnimationLibrary')).to_be_visible()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card = other.locator('#ModernAnimationLibrary [data-animation-id="' + project_id + '"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button', name='Open saved animation').click()
+            other_studio = other.locator('#ModernAnimationStudio')
+            expect(other_studio).to_be_visible()
+            original = studio.locator('.modern-studio-header').inner_text()
+            self.assertIn('Working draft', original)
+            initial = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name')
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             initial)
+
+            # Both tabs now have the same baseline. Write A first, with B
+            # intentionally keeping its old optimistic concurrency baseline.
+            studio.get_by_role('button', name='Inspect project settings').click()
+            name_a = studio.get_by_label('Project name')
+            name_a.fill('Stage 5 protected change A')
+            name_a.press('Tab')
+            self.page.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.some(w => w.id===id &&
+                    w.checkpoint.draft.name==='Stage 5 protected change A');
+            }""", arg=workspace_id, timeout=30000)
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             initial)
+
+            other_studio.get_by_role('button', name='Inspect project settings').click()
+            name_b = other_studio.get_by_label('Project name')
+            name_b.fill('Stage 5 protected change B')
+            name_b.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.some(w => w.id===id &&
+                    w.checkpoint.draft.name==='Stage 5 protected change A') &&
+                    c.workspaces.some(w => w.id!==id && w.id.startsWith('draft_') &&
+                    w.checkpoint.draft.name==='Stage 5 protected change B');
+            }""", arg=workspace_id, timeout=30000)
+            names = other.evaluate("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.map(w => [w.id,w.checkpoint.draft.name]);
+            }""")
+            self.assertEqual(sum(1 for _, value in names if value=='Stage 5 protected change A'), 1)
+            self.assertEqual(sum(1 for _, value in names if value=='Stage 5 protected change B'), 1)
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change A')
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change B')
+
+            # Reload must not manufacture additional same-content recovery forks.
+            count_before = len(names)
+            for _ in range(2):
+                other.reload(wait_until='load')
+                expect(other.locator('#ModernAnimationWorkspace')).to_be_visible()
+                other.wait_for_function("""async () => {
+                    const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                    return c && c.workspaces.some(w => w.checkpoint.draft.name==='Stage 5 protected change A')
+                       && c.workspaces.some(w => w.checkpoint.draft.name==='Stage 5 protected change B');
+                }""", timeout=30000)
+            stable = other.evaluate("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.map(w => w.checkpoint.draft.name);
+            }""")
+            self.assertEqual(len(stable), count_before,
+                             'reloading a conflict must not multiply recovery drafts')
+            self.assertEqual(stable.count('Stage 5 protected change A'), 1)
+            self.assertEqual(stable.count('Stage 5 protected change B'), 1)
+            self.assertEqual(other_errors, [])
+            self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+        finally:
+            other.close()
+
+    def test_animation_stage5_maximum_200_keyframes_import_scroll_and_recovery(self):
+        self.open_modern()
+        self.open_animation()
+        # Exercise the supported upper bound through the public import path,
+        # not by bypassing the app's private editor state.
+        wire = self.page.evaluate("""() => {
+            const base=structuredClone(CurvatureModernDemoCatalog.load().find(d => d.id==='soundly').project);
+            const template=base.keyframes.map(frame => structuredClone(frame));
+            base.id='stage5_large_timeline';
+            base.name='Stage 5 maximum timeline';
+            base.keyframes=Array.from({length:200},(_,i) => {
+                const frame=structuredClone(template[i%template.length]);
+                frame.sourceSnapshotId=null;
+                frame.name='Long timeline frame '+String(i+1).padStart(3,'0');
+                frame.travelMs=i===0?0:200;
+                frame.holdMs=0;
+                return frame;
+            });
+            return JSON.stringify(CurvatureModernAnimationProject.validate(base));
+        }""")
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.get_by_label('Import animation JSON file').set_input_files({
+            'name':'large-timeline.json', 'mimeType':'application/json',
+            'buffer':wire.encode('utf-8')})
+        expect(library.locator('[data-animation-id]')).to_have_count(1, timeout=30000)
+        library.locator('[data-animation-id]').get_by_role(
+            'button', name='Open saved animation').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        cards = studio.locator('.modern-studio-keyframe')
+        expect(cards).to_have_count(200, timeout=30000)
+        strip = studio.locator('.modern-studio-filmstrip')
+        self.assertGreater(strip.evaluate('el => el.scrollWidth / el.clientWidth'), 3)
+        last = studio.locator('.modern-studio-filmstrip-item').nth(199)
+        last.get_by_role('button', name='Properties for').focus()
+        last.get_by_role('button', name='Properties for').press('Enter')
+        expect(cards.nth(199)).to_have_attribute('aria-pressed', 'true')
+        expect(studio.locator('.modern-studio-selected-heading')).to_contain_text('200 / 200')
+        start = strip.evaluate('el => el.scrollLeft')
+        self.assertGreater(start, 1000)
+        old_keys = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        studio.get_by_role('button', name='Move animation frame 200 earlier').click()
+        moved = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        self.assertEqual(moved[198], old_keys[199])
+        self.assertEqual(moved[199], old_keys[198])
+        self.assertAlmostEqual(strip.evaluate('el => el.scrollLeft'), start, delta=3)
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), old_keys)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(200, timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'),
+                         old_keys[199])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_stage5_end_to_end_narrow_history_and_state_recovery(self):
         self.open_modern()
         self.open_animation()
