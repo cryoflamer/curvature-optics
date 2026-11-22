@@ -7217,6 +7217,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(live_state(),state_a,
                          'F5 must restore A with its exact original and correspondence state')
         after_reload=stored()
+        self.assertEqual([p['revision'] for p in after_reload],
+                         [p['revision'] for p in before_reload],
+                         'F5 must not create a no-op Project revision')
         self.assertEqual(after_reload,before_reload,
                          'IndexedDB rows must remain byte-logically unchanged by F5')
         for project,expected in [(b,state_b),(a,state_a)]:
@@ -7843,10 +7846,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual((saved_b['view'],saved_b['sha']),
                          (view_b['view'],view_b['sha']),
                          'switch may advance revision but must not alter B viewport')
+        # A clean F5 continues exactly the already open project A, retaining
+        # its photograph and viewport without inventing another IDB revision.
+        before_reload_a=stored(a)
+        before_reload_b=stored(b)
         self.page.reload(wait_until='load',timeout=30000)
         expect(workspace).to_be_visible(timeout=30000)
-        self.assertIsNone(self.page.evaluate("""() =>
-            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        self.page.wait_for_function("""id => {
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const binding=editor.projectBinding(),status=editor.projectPersistenceStatus();
+            return binding?.projectId===id && status?.projectId===id &&
+                status.pending===0 && !status.unsaved && !status.error;
+        }""",arg=a,timeout=30000)
+        self.assertEqual(live_view(),view_a['view'],
+                         'F5 must restore the opened A photo viewport')
+        self.assertEqual(stored(a),before_reload_a,
+                         'clean F5 must not rewrite the opened A record')
+        self.assertEqual(stored(b),before_reload_b,
+                         'clean F5 must not mutate the independent B record')
         for id,expected in [(b,view_b),(a,view_a)]:
             open_project(id)
             self.assertEqual(live_view(),expected['view'])
