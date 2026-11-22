@@ -1848,20 +1848,17 @@
     sourcePicker.onchange=()=>{};
     sourceRefresh.onclick=refreshSources;
     $('ModernCalibrationOpenImageLibrary').onclick=()=>{
-      const animationTab=$('ModernAnimationTab'),libraryView=$('ModernAnimationViewLibrary'),
-        imageLibrary=$('ModernReferenceImageLibrary');
-      if(!animationTab||!imageLibrary){
+      const libraryTab=$('ModernImageLibraryTab'),imageLibrary=$('ModernReferenceImageLibrary');
+      if(!libraryTab||!imageLibrary){
         sourceStatus.textContent='Image Library navigation is unavailable';return;
       }
-      // The Calibration editor and its working draft stay mounted while changing
-      // workspace; reopening Calibration refreshes the picker source catalogue.
-      animationTab.click();
-      if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='animation'){
+      // The Calibration editor and its working draft stay mounted. Opening the
+      // standalone gallery never imports a photo or changes correspondences.
+      libraryTab.click();
+      if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='images'){
         sourceStatus.textContent='Cannot leave Calibration while another operation is active';return;
       }
       env.CurvatureImageLibraryReturnToCalibration=true;
-      if(libraryView)libraryView.click();
-      imageLibrary.open=true;
       imageLibrary.dispatchEvent(new Event('curvature-library-navigation'));
       imageLibrary.scrollIntoView({block:'start',behavior:'instant'});
     };
