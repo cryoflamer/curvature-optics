@@ -51,6 +51,8 @@ jobs:
             tests/ModernAnimationWorkspaceSwitch.test.js \
             tests/ModernAnimationWorkspaceViews.test.js \
             tests/ModernAnimationStudio.test.js \
+            tests/ModernAnimationKeyframeEditSession.test.js \
+            tests/ModernAnimationKeyframeControlLocks.test.js \
             tests/ModernAnimationInitialFrame.test.js \
             tests/ModernUiBootstrap.test.js \
             tests/ModernPrimaryEntry.test.js \

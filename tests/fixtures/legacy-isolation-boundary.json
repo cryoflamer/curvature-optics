@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 140,
-      "uniqueScripts": 138,
+      "scriptTags": 141,
+      "uniqueScripts": 139,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -207,6 +207,7 @@
         "src/animation/ModernAnimationProjectWizard.js",
         "src/animation/ModernAnimationStudioEditing.js",
         "src/animation/ModernAnimationKeyframeEditSession.js",
+        "src/animation/ModernAnimationKeyframeControlLocks.js",
         "src/animation/ModernAnimationStudio.js",
         "src/animation/ModernAnimationPlayback.js",
         "src/animation/ModernAnimationPlaybackControls.js",
@@ -391,6 +392,7 @@
       "src/animation/ModernAnimationContract.js",
       "src/animation/ModernAnimationDraftAutosave.js",
       "src/animation/ModernAnimationFrameExport.js",
+      "src/animation/ModernAnimationKeyframeControlLocks.js",
       "src/animation/ModernAnimationKeyframeEditSession.js",
       "src/animation/ModernAnimationLibrary.js",
       "src/animation/ModernAnimationLibraryActions.js",
@@ -517,7 +519,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 232,
+  "sourceJsCount": 233,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -741,6 +743,16 @@
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [],
+      "commonJsToolCallers": []
+    },
+    "src/animation/ModernAnimationKeyframeControlLocks.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationKeyframeControlLocks.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/animation/ModernAnimationKeyframeEditSession.js": {

@@ -30,6 +30,7 @@
   var studioEditingApi=root.CurvatureModernAnimationStudioEditing;
   var studioContractApi=root.CurvatureModernAnimationContract;
   var keyframeEditApi=root.CurvatureModernAnimationKeyframeEditSession;
+  var keyframeControlLocksApi=root.CurvatureModernAnimationKeyframeControlLocks;
   var studioUI=root.CurvatureModernAnimationStudioUI;
   var studioViewsApi=root.CurvatureModernAnimationWorkspaceViews;
   var studioProjects=root.CurvatureModernAnimationProject;
@@ -581,6 +582,7 @@
   // Temporary Scene/Compare sessions are read-only until Stage 2 locks inputs.
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
   var keyframeEditReturnView=null,keyframeEditShellLocks=null;
+  var keyframeControlLocks=null,keyframeEditUIBaseline=null;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -4069,11 +4071,35 @@
     keyframeEditShellLocks.forEach(function(item){item.node.inert=item.inert;});
     keyframeEditShellLocks=null;
   }
-  // Stage 1 uses the real Scene/Compare renderer with all physical controls
+  function validateKeyframePreview(){
+    if(!keyframeEditSession||keyframeEditEntering)return true;
+    try{
+      var candidate=experimentSnapshot();
+      var verdict=studioContractApi.inspectCandidate(studioDraft.contract,candidate);
+      if(!verdict.allowed)
+        throw RangeError('The animation contract rejected '+(verdict.issues[0]&&verdict.issues[0].path||'this edit'));
+      keyframeEditSession.replace(candidate);
+      return true;
+    }catch(error){
+      var previous=keyframeEditSession.snapshot();
+      applyExperiment(previous);syncNumericInputs();syncCompareEditor();
+      updateStatus('Keyframe contract: '+error.message+' · Previous valid preview restored.',true);
+      return false;
+    }
+  }
+  function refreshKeyframeLocks(){
+    if(keyframeControlLocks)keyframeControlLocks.refresh();
+  }
+  function unlockKeyframeControls(){
+    if(keyframeControlLocks)keyframeControlLocks.release();
+    keyframeControlLocks=null;
+  }
+  // The existing Scene/Compare renderer remains authoritative; locks map
+  // contract channels to its existing inputs, never to a second editor.
   // inert. Stage 2 must implement the full contract-based control allowlist
   // before any editable input or Apply action is enabled.
   function beginStudioKeyframeEdit(key){
-    if(keyframeEditSession||!keyframeEditApi||!studioContractApi||
+    if(keyframeEditSession||!keyframeEditApi||!studioContractApi||!keyframeControlLocksApi||
        !studioWorkspaceReady||!persistence.ready||studioLibraryBusy)
       throw Error('Keyframe editor is not ready');
     if(studioActiveDemo)throw Error('Create a copy of this demo before editing');
@@ -4097,7 +4123,7 @@
     var title=document.createElement('strong');
     title.textContent='Editing keyframe · '+frame.name;banner.appendChild(title);
     var explanation=document.createElement('p');
-    explanation.textContent='Read-only Stage 1 preview. Scene/Compare controls and Apply remain locked until contract-safe editing is implemented. Cancel restores the previous workspace.';
+    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. All other Scene/Compare controls, gestures, presets and History actions are locked. Apply is disabled until transactional keyframe saving is implemented.';
     banner.appendChild(explanation);
     var cancel=document.createElement('button');
     cancel.type='button';cancel.textContent='Cancel & Return';
@@ -4105,24 +4131,35 @@
     banner.appendChild(cancel);
     var apply=document.createElement('button');
     apply.type='button';apply.textContent='Apply & Return';apply.disabled=true;
-    apply.title='Available after contract-safe parameter editing and validation are implemented';
+    apply.title='Available after transactional keyframe Apply and conflict checks are implemented';
     banner.appendChild(apply);
     keyframeEditReturnView=studioView;
+    keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
+      compareModel:workspaceState.compareModel};
     keyframeEditSession=session;keyframeEditBanner=banner;
     physical.parentNode.insertBefore(banner,physical);
     try{
-      applyExperiment(frame.experiment);syncNumericInputs();syncCompareEditor();
+      applyExperiment(frame.experiment);
+      var target=studioDraft.contract.target;
+      var scope=studioDraft.contract.mode==='physical'?target.scope:'camera';
+      if(scope==='A'||scope==='B')state.compareSelected=scope;
+      syncNumericInputs();syncCompareEditor();
       keyframeEditEntering=true;
       if(setMode(session.mode,false)===false)throw Error('Cannot open keyframe editor');
-      physical.inert=true;
+      activateSettings(studioDraft.contract.mode==='camera'?'Camera':
+        target.parameter==='surface.curvature'?'Surface':'Atmosphere',false,false);
+      physical.inert=false;
+      keyframeControlLocks=keyframeControlLocksApi.create(physical,session.allowedPaths,scope);
       lockKeyframeShell();
     }catch(error){
+      unlockKeyframeControls();
       physical.inert=false;unlockKeyframeShell();
       if(banner.parentNode)banner.parentNode.removeChild(banner);
       keyframeEditSession=null;keyframeEditBanner=null;
       keyframeEditEntering=false;
       applyExperiment(session.cancel());syncNumericInputs();syncCompareEditor();
       resetHistoryBaseline();setMode('animation',false);
+      keyframeEditUIBaseline=null;keyframeEditReturnView=null;
       throw error;
     }finally{keyframeEditEntering=false;}
     return true;
@@ -4131,6 +4168,7 @@
     if(!keyframeEditSession)return false;
     var session=keyframeEditSession,original=session.cancel();
     keyframeEditSession=null;
+    unlockKeyframeControls();
     var physical=newUiEl('ModernWorkspace');
     if(physical)physical.inert=false;
     unlockKeyframeShell();
@@ -4139,6 +4177,12 @@
     keyframeEditBanner=null;
     cancelPending();cancelEdits();cancelHistoryAuto();
     applyExperiment(original);syncNumericInputs();syncCompareEditor();
+    if(keyframeEditUIBaseline){
+      workspaceState.sceneTab=keyframeEditUIBaseline.sceneTab;
+      workspaceState.compareTab=keyframeEditUIBaseline.compareTab;
+      workspaceState.compareModel=keyframeEditUIBaseline.compareModel;
+      keyframeEditUIBaseline=null;
+    }
     resetHistoryBaseline();
     studioSelectedKey=session.frameKey;
     setMode('animation',false);
@@ -6684,6 +6728,7 @@
     if(navigationKeyActive())navigationFrame=requestAnimationFrame(navigationTick);
   }
   function keyboardAllowed(event){
+    if(keyframeEditSession)return false; // Gestures are not a safe contract channel.
     if(!event||event.altKey||event.metaKey||state.demosActive||animationWorkspaceOpen||photoCalibrationWorkspaceOpen||activeCameraPointer)return false;
     var target=event.target||document.activeElement;
     if(target){
@@ -7031,6 +7076,7 @@
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointerdown',function(event){
+      if(keyframeEditSession)return;
       if(event.button===1){if(event.preventDefault)event.preventDefault();return;}
       if(activeCameraPointer||(cameraPreview&&cameraPreview.isHolding())||
         event.button!==0||event.isPrimary===false||
@@ -7216,6 +7262,7 @@
     if(!canvas||typeof canvas.addEventListener!=='function'||
        !interaction||typeof interaction.focalWheel!=='function')return;
     canvas.addEventListener('wheel',function(event){
+      if(keyframeEditSession)return;
       // Some Windows/Opera configurations remap Shift+vertical wheel to
       // horizontal deltaX. Accept that delta only if deltaY is zero.
       var delta=event.deltaY||event.deltaX||0;
@@ -7308,7 +7355,8 @@
       redrawMs:finished-resized};
   }
   function redraw(opticalSampleMode,compareSide){
-    if(photoCalibrationWorkspaceOpen)return; // never render a hidden physical workspace
+    if(photoCalibrationWorkspaceOpen)return;
+    validateKeyframePreview(); // never render a hidden physical workspace
     // Ignore DOM events passed by ordinary change handlers: only the explicit
     // profiling actions can request a forced cold optical recomputation.
     var liveMotion=opticalSampleMode==='camera-motion';
@@ -7334,7 +7382,7 @@
     cancelPending();
     var liveDescription=el('ModernSceneDescription');
     if(liveDescription)liveDescription.textContent=model.Description||'Custom physical scene';
-    model.Update();refreshLabels();
+    model.Update();refreshLabels();refreshKeyframeLocks();
     if(!liveMotion){scheduleExperimentSave();refreshCalibrationApplicability(true);}
     if(state.mode==='compare'){
       if(!prepareCompare()){state.opticalSample=null;if(cameraPreview)cameraPreview.clear();return;}
@@ -7408,6 +7456,7 @@
     }
   }
   function scheduleRedraw(){
+    validateKeyframePreview();refreshKeyframeLocks();
     stopCameraTransition(false,'Animation interrupted by parameter change',false);
     if(cameraDirectMotion){stopCameraKeyboard(true);stopAutoCameraPreview();abortCameraDrag();}
     updateSnapshotSaveAction();
@@ -7541,6 +7590,7 @@
     redraw();
   }
   function markCustom(){
+    if(keyframeEditSession)return; // The animation base preset remains immutable.
     state.scenePresetSelection='custom';
     var preset=el('ModernPreset');if(preset)preset.value='custom';
   }
@@ -7781,7 +7831,7 @@
   function activateSettings(name,focus,remember){
     if(!settingGroups.includes(name))return;
     activeSettings=name;
-    if(remember!==false){
+    if(remember!==false&&!keyframeEditSession){
       var tabKey=state.mode==='compare'?'compareTab':'sceneTab';
       if(workspaceState[tabKey]!==name){workspaceState[tabKey]=name;saveApplicationPreferences();}
     }

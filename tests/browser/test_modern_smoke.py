@@ -4139,11 +4139,19 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(banner).to_be_visible()
         expect(banner).to_contain_text('04 · Low view, hidden spans')
         expect(banner.get_by_role('button', name='Apply & Return')).to_be_disabled()
-        self.assertTrue(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
+        self.assertFalse(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
+        expect(self.page.locator('#ModernHeight')).to_be_enabled()
+        expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
+        expect(self.page.locator('#ModernRender')).to_be_disabled()
         expected_mode = self.page.evaluate('''() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.display.mode''')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'), expected_mode)
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        old_height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old_height+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height === h',
+                                    arg=old_height+2)
         self.page.wait_for_timeout(700)
         self.assertEqual(self.page.evaluate("""() =>
             localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)"""), before['saved'])
@@ -4247,6 +4255,41 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.go_forward()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+
+    def test_animation_keyframe_contract_locks_secondary_camera_and_compare_actions(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
+        for locked in ['ModernModelRadius','ModernModelCurvature','ModernAtmosphere',
+                       'ModernViewAngle','ModernCameraAim','ModernModelTabA',
+                       'ModernModelTabB','ModernResetPreset','ModernRender']:
+            expect(self.page.locator('#'+locked)).to_be_disabled()
+        expect(self.page.locator('#ModernPan')).to_be_enabled()
+        pan=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        # A disallowed programmatic DOM event must not bypass delegated locking.
+        self.page.evaluate("""() => {
+            const el=document.getElementById('ModernAtmosphere');
+            el.value='vacuum';
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Pan'),pan)
+        self.page.locator('#ModernPan').fill(str(pan+1))
+        self.page.locator('#ModernPan').press('Tab')
+        self.page.wait_for_function('p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',
+                                    arg=pan+1)
+        expect(self.page.locator('#ModernModelRadius')).to_be_disabled()
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
 
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
