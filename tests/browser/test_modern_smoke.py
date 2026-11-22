@@ -2876,44 +2876,59 @@ class ModernBrowserSmoke(unittest.TestCase):
                 new File([blob],'Embedded observation.png',{type:'image/png'}),'calibration-existing',window);
             const demo={id:'test-embedded',project:{name:'Test embedded project',keyframes:[
                 {name:'Test frame',referenceImageIds:[embedded.id]}]},referenceImages:[embedded]};
-            // Production catalog entries need not contain reference originals.
-            // Test the read-only embedded source with an explicit original.
+            // A local image ID must never be confused with the shipped demo ID.
             window.CurvatureModernDemoCatalog={...catalog,load:()=>[...shipped,demo]};
             return {key:JSON.stringify(['demo',demo.id,embedded.id]),
                     title:embedded.title,width:embedded.original.width,height:embedded.original.height};
         }""")
         self.page.locator('#ModernPhotoCalibrationOpen').click()
-        dialog=self.page.locator('#ModernPhotoCalibration')
-        picker=dialog.locator('#ModernCalibrationSource')
-        local_key=json.dumps(['library','calibration-existing'],separators=(',',':'))
-        expect(picker.locator('option',has_text='Library photo.png')).to_have_count(1)
-        picker.select_option(value=local_key)
-        dialog.locator('#ModernCalibrationUsePhoto').click()
-        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
-        dialog.locator('#ModernCalibrationReferenceTools summary').click()
-        dialog.locator('#ModernCalibrationUsePhoto').click()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        browse=workspace.locator('#ModernCalibrationUsePhoto')
+        expect(browse).to_have_text('Browse photographs')
+        expect(browse).to_be_enabled()
+        browse.click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(2)
+        expect(picker.get_by_label('Search images')).to_be_visible()
+        expect(picker.get_by_label('Source')).to_be_visible()
+        expect(picker.get_by_label('Kind')).to_be_visible()
+        picker.get_by_role('button',name='Select image Library photo.png (Local)').click()
+        picker.get_by_role('button',name='Use original').click()
+        expect(picker).to_have_count(0)
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text('100 × 80')
+        workspace.locator('#ModernCalibrationReferenceTools summary').click()
+        browse.click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image Library photo.png (Local)').click()
+        picker.get_by_role('button',name='Use original').click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
         fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
         observation={**fixture['observations'][0],'pixel':[25,35]}
         reference=self.page.evaluate("CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment().referenceImage")
         data=self.soundly_calibration_experiment([observation],reference)
         self.import_calibration_experiment(data,replace=True)
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
-        dialog.locator('#ModernCalibrationReferenceTools summary').click()
-        picker.select_option(value=original['key'])
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        workspace.locator('#ModernCalibrationReferenceTools summary').click()
+        browse.click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_label('Source').select_option('demo')
+        picker.get_by_role('button',name='Select image Embedded observation.png (Built-in demo)').click()
         self.page.once('dialog',lambda prompt: prompt.dismiss())
-        dialog.locator('#ModernCalibrationUsePhoto').click()
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
+        picker.get_by_role('button',name='Use original').click()
+        expect(picker).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('1 correspondences')
         self.page.once('dialog',lambda prompt: prompt.accept())
-        dialog.locator('#ModernCalibrationUsePhoto').click()
-        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text(original['title'])
-        expect(dialog.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+        picker.get_by_role('button',name='Use original').click()
+        expect(picker).to_have_count(0)
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(original['title'])
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
             f"{original['width']} × {original['height']}")
-        expect(dialog.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('0 correspondences')
         self.assertEqual(self.page.evaluate("""async () =>
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(r=>r.id)"""),
             ['calibration-existing'])
-        dialog.locator('#ModernCalibrationClose').click()
+        workspace.locator('#ModernCalibrationClose').click()
 
     def test_reference_photo_content_identity(self):
         self.page.goto(self.base_url)
@@ -3225,12 +3240,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewEditor').click()
         editor = self.page.locator('#ModernAnimationStudio')
         links = editor.locator('.modern-studio-reference-links')
-        links.get_by_text('Load photographs', exact=True).click()
+        links.get_by_text('Browse photographs', exact=True).click()
         expect(links.get_by_role('status')).to_contain_text('Local library loaded')
         photo_id = self.page.evaluate("async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id")
-        expect(links.locator('.modern-reference-choice img')).to_be_visible()
-        links.locator('.modern-reference-choice').filter(has_text='observation.png').click()
-        links.get_by_text('Attach', exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker.locator('.modern-image-picker-choice img')).to_be_visible()
+        picker.get_by_role('button',name='Select image observation.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
         expect(links).to_contain_text('Reference photographs (1)')
         expect(links.locator('.modern-studio-reference-row')).to_contain_text('observation.png')
         expect(links.locator('.modern-studio-reference-row img')).to_be_visible()
@@ -3326,10 +3343,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         editor.locator('.modern-studio-keyframe').first.click()
         links = editor.locator('.modern-studio-reference-links')
-        links.get_by_text('Load photographs', exact=True).click()
-        expect(links.locator('.modern-reference-choice img')).to_be_visible()
-        links.locator('.modern-reference-choice').first.click()
-        links.get_by_text('Attach', exact=True).click()
+        links.get_by_text('Browse photographs', exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker.locator('.modern-image-picker-choice img')).to_be_visible()
+        picker.get_by_role('button',name='Select image observation.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
         editor.locator('.modern-studio-keyframe').first.click()
         self.page.locator('#ModernAnimationViewPreview').click()
         expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
@@ -6755,6 +6774,48 @@ class ModernBrowserSmoke(unittest.TestCase):
                          'History provenance is informative, never a live dependency')
         self.assertEqual(result['count'],count,
                          'default Apply must not recreate missing source History')
+
+
+    def test_shared_image_picker_cancel_filters_and_no_browser_mutation(self):
+        self.open_modern()
+        self.page.wait_for_function("window.CurvatureModernApp?.getWorkspaceMode() === 'scene'")
+        before=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=40;c.height=30;
+            c.getContext('2d').fillRect(0,0,40,30);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Picker source.png',{type:'image/png'}),'picker-original',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            return {record:JSON.stringify((await CurvatureModernReferenceImageLibrary.get(indexedDB,record.id)).record)};
+        }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace.locator('#ModernCalibrationUsePhoto')).to_be_enabled()
+        snapshot=self.page.evaluate("""() => ({
+            count:CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow(),
+            calibration:CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()
+        })""")
+        workspace.locator('#ModernCalibrationUsePhoto').click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        picker.get_by_label('Source').select_option('demo')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(0)
+        picker.get_by_label('Source').select_option('library')
+        picker.get_by_label('Search images').fill('not-an-original')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(0)
+        picker.get_by_label('Search images').fill('Picker source')
+        expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
+        picker.get_by_role('button',name='Select image Picker source.png (Local)').click()
+        picker.get_by_role('button',name='Cancel').click()
+        expect(picker).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""() => ({
+            count:CurvatureModernPhotoCalibrationEditor.mount(document).pairWorkflow(),
+            calibration:CurvatureModernPhotoCalibrationEditor.mount(document).snapshot()
+        })"""),snapshot)
+        self.assertEqual(self.page.evaluate("""async () =>
+            JSON.stringify((await CurvatureModernReferenceImageLibrary.get(indexedDB,'picker-original')).record)"""),
+            before['record'])
+        workspace.locator('#ModernCalibrationClose').click()
 
 if __name__ == '__main__':
     unittest.main()
