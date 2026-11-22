@@ -4133,6 +4133,35 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNotNone(live_view(),
                              'imported photo must start with a fitted viewport')
         view_a=zoom_and_save(a,-490)
+        # A real Shift+drag pans the photo canvas rather than moving a
+        # correspondence marker. Pan must persist without a project switch.
+        before_pan=view_a
+        photo=workspace.locator('#ModernCalibrationPhoto')
+        bounds=photo.bounding_box()
+        self.assertIsNotNone(bounds)
+        start_x=bounds['x']+90
+        start_y=bounds['y']+90
+        self.page.keyboard.down('Shift')
+        try:
+            self.page.mouse.move(start_x,start_y)
+            self.page.mouse.down()
+            self.page.mouse.move(start_x+42,start_y+27,steps=5)
+            self.page.mouse.up()
+        finally:
+            self.page.keyboard.up('Shift')
+        panned=live_view()
+        self.assertNotEqual(panned,before_pan['view'],
+                            'dragging the canvas must change the photo position')
+        self.assertEqual(panned['scale'],before_pan['view']['scale'])
+        self.page.wait_for_function("""async ({id,revision,expected}) => {
+            const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return row.revision>revision && status.projectId===id &&
+                !status.unsaved && status.pending===0 &&
+                JSON.stringify(row.checkpoint.payload.draft.view)===JSON.stringify(expected);
+        }""",arg={'id':a,'revision':before_pan['revision'],'expected':panned},timeout=30000)
+        view_a=stored(a)
+        self.assertEqual(view_a['view'],panned)
         open_project(b)
         self.assertIsNotNone(live_view(),
                              'duplicate photo must have a valid initial viewport')
