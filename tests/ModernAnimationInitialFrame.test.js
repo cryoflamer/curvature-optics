@@ -120,8 +120,13 @@ test('resize observer requests paused-frame repaint only on actual visible width
   h.setWidth(400);h.resized();h.flush();assert.deepEqual(h.paints,[0,0]);
 });
 
-test('Prepare, restoration, Stop, Seek and workspace entry are connected to frame rendering',()=>{
-  assert.match(app,/if\(studioPlayback\)\{[\s\S]{0,165}scheduleStudioInitialPaint\('prepared'\)/);
+test('Preview-tab preparation, restoration, Stop, Seek and workspace entry are connected to frame rendering',()=>{
+  assert.match(app,/if\(view==='preview'&&animationWorkspaceOpen&&!studioPlayback&&studioApi&&studioPlaybackApi&&studioDraft\)/,
+    'an unprepared compatible draft is prepared only when Preview opens');
+  assert.match(app,/studioApi\.inspect\(studioDraft\)\.compatible/);
+  assert.match(app,/studioPlayback=studioPlaybackApi\.create\(studioPrepared\)/);
+  assert.match(app,/scheduleStudioInitialPaint\('view'\)/,
+    'the new Preview route schedules paused optical rendering');
   assert.match(app,/if\(studioPlayback&&animationWorkspaceOpen\)scheduleStudioInitialPaint\('restored'\)/);
   assert.match(app,/controls.stop\(\)/);
   assert.match(playbackControls.create.toString(),/player.stop\(\)/);
