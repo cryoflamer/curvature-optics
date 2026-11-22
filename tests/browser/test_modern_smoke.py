@@ -5445,6 +5445,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             'data-animation-id', opened_id)
         self.page.locator('#ModernAnimationViewEditor').click()
         studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-inspector-pane').get_by_role(
+            'button', name='Inspect project settings').click()
         studio.get_by_label('Project name').fill('Local project rename')
         studio.get_by_label('Project name').press('Tab')
         expect(current).to_contain_text('Unsaved working edits')
