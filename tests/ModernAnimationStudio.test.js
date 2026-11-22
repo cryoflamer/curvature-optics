@@ -157,8 +157,8 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   buttons.find(b=>b.textContent==='Choose from History').listeners.click();
   assert.equal(buttons.some(b=>b.textContent.startsWith('Load staged snapshots')),false);
   buttons.find(b=>b.textContent==='Replace with Camera Animation…').listeners.click();
-  buttons.find(b=>b.textContent==='Preview animation').listeners.click();
-  assert.deepEqual(calls,['choose','import','prepare']);
+  assert.deepEqual(calls,['choose','import']);
+  assert.equal(buttons.some(b=>b.textContent==='Preview animation'),false,'Preview navigation belongs to the workspace tab and keyframes');
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project').length,0,
     'old ambiguous action must not appear');
   assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Preview does not save')).length);
@@ -189,7 +189,7 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   assert.ok(cells.some(n=>n.textContent==='Camera · Camera height (m)'));
   assert.ok(cells.some(n=>n.textContent==='15'));
   assert.ok(cells.some(n=>n.textContent==='50'));
-  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation')[0].disabled,true);
+  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation').length,0);
 });
 
 test('Studio fields persist valid in-progress edits on input before focus leaves the field',()=>{
@@ -883,27 +883,17 @@ test('Touch pointer drag resolves drop position without relying on native HTML d
 });
 
 
-test('One Preview action shares readiness with timeline navigation and saved-link description',()=>{
+test('Editor has no redundant Preview button or readiness bar for compatible and incompatible drafts',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=50;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
-  const {doc,host}=mockDom(),calls=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{});
-  const controls=()=>collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation');
-  assert.equal(controls().length,1,'one explicit Preview from start, plus keyframe thumbnail navigation');
-  assert.equal(controls()[0].disabled,false);
-  controls()[0].listeners.click();
-  assert.deepEqual(calls,['preview']);
-  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length>=1);
-  const bars=collect(host,n=>typeof n.className==='string'&&n.className.startsWith('modern-studio-preview-bar'));
-  assert.equal(bars.length,1);
+  const {doc,host}=mockDom();
+  editor.render(doc,host,draft,studio.inspect(draft),{},true,{});
+  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation').length,0);
+  assert.equal(collect(host,n=>typeof n.className==='string'&&n.className.startsWith('modern-studio-preview-bar')).length,0);
   host.children=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{activeId:'saved-1'});
-  assert.equal(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length,1);
   const broken=studio.history([1,2],[entry(1,a),entry(2,a)]);
-  host.children=[];
-  editor.render(doc,host,broken,studio.inspect(broken),{prepare:()=>calls.push('preview')},false,{});
-  assert.deepEqual(controls().map(n=>n.disabled),[true],
-    'a blocked sequence disables explicit Preview');
+  editor.render(doc,host,broken,studio.inspect(broken),{},false,{});
+  assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation').length,0);
 });
 
 test('Preview navigation is one-shot, gesture-cancellable and respects reduced motion',()=>{

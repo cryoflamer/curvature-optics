@@ -845,6 +845,26 @@
       }
     }
     studioView=view;
+    // The Preview tab is a navigation action, not a demand to re-create an
+    // already prepared player. Prepare compatible drafts lazily on first entry.
+    // An unfinished/incompatible draft remains visible with an explanation.
+    if(view==='preview'&&animationWorkspaceOpen&&!studioPlayback&&studioApi&&studioPlaybackApi&&studioDraft){
+      try{
+        if(studioApi.inspect(studioDraft).compatible){
+          studioPrepared=studioActiveDemo?studioProjects.validate(studioActiveDemo.project):
+            studioApi.build(studioDraft,'studio_draft');
+          studioPlayback=studioPlaybackApi.create(studioPrepared);
+          studioRestorePreviewPending=true;
+          syncStudioPlaybackControls();
+          renderAnimationStudio(studioHistoryEntries);
+        }else syncStudioPlaybackControls();
+      }catch(error){
+        studioPrepared=null;studioPlayback=null;
+        syncStudioPlaybackControls();
+        var notice=newUiEl('ModernAnimationPreviewEmpty');
+        if(notice)notice.textContent='Cannot prepare animation: '+error.message;
+      }
+    }
     if(studioRouteReady&&!persistence.explicitUrl&&studioViewsApi&&studioViewsApi.navigate&&
        (routeAction==='push'||routeAction==='replace'))
       studioViewsApi.navigate(root,view,routeAction==='replace');
@@ -2573,7 +2593,12 @@
     var ready=!!(studioPrepared&&studioPlayback);
     stage.hidden=!ready;
     var empty=newUiEl('ModernAnimationPreviewEmpty');
-    if(empty)empty.hidden=ready;
+    if(empty){
+      empty.hidden=ready;
+      if(!ready)empty.textContent=studioDraft&&studioApi&&!studioApi.inspect(studioDraft).compatible?
+        'Preview unavailable: the draft needs at least two compatible keyframes. Check the Editor timeline and Project settings.':
+        'No prepared animation yet. Open a project or add compatible keyframes in Editor.';
+    }
     var camera=ready&&studioPrepared.mode==='camera';
     var interpolationLabel=newUiEl('ModernAnimationPlaybackInterpolationLabel');
     var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
@@ -4193,29 +4218,6 @@
       remove:function(key){safe(function(){studioEditing.remove(key);});},
       undo:function(){safe(function(){restoreEditHistory('undo');});},
       redo:function(){safe(function(){restoreEditHistory('redo');});},
-      prepare:function(){
-        try{
-          stopStudioPlayback(true);
-          studioPrepared=studioActiveDemo?studioProjects.validate(studioActiveDemo.project):
-            studioApi.build(studioDraft,'studio_draft');
-          studioPlayback=studioPlaybackApi?studioPlaybackApi.create(studioPrepared):null;
-          saveStudioDraft(false);
-          syncStudioPlaybackControls();
-          renderAnimationStudio(entries);
-          var status=newUiEl('ModernAnimationStudioMessage');
-          if(status){status.classList.remove('is-error');
-            status.textContent=studioPlayback?
-              (studioPrepared.mode==='camera'?'Camera':'Physical')+
-                ' preview ready above. No project was saved to Animation Library.':
-              'Independent animation playback is unavailable.';
-            if(root.CurvatureModernStatusMessage)
-              root.CurvatureModernStatusMessage.decorate(status,studioPlayback?'success':'error');}
-          if(studioPlayback){
-            setStudioView('preview',true,'push');
-            scheduleStudioInitialPaint('prepared');
-          }else if(status)status.classList.add('is-error');
-        }catch(error){report(error);}
-      },
       dragStart:function(payload,event){
         if(studioActiveDemo){if(event&&event.preventDefault)event.preventDefault();return;}
         if(payload.kind==='snapshots'&&studioDraft.contract){

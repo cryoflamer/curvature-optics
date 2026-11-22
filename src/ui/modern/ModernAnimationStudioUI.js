@@ -989,17 +989,6 @@
     }
     return Object.freeze({start:start,finish:finish,cancel:cancel,isPending:function(){return pending;}});
   }
-  function previewBar(doc,result,actions,prepared,options,atEnd){
-    var bar=el(doc,'div','modern-studio-preview-bar'+(atEnd?' is-bottom':''));
-    var preview=button(doc,'Preview animation',
-      'Prepare in-memory playback without adding a saved project',actions.prepare);
-    preview.disabled=!result.compatible;
-    bar.appendChild(preview);
-    bar.appendChild(el(doc,'span','',prepared?
-      'Preview ready above · '+(options.activeId?'Saved project linked':'Working draft; not saved to library'):
-      'Prepare the preview to play above; Save project is a separate action.'));
-    return bar;
-  }
   // Navigation only: the prepared sequence and exact arrival times belong to
   // the player. The editor below retains all draft frames and mutation controls.
   function renderStoryboard(doc,host,draft,frames,times,selectedKey,select,options){
@@ -1181,7 +1170,6 @@
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
       'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens Scene or Compare in a future stage. Excluded frames cannot be previewed. Preview does not save a project; use Library for permanent saves.'));
-    host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
     undo.className+=' modern-studio-edit-undo';undo.disabled=!options.canUndo;
