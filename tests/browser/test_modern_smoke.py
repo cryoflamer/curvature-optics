@@ -3601,9 +3601,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         caption.fill(literal)
         caption.press('Tab')
         editor.locator('.modern-studio-keyframe').nth(3).click()
+        # A hidden Preview retains the playhead, but optical painting waits
+        # until its mounted viewport becomes visible again.
+        self.page.locator('#ModernAnimationViewPreview').click()
         diag = self.page.locator('#ModernAnimationPlaybackDiagnostics')
         expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
-        self.page.locator('#ModernAnimationViewPreview').click()
         self.page.locator('#ModernAnimationPresent').click()
         narrative = self.page.locator('#ModernAnimationPresentationNarrative')
         text = self.page.locator('#ModernAnimationPresentationNarrativeText')
