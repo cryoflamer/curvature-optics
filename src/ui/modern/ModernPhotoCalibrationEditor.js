@@ -879,7 +879,9 @@
         const selected=card.dataset.calibrationProjectId===id;
         card.classList.toggle('is-selected',selected);
         card.setAttribute('aria-label',(selected?'Selected calibration: ':'Calibration: ')+
-          (card.dataset.projectTitle||'')+'. Open or double-click to edit.');
+          (card.dataset.projectTitle||'')+
+          (card.dataset.projectActive==='true'?'. Currently opened for editing.':
+            '. Open or double-click to edit.'));
       }
     }
     function projectCardControl(event,card){
@@ -1014,16 +1016,16 @@
       card.tabIndex=0;
       card.setAttribute('role','group');
       card.setAttribute('aria-label',(selected?'Selected calibration: ':'Calibration: ')+entry.title+
-        '. Open or double-click to edit.');
+        (active?'. Currently opened for editing.':'. Open or double-click to edit.'));
       card.addEventListener('click',event=>{
         if(!projectCardControl(event,card))selectProjectCard(entry.id);
       });
       card.addEventListener('dblclick',event=>{
-        if(!projectCardControl(event,card)&&!projectListBusy)void openFromProjects(entry.id);
+        if(!active&&!projectCardControl(event,card)&&!projectListBusy)void openFromProjects(entry.id);
       });
       card.addEventListener('keydown',event=>{
         if(projectCardControl(event,card))return;
-        if(event.key==='Enter'&&!projectListBusy){
+        if(event.key==='Enter'&&!projectListBusy&&!active){
           event.preventDefault();void openFromProjects(entry.id);
         }else if(event.key===' '||event.key==='Spacebar'){
           event.preventDefault();selectProjectCard(entry.id);
@@ -1088,7 +1090,9 @@
         button.onclick=event=>{event.stopPropagation();void callback(entry);};
         actions.append(button);return button;
       }
-      action(active?'Reopen':'Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
+      // The opened project is already being edited; reopening it is neither
+      // useful nor safe while its live checkpoint may be changing.
+      if(!active)action('Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
       action('Rename','calibrationProjectRename',renameFromProjects);
       action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
       card.append(actions);
@@ -1120,6 +1124,8 @@
       }
       projectsLegacy.hidden=projectInspection?.status!=='legacy-pending';
       const state=projectSession?.state();
+      if(!state?.projectId&&!projectListBusy&&projectInspection?.status!=='recovery-required')
+        projectsMessage('Current editor: standalone draft (no saved Calibration Project is open).');
       if(state?.pending>0)projectsMessage('Saving active Calibration Project…');
       else if(state?.error)projectsMessage('Save failed: '+state.error+'. Use Retry save before switching projects.',true);
       else if(state?.unsaved)projectsMessage('Active project has unsaved changes. Use Save now before switching projects.',true);
