@@ -3275,6 +3275,18 @@ class ModernBrowserSmoke(unittest.TestCase):
             panel.get_by_role('button',name='Download full backup').click()
         updated=json.loads(new_backup.value.path().read_text(encoding='utf-8'))
         self.assertEqual(updated['annotations'][0]['kind'],'diagram')
+        # Existing source rows must be idempotent when the pre-upgrade backup
+        # is reimported after v2. Restoring must not erase newer annotations.
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        panel.locator('input[accept="application/json,.json"]').set_input_files({
+            'name':'curvature-image-library-backup.json','mimeType':'application/json',
+            'buffer':backup.path().read_bytes()})
+        expect(panel.get_by_role('status')).to_contain_text('Reference Image Library ready')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
+        self.assertEqual(self.page.evaluate("""async id =>
+            (await CurvatureModernReferenceImageLibrary.get(indexedDB,id)).kind""",
+            before['row']['id']),'diagram')
         self.page.reload(wait_until='load')
         self.open_animation()
         panel.locator('summary').first.click()
