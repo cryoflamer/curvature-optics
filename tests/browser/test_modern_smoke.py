@@ -4306,6 +4306,29 @@ class ModernBrowserSmoke(unittest.TestCase):
                              'reloading a conflict must not multiply recovery drafts')
             self.assertEqual(stable.count('Stage 5 protected change A'), 1)
             self.assertEqual(stable.count('Stage 5 protected change B'), 1)
+
+            # A recovered fork remains writable after reload. A fresh edit
+            # belongs only to B's independent draft, never to A or Library.
+            other_studio = other.locator('#ModernAnimationStudio')
+            other_studio.get_by_role('button', name='Inspect project settings').click()
+            followup = other_studio.get_by_label('Project name')
+            followup.fill('Stage 5 follow-up on recovered B')
+            followup.press('Tab')
+            other.wait_for_function("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.some(w=>w.checkpoint.draft.name==='Stage 5 protected change A')
+                  && c.workspaces.some(w=>w.id.startsWith('draft_') &&
+                      w.checkpoint.draft.name==='Stage 5 follow-up on recovered B');
+            }""", timeout=30000)
+            recovered = other.evaluate("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.map(w=>w.checkpoint.draft.name);
+            }""")
+            self.assertEqual(len(recovered), count_before)
+            self.assertEqual(recovered.count('Stage 5 protected change A'), 1)
+            self.assertEqual(recovered.count('Stage 5 follow-up on recovered B'), 1)
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 protected change A')
             self.assertEqual(other_errors, [])
             self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
         finally:
@@ -4373,6 +4396,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'),
                          old_keys[199])
+        self.assertEqual(self.page.evaluate("""async () => {
+            const saved=await CurvatureModernAnimationLibrary.list(indexedDB);
+            return saved.length===1 ? saved[0].project.keyframes.length : -1;
+        }"""), 200, 'draft reordering must not mutate the original Library project')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
     def test_animation_stage5_end_to_end_narrow_history_and_state_recovery(self):
