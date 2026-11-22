@@ -25,6 +25,14 @@ test('physical target binds only its one active Scene/Compare A/B editor field',
       scope==='A'?'B':'A'),/No safe UI binding/);
   }
 });
+test('canvas drag is available only for camera Pan and Nick channels',()=>{
+  const cameraPaths=['camera.Pan','camera.Nick','camera.Height'];
+  assert.equal(locks.cameraDragAllowed(cameraPaths,'camera'),true);
+  assert.equal(locks.cameraDragAllowed(['camera.Pan'],'camera'),false);
+  assert.equal(locks.cameraDragAllowed(cameraPaths,'scene'),false);
+  assert.equal(locks.cameraDragAllowed(['scene.surface.curvature'],'scene'),false);
+  assert.equal(locks.cameraDragAllowed(['*'],'camera'),false);
+});
 test('unmapped and experimental paths fail closed',()=>{
   assert.throws(()=>locks.inputIds(['*'],'camera'),/explicit/);
   assert.throws(()=>locks.inputIds(['camera.Unknown'],'camera'),/No safe UI/);
@@ -65,10 +73,33 @@ test('lock, event capture, refresh, release preserve originally-disabled control
   }
   event(other);assert.equal(blocked,2);
   event(canvas,'wheel');assert.equal(blocked,4);
-  event(height);assert.equal(blocked,4);
+  event(canvas,'pointerdown');assert.equal(blocked,6); // Height alone cannot rotate.
+  event(height);assert.equal(blocked,6);
   other.disabled=false;guard.refresh();assert.equal(other.disabled,true);
   guard.release();
   assert.equal(height.disabled,false);
   assert.equal(other.disabled,false);assert.equal(oldDisabled.disabled,true);
   assert.equal(other.title,'normal');assert.equal(listeners.size,0);
+});
+test('camera canvas pointer events pass the capture lock, other events do not',()=>{
+  const canvas=node('','CANVAS'),other=node('ModernAtmosphere','SELECT');
+  const listeners=new Map(),workspace={querySelectorAll:()=>[other],
+    addEventListener:(type,fn)=>listeners.set(type,fn),
+    removeEventListener:type=>listeners.delete(type)};
+  const guard=locks.create(workspace,['camera.Pan','camera.Nick'],'camera');
+  assert.equal(guard.allowsCameraDrag,true);
+  let stopped=0;
+  function event(type,target=canvas){
+    listeners.get(type)({type,target,cancelable:true,
+      preventDefault(){stopped++;},stopImmediatePropagation(){stopped++;}});
+  }
+  event('pointerdown');event('mousedown');
+  assert.equal(stopped,0);
+  event('wheel');event('keydown');event('pointerdown',other);
+  assert.equal(stopped,6);
+  guard.release();
+  const physical=locks.create(workspace,['scene.surface.curvature'],'scene');
+  assert.equal(physical.allowsCameraDrag,false);
+  event('pointerdown');assert.equal(stopped,8);
+  physical.release();
 });

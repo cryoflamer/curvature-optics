@@ -37,11 +37,16 @@
     });
     return Object.freeze(result);
   }
+  function cameraDragAllowed(paths,scope){
+    return scope==='camera'&&Array.isArray(paths)&&
+      paths.includes('camera.Pan')&&paths.includes('camera.Nick');
+  }
   function create(workspace,paths,scope){
     if(!workspace||typeof workspace.querySelectorAll!=='function'||
        typeof workspace.addEventListener!=='function')
       throw TypeError('Mounted physical editor is required');
     var allowed=new Set(inputIds(paths,scope)),original=new Map(),active=true;
+    var allowsCameraDrag=cameraDragAllowed(paths,scope);
     var lockReason='Locked by the animation project contract; permitted channel: '+paths.join(', ');
     var types='input,select,textarea,button,a,[role="button"]';
     function permit(node){
@@ -75,6 +80,10 @@
       if(!active)return;
       var target=event.target;
       if(event.type==='wheel'&&!target?.closest?.('canvas'))return; // normal page scrolling
+      // Only a real camera drag reaches the canonical canvas handler; wheel,
+      // keyboard and other events remain locked until separately authorized.
+      if(allowsCameraDrag&&(event.type==='pointerdown'||event.type==='mousedown')&&
+         target?.closest?.('canvas'))return;
       if(permittedEvent(target))return;
       if(event.cancelable&&event.preventDefault)event.preventDefault();
       if(event.stopImmediatePropagation)event.stopImmediatePropagation();
@@ -84,7 +93,8 @@
       'keydown','keyup','input','change'];
     events.forEach(function(type){workspace.addEventListener(type,guard,true);});
     refresh();
-    return Object.freeze({allowedInputs:Object.freeze(Array.from(allowed)),refresh:refresh,
+    return Object.freeze({allowedInputs:Object.freeze(Array.from(allowed)),
+      allowsCameraDrag:allowsCameraDrag,refresh:refresh,
       release:function(){
         if(!active)return;
         active=false;
@@ -100,5 +110,5 @@
         original.clear();
       }});
   }
-  return Object.freeze({inputIds:inputIds,create:create});
+  return Object.freeze({inputIds:inputIds,cameraDragAllowed:cameraDragAllowed,create:create});
 }));

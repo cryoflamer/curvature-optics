@@ -4292,6 +4292,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(self.page.locator('.modern-share-actions').evaluate('(el) => el.inert'))
 
 
+    def test_animation_camera_keyframe_mouse_rotation_apply_and_cancel(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        original=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        canvas=self.page.locator('#ModernWorkspace canvas.modern-camera-draggable:visible').first
+        box=canvas.bounding_box()
+        self.assertIsNotNone(box)
+        x=box['x']+box['width']*0.5
+        y=box['y']+box['height']*0.5
+        self.page.mouse.move(x,y)
+        self.page.mouse.down()
+        self.page.mouse.move(x+min(90,box['width']*0.2),y,steps=6)
+        self.page.mouse.up()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)>0.0001',
+            arg=original)
+        expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',
+            arg=original)
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Cancel & Return').click()
+
+
     def create_physical_keyframe_project(self, scope, channel, name):
         library = self.page.locator('#ModernAnimationLibrary')
         library.get_by_text('New project', exact=True).click()

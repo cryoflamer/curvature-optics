@@ -7156,7 +7156,7 @@
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointerdown',function(event){
-      if(keyframeEditSession)return;
+      if(keyframeEditSession&&!(keyframeControlLocks&&keyframeControlLocks.allowsCameraDrag))return;
       if(event.button===1){if(event.preventDefault)event.preventDefault();return;}
       if(activeCameraPointer||(cameraPreview&&cameraPreview.isHolding())||
         event.button!==0||event.isPrimary===false||
