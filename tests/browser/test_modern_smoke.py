@@ -3511,7 +3511,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(panel.get_by_text('Download original').get_attribute('href'),
                          'data:image/png;base64,' + base64.b64encode(payload).decode())
         expect(panel.get_by_text('Delete observation', exact=True)).to_be_disabled()
-        expect(panel.get_by_text('Deletion is temporarily disabled', exact=False)).to_be_visible()
+        expect(panel.get_by_text('Deletion remains disabled.', exact=False)).to_be_visible()
+        panel.get_by_text('Check deletion safety', exact=True).click()
+        expect(panel.get_by_text('Deletion blocked.', exact=False)).to_be_visible(timeout=30000)
+        expect(panel.get_by_text('Delete observation', exact=True)).to_be_disabled()
 
 
     def test_image_library_classification_migrates_v1_with_explicit_backup(self):
