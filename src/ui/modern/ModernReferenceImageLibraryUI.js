@@ -64,19 +64,20 @@
         return imported;
       });
     });
+    async function pasteClipboardImage(){
+      if(!env.navigator.clipboard||!env.navigator.clipboard.read)
+        throw Error('Clipboard image reading is unavailable; use an image paste event or local file.');
+      var items=await env.navigator.clipboard.read(),blob=null;
+      for(var i=0;i<items.length&&!blob;i++){
+        var type=items[i].types.find(function(t){return /^image\/(png|jpeg|webp)$/.test(t);});
+        if(type)blob=await items[i].getType(type);
+      }
+      if(!blob)throw Error('Clipboard contains no supported PNG, JPEG or WebP image');
+      return ingestSource(blob,'Clipboard image');
+    }
     var paste=button('Paste image',toolbar,function(){
       if(!allowDiscard())return;
-      run(async function(){
-        if(!env.navigator.clipboard||!env.navigator.clipboard.read)
-          throw Error('Clipboard image reading is unavailable. Use Ctrl+V inside Image Library instead.');
-        var items=await env.navigator.clipboard.read(),blob=null;
-        for(var i=0;i<items.length&&!blob;i++){
-          var type=items[i].types.find(function(t){return /^image\/(png|jpeg|webp)$/.test(t);});
-          if(type)blob=await items[i].getType(type);
-        }
-        if(!blob)throw Error('Clipboard contains no supported PNG, JPEG or WebP image');
-        return ingestSource(blob,'Clipboard image');
-      });
+      run(pasteClipboardImage);
     });
     var returnToCalibration=button('Return to Calibration',toolbar,function(){
       if(busy)return;
@@ -323,6 +324,18 @@
     }
     file.addEventListener('change',function(){var chosen=file.files[0];file.value='';if(!chosen||!allowDiscard())return;
       run(function(){return ingestSource(chosen,chosen.name);});});
+    // Chromium may not dispatch a native paste event for a focused, noneditable
+    // gallery. Handle the explicit keyboard gesture as a clipboard-read action;
+    // keep the native paste event for browsers that deliver image clipboardData.
+    host.addEventListener('keydown',function(event){
+      if(busy||event.defaultPrevented||event.altKey||
+         !(event.ctrlKey||event.metaKey)||String(event.key).toLowerCase()!=='v')return;
+      var target=event.target;
+      if(target&&target.closest&&target.closest('input,textarea,[contenteditable]'))return;
+      event.preventDefault(); // Avoid a second native paste event importing twice.
+      if(!allowDiscard())return;
+      run(pasteClipboardImage);
+    });
     host.addEventListener('paste',function(event){
       if(busy||!host.open||event.defaultPrevented)return;
       var target=event.target;
