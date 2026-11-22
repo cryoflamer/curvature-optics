@@ -6997,5 +6997,31 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(r=>r.id).sort()"""),
             ['multiple_first','multiple_second'])
 
+
+    def test_image_library_built_in_demos_are_read_only_and_not_imported(self):
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        local_before=self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length""")
+        panel.get_by_label('Source',exact=True).select_option('demo')
+        expect(panel.locator('.modern-image-library-card').first).to_be_visible()
+        card=panel.locator('.modern-image-library-card').first
+        expect(card).to_contain_text('Built-in demo · read-only')
+        card.click()
+        expect(panel.locator('.modern-image-library-demo')).to_contain_text('Read-only demo original')
+        expect(panel.locator('.modern-image-library-demo img')).to_be_visible()
+        expect(panel.locator('.modern-reference-editor')).to_be_hidden()
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),
+            local_before,'Browsing shipped demo assets must never import originals')
+        panel.get_by_label('Source',exact=True).select_option('library')
+        expect(panel.locator('.modern-image-library-demo')).to_be_visible()
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),
+            local_before)
+
 if __name__ == '__main__':
     unittest.main()
