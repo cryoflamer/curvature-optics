@@ -277,6 +277,19 @@ experiment, History archive, or named Animation Library:
 - `src/animation/ModernAnimationDraftAutosave.js` owns checkpoint/collection
   formats, tab-scoped synchronous recovery keys, migration, tombstones and atomic
   IndexedDB merging. It must not render the UI or manage browser lifecycle events.
+
+Concurrent animation edits use per-workspace checkpoints, a durable IndexedDB
+baseline and explicit deletion tombstones. Two tabs changing the same project
+workspace must retain the first committed version and fork the other into an
+independent `draft_*` recovery workspace. A queued older checkpoint must never
+overwrite a newer baseline, delete an unrelated fork merely because it was
+absent from that old snapshot, or revert the selected recovery workspace.
+Only `withoutWorkspace`/`withoutDrafts` tombstones authorize deletion.
+Stage 5 regression coverage includes this stale-write ordering in
+`tests/ModernAnimationDraftAutosave.test.js` and a real two-tab Chromium
+scenario with repeated reloads in `tests/browser/test_modern_smoke.py`.
+These safeguards protect working drafts and do not rewrite saved Animation
+Library projects or History.
 - `src/animation/ModernAnimationWorkspaceRecovery.js` owns **startup ordering**:
   local and session-backup collection reads, legacy v1 migration, first-workspace
   creation, async durable reconciliation, generation-guarded late reads and
