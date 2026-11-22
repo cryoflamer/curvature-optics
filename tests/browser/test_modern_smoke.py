@@ -6681,8 +6681,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             draft: CurvatureModernApp.getAnimationStudioDraft().draft,
             model: JSON.stringify(CurvatureModernApp.getModel())
         })""")
-        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         canvas=self.page.locator('#ModernWorkspace canvas.modern-camera-draggable:visible').first
@@ -6722,8 +6722,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         original=self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
-        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         banner.get_by_role('button',name='Apply + Save to History').click()
         expect(banner).to_have_count(0,timeout=30000)
@@ -6738,8 +6738,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         count=self.page.evaluate("""async () =>
             (await CurvatureModernApp.getHistoryStore().list()).length""")
         self.assertEqual(count,saved['count']-1)
-        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
-            'button',name='Edit 04').click()
+        studio.locator('.modern-studio-filmstrip-item').nth(3).locator(
+            '.modern-studio-card-actions .modern-studio-card-icon').nth(1).click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         self.page.locator('#ModernHeight').fill(str(original+11))
