@@ -1773,6 +1773,7 @@
         env.sessionStorage?.removeItem(RELOAD_PROJECT_KEY);
       }catch(_ignored){return;}
       if(!id)return;
+      projectsMessage('Restoring last verified Calibration Project…');
       try{
         env.CurvatureModernCalibrationProject.id(id);
         const opened=await openCalibrationProject(id,{cleanReload:true});
