@@ -361,7 +361,7 @@ test('invalid or corrupted classification fails closed without changing original
   const db=memoryIndexedDB();await library.create(db,record('photo'));
   await library.enableAnnotations(db);
   const before=structuredClone(db.records.get('photo'));
-  await assert.rejects(library.setAnnotation(db,'photo',0,
+  assert.throws(()=>library.setAnnotation(db,'photo',0,
     {kind:'graph',tags:Array.from({length:21},(_,i)=>'tag'+i)}),/tags/);
   assert.equal(db.annotations.size,0);
   db.annotations.set('photo',{id:'photo',revision:1,kind:'invalid-kind',tags:[],collections:[]});
