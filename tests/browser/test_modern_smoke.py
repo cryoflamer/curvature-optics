@@ -4411,6 +4411,75 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(links).to_contain_text('Reference photographs (0)')
         self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 1)
 
+    def test_stage5_portable_photos_restore_across_independent_browser_contexts(self):
+        self.open_modern()
+        self.open_animation()
+        portable=self.page.evaluate("""async () => {
+            const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC';
+            const asset={version:1,id:'cross_browser_photo',title:'Source original',
+                author:'Browser A',original:{dataUrl:png,width:1,height:1}};
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,asset);
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.keyframes[0].referenceImageIds=[asset.id];
+            project.keyframes[1].referenceImageIds=[asset.id];
+            const entry=await CurvatureModernAnimationLibrary.create(
+                indexedDB,project,'auto',Date.now());
+            return CurvatureModernAnimationLibrary.exportPortable(
+                [entry],undefined,{referenceImages:[asset]});
+        }""")
+        # A separate BrowserContext has independent IndexedDB/localStorage,
+        # like the restored file opened in another browser profile.
+        target=self.browser.new_context(viewport={'width':1440,'height':900})
+        try:
+            other=target.new_page()
+            self.assertEqual(other.goto(self.base_url,wait_until='load').status,200)
+            other.wait_for_function('window.CurvatureModernReferenceImageLibrary != null')
+            other.evaluate("""async () => {
+                const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC';
+                await CurvatureModernReferenceImageLibrary.create(indexedDB,{
+                    version:1,id:'cross_browser_photo',title:'Existing target credit',
+                    author:'Browser B',original:{dataUrl:png,width:1,height:1}});
+            }""")
+            other.locator('#ModernAnimationTab').click()
+            imported=other.locator('#ModernAnimationLibrary')
+            imported.get_by_label('Import animation JSON file').set_input_files({
+                'name':'from-other-browser.json','mimeType':'application/json',
+                'buffer':portable.encode('utf-8')})
+            expect(imported.get_by_text('My Projects · 1',exact=True)).to_be_visible(timeout=30000)
+            result=other.evaluate("""async () => {
+                const rows=await CurvatureModernAnimationLibrary.list(indexedDB);
+                const id=rows[0].project.keyframes[0].referenceImageIds?.[0];
+                const otherId=rows[0].project.keyframes[1].referenceImageIds?.[0];
+                const linked=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+                const local=await CurvatureModernReferenceImageLibrary.get(
+                    indexedDB,'cross_browser_photo');
+                const report=await CurvatureModernImageUsageGraph.discover(window,linked);
+                const review=await CurvatureModernImageUsageGraph.deletionReview(window,linked);
+                return {id,otherId,linked:linked.record,local:local.record,
+                    count:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length,
+                    useCount:report.uses.filter(u=>u.type==='animation').length,
+                    deletionAllowed:review.safe,localScanComplete:review.localScanComplete};
+            }""")
+            self.assertEqual(result['id'],result['otherId'])
+            self.assertNotEqual(result['id'],'cross_browser_photo')
+            self.assertEqual(result['linked']['title'],'Source original')
+            self.assertEqual(result['linked']['author'],'Browser A')
+            self.assertEqual(result['local']['title'],'Existing target credit')
+            self.assertEqual(result['local']['author'],'Browser B')
+            self.assertEqual(result['linked']['original'],result['local']['original'])
+            self.assertEqual(result['count'],2)
+            self.assertEqual(result['useCount'],2)
+            self.assertFalse(result['deletionAllowed'])
+            self.assertTrue(result['localScanComplete'])
+            original=self.page.evaluate("""async () => ({
+                rows:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length,
+                saved:(await CurvatureModernAnimationLibrary.list(indexedDB)).length
+            })""")
+            self.assertEqual(original,{'rows':1,'saved':1},
+                'browser-profile restore must not mutate the source context')
+        finally:
+            target.close()
+
     def test_reference_portable_bundle_import_and_export(self):
         self.open_modern()
         self.open_animation()
