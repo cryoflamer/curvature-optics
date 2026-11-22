@@ -4345,7 +4345,28 @@ class ModernBrowserSmoke(unittest.TestCase):
             JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),before['A'])
         self.page.reload(wait_until='load')
         banner=self.page.locator('#ModernKeyframeEditBanner')
-        expect(banner).to_be_visible(timeout=30000)
+        try:
+            expect(banner).to_be_visible(timeout=12000)
+        except AssertionError:
+            diag=self.page.evaluate("""async () => {
+                const raw=sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1');
+                const saved=raw?JSON.parse(raw):null;
+                const current=CurvatureModernApp.getAnimationStudioDraft();
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const remote=saved&&c?CurvatureModernAnimationDraftAutosave.getWorkspace(
+                    c,saved.session.projectId):null;
+                const frame=current?.draft?.frames?.find(f=>f.key===saved?.session?.frameKey);
+                return {saved:!!saved,windowName:window.name,windowId:saved?.windowId,
+                    libraryId:saved?.libraryId,projectId:saved?.session?.projectId,
+                    activeId:c?.activeId,
+                    current:current?.draft?.name,
+                    draftEqual:JSON.stringify(current?.draft)===saved?.draftAtEntry,
+                    remoteEqual:JSON.stringify(remote?.draft)===saved?.draftAtEntry,
+                    frameEqual:JSON.stringify(frame?.experiment)===JSON.stringify(saved?.session?.original),
+                    message:document.getElementById('ModernAnimationDraftStatus')?.textContent,
+                    appMode:CurvatureModernApp.getWorkspaceMode()};
+            }""")
+            self.fail('Physical B recovery not visible: '+str(diag))
         expect(banner).to_contain_text('Recovered unsaved keyframe edits')
         self.assertEqual(self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),edited)
@@ -4376,6 +4397,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 notice:document.querySelector('.modern-keyframe-edit-hint')?.textContent};
         }""")
         self.assertIsNotNone(token['session'],'No F5 checkpoint: '+str(token))
+        self.assertTrue(token['window'],'Original browser window requires a stable identity')
         with self.page.expect_popup() as info:
             self.page.evaluate("window.open(location.href,'_blank')")
         popup=info.value
