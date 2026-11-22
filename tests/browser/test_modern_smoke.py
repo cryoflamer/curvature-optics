@@ -3965,7 +3965,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(stale).to_be_visible(timeout=30000)
             initial=self.page.evaluate("""async id => {
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
-                return c.workspaces.find(w=>w.id===id).checkpoint.savedAt;
+                const checkpoint=c.workspaces.find(w=>w.id===id).checkpoint;
+                return {savedAt:checkpoint.savedAt,
+                    content:JSON.stringify(checkpoint.draft),name:checkpoint.draft.name};
             }""",workspace)
 
             # Tab B changes the real shared workspace and commits to IndexedDB.
@@ -3980,9 +3982,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             """,arg=workspace,timeout=30000)
             changed=self.page.evaluate("""async id => {
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
-                return c.workspaces.find(w=>w.id===id).checkpoint.savedAt;
+                const checkpoint=c.workspaces.find(w=>w.id===id).checkpoint;
+                return {savedAt:checkpoint.savedAt,
+                    content:JSON.stringify(checkpoint.draft),name:checkpoint.draft.name};
             }""",workspace)
-            self.assertGreaterEqual(changed,initial)
+            self.assertEqual(changed['name'],'Tab B photo edits')
+            self.assertNotEqual(changed['content'],initial['content'],
+                'Concurrent drafts must be compared by content, not only timestamp')
+            self.assertGreaterEqual(changed['savedAt'],initial['savedAt'])
             # A matching timestamp alone is not proof that the indexed
             # checkpoint still has the same content.
             stale.click()
