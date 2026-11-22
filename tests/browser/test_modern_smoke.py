@@ -916,7 +916,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             window.__calibrationQuotaPut=original;
             window.__calibrationQuotaHits=0;
             IDBObjectStore.prototype.put=function(...args){
-                if(this.name==='project-summaries' && !window.__calibrationQuotaHits++){
+                if(this.name==='project-summaries'){
+                    window.__calibrationQuotaHits++;
+                    // Stage changes can queue more than one autosave.
+                    // Keep failing until the test explicitly restores IDB.
                     throw new DOMException('Injected quota exhaustion','QuotaExceededError');
                 }
                 return original.apply(this,args);
