@@ -4214,7 +4214,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace=self.open_physical_calibration()
         panel=workspace.locator('#ModernCalibrationProjectsPanel')
         toggle=workspace.locator('#ModernCalibrationProjectsToggle')
-        self.page.locator('#ModernPhotoCalibrationClose').click()
+        workspace.locator('#ModernCalibrationClose').click()
         self.page.locator('#ModernRender').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
