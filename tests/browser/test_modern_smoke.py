@@ -4515,7 +4515,27 @@ class ModernBrowserSmoke(unittest.TestCase):
             }""",arg=workspace_id,timeout=30000)
 
             banner=self.page.locator('#ModernKeyframeEditBanner')
+            self.assertEqual(banner.get_attribute('data-workspace-id'),workspace_id,
+                             'temporary keyframe editor must share the edited workspace')
+            remote_before=self.page.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                const w=c.workspaces.find(w=>w.id===id);
+                return {id,remoteName:w?.checkpoint?.draft?.name,
+                    localName:CurvatureModernApp.getAnimationStudioDraft().draft.name};
+            }""",workspace_id)
+            self.assertEqual(remote_before['remoteName'],'Competing tab project edit')
+            self.assertNotEqual(remote_before['localName'],remote_before['remoteName'])
             banner.get_by_role('button',name='Apply & Return').click()
+            self.page.wait_for_timeout(1100)
+            if banner.count()==0:
+                after=self.page.evaluate("""async id => {
+                    const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                    return {remoteName:c.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name,
+                        localName:CurvatureModernApp.getAnimationStudioDraft().draft.name,
+                        currentView:CurvatureModernApp.getAnimationStudioView()};
+                }""",workspace_id)
+                self.fail('Stale keyframe Apply unexpectedly returned: '+str({
+                    'before':remote_before,'after':after}))
             expect(banner).to_contain_text('Apply blocked',timeout=30000)
             expect(banner).to_contain_text('changed in another tab')
             self.assertEqual(self.page.evaluate("""() =>

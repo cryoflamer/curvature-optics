@@ -4174,6 +4174,7 @@
     var banner=document.createElement('section');
     banner.id='ModernKeyframeEditBanner';banner.className='modern-keyframe-edit-banner';
     banner.setAttribute('aria-label','Temporary keyframe editor');
+    banner.setAttribute('data-workspace-id',session.projectId);
     var title=document.createElement('strong');
     title.textContent='Editing keyframe · '+frame.name;banner.appendChild(title);
     var explanation=document.createElement('p');

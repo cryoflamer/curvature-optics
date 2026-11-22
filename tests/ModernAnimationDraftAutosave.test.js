@@ -42,7 +42,9 @@ function memoryIndexedDB(){
           const done=()=>queueMicrotask(()=>tx.oncomplete&&tx.oncomplete());
           tx.objectStore=()=>({
             get(key){const op={result:undefined};queueMicrotask(()=>{
-              op.result=records.get(key);done();});return op;},
+              op.result=records.get(key);
+              if(typeof op.onsuccess==='function')op.onsuccess();
+              done();});return op;},
             put(value,key){assert.equal(mode,'readwrite');records.set(key,structuredClone(value));done();},
           });return tx;
         }};
