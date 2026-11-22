@@ -8657,7 +8657,12 @@
       }
       var editor=root.CurvatureModernPhotoCalibrationEditor&&root.CurvatureModernPhotoCalibrationEditor.mount(document);
       if(startupMode!=='calibration')restoreWorkspace();
-      if(allowStudioRoute)setStudioView(initialStudioRoute,false);
+      if(allowStudioRoute||
+         (startupMode==='images'&&initialStudioRoute&&historyEntry&&
+          historyEntry[WORKSPACE_ENTRY_KEY]==='images'))
+        // Keep the prior Studio subview ready behind the gallery, without
+        // allowing its URL route to override the chosen top-level workspace.
+        setStudioView(initialStudioRoute,false);
       studioRouteReady=true;
       tryResumeKeyframeRecovery();
       Promise.resolve(editor&&editor.restore()).then(function(){
