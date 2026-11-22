@@ -8733,12 +8733,15 @@
       if(!tab)throw Error('Animation workspace unavailable');
       tab.click();
       if(currentWorkspaceMode()!=='animation')throw Error('Animation workspace navigation blocked');
-      // Opening the currently active project again would unnecessarily ask
-      // to replace its unsaved working draft. Reuse that exact owner instead.
-      if(!studioLibraryActive||studioLibraryActive.id!==id)
+      // The switch coordinator intentionally short-circuits when the named
+      // project's workspace is already active. A pending local draft may be
+      // detached from its saved revision; selecting its exact frame is safe
+      // without overwriting that draft or re-opening the project.
+      var sameWorkspace=studioWorkspaceId===studioDraftAutosave.projectWorkspaceId(id);
+      if(!sameWorkspace&&(!studioLibraryActive||studioLibraryActive.id!==id))
         await requestStudioSwitch('open',id);
-      if(!studioLibraryActive||studioLibraryActive.id!==id)
-        throw Error('Animation switch was cancelled or blocked');
+      if(!sameWorkspace&&(!studioLibraryActive||studioLibraryActive.id!==id))
+        throw Error('Animation switch was cancelled or blocked; refresh the saved projects');
       if(frameKey!==null&&frameKey!==undefined){
         if(!studioDraft.frames.some(function(f){return f.key===frameKey;}))
           throw Error('Keyframe changed during animation switch');
