@@ -3277,6 +3277,28 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel.get_by_role('button',name='Return to Storyboard')).to_be_hidden()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_tab_survives_stale_studio_subview_route_on_reload(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Library reload from Studio route')
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate("""() =>
+            new URL(location.href).searchParams.get('studioView')"""),'editor')
+        self.open_image_library()
+        # Opening the independent workspace must win over the old subview
+        # route in this history entry without changing the user-facing URL.
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.page.locator('#ModernAnimationTab').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_direct_url_import_reuses_verified_original(self):
         self.open_modern()
         self.open_image_library()
