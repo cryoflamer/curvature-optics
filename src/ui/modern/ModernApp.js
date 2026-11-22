@@ -4215,8 +4215,8 @@
     var explanation=document.createElement('p');
     explanation.className='modern-keyframe-edit-hint';
     explanation.textContent='Only '+(studioDraft.contract.mode==='camera'?
-      'camera controls':'the selected physical channel')+
-      ' can change · Apply updates this keyframe only';
+      'camera controls':'the contracted model and physical channel')+
+      ' can change · A/B switches view only · Apply updates this keyframe only';
     banner.appendChild(explanation);
     var actions=document.createElement('div');
     actions.className='modern-keyframe-edit-actions';
@@ -6143,6 +6143,7 @@
       tab.classList.toggle('is-active',active);
       tab.setAttribute('aria-pressed',String(active));
     });
+    refreshKeyframeLocks();
     var pairPreset=el('ModernPairPreset');if(pairPreset){showLegacyOption('ModernPairPreset',state.compareConfig.preset);pairPreset.value=state.compareConfig.preset;}
     showLegacyOption('ModernModelAtmosphere',spec.atmosphere);
     renderAtmosphereDescription('ModernModelAtmosphereInfo',spec.atmosphere);
@@ -6215,7 +6216,12 @@
       var tab=el('ModernModelTab'+side);if(tab)tab.addEventListener('click',function(){
         // Do not leave a changed slider paired with the previous model's image.
         if(state.curvaturePending)redraw();
-        cancelEdits();state.compareSelected=side;workspaceState.compareModel=side;
+        cancelEdits();state.compareSelected=side;
+        if(keyframeEditSession){
+          // Inspect either model without persisting a transient tab choice.
+          syncCompareEditor();return;
+        }
+        workspaceState.compareModel=side;
         syncCompareEditor();saveApplicationPreferences();scheduleExperimentSave();
       });
     });

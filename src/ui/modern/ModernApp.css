@@ -1733,6 +1733,26 @@ body.modern-keyframe-edit-active .modern-primary-button:not(:disabled){
 body.modern-keyframe-edit-active .modern-primary-button:hover:not(:disabled){
   background:#60409d
 }
+/* Disabled contract controls must look and feel disabled, even when the
+ * underlying Modern component normally has a strong active-button style. */
+body.modern-keyframe-edit-active #ModernWorkspace :is(button,select,input,textarea):disabled{
+  opacity:.42;cursor:not-allowed;filter:saturate(.5)
+}
+body.modern-keyframe-edit-active #ModernWorkspace :is(button,select,input,textarea):not(:disabled){
+  cursor:pointer
+}
+body.modern-keyframe-edit-active #ModernWorkspace input:not(:disabled):is([type=number],[type=text]){
+  cursor:text
+}
+body.modern-keyframe-edit-active #ModernWorkspace button:disabled:hover{
+  box-shadow:none;transform:none
+}
+body.modern-keyframe-edit-active :is(.modern-tabs,.modern-share-actions,#ModernHistoryPanel)[inert]{
+  opacity:.45;cursor:not-allowed
+}
+body.modern-keyframe-edit-active :is(.modern-tabs,.modern-share-actions,#ModernHistoryPanel)[inert] *{
+  cursor:not-allowed
+}
 .modern-keyframe-edit-banner{
   display:flex;align-items:center;flex-wrap:wrap;gap:10px;
   padding:10px 16px;border:1px solid #a994d0;border-left:4px solid #7454b8;

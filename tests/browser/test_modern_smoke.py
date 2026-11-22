@@ -4293,10 +4293,20 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
         for locked in ['ModernModelRadius','ModernModelCurvature','ModernAtmosphere',
-                       'ModernViewAngle','ModernCameraAim','ModernModelTabA',
-                       'ModernModelTabB','ModernResetPreset','ModernRender']:
+                       'ModernViewAngle','ModernCameraAim',
+                       'ModernResetPreset','ModernRender']:
             expect(self.page.locator('#'+locked)).to_be_disabled()
+        expect(self.page.locator('#ModernModelTabA')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabB')).to_be_enabled()
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelTabA')).to_have_attribute('aria-pressed','true')
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelTabB')).to_have_attribute('aria-pressed','true')
         expect(self.page.locator('#ModernPan')).to_be_enabled()
+        self.assertEqual(self.page.locator('#ModernRender').evaluate(
+            'el => getComputedStyle(el).cursor'),'not-allowed')
+        self.assertLess(float(self.page.locator('#ModernRender').evaluate(
+            'el => getComputedStyle(el).opacity')),0.8)
         pan=self.page.evaluate('CurvatureModernApp.getModel().Pan')
         # A disallowed programmatic DOM event must not bypass delegated locking.
         self.page.evaluate("""() => {
@@ -4401,14 +4411,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_animation()
         self.create_physical_keyframe_project('A','Earth curvature','CI Compare A curvature')
         expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
-        expect(self.page.locator('#ModernModelTabA')).to_be_disabled()
-        expect(self.page.locator('#ModernModelTabB')).to_be_disabled()
+        expect(self.page.locator('#ModernModelTabA')).to_be_enabled()
+        expect(self.page.locator('#ModernModelTabB')).to_be_enabled()
         expect(self.page.locator('#ModernHeight')).to_be_disabled()
         expect(self.page.locator('#ModernTemperatureCompareGradient')).to_be_disabled()
         prior = self.page.evaluate("""() => ({
             A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
             B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
         })""")
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_disabled()
+        self.assertEqual(self.page.locator('#ModernModelCurvature').evaluate(
+            'el => getComputedStyle(el).cursor'),'not-allowed')
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),prior['B'])
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
         self.page.locator('#ModernModelCurvature').evaluate("""el => {
             el.value='235';
             el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
@@ -4434,6 +4455,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
             B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
         })""")
+        self.page.locator('#ModernModelTabA').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_disabled()
+        self.page.locator('#ModernModelCurvature').evaluate("""el => {
+            el.value='235';el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),prior['A'])
+        self.page.locator('#ModernModelTabB').click()
+        expect(self.page.locator('#ModernModelCurvature')).to_be_enabled()
         self.page.locator('#ModernModelCurvature').evaluate("""el => {
             el.value='235';
             el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));

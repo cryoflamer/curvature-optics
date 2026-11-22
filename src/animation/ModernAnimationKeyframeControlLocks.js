@@ -61,7 +61,16 @@
     function permit(node){
       if(!node)return false;
       if(node.classList&&node.classList.contains('modern-settings-tab'))return true;
-      return allowed.has(node.id)&&['INPUT','SELECT','TEXTAREA'].includes(node.tagName);
+      // Model selection is navigation, never a physical mutation.
+      if(node.id==='ModernModelTabA'||node.id==='ModernModelTabB')return true;
+      if(!allowed.has(node.id)||!['INPUT','SELECT','TEXTAREA'].includes(node.tagName))return false;
+      // Compare A/B share controls. The non-contract model is read-only,
+      // including synthetic events that bypass native disabled handling.
+      if(scope==='A'||scope==='B'){
+        var tab=workspace.querySelector('#ModernModelTab'+scope);
+        if(!tab||tab.getAttribute('aria-pressed')!=='true')return false;
+      }
+      return true;
     }
     function refresh(){
       if(!active)return;
@@ -74,6 +83,12 @@
         if(!editable){
           node.title=lockReason;
           if(node.setAttribute)node.setAttribute('aria-description',lockReason);
+        }else{
+          node.title=old.title;
+          if(node.setAttribute&&node.removeAttribute){
+            if(old.aria===null||old.aria===undefined)node.removeAttribute('aria-description');
+            else node.setAttribute('aria-description',old.aria);
+          }
         }
       });
     }
@@ -81,7 +96,10 @@
       if(!target||typeof target.closest!=='function')return false;
       if(target.closest('.modern-settings-tab,summary'))return true;
       var label=target.closest('label[for]');
-      if(label&&allowed.has(label.htmlFor))return true;
+      if(label){
+        var labeled=workspace.querySelector('#'+label.htmlFor);
+        if(labeled&&permit(labeled)&&!labeled.disabled)return true;
+      }
       var control=target.closest('input,select,textarea,button,a,[role="button"]');
       return !!(control&&permit(control)&&!control.disabled);
     }
