@@ -766,6 +766,9 @@ button{cursor:pointer}
 .modern-studio-filmstrip{display:flex;gap:9px;list-style:none;padding:3px 2px 10px;
   margin:10px 0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .modern-studio-filmstrip-item{flex:0 0 160px;min-width:0}
+.modern-studio-card-actions{display:flex;gap:5px;width:100%}
+.modern-studio-card-actions button{flex:1;min-width:0;border:1px solid #bad0e4;border-radius:6px;background:#f2f7fc;color:#24547e;padding:5px 4px;font-size:11px}
+.modern-studio-card-actions button:focus-visible{outline:2px solid #287bbd;outline-offset:2px}
 .modern-studio-keyframe{display:flex;flex-direction:column;gap:5px;width:100%;min-height:150px;
   padding:5px;text-align:left;background:#f8fbff;border:1px solid #d5e2ef;border-radius:8px;
   color:#234867;cursor:pointer}

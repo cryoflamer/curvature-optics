@@ -4163,6 +4163,26 @@
         }catch(error){/* Do not persist incomplete or invalid intermediate numbers. */}
       },
       select:selectKeyframe,
+      previewFrame:function(key){
+        if(!studioApi.activeFrames(studioDraft).some(function(frame){return frame.key===key;})){
+          report(Error('This keyframe is excluded from the preview sequence. Use Project settings to change the sequence.'));
+          return;
+        }
+        try{
+          studioEditing.select(key);
+          if(navigateStudioKeyframe(key,false))renderAnimationStudio(entries);
+          setStudioView('preview',true,'push');
+        }catch(error){report(error);}
+      },
+      editKeyframe:function(key){
+        var frame=studioDraft.frames.find(function(item){return item.key===key;});
+        if(!frame)return;
+        var message=newUiEl('ModernAnimationStudioMessage');
+        if(message){message.classList.remove('is-error');
+          message.textContent='Edit for '+frame.name+' is coming soon. Scene/Compare editing is tracked in Issue #25.';
+          if(root.CurvatureModernStatusMessage)
+            root.CurvatureModernStatusMessage.decorate(message,'info');}
+      },
       focusTransition:function(index){
         if(!studioEditing.focusTransition(index))return;
         var chosen=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-transition-to');

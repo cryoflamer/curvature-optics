@@ -3913,6 +3913,29 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_animation_timeline_thumbnail_opens_preview_at_frame_and_edit_is_stub(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        library.locator('[data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        timeline = studio.locator('.modern-studio-keyframe')
+        expect(timeline).to_have_count(9)
+        expect(studio.get_by_role('button', name='Preview animation', exact=True)).to_have_count(1)
+        controls = studio.locator('.modern-studio-card-actions').nth(3)
+        controls.get_by_text('Edit', exact=True).click()
+        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        timeline.nth(3).click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs > 0')
+        position = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+        self.assertGreater(position, 0)
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
         self.open_animation()
@@ -3954,7 +3977,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             return {timelineTop:t.top,inspectorTop:i.top};
         }""")
         self.assertGreater(narrow['inspectorTop'], narrow['timelineTop'])
-        strip.nth(1).click()
+        studio.locator('.modern-studio-card-actions').nth(1).get_by_text('Properties').click()
         expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
         expect(strip.nth(1)).to_have_attribute('aria-pressed', 'true')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)

@@ -1180,7 +1180,7 @@
       return;
     }
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Select a timeline keyframe to edit it in the Inspector. Preview does not save a project; use Library for permanent saves. Changes never alter the live experiment.'));
+      'Click a keyframe to open Preview at its arrival time. Properties edits animation settings; Edit opens Scene or Compare in a future stage. Excluded frames cannot be previewed.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
@@ -1300,20 +1300,6 @@
       disclosure.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
     }
 
-    if(selected){
-      var previewEntry=frameEntry(selected,entries,options.resolveFrame);
-      var preview=el(doc,'section','modern-studio-preview');
-      preview.setAttribute('aria-label','Selected saved keyframe preview');
-      var previewVisual=snapshotPresentation.frameVisual(doc,previewEntry,'modern-studio-preview-visual');
-      preview.appendChild(previewVisual);
-      var previewCaption=el(doc,'div','modern-studio-preview-caption');
-      previewCaption.appendChild(el(doc,'strong','',selected.name));
-      previewCaption.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(previewEntry)));
-      previewCaption.appendChild(el(doc,'small','',
-        'Keyframe thumbnail · use the independent optical viewport above to play a prepared project.'));
-      preview.appendChild(previewCaption);framePane.appendChild(preview);
-    }
-
     // Inclusion in the playback sequence and selection for editing are separate states.
     // State labels deliberately do not depend on thumbnail opacity or color alone.
     if(draft.activeFrameKeys){
@@ -1337,11 +1323,11 @@
       var entry=frameEntry(frame,entries,options.resolveFrame),item=el(doc,'li','modern-studio-filmstrip-item');
       var hasSelection=Array.isArray(draft.activeFrameKeys);
       var inPreview=!hasSelection||draft.activeFrameKeys.includes(frame.key);
-      var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name+
+      var pick=button(doc,'','Preview animation frame '+(i+1)+': '+frame.name+
         (hasSelection?(inPreview?' (in preview)':' (excluded from preview)'):'')+
-        (frame===selected?' (currently editing)':''),function(){
-        host.__studioInspectorMode='frame';
-        if(actions.select)actions.select(frame.key);
+        (frame===selected?' (selected)':''),function(){
+        if(actions.previewFrame)actions.previewFrame(frame.key);
+        else if(actions.select)actions.select(frame.key);
       });
       pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'')+
         (hasSelection?(inPreview?' is-in-sequence':' is-outside-sequence'):'')+
@@ -1350,13 +1336,22 @@
       pick.setAttribute('aria-pressed',String(frame===selected));
       if(hasSelection)pick.appendChild(el(doc,'span','modern-studio-sequence-status'+
         (inPreview?' is-included':' is-excluded'),inPreview?'✓ IN PREVIEW':'− EXCLUDED'));
-      if(frame===selected&&hasSelection)pick.appendChild(el(doc,'span','modern-studio-editing-status','EDITING'));
+      if(frame===selected&&hasSelection)pick.appendChild(el(doc,'span','modern-studio-editing-status','SELECTED'));
+      pick.title=inPreview?'Open Preview at this keyframe':'Excluded from the active preview sequence';
       pick.appendChild(snapshotPresentation.frameVisual(doc,entry,'modern-studio-keyframe-visual'));
       var name=el(doc,'strong','modern-studio-keyframe-name',(i+1)+'. '+frame.name);
       name.title=frame.name;pick.appendChild(name);
       var summary=el(doc,'small','modern-studio-keyframe-summary',snapshotPresentation.frameSummary(entry));
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
+      var frameActions=el(doc,'div','modern-studio-card-actions');
+      frameActions.appendChild(button(doc,'Properties','Edit animation properties for '+frame.name,function(){
+        host.__studioInspectorMode='frame';if(actions.select)actions.select(frame.key);
+      }));
+      frameActions.appendChild(button(doc,'Edit','Edit '+frame.name+' in Scene or Compare (coming soon)',function(){
+        if(actions.editKeyframe)actions.editKeyframe(frame.key);
+      }));
+      item.appendChild(frameActions);
       if(inspector)inspector.infoButton(item,{name:frame.name,description:'Animation keyframe '+(i+1),
         experiment:frame.experiment,thumbnail:entry.thumbnail,
         source:'Animation Studio',createdAt:entry.createdAt},item,frame.name);
@@ -1434,9 +1429,8 @@
       renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage);
       framePane.appendChild(panel);
     }
-    timelinePane.appendChild(previewBar(doc,result,actions,prepared,options,true));
     timelinePane.appendChild(el(doc,'p','modern-studio-hint',
-      'Preview opens playback in its own view; return to Editor to continue editing. '+
+      'Click a timeline thumbnail for playback at that frame; return to Editor for Properties. '+
       'PNG/video export is in Preview, permanent project saves are in Library.'));
     showInspector(host.__studioInspectorMode);
   }

@@ -287,15 +287,31 @@ test('Studio thumbnail filmstrip uses saved History images, selected-only contro
   assert.deepEqual(calls.at(-1),['select','history-1']);
   assert.deepEqual([draft,saved],before,'visuals never modify source records or drafts');
   const previews=collect(host,n=>n.className==='modern-studio-preview');
-  assert.equal(previews.length,1);
-  assert.equal(collect(previews[0],n=>n.tagName==='img')[0].src,image);
+  assert.equal(previews.length,0,'Inspector no longer duplicates the thumbnail shown in the timeline');
   const imported=studio.importCamera(a,sequence.validate([
     {name:'Low',camera:a.scene.camera,travelMs:0,holdMs:0,easing:'linear'},
     {name:'High',camera:b.scene.camera,travelMs:1000,holdMs:0,easing:'linear'}]));
   host.children=[];
   editor.render(doc,host,imported,studio.inspect(imported),actions,false,{entries:saved});
   const placeholders=collect(host,n=>n.className==='modern-storyboard-no-image');
-  assert.equal(placeholders.length,3,'imported camera views, including selected preview, do not borrow unrelated History screenshots');
+  assert.equal(placeholders.length,2,'timeline camera views do not borrow unrelated History screenshots');
+});
+
+test('Timeline thumbnail Preview, Properties and Edit remain distinct and Edit is a stub',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=42;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),calls=[];
+  editor.render(doc,host,draft,studio.inspect(draft),{
+    previewFrame:key=>calls.push(['preview',key]),
+    select:key=>calls.push(['properties',key]),
+    editKeyframe:key=>calls.push(['edit-stub',key])
+  },false,{selectedKey:'history-1'});
+  const items=collect(host,n=>n.className==='modern-studio-filmstrip-item');
+  items[1].children[0].listeners.click();
+  const controls=collect(items[1],n=>n.className==='modern-studio-card-actions')[0].children;
+  assert.deepEqual(controls.map(c=>c.textContent),['Properties','Edit']);
+  controls[0].listeners.click();controls[1].listeners.click();
+  assert.deepEqual(calls,[['preview','history-2'],['properties','history-2'],['edit-stub','history-2']]);
 });
 
 test('Keyframe card × removes its own frame without selecting, dragging or touching History',()=>{
@@ -867,30 +883,27 @@ test('Touch pointer drag resolves drop position without relying on native HTML d
 });
 
 
-test('Both Preview controls share the same action, disabled state, and saved-link description',()=>{
+test('One Preview action shares readiness with timeline navigation and saved-link description',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=50;
   const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
   const {doc,host}=mockDom(),calls=[];
   editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{});
   const controls=()=>collect(host,n=>n.tagName==='button'&&n.textContent==='Preview animation');
-  assert.equal(controls().length,2,'Preview is available above and below the keyframe editor');
-  assert.equal(controls()[0].disabled,false);assert.equal(controls()[1].disabled,false);
-  controls()[0].listeners.click();controls()[1].listeners.click();
-  assert.deepEqual(calls,['preview','preview'],'both buttons invoke the same preparation action');
-  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length>=2);
+  assert.equal(controls().length,1,'one explicit Preview from start, plus keyframe thumbnail navigation');
+  assert.equal(controls()[0].disabled,false);
+  controls()[0].listeners.click();
+  assert.deepEqual(calls,['preview']);
+  assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length>=1);
   const bars=collect(host,n=>typeof n.className==='string'&&n.className.startsWith('modern-studio-preview-bar'));
-  assert.equal(bars.length,2);
-  const timeline=collect(host,n=>n.className==='modern-studio-timeline-pane')[0];
-  assert.equal(timeline.children[timeline.children.length-2],bars[1],
-    'bottom Preview remains adjacent to the timeline instead of behind project settings');
+  assert.equal(bars.length,1);
   host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{activeId:'saved-1'});
-  assert.equal(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length,2);
+  assert.equal(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length,1);
   const broken=studio.history([1,2],[entry(1,a),entry(2,a)]);
   host.children=[];
   editor.render(doc,host,broken,studio.inspect(broken),{prepare:()=>calls.push('preview')},false,{});
-  assert.deepEqual(controls().map(n=>n.disabled),[true,true],
-    'a blocked sequence disables both duplicate controls');
+  assert.deepEqual(controls().map(n=>n.disabled),[true],
+    'a blocked sequence disables explicit Preview');
 });
 
 test('Preview navigation is one-shot, gesture-cancellable and respects reduced motion',()=>{
