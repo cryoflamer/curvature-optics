@@ -4771,6 +4771,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewEditor').click()
         expect(timeline).to_be_visible()
         expect(timeline.locator('.modern-studio-keyframe').nth(2)).to_have_attribute('aria-pressed', 'true')
+        # Choosing a different frame resets Inspector to its selected-frame
+        # context. Project settings remain an explicit accessible mode.
+        expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        inspector.get_by_role('button', name='Inspect project settings').click()
         expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
         name = editor.get_by_label('Project name')
         name.fill('Soundly navigation check')
@@ -4795,7 +4799,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationPresentationTitle')).to_contain_text('Soundly')
         expect(self.page.locator('#ModernAnimationPlaybackOptics')).not_to_be_visible()
         expect(self.page.locator('#ModernAnimationPlaybackQuality')).to_be_visible()
-        self.assertTrue(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
+        # Presentation isolates the stage by marking its ancestor-path
+        # siblings inert, not each descendant of those blocked panels.
+        self.assertTrue(self.page.locator('#ModernAnimationLibrary').evaluate(
+            '(el) => !!el.closest("[inert]")'))
         story = self.page.locator('#ModernAnimationStoryboard')
         cards = story.locator('.modern-animation-storyboard-card')
         settings = self.page.locator('#ModernAnimationPresentationSettingsToggle')
@@ -4844,7 +4851,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(stage).not_to_have_class(re.compile('is-presenting'))
         self.assert_preview_fills_panels()
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
-        self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate('(el) => el.inert'))
+        self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate(
+            '(el) => !!el.closest("[inert]")'))
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
         expect(story.get_by_role('button', name='Export without thumbnails', exact=True)).to_be_visible()
         expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
@@ -4900,7 +4908,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         demo.get_by_text('Create copy', exact=True).click()
         editor = self.page.locator('#ModernAnimationStudio')
         expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
-        editor.locator('.modern-studio-keyframe').nth(3).click()
+        # A timeline thumbnail navigates to Preview. Open the fourth
+        # keyframe's Properties to edit its narrative in the Inspector.
+        editor.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Properties for').click()
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         heading = editor.get_by_label('Presentation title (optional)')
         heading.fill('Real observation')
         heading.press('Tab')
@@ -6674,10 +6686,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
         demo.get_by_text('Create copy', exact=True).click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        # Scroll preservation is observable only when the strip overflows.
+        # Constrain the viewport rather than expecting a desktop-wide
+        # nine-keyframe strip to have a nonzero scroll offset.
+        self.page.set_viewport_size({'width': 900, 'height': 900})
         studio = self.page.locator('#ModernAnimationStudio')
         strip = studio.locator('.modern-studio-filmstrip')
         cards = strip.locator('.modern-studio-keyframe')
         expect(cards).to_have_count(9)
+        self.assertGreater(strip.evaluate('(el) => el.scrollWidth'),
+                           strip.evaluate('(el) => el.clientWidth'),
+                           'the filmstrip must overflow in this scroll regression')
         cards.nth(4).click()
         original = self.page.evaluate(
             'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
