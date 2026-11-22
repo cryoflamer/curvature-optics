@@ -2413,7 +2413,13 @@
     }
     return studioPersistenceCoordinator.persist(settings);
   }
-  function writeStudioDraftIndexedDB(){return persistStudioWorkspace();}
+  function writeStudioDraftIndexedDB(){
+    // A temporary Scene/Compare keyframe is not a Studio draft edit. In
+    // particular, visibilitychange and pagehide must not replay this tab's
+    // old project checkpoint over a newer sibling-tab edit.
+    if(keyframeEditSession)return Promise.resolve(false);
+    return persistStudioWorkspace();
+  }
   function dropStudioWorkspace(id){
     if(!studioWorkspaces||id===studioWorkspaceId)return;
     // Invalidate any earlier asynchronous write snapshot before removing a
@@ -2430,6 +2436,7 @@
     studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
   }
   function saveStudioDraft(throttled){
+    if(keyframeEditSession)return studioWorkspaceLocalSaved;
     if(studioActiveDemo)return true; // runtime playback must never checkpoint a demo
     if(!studioDraftAutosave||!studioDraft||!studioWorkspaceReady)return false;
     var now=Date.now();
@@ -4166,6 +4173,11 @@
     // Checkpoint the normal working experiment before replacing its in-memory
     // physical model, and never allow temporary state to enter persistence.
     flushWorkingSession(false);cancelHistoryAuto();cancelPending();cancelEdits();
+    // The pre-session synchronous backup already owns this draft. Do not
+    // allow an old debounce timer to write it while another tab is editing.
+    if(studioDraftSaveTimer!==null){
+      clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;
+    }
     var physical=newUiEl('ModernWorkspace');
     if(!physical||!physical.parentNode)throw Error('Scene/Compare workspace is unavailable');
     var session=keyframeEditApi.begin({projectId:studioWorkspaceId||'working-draft',

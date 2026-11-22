@@ -4513,6 +4513,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 return c?.workspaces.some(w=>w.id===id &&
                     w.checkpoint.draft.name==='Competing tab project edit');
             }""",arg=workspace_id,timeout=30000)
+            other.wait_for_timeout(700)  # flush stale debounces before comparing
 
             banner=self.page.locator('#ModernKeyframeEditBanner')
             self.assertEqual(banner.get_attribute('data-workspace-id'),workspace_id,
@@ -4523,7 +4524,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 return {id,remoteName:w?.checkpoint?.draft?.name,
                     localName:CurvatureModernApp.getAnimationStudioDraft().draft.name};
             }""",workspace_id)
-            self.assertEqual(remote_before['remoteName'],'Competing tab project edit')
+            self.assertEqual(remote_before['remoteName'],'Competing tab project edit',
+                             'hidden keyframe session must not replay a stale autosave')
             self.assertNotEqual(remote_before['localName'],remote_before['remoteName'])
             banner.get_by_role('button',name='Apply & Return').click()
             self.page.wait_for_timeout(1100)
