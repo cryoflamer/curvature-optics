@@ -4142,7 +4142,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertNotEqual(view_a['view'],view_b['view'])
         open_project(a)
         self.assertEqual(live_view(),view_a['view'])
-        self.assertEqual(stored(b),view_b)
+        saved_b=stored(b)
+        self.assertEqual((saved_b['view'],saved_b['sha']),
+                         (view_b['view'],view_b['sha']),
+                         'switch may advance revision but must not alter B viewport')
         self.page.reload(wait_until='load',timeout=30000)
         expect(workspace).to_be_visible(timeout=30000)
         self.assertIsNone(self.page.evaluate("""() =>
