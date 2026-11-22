@@ -3244,7 +3244,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(links.get_by_role('status')).to_contain_text('Local library loaded')
         photo_id = self.page.evaluate("async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id")
         picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker.get_by_label('Source')).to_have_value('all')
+        expect(picker.get_by_label('Kind')).to_have_value('all')
         expect(picker.locator('.modern-image-picker-choice img')).to_be_visible()
+        picker.get_by_label('Kind').select_option('unclassified')
         picker.get_by_role('button',name='Select image observation.png (Local)').click()
         picker.get_by_role('button',name='Attach selected').click()
         expect(picker).to_have_count(0)
@@ -6816,6 +6819,48 @@ class ModernBrowserSmoke(unittest.TestCase):
             JSON.stringify((await CurvatureModernReferenceImageLibrary.get(indexedDB,'picker-original')).record)"""),
             before['record'])
         workspace.locator('#ModernCalibrationClose').click()
+
+
+    def test_shared_image_picker_missing_original_does_not_attach(self):
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Picker missing original')
+        self.page.evaluate("""async () => {
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+            canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const record=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Stale source.png',{type:'image/png'}),'stale_source',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+        }""")
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs', exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        expect(picker).to_be_visible()
+        picker.get_by_role('button',name='Select image Stale source.png (Local)').click()
+        self.page.evaluate("""() => {
+            window.__realImageLibrary=CurvatureModernReferenceImageLibrary;
+            window.CurvatureModernReferenceImageLibrary={
+                ...window.__realImageLibrary,
+                get:async(idb,id)=>id==='stale_source'?null:window.__realImageLibrary.get(idb,id)
+            };
+        }""")
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker.get_by_role('status')).to_contain_text('Original image missing')
+        expect(links).to_contain_text('Reference photographs (0)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds||[]"""),[])
+        self.page.evaluate("""() => {
+            window.CurvatureModernReferenceImageLibrary=window.__realImageLibrary;
+            delete window.__realImageLibrary;
+        }""")
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(picker).to_have_count(0)
+        expect(links).to_contain_text('Reference photographs (1)')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].referenceImageIds"""),
+            ['stale_source'])
 
 if __name__ == '__main__':
     unittest.main()
