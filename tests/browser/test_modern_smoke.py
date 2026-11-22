@@ -4099,7 +4099,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             }));
         }""")
         self.assertEqual(len(records),2)
-        a,b=records
+        originals=self.page.evaluate("""async photos => Promise.all(
+            photos.map(async p => (await CurvatureModernReferenceImageImport.identify(
+                p,window)).sha256))""",[first['referenceImage'],second['referenceImage']])
+        by_sha={p['sha']:p for p in records}
+        self.assertEqual(len(by_sha),2)
+        a,b=(by_sha[sha] for sha in originals)
         self.assertNotEqual(a['sha'],b['sha'])
         self.assertEqual((a['observations'],b['observations']),(14,14))
         self.assertEqual((a['results'],b['results']),([],[]))
