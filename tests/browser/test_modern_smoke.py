@@ -3980,7 +3980,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             frames = [name for name in names if name.endswith('.png')]
             self.assertGreaterEqual(len(frames), 2)
             first = z.read(frames[0])
-            self.assertEqual(first[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+            self.assertEqual(first[:8], b'\x89PNG\r\n\x1a\n')
             self.assertEqual(struct.unpack('>II', first[16:24]), (640, 360))
             self.assertGreater(len(first), 1000)
         expect(self.page.locator('#ModernAnimationFrameExportStatus')).to_contain_text(
@@ -3999,7 +3999,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         video_file = Path(download.value.path())
         self.assertTrue(download.value.suggested_filename.endswith('.webm'))
         video_bytes = video_file.read_bytes()
-        self.assertTrue(video_bytes.startswith(b'\\x1a\\x45\\xdf\\xa3'), 'valid WebM EBML header')
+        self.assertTrue(video_bytes.startswith(b'\x1a\x45\xdf\xa3'), 'valid WebM EBML header')
         self.assertGreater(len(video_bytes), 1000)
         expect(self.page.locator('#ModernAnimationVideoExportStatus')).to_contain_text(
             'export ready:')
