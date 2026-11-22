@@ -5,7 +5,9 @@
   root.CurvatureModernReferenceImageLibrary=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(images){
   'use strict';
-  var DATABASE='curvature-modern-reference-images',STORE='observations',MAX_ITEMS=100,MAX_CHARS=64*1024*1024;
+  var DATABASE='curvature-modern-reference-images',STORE='observations',ANNOTATIONS='annotations',MAX_ITEMS=100,MAX_CHARS=64*1024*1024;
+  var MAX_ANNOTATION_CHARS=512*1024,VERSION_ANNOTATED=2;
+  var KINDS=['unclassified','photograph','diagram','map','graph','render','screenshot','illustration','other'];
   var editable=['title','description','author','sourceUrl','license','notes','cameraMetadata'];
   function revision(n){if(!Number.isSafeInteger(n)||n<1)throw RangeError('Invalid observation revision');return n;}
   function normalize(row){
@@ -18,34 +20,150 @@
     if(rows.length>MAX_ITEMS||rows.reduce(function(n,row){return n+size(row);},0)>MAX_CHARS)
       throw RangeError('Reference Image Library limit reached. Save originals externally before removing unused observations.');
   }
-  function transaction(indexedDB,mode,action){
+  function annotation(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+      Object.keys(value).some(function(k){return !['kind','tags','collections'].includes(k)}))
+      throw RangeError('Invalid image classification metadata');
+    var kind=value.kind||'unclassified';
+    if(!KINDS.includes(kind))throw RangeError('Invalid image kind');
+    function labels(input,max,length,label){
+      if(!Array.isArray(input)||input.length>max)throw RangeError('Invalid image '+label);
+      var unique=new Set();
+      return input.map(function(item){
+        if(typeof item!=='string'||!item.trim()||item.length>length||
+          /[\u0000-\u001f\u007f]/.test(item))throw RangeError('Invalid image '+label);
+        var trimmed=item.trim(),lower=trimmed.toLocaleLowerCase();
+        if(unique.has(lower))throw RangeError('Duplicate image '+label);
+        unique.add(lower);return trimmed;
+      });
+    }
+    return {kind:kind,tags:labels(value.tags||[],20,64,'tags'),
+      collections:labels(value.collections||[],12,80,'collections')};
+  }
+  function annotated(row){
+    if(!row)return {kind:'unclassified',tags:[],collections:[],annotationRevision:0};
+    if(!Number.isSafeInteger(row.revision)||row.revision<1)
+      throw RangeError('Invalid annotation revision');
+    var normalized=annotation({kind:row.kind,tags:row.tags,collections:row.collections});
+    return {...normalized,annotationRevision:row.revision};
+  }
+  function annotationQuota(rows){
+    if(rows.length>MAX_ITEMS||JSON.stringify(rows).length>MAX_ANNOTATION_CHARS)
+      throw RangeError('Image classifications exceed local metadata quota');
+  }
+  function transaction(indexedDB,mode,action,includeAnnotations){
     return new Promise(function(resolve,reject){
       var db,tx,request,done=false,result;
       function fail(error){if(done)return;done=true;if(db)db.close();reject(error||Error('Observation storage unavailable'));}
-      try{request=indexedDB.open(DATABASE,1);}catch(error){fail(error);return;}
-      request.onupgradeneeded=function(){request.result.createObjectStore(STORE,{keyPath:'id'});};
+      try{request=indexedDB.open(DATABASE);}catch(error){fail(error);return;}
+      request.onupgradeneeded=function(){
+        if(!request.result.objectStoreNames.contains(STORE))
+          request.result.createObjectStore(STORE,{keyPath:'id'});
+      };
       request.onblocked=function(){fail(Error('Observation storage upgrade blocked'));};
       request.onerror=function(){fail(request.error);};
       request.onsuccess=function(){
         db=request.result;if(done){db.close();return;}
-        try{tx=db.transaction(STORE,mode);}catch(error){fail(error);return;}
+        db.onversionchange=function(){db.close();};
+        var available=db.objectStoreNames.contains(ANNOTATIONS);
+        if(includeAnnotations===true&&!available){fail(Error('Enable Image Library classification before editing kind or tags'));return;}
+        try{tx=db.transaction(includeAnnotations&&available?[STORE,ANNOTATIONS]:STORE,mode);}catch(error){fail(error);return;}
         tx.oncomplete=function(){if(done)return;done=true;db.close();resolve(result);};
         tx.onerror=function(){fail(tx.error);};tx.onabort=function(){fail(tx.error||Error('Observation transaction aborted'));};
         function abort(error){try{tx.abort();}catch(ignore){}fail(error);}
         function read(req,fn){req.onsuccess=function(){try{fn(req.result);}catch(error){abort(error);}};}
-        try{action(tx.objectStore(STORE),read,function(value){result=value;});}catch(error){abort(error);}
+        try{action(tx.objectStore(STORE),read,function(value){result=value;},available&&includeAnnotations?tx.objectStore(ANNOTATIONS):null);}catch(error){abort(error);}
       };
     });
   }
-  function list(db){return transaction(db,'readonly',function(store,read,finish){
-    read(store.getAll(),function(rows){finish(rows.map(normalize).map(function(row){
-      var r=row.record;return {id:r.id,revision:row.revision,title:r.title,author:r.author,
-        width:r.original.width,height:r.original.height,thumbnail:r.thumbnail||null};
-    }).sort(function(a,b){return a.title.localeCompare(b.title)||a.id.localeCompare(b.id);}));});
-  });}
-  function get(db,id){images.validId(id);return transaction(db,'readonly',function(store,read,finish){
-    read(store.get(id),function(row){finish(row?normalize(row):null);});
-  });}
+  function list(db){return transaction(db,'readonly',function(store,read,finish,annotations){
+    read(store.getAll(),function(raw){
+      var rows=raw.map(normalize);
+      function complete(extra){
+        var byId=new Map(extra.map(function(r){return [r.id,annotated(r)];}));
+        finish(rows.map(function(row){
+          var r=row.record;return {id:r.id,revision:row.revision,title:r.title,
+            description:r.description||'',author:r.author,license:r.license||'',
+            sourceUrl:r.sourceUrl||'',width:r.original.width,height:r.original.height,
+            thumbnail:r.thumbnail||null,...(byId.get(r.id)||annotated(null))};
+        }).sort(function(a,b){return a.title.localeCompare(b.title)||a.id.localeCompare(b.id);}));
+      }
+      if(annotations)read(annotations.getAll(),complete);else complete([]);
+    });
+  },'optional');}
+  function get(db,id){images.validId(id);return transaction(db,'readonly',function(store,read,finish,annotations){
+    read(store.get(id),function(row){
+      if(!row){finish(null);return;}
+      var normalized=normalize(row);
+      if(!annotations){finish({...normalized,...annotated(null)});return;}
+      read(annotations.get(id),function(extra){finish({...normalized,...annotated(extra)});});
+    });
+  },'optional');}
+  function annotationStatus(db){
+    return transaction(db,'readonly',function(store,read,finish,annotations){
+      finish({enabled:!!annotations,version:annotations?VERSION_ANNOTATED:1});
+    },'optional');
+  }
+  // This is explicitly invoked after exporting the complete v1 library.
+  // No transaction automatically bumps a user's existing v1 database.
+  function enableAnnotations(db){
+    return new Promise(function(resolve,reject){
+      var request,database,done=false;
+      function fail(error){if(done)return;done=true;if(database)database.close();reject(error||Error('Image Library classification upgrade failed'));}
+      try{request=db.open(DATABASE,VERSION_ANNOTATED);}catch(error){fail(error);return;}
+      request.onblocked=function(){fail(Error('Image Library upgrade blocked by another tab; close older tabs and retry'));};
+      request.onerror=function(){fail(request.error);};
+      request.onupgradeneeded=function(){
+        database=request.result;
+        if(!database.objectStoreNames.contains(STORE))
+          database.createObjectStore(STORE,{keyPath:'id'});
+        if(!database.objectStoreNames.contains(ANNOTATIONS))
+          database.createObjectStore(ANNOTATIONS,{keyPath:'id'});
+      };
+      request.onsuccess=function(){
+        database=request.result;
+        if(done){database.close();return;}
+        var valid=database.objectStoreNames.contains(STORE)&&
+          database.objectStoreNames.contains(ANNOTATIONS);
+        database.close();done=true;
+        if(!valid)reject(Error('Image Library annotation store missing'));
+        else resolve({enabled:true,version:VERSION_ANNOTATED});
+      };
+    });
+  }
+  function exportBackup(db){
+    return transaction(db,'readonly',function(store,read,finish,annotations){
+      read(store.getAll(),function(raw){
+        var originals=raw.map(normalize);
+        function complete(extra){
+          extra.forEach(function(row){annotated(row);});
+          finish({format:'curvature-image-library-backup',version:1,
+            observations:originals,annotations:extra});
+        }
+        if(annotations)read(annotations.getAll(),complete);else complete([]);
+      });
+    },'optional');
+  }
+  function setAnnotation(db,id,expected,values){
+    images.validId(id);
+    if(!Number.isSafeInteger(expected)||expected<0)
+      throw RangeError('Invalid expected annotation revision');
+    var wanted=annotation(values);
+    return transaction(db,'readwrite',function(store,read,finish,annotations){
+      read(store.get(id),function(existing){
+        if(!existing)throw Error('Original image was removed or is not accessible');
+        read(annotations.getAll(),function(all){
+          var old=all.find(function(row){return row.id===id;});
+          if((old?old.revision:0)!==expected)
+            throw Error('Image classification changed in another tab. Reload before saving.');
+          var next={id:id,revision:expected+1,...wanted};
+          annotationQuota(all.filter(function(row){return row.id!==id;}).concat([next]));
+          annotations.put(next);
+          finish(annotated(next));
+        });
+      });
+    },true);
+  }
   function create(db,record){
     var row=normalize({id:record.id,revision:1,record:record});
     return transaction(db,'readwrite',function(store,read,finish){read(store.getAll(),function(raw){
@@ -185,6 +303,6 @@
       function(b){return b.toString(16).padStart(2,'0');}).join('');
     return images.validId('reference_'+token);
   }
-  return Object.freeze({DATABASE:DATABASE,STORE:STORE,MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota});
+  return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
+    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation});
 }));
