@@ -453,6 +453,14 @@
     <div class="modern-animation-workspace-heading">
       <div><h1>Animation Studio</h1><p>New project → Edit keyframes → Preview tab or click a keyframe → Save project in Library → Export PNG/video in Preview. Preview never adds an entry to Animation Library; your working draft autosaves separately. Scene / Compare remains unchanged.</p></div>
     </div>
+    <div class="modern-animation-opened-project" id="ModernAnimationOpenedProject" role="group" aria-label="Current animation project">
+      <div class="modern-animation-opened-project-details">
+        <span class="modern-animation-opened-project-label">Open project</span>
+        <strong id="ModernAnimationOpenedProjectName"></strong>
+        <span id="ModernAnimationOpenedProjectState" role="status"></span>
+      </div>
+      <button type="button" id="ModernAnimationShowInLibrary" class="modern-ghost-button" hidden>Show in Library</button>
+    </div>
     <div class="modern-animation-view-navigation" role="tablist" aria-label="Animation Studio views">
       <button type="button" role="tab" id="ModernAnimationViewLibrary" aria-controls="ModernAnimationLibraryView" aria-selected="true" tabindex="0">Library</button>
       <button type="button" role="tab" id="ModernAnimationViewEditor" aria-controls="ModernAnimationEditorView" aria-selected="false" tabindex="-1">Editor</button>

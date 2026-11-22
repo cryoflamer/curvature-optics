@@ -802,6 +802,17 @@ button{cursor:pointer}
 .modern-animation-workspace-heading p{font-size:13px;line-height:1.5;color:#637c94;margin:0}
 .modern-animation-workspace-heading button{border:1px solid #9bbfdf;border-radius:8px;background:#e6f3ff;color:#1f5f99;padding:10px 15px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
 .modern-animation-workspace .modern-animation-studio{max-width:none;width:100%;box-sizing:border-box;margin:0}
+/* Active identity is shared by Library, Editor and Preview without moving cards. */
+.modern-animation-opened-project{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 13px;min-width:0;
+  border:1px solid #bcd6ea;border-radius:9px;background:#f3f9ff;color:#254b6e}
+.modern-animation-opened-project-details{display:flex;align-items:baseline;gap:6px 12px;
+  flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}
+.modern-animation-opened-project-label{font-size:12px;font-weight:700;color:#55758f}
+#ModernAnimationOpenedProjectName{font-size:15px}
+#ModernAnimationOpenedProjectState{font-size:12px;color:#486b86}
+#ModernAnimationShowInLibrary{flex-shrink:0}
+#ModernAnimationShowInLibrary[hidden]{display:none!important}
 /* Single Animation Workspace, three mutually exclusive views (#27). */
 .modern-animation-view[hidden],.modern-animation-preview-empty[hidden]{display:none!important}
 .modern-animation-view-navigation{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px;

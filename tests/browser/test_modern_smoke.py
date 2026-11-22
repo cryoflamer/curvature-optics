@@ -5423,6 +5423,44 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_opened_project_identity_survives_views_selection_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationLibrary')
+        demo = library.locator('[data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        current = self.page.locator('#ModernAnimationOpenedProject')
+        show = self.page.locator('#ModernAnimationShowInLibrary')
+        expect(current).to_contain_text('Soundly Causeway')
+        expect(current).to_contain_text('Saved Library project')
+        expect(show).to_be_visible()
+        opened = library.locator('.modern-animation-library-card.is-editing')
+        expect(opened).to_have_count(1)
+        opened_id = opened.get_attribute('data-animation-id')
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(current).to_contain_text('Soundly Causeway')
+        show.click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.get_by_label('Project name').fill('Local project rename')
+        studio.get_by_label('Project name').press('Tab')
+        expect(current).to_contain_text('Unsaved working edits')
+        expect(current).to_contain_text('Soundly Causeway')
+        show.click()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.page.reload(wait_until='load')
+        self.open_animation()
+        expect(current).to_contain_text('Soundly Causeway')
+        expect(current).to_contain_text('Unsaved working edits')
+        show.click()
+        expect(library.locator('.modern-animation-library-card.is-editing')).to_have_attribute(
+            'data-animation-id', opened_id)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_studio_views_share_draft_and_playback(self):
         self.open_modern()
         self.open_animation()

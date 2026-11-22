@@ -194,6 +194,25 @@ audits. Actual visual interaction and IndexedDB behavior still require
 acceptance testing in the target Opera/Chromium installation.
 
 
+## Opened Animation Project identity and Library reveal
+
+The shared Animation Workspace header presents the actual opened saved Library
+project, built-in demo, or local working draft in Library, Editor and Preview.
+A saved Library entry remains distinct from the local autosaved working copy:
+unsaved edits are labeled as local, not saved back into the Library. A demo
+remains explicitly read-only. An unresolved external Library revision is
+reported as a local working-copy conflict rather than a saved identity.
+
+The **Show in Library** action is available for an opened saved project. It
+opens the Library view, expands the saved gallery, clears active filters on
+that explicit request, and reveals the opened card by scrolling the gallery
+horizontally; it never reorders cards or changes the backup selection.
+Ordinary navigation into Library reveals the opened card only when it is
+already present among the current filters. Background Library rerenders
+preserve scroll rather than continuously snapping to the opened card.
+Selection for JSON backup and activation for editing remain independent.
+No physical project, History, optics, or persistence format is changed.
+
 ## Animation Studio browser navigation (#27, Stage 2)
 
 The active Library/Editor/Preview tab uses a UI-only `studioView` URL query

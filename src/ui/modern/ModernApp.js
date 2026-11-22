@@ -902,6 +902,7 @@
        (routeAction==='push'||routeAction==='replace'))
       studioViewsApi.navigate(root,view,routeAction==='replace');
     if(studioViewController)studioViewController.show(view,!!focus);
+    if(view==='library'&&previous!==view)revealStudioOpenedCard();
     if(view==='preview'&&previous!==view&&studioPlayback&&animationWorkspaceOpen){
       var resized=studioPreviewLifecycle&&studioPreviewLifecycle.checkSize();
       // checkSize() already schedules a paint on a layout change.
@@ -1747,7 +1748,61 @@
       catch(error){studioLibraryNotice('Demo export failed: '+error.message,true);}
     });
   }
+  function syncStudioOpenedProject(){
+    var name=newUiEl('ModernAnimationOpenedProjectName');
+    var details=newUiEl('ModernAnimationOpenedProjectState');
+    var show=newUiEl('ModernAnimationShowInLibrary');
+    if(!name||!details)return;
+    if(studioActiveDemo){
+      name.textContent=studioActiveDemo.project.name;
+      details.textContent='Built-in demo · Read-only · Not saved to your Library';
+    }else if(studioLibraryActive){
+      name.textContent=studioLibraryActive.project.name;
+      details.textContent=studioLibraryDirty()?
+        'Saved Library project · Unsaved working edits (autosaved locally)':
+        'Saved Library project · Working copy';
+    }else{
+      name.textContent=studioDraft&&studioDraft.name||'New working draft';
+      details.textContent=studioLibraryPending?
+        'Working copy · Saved Library revision changed elsewhere':
+        'Working draft · Autosaved locally · Not saved to Library';
+    }
+    if(show){show.hidden=!studioLibraryActive;show.disabled=!!studioLibraryBusy;}
+  }
+  function revealStudioOpenedCard(){
+    if(!studioLibraryActive)return false;
+    var host=newUiEl('ModernAnimationLibrary');
+    var gallery=host&&host.querySelector&&host.querySelector(
+      '.modern-animation-library-gallery:not(.modern-demo-gallery)');
+    if(!gallery)return false;
+    var cards=gallery.querySelectorAll('.modern-animation-library-card[data-animation-id]');
+    var card=Array.prototype.find.call(cards,function(item){
+      return item.getAttribute('data-animation-id')===studioLibraryActive.id;
+    });
+    if(!card)return false; // A user filter can intentionally hide the opened card.
+    var outer=gallery.getBoundingClientRect(),inner=card.getBoundingClientRect();
+    if(inner.left<outer.left||inner.right>outer.right){
+      gallery.scrollLeft+=inner.left-outer.left-
+        (gallery.clientWidth-card.offsetWidth)/2;
+    }
+    studioLibraryScroll=gallery.scrollLeft;
+    return true;
+  }
+  function showOpenedStudioProject(){
+    if(!studioLibraryActive)return;
+    studioLibraryExpanded=true;
+    // Explicit Show in Library must find the opened card, even behind filters.
+    if(studioLibraryFiltersApi&&studioLibraryFilters&&
+       studioLibraryFiltersApi.active(studioLibraryFilters)){
+      studioLibraryFilters=studioLibraryFiltersApi.normalize();
+      studioLibraryQueryDraft='';rememberStudioLibraryFilters();
+    }
+    setStudioView('library',true,'push');
+    renderStudioLibrary();
+    revealStudioOpenedCard();
+  }
   function renderStudioLibrary(){
+    syncStudioOpenedProject();
     if(!studioUI||!studioUI.renderLibrary)return;
     var host=newUiEl('ModernAnimationLibrary');
     var previous=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery:not(.modern-demo-gallery)');
@@ -1905,7 +1960,9 @@
       studioLibrarySelected='';
     if(studioLibraryRenamingId&&!entries.some(function(e){return e.id===studioLibraryRenamingId;}))
       studioLibraryRenamingId='';
-    if(studioLibraryActive)studioLibrarySelected=studioLibraryActive.id;
+    // Selection is for backup; do not replace an intentional selection with
+    // the opened project during a background Library refresh.
+    if(!studioLibrarySelected&&studioLibraryActive)studioLibrarySelected=studioLibraryActive.id;
   }
   function refreshStudioLibrary(){
     var actions=studioLibraryActions();
@@ -4640,6 +4697,11 @@
         if(root.CurvatureModernStatusMessage)root.CurvatureModernStatusMessage.decorate(status,'error');}
     }
     function safe(action){if(studioActiveDemo)return;try{action();}catch(error){report(error);}}
+    var locateOpened=newUiEl('ModernAnimationShowInLibrary');
+    if(locateOpened&&!locateOpened.__studioLocateBound){
+      locateOpened.__studioLocateBound=true;
+      locateOpened.addEventListener('click',showOpenedStudioProject);
+    }
     renderStudioLibrary();
     var storyboard=newUiEl('ModernAnimationStoryboard');
     function selectKeyframe(key,source,refresh){
