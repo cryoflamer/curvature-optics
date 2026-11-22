@@ -294,6 +294,36 @@
       quota(rows.map(function(r){return r.id===id?next:r;}));store.put(next);finish(next);
     });});
   }
+  // For the classification-enabled editor, original attribution and the
+  // independent classification revision are committed as one IDB transaction.
+  function updateDetails(db,id,expectedRevision,expectedAnnotation,metadata,values){
+    images.validId(id);revision(expectedRevision);
+    if(!Number.isSafeInteger(expectedAnnotation)||expectedAnnotation<0)
+      throw RangeError('Invalid expected annotation revision');
+    var wanted=annotation(values);
+    return transaction(db,'readwrite',function(store,read,finish,annotations){
+      read(store.getAll(),function(raw){
+        var rows=raw.map(normalize),
+          old=current(rows.find(function(r){return r.id===id;}),expectedRevision);
+        var next=normalize({id:id,revision:expectedRevision+1,
+          record:edited(old.record,metadata)});
+        read(annotations.getAll(),function(all){
+          var existing=all.find(function(row){return row.id===id;});
+          if((existing?existing.revision:0)!==expectedAnnotation)
+            throw Error('Image classification changed in another tab. Reload before saving.');
+          var unchanged=JSON.stringify(annotation(existing||{}))===JSON.stringify(wanted);
+          var classified=unchanged?existing:
+            {id:id,revision:expectedAnnotation+1,...wanted};
+          var annRows=unchanged?all:all.filter(function(row){return row.id!==id;}).concat([classified]);
+          annotationQuota(annRows);
+          quota(rows.map(function(row){return row.id===id?next:row;}));
+          store.put(next);
+          if(!unchanged)annotations.put(classified);
+          finish({...next,...annotated(classified||null)});
+        });
+      });
+    },true);
+  }
   // Cross-database workspaces, Undo and other open tabs cannot yet be
   // enumerated atomically. Fail closed until there is a safe use-site guard.
   // Keep the API protected even if a stale UI attempts to call it.
@@ -304,5 +334,5 @@
     return images.validId('reference_'+token);
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation});
+    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails});
 }));
