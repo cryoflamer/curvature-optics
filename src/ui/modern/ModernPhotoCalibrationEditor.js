@@ -514,7 +514,7 @@
     if(!workspace)return null;
     if(mounted)return mounted;
     const photo=$('ModernCalibrationPhoto'),sceneCanvas=$('ModernCalibrationMesh'),
-      file=$('ModernCalibrationFile'),list=$('ModernCalibrationPairs'),status=$('ModernCalibrationStatus'),
+      list=$('ModernCalibrationPairs'),status=$('ModernCalibrationStatus'),
       add=$('ModernCalibrationAdd'),weight=$('ModernCalibrationWeight'),px=$('ModernCalibrationX'),py=$('ModernCalibrationY');
     const ctx=photo.getContext('2d'),mesh=sceneCanvas.getContext('2d');
     const workflow=createPairWorkflow();
@@ -1744,7 +1744,7 @@
         ++loadToken;++catalogToken;++applyRevision;
         contextMenu.close();photoGestures.cancel();resultGestures.cancel();
         inlineViewer.cancelGesture();inlineViewer.close();
-        photoGhost=null;inlineSource=null;inlineRole=null;file.value='';
+        photoGhost=null;inlineSource=null;inlineRole=null;
         record=d.record;image=target.decoded;activeSource=d.activeSource;
         view=null;resultViews={initial:null,best:null};
         fitBest=null;fitSignature=null;paintedFit=null;viewBest=false;
@@ -2237,19 +2237,9 @@
       let next;
       try{next=prepareScene(env.CurvatureModernApp.getPhotoCalibrationScene());}
       catch(e){message('Cannot start a new session: '+e.message);return;}
-      loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();photoGestures.cancel();photoGhost=null;file.value='';
+      loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();photoGestures.cancel();photoGhost=null;
       referenceTools.open=true;photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=!choices.length;resetPending();
       showScene(next);setStage("correspondences",{camera:"best"});void refreshSources();
-    };
-    file.onchange=async()=>{
-      const f=file.files[0];if(!f)return;
-      if(!confirmReplacement()){file.value='';return;}
-      const token=++loadToken;beginPhotoLoad();message('Loading photograph…');
-      try{
-        const next=await env.CurvatureModernReferenceImageImport.ingest(f,'calibration-photo',env);
-        await acceptPhoto(next,null,token);
-      }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
-      finally{if(token===loadToken)file.value='';endPhotoLoad();}
     };
     const photoGestures=pointerGestures.mount(photo,{
       enabled:()=>!!(record&&view&&(editingStage()||resultStage())),
