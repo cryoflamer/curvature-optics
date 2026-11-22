@@ -3271,7 +3271,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
         self.page.locator('#ModernSceneTab').click()
         expect(self.page.locator('#ModernWorkspace')).to_be_visible()
+        self.page.locator('#ModernCompareTab').click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
         self.page.locator('#ModernImageLibraryTab').click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'),'compare')
         expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
         expect(panel.get_by_role('button',name='Return to Calibration')).to_be_hidden()
         expect(panel.get_by_role('button',name='Return to Storyboard')).to_be_hidden()
@@ -3527,6 +3530,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'name':'storybook-photo.png','mimeType':'image/png','buffer':payload})
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         panel.get_by_role('button',name='Return to Storyboard').click()
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_hidden()
         expect(editor).to_be_visible()
         after=self.page.evaluate("""() => {
             const draft=CurvatureModernApp.getAnimationStudioDraft().draft;
