@@ -3589,7 +3589,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         where=panel.locator('.modern-image-usage')
         expect(where.get_by_text('Saved animations (1)')).to_be_visible()
         expect(where).to_contain_text('Usage graph bridge project')
-        expect(where.get_by_role('button',name='Open Usage graph bridge project frame 1')).to_be_visible()
+        go=where.get_by_role('button',name='Open Usage graph bridge project frame 1')
+        expect(go).to_be_visible()
+        go.click()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.page.wait_for_function("""async () => {
+            const saved=(await CurvatureModernAnimationLibrary.list(indexedDB))
+              .find(r=>r.project.name==='Usage graph bridge project');
+            const current=CurvatureModernApp.getAnimationStudioDraft();
+            return saved&&current&&current.libraryId===saved.id&&
+              current.selectedKey===saved.project.keyframes[0].key;
+        }""")
         self.assertEqual(self.page.evaluate("""async () => {
             const rows=await CurvatureModernReferenceImageLibrary.list(indexedDB);
             return rows.length;
