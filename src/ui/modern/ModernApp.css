@@ -1437,6 +1437,42 @@ button{cursor:pointer}
 .modern-reference-body label{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:.9em}
 .modern-reference-body input,.modern-reference-body select,.modern-reference-body textarea{box-sizing:border-box;max-width:100%;min-width:0;padding:5px;border:1px solid #b4c7d9;border-radius:4px}
 .modern-reference-body button{padding:6px 12px;border:1px solid #9cbddd;border-radius:6px;background:#e7f2fd;color:#255e91;cursor:pointer}
+/* Image Library Stage 4: shared control vocabulary and native file chooser.
+ * This is deliberately scoped to the gallery; the app-wide refactor is #46. */
+.modern-reference-toolbar>label{flex:0 1 auto;min-width:190px}
+.modern-reference-toolbar input[type="file"]{width:min(100%,260px);min-height:36px;
+  padding:4px!important;border:1px solid #9cbddd;border-radius:7px;background:#fff;
+  color:#254e70;line-height:24px}
+.modern-reference-toolbar input[type="file"]::file-selector-button{
+  margin:0 9px 0 0;padding:5px 11px;background:#e7f2fd;color:#255e91;
+  border:1px solid #9cbddd;border-radius:6px;font:inherit;font-weight:600;
+  cursor:pointer}
+.modern-reference-toolbar input[type="file"]:hover:not(:disabled)::file-selector-button{
+  background:#d5e8fb}
+.modern-reference-toolbar input[type="file"]:disabled::file-selector-button{
+  opacity:.55;cursor:not-allowed}
+.modern-reference-toolbar input[type="file"]:focus-visible,
+.modern-reference-body button:focus-visible,
+.modern-reference-body input:focus-visible,
+.modern-reference-body select:focus-visible,
+.modern-reference-body textarea:focus-visible{outline:2px solid #2371bc;outline-offset:2px}
+.modern-reference-toolbar>button{min-height:36px;font-weight:600}
+.modern-reference-toolbar input:not([type="file"]){min-height:36px;padding:7px 9px}
+.modern-image-usage{padding:12px;border:1px solid #c6d8e9;border-radius:8px;
+  background:#fff;display:grid;gap:9px}
+.modern-image-usage-heading{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.modern-image-usage-heading strong{font-size:14px}
+.modern-image-usage-heading button{font-size:12px}
+.modern-image-usage-groups{display:grid;gap:9px}
+.modern-image-usage-groups h3{font-size:13px;color:#254e70;margin:4px 0 7px}
+.modern-image-usage-item{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  padding:7px 0;border-bottom:1px solid #e0e9f2}
+.modern-image-usage-item span{flex:1 1 250px;min-width:0;overflow-wrap:anywhere}
+.modern-image-usage-item button{flex:none}
+.modern-image-usage-warning{color:#914a16;font-weight:600}
+.modern-image-usage-caveat{color:#597089;font-size:11px}
+@media(max-width:700px){.modern-reference-toolbar>label{width:100%;min-width:0}
+  .modern-reference-toolbar input[type="file"]{width:100%}}
 .modern-reference-editor:not([hidden]){display:grid;gap:10px}
 .modern-reference-fields,.modern-reference-fact{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
 .modern-reference-preview img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain}
