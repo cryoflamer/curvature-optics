@@ -874,14 +874,29 @@ class ModernBrowserSmoke(unittest.TestCase):
 
     def test_calibration_project_photo_selection_retains_verified_library_original(self):
         import base64
-        workspace=self.open_physical_calibration()
-        data=self.soundly_calibration_experiment()
-        original=data['referenceImage']['original']['dataUrl']
-        workspace.locator('#ModernCalibrationFile').set_input_files({
-            'name':'selected-original.png','mimeType':'image/png',
-            'buffer':base64.b64decode(original.split(',',1)[1])})
-        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
-            'selected-original.png',timeout=30000)
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        panel.locator('input[accept^="image/png"]').set_input_files({
+            'name':'selected-original.png','mimeType':'image/png','buffer':payload})
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernSceneTab').click()
+        expect(self.page.locator('#ModernPhotoCalibrationOpen')).to_be_visible()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationFile')).to_have_count(0)
+        chooser=workspace.locator('#ModernCalibrationUsePhoto')
+        expect(chooser).to_be_enabled()
+        chooser.click()
+        picker=self.page.get_by_role('dialog',name='Choose a calibration photograph')
+        expect(picker).to_be_visible()
+        picker.get_by_role('button',name='Select image selected-original.png (Local)').click()
+        picker.get_by_role('button',name='Use original').click()
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text('selected-original.png')
         result=self.page.evaluate("""async () => {
             const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
             const active=editor.exportExperiment(),saved=await CurvatureModernReferenceImageLibrary.list(indexedDB);
@@ -890,7 +905,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             return {count:rows.length,matched:rows.some(x=>x&&x.record.original.dataUrl===active.referenceImage.original.dataUrl),
                 shaLength:identity.sha256.length,source:active.referenceSource.source};
         }""")
-        self.assertEqual(result,{'count':1,'matched':True,'shaLength':64,'source':'local'})
+        self.assertEqual(result,{'count':1,'matched':True,'shaLength':64,'source':'library'})
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
 
