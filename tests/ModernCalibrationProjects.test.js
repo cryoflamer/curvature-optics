@@ -1041,7 +1041,9 @@ test('Calibration Project library interaction matches Animation Library selectio
   assert.match(source,/if\(!projectCardControl\(event,card\)\)selectProjectCard\(entry\.id\)/);
   assert.match(source,/modern-animation-library-card modern-calibration-project-card/);
   assert.match(source,/modern-animation-library-status-editing/);
-  assert.match(source,/deletion\.disabled=projectListBusy\|\|active/);
+  assert.match(source,/deletion\.disabled=projectListBusy;/);
+  assert.match(source,/if\(active\)\{projectSwitchBusy=true;switchInterference=false;workspace\.inert=true;\}/);
+  assert.match(source,/env\.location\.reload\(\)/);
   assert.match(source,/event\.stopPropagation\(\);void deleteFromProjects\(entry\)/);
   assert.match(css,/\.modern-calibration-projects-list\{display:flex/);
   assert.match(studio,/modern-animation-library-card.is-selected|is-selected/);
