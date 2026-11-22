@@ -4359,8 +4359,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         def open_project(id):
             if panel.is_hidden():
                 toggle.click()
-            panel.locator('[data-calibration-project-id="'+id+'"] '
-                          '[data-calibration-project-open]').click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            # Active projects intentionally do not expose a redundant Open
+            # button. Keep the existing live editor rather than reopening it.
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
             expect(panel).to_be_hidden(timeout=30000)
             self.page.wait_for_function("""id => {
                 const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
@@ -4676,8 +4682,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         def open_project(id):
             if panel.is_hidden():
                 toggle.click()
-            panel.locator('[data-calibration-project-id="'+id+'"] '
-                          '[data-calibration-project-open]').click()
+            card=panel.locator('[data-calibration-project-id="'+id+'"]')
+            # Active projects intentionally do not expose a redundant Open
+            # button. Keep the existing live editor rather than reopening it.
+            if card.get_attribute('data-project-active')=='true':
+                expect(card.locator('[data-calibration-project-open]')).to_have_count(0)
+                toggle.click()
+            else:
+                card.locator('[data-calibration-project-open]').click()
             expect(panel).to_be_hidden(timeout=30000)
             self.page.wait_for_function("""id => {
                 const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
