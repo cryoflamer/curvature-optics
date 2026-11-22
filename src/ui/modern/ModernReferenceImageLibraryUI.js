@@ -145,6 +145,96 @@
     chooser.parentElement.hidden=true;chooser.setAttribute('aria-hidden','true');chooser.tabIndex=-1;
     var editor=el('form',undefined,body);editor.noValidate=true;editor.className='modern-reference-editor';editor.hidden=true;
     var preview=el('div',undefined,editor);preview.className='modern-reference-preview';
+    var usage=el('section',undefined,editor);usage.className='modern-image-usage';
+    usage.setAttribute('aria-label','Where used?');
+    var usageHead=el('div',undefined,usage);usageHead.className='modern-image-usage-heading';
+    el('strong','Where used?',usageHead);
+    var usageRefresh=button('Refresh uses',usageHead,function(){
+      if(selected)void showUses(selected);
+    });
+    var usageStatus=el('p','Select a saved original to inspect known uses.',usage);
+    usageStatus.setAttribute('role','status');
+    var usageGroups=el('div',undefined,usage);usageGroups.className='modern-image-usage-groups';
+    var usageEpoch=0;
+    async function navigateUse(use){
+      if(busy||!allowDiscard())return;
+      var tab=null;
+      if(use.type==='animation'){
+        tab=doc.getElementById('ModernAnimationTab');if(!tab)throw Error('Animation tab unavailable');
+        tab.click();
+        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='animation')throw Error('Animation navigation was blocked');
+        doc.getElementById('ModernAnimationViewLibrary')?.click();
+        var card=Array.from(doc.querySelectorAll('#ModernAnimationLibrary [data-animation-id]'))
+          .find(function(node){return node.getAttribute('data-animation-id')===use.ownerId;});
+        if(!card)throw Error('Saved animation not visible: project may be deleted or filtered');
+        var open=card.querySelector('[aria-label^="Open saved animation"]');
+        if(!open||open.disabled)throw Error('Saved animation cannot be opened');
+        open.click();
+        // Select the recorded frame only when the newly opened project
+        // presents the same project identity. No approximation by title.
+        if(use.frameIndex&&env.CurvatureModernApp?.getAnimationStudioDraft?.()?.libraryId===use.ownerId){
+          doc.getElementById('ModernAnimationViewEditor')?.click();
+          var frames=doc.querySelectorAll('#ModernAnimationStudio .modern-studio-keyframe');
+          var frame=frames[use.frameIndex-1];
+          if(frame)frame.click();
+        }
+      }else if(use.type==='calibration'){
+        tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
+        tab.click();
+        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')throw Error('Calibration navigation was blocked');
+        var editorApi=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
+        if(!editorApi?.openCalibrationProject)throw Error('Calibration Projects unavailable');
+        await editorApi.openCalibrationProject(use.ownerId);
+      }else{
+        throw Error('This recoverable draft has no safe direct-open action yet; open its owner workspace manually');
+      }
+    }
+    async function showUses(row){
+      var token=++usageEpoch,graph=env.CurvatureModernImageUsageGraph;
+      usageGroups.replaceChildren();
+      if(!graph){usageStatus.textContent='Usage graph unavailable';return;}
+      usageStatus.textContent='Checking saved projects and recoverable drafts…';
+      try{
+        var report=await graph.discover(env,row);
+        if(token!==usageEpoch||!selected||selected.id!==row.id)return;
+        usageStatus.textContent=report.count+' known local use'+(report.count===1?'':'s')+
+          (report.complete?' · accessible stores inspected':' · incomplete discovery');
+        var groups=[
+          ['animation','Saved animations'],['calibration','Calibration projects'],
+          ['draft','Recoverable Storyboards'],['calibration-draft','Current Calibration']
+        ];
+        groups.forEach(function(group){
+          var found=report.uses.filter(function(use){return use.type===group[0];});
+          if(!found.length)return;
+          var section=el('section',undefined,usageGroups);
+          el('h3',group[1]+' ('+found.length+')',section);
+          found.forEach(function(use){
+            var item=el('div',undefined,section);item.className='modern-image-usage-item';
+            var detail=el('span',use.title+
+              (use.frameIndex?' · keyframe '+use.frameIndex+': '+use.frameName:'')+
+              ' · '+use.source,item);
+            detail.title=use.ownerId;
+            if(use.type==='animation'||use.type==='calibration'){
+              var open=button('Open use',item,function(){
+                navigateUse(use).catch(function(error){
+                  usageStatus.textContent='Cannot open use: '+error.message;
+                });
+              });
+              open.setAttribute('aria-label','Open '+use.title+
+                (use.frameIndex?' frame '+use.frameIndex:''));
+            }
+          });
+        });
+        if(!report.uses.length)el('p','No references found in inspected local records.',usageGroups);
+        if(report.unavailable.length){
+          var warning=el('p','Not checked: '+report.unavailable.join('; '),usageGroups);
+          warning.className='modern-image-usage-warning';
+        }
+        el('p',report.note,usageGroups).className='modern-image-usage-caveat';
+      }catch(error){
+        if(token===usageEpoch)usageStatus.textContent='Usage discovery failed: '+error.message;
+      }
+    }
     var classify=el('fieldset',undefined,editor);classify.className='modern-image-library-classification';
     el('legend','Independent image classification',classify);
     var kind=field(classify,'Image kind','select');
@@ -184,7 +274,9 @@
       catch(error){status.textContent='Reference Image Library: '+(error&&error.message||error);}
       finally{setBusy(false);}}
     function fill(row){selected=row;dirty=false;editor.hidden=!row;preview.replaceChildren();
+      ++usageEpoch;usageGroups.replaceChildren();
       if(!row)return;
+      void showUses(row);
       kind.disabled=!classificationReady;tags.disabled=!classificationReady;
       collections.disabled=!classificationReady;
       kind.value=row.kind||'unclassified';tags.value=(row.tags||[]).join(', ');
