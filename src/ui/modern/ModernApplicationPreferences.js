@@ -32,7 +32,7 @@
     return Object.freeze(result);
   }
   var TABS=['Camera','Surface','Atmosphere','Objects','Display'];
-  var WORKSPACE_MODES=Object.freeze(['scene','compare','animation','calibration','demos']);
+  var WORKSPACE_MODES=Object.freeze(['scene','compare','animation','calibration','images','demos']);
   function startupWorkspace(stored,physical,urlMode,shared,entryMode){
     var explicit=['scene','compare','demos'].includes(urlMode)?urlMode:null;
     var fallback=['scene','compare'].includes(physical)?physical:'scene';
