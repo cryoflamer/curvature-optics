@@ -663,6 +663,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.once('dialog',lambda dialog:dialog.accept('Renamed independent'))
         active_row.locator('[data-calibration-project-rename]').click()
         expect(active_row).to_contain_text('Renamed independent',timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        with self.page.expect_download() as exported:
+            workspace.locator('#ModernCalibrationExportExperiment').click()
+        self.assertEqual(exported.value.suggested_filename,
+                         'calibration-Renamed independent.json')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        active_row=panel.locator('[data-project-active="true"]')
         active_row.locator('[data-calibration-project-duplicate]').click()
         copy_row=panel.locator('[data-calibration-project-id]').filter(
             has_text='Renamed independent (copy)')
