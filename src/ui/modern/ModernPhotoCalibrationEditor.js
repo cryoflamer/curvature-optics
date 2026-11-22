@@ -2157,14 +2157,19 @@
           else if(a.target.kind==='background')choosePhoto(imagePoint(view,...p,record.original.width,record.original.height));
         }
       },
-      onEnd(a){photoGhost=null;photo.style.cursor='crosshair';photoDraw();if(a.kind==='cancel'&&a.moved&&a.action==='marker')message('Move cancelled · original point retained.');},
+      onEnd(a){
+        photoGhost=null;photo.style.cursor='crosshair';photoDraw();
+        if(a.kind==='drag'&&a.action==='pan')persist();
+        if(a.kind==='cancel'&&a.moved&&a.action==='marker')
+          message('Move cancelled · original point retained.');
+      },
       onLeave(){if(!photoGestures.active)photo.style.cursor='';}
     });
     env.addEventListener('blur',()=>photoGestures.cancel());
     photo.addEventListener('wheel',e=>{
       if(!record)return;e.preventDefault();if(photoGestures.active)return;photoGestures.clearClicks();const p=canvasPoint(photo,e);
       const min=fit(record.original.width,record.original.height,photo.width,photo.height).scale/4;
-      view=zoomAt(view,...p,Math.exp(-e.deltaY*.0015),min,Math.max(16,min*16));photoDraw();
+      view=zoomAt(view,...p,Math.exp(-e.deltaY*.0015),min,Math.max(16,min*16));photoDraw();persist();
     },{passive:false});
     $('ModernCalibrationFit').onclick=fitPhoto;
     function manualPixel(){
