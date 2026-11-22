@@ -3958,11 +3958,21 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationPlaybackRetry').click()
         expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
         optics = self.page.locator('#ModernAnimationPlaybackOptics')
+        optics.select_option('fast')
+        expect(diag).to_contain_text('Requested optics: Fast Preview', timeout=30000)
         optics.select_option('canvas-direct')
         expect(diag).to_contain_text('Requested optics: Canvas Direct', timeout=30000)
         storyboard = self.page.locator('#ModernAnimationStoryboard')
         expect(storyboard.locator('.modern-animation-storyboard-card')).to_have_count(9)
-        expect(storyboard.get_by_role('button', name='Capture selected keyframe thumbnail', exact=True)).to_have_count(1)
+        refresh = storyboard.get_by_role('button', name='Capture selected keyframe thumbnail', exact=True)
+        refresh.click()
+        expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        with self.page.expect_download() as download:
+            storyboard.get_by_role('button', name='Export without thumbnails', exact=True).click()
+        portable = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(len(portable['animations']), 1)
+        self.assertEqual(len(portable['animations'][0]['project']['keyframes']), 9)
         for section, action in (
             ('ModernAnimationFrameExportSection', 'Render PNG ZIP'),
             ('ModernAnimationVideoExportSection', 'Render video'),
