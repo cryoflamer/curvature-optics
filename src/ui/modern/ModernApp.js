@@ -8718,6 +8718,31 @@
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
     getAnimationStudioView:function(){return studioView;},
+    // A verified saved owner can be opened without relying on visible Library
+    // cards (which may be filtered). Existing switch guards own unsaved drafts.
+    openImageUsageAnimation:async function(id,frameKey){
+      if(!studioLibrary||!root.indexedDB)throw Error('Animation Library unavailable');
+      var record=await studioLibrary.get(root.indexedDB,id);
+      if(!record)throw Error('Saved animation no longer exists');
+      if(frameKey!==null&&frameKey!==undefined&&
+         !record.project.keyframes.some(function(f){return f.key===frameKey;}))
+        throw Error('Referenced keyframe is missing from the current project revision');
+      var tab=newUiEl('ModernAnimationTab');
+      if(!tab)throw Error('Animation workspace unavailable');
+      tab.click();
+      if(currentWorkspaceMode()!=='animation')throw Error('Animation workspace navigation blocked');
+      await requestStudioSwitch('open',id);
+      if(!studioLibraryActive||studioLibraryActive.id!==id)
+        throw Error('Animation switch was cancelled or blocked');
+      if(frameKey!==null&&frameKey!==undefined){
+        if(!studioDraft.frames.some(function(f){return f.key===frameKey;}))
+          throw Error('Keyframe changed during animation switch');
+        studioSelectedKey=frameKey;
+        setStudioView('editor',true,'push');
+        renderAnimationStudio(studioHistoryEntries);
+      }
+      return {id:id,frameKey:frameKey||null};
+    },
     getCalibrationView:function(){return workspaceState.calibrationView;},
     rememberCalibrationView:rememberCalibrationView,
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
