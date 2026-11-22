@@ -4190,7 +4190,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const store=CurvatureModernCalibrationResultArchive;
             const rows=await Promise.all(ids.map(id=>store.get(indexedDB,id)));
             return rows.map(x=>({
-                photo:x.record.payload.photo.identity.sha256,
+                photo:x.record.payload.photo.sha256,
                 project:x.record.provenance.projectId,
                 valid:x.record.payload.fit.result.evaluation.valid}));
         }""",[results[a['id']],results[b['id']]])
