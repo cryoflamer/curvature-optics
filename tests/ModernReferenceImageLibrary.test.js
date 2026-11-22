@@ -677,6 +677,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   const used=await usageGraph.deletionReview(env,original);
   assert.equal(used.safe,false);
   assert.equal(used.knownUses,1);
+  assert.equal(used.localScanComplete,true,'a linked asset can still have complete local scan coverage');
   assert.match(used.reasons.join('; '),/1 known linked use/);
   env.CurvatureModernCalibrationProjectStore.list=async()=>{throw Error('Store inaccessible');};
   const missing=await usageGraph.deletionReview(env,original);

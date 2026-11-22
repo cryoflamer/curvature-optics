@@ -197,7 +197,8 @@
     }
     issues.push('Deletion is disabled: cross-database writes, unsaved Undo/recovery in other tabs and external backups cannot be atomically excluded');
     return {safe:false,knownUses:report?report.count:null,
-      localScanComplete:!!report&&report.complete&&issues.length===1,
+      localScanComplete:!!report&&report.complete&&!!before&&!!after&&
+        before.revision===selected.revision&&after.revision===before.revision,
       reasons:issues,unavailable:report?report.unavailable.slice():[]};
   }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,

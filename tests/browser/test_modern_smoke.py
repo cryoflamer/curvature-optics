@@ -4279,7 +4279,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 knownUses:result.knownUses};
         }""",before['id'])
         self.assertFalse(review['safe'])
-        self.assertIsInstance(review['localScanComplete'],bool)
+        self.assertTrue(review['localScanComplete'],
+            'local scan coverage must not be conflated with delete permission')
         self.assertIsInstance(review['knownUses'],int)
         self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
 
