@@ -162,7 +162,8 @@ test('DOM editor wires controls, shows issue paths, and disables preparation on 
   assert.equal(collect(host,n=>n.tagName==='button'&&n.textContent==='Prepare project').length,0,
     'old ambiguous action must not appear');
   assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Preview does not save')).length);
-  const fieldInputs=collect(host,n=>n.tagName==='input');
+  const projectPane=collect(host,n=>n.className==='modern-studio-project-panel')[0];
+  const fieldInputs=collect(projectPane,n=>n.tagName==='input');
   fieldInputs[0].value='Named study';fieldInputs[0].listeners.change();
   assert.deepEqual(calls.at(-1),['edit','name','Named study']);
   const keyframes=collect(host,n=>n.tagName==='button'&&n.className.includes('modern-studio-keyframe'));
@@ -199,21 +200,25 @@ test('Studio fields persist valid in-progress edits on input before focus leaves
     liveEdit:(field,value)=>calls.push(['liveEdit',field,value]),
     liveFrame:(key,field,value)=>calls.push(['liveFrame',key,field,value])};
   editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2'});
-  const controls=collect(host,n=>n.tagName==='input'||n.tagName==='textarea');
-  const names=controls.filter(n=>n.type==='text');
-  names[0].value='New draft before F5';names[0].listeners.input();
+  const projectPane=collect(host,n=>n.className==='modern-studio-project-panel')[0];
+  const framePane=collect(host,n=>n.className==='modern-studio-frame-panel')[0];
+  const projectControls=collect(projectPane,n=>n.tagName==='input'||n.tagName==='textarea');
+  const frameControls=collect(framePane,n=>n.tagName==='input'||n.tagName==='textarea');
+  const projectName=projectControls.find(n=>n.type==='text');
+  projectName.value='New draft before F5';projectName.listeners.input();
   assert.deepEqual(calls.at(-1),['liveEdit','name','New draft before F5']);
-  names[1].value='Renamed frame';names[1].listeners.input();
+  const names=frameControls.filter(n=>n.type==='text');
+  names[0].value='Renamed frame';names[0].listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','name','Renamed frame']);
-  names[2].value='Chapter title';names[2].listeners.input();
+  names[1].value='Chapter title';names[1].listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','narrativeTitle','Chapter title']);
-  const number=controls.find(n=>n.type==='number');
+  const number=frameControls.find(n=>n.type==='number');
   number.value='6.2';number.listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','travelMs','6.2']);
-  const textarea=controls.find(n=>n.tagName==='textarea');
+  const textarea=projectControls.find(n=>n.tagName==='textarea');
   textarea.value='An important physical experiment';textarea.listeners.input();
   assert.deepEqual(calls.at(-1),['liveEdit','description','An important physical experiment']);
-  const caption=controls.filter(n=>n.tagName==='textarea')[1];
+  const caption=frameControls.find(n=>n.tagName==='textarea');
   assert.equal(caption.maxLength,1000);caption.value='Frame explanation';caption.listeners.input();
   assert.deepEqual(calls.at(-1),['liveFrame','history-2','description','Frame explanation']);
 });
@@ -875,7 +880,9 @@ test('Both Preview controls share the same action, disabled state, and saved-lin
   assert.ok(collect(host,n=>n.textContent&&n.textContent.includes('Working draft; not saved to library')).length>=2);
   const bars=collect(host,n=>typeof n.className==='string'&&n.className.startsWith('modern-studio-preview-bar'));
   assert.equal(bars.length,2);
-  assert.equal(host.children[host.children.length-2],bars[1],'bottom Preview follows the last frame editor');
+  const timeline=collect(host,n=>n.className==='modern-studio-timeline-pane')[0];
+  assert.equal(timeline.children[timeline.children.length-2],bars[1],
+    'bottom Preview remains adjacent to the timeline instead of behind project settings');
   host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),{prepare:()=>calls.push('preview')},true,{activeId:'saved-1'});
   assert.equal(collect(host,n=>n.textContent&&n.textContent.includes('Saved project linked')).length,2);
