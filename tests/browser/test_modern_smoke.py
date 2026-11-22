@@ -7844,6 +7844,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                     storage:document.getElementById('ModernCalibrationStorage').textContent};
             }""")
             print('CALIBRATION_RELOAD_DIAGNOSTIC:',diagnostic,flush=True)
+            attempted=self.page.evaluate("""async id => {
+                const e=CurvatureModernPhotoCalibrationEditor.mount(document);
+                sessionStorage.setItem('curvature-calibration-clean-reload-project-v1',id);
+                await e.resumeCleanProjectAfterReload();
+                return {project:e.projectPersistenceStatus(),
+                    status:document.getElementById('ModernCalibrationProjectsStatus').textContent,
+                    storage:document.getElementById('ModernCalibrationStorage').textContent};
+            }""",project_id)
+            print('CALIBRATION_MANUAL_REOPEN_DIAGNOSTIC:',attempted,flush=True)
             raise
         workspace=self.page.locator('#ModernPhotoCalibration')
         expect(workspace).to_be_visible()
