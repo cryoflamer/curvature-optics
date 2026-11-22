@@ -4112,13 +4112,19 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(photo).to_be_visible()
             photo.hover(position={'x':80,'y':65})
             self.page.mouse.wheel(0,delta)
-            self.page.wait_for_function("""async ({id,revision}) => {
+            expected=live_view()
+            self.assertIsNotNone(expected,'wheel zoom must update the live photo viewport')
+            self.assertNotEqual(expected,before['view'])
+            # An unrelated autosave may advance the revision before the wheel
+            # snapshot is committed: wait for these exact viewport values.
+            self.page.wait_for_function("""async ({id,revision,expected}) => {
                 const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
                 const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
-                return p.revision>revision && s.projectId===id && !s.unsaved && s.pending===0;
-            }""",arg={'id':id,'revision':before['revision']},timeout=30000)
+                return p.revision>revision && s.projectId===id && !s.unsaved && s.pending===0 &&
+                    JSON.stringify(p.checkpoint.payload.draft.view)===JSON.stringify(expected);
+            }""",arg={'id':id,'revision':before['revision'],'expected':expected},timeout=30000)
             after=stored(id)
-            self.assertNotEqual(after['view'],before['view'])
+            self.assertEqual(after['view'],expected)
             self.assertEqual(live_view(),after['view'])
             self.assertEqual(after['sha'],before['sha'])
             return after
