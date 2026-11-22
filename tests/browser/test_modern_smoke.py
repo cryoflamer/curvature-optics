@@ -3617,8 +3617,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             const saved=(await CurvatureModernAnimationLibrary.list(indexedDB))
               .find(r=>r.project.name==='Usage graph bridge project');
             const current=CurvatureModernApp.getAnimationStudioDraft();
-            return saved&&current&&current.libraryId===saved.id&&
-              current.selectedKey===saved.project.keyframes[0].key;
+            const opened=document.querySelector('#ModernAnimationLibrary .modern-animation-library-card.is-editing');
+            return saved&&current&&current.selectedKey===current.draft.frames[0].key&&
+              current.draft.frames[0].referenceImageIds?.length===1&&
+              opened?.getAttribute('data-animation-id')===saved.id;
         }""")
         diagnostic=self.page.evaluate("""() => ({
             mode:CurvatureModernApp.getWorkspaceMode(),
