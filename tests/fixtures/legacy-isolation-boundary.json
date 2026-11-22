@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 142,
-      "uniqueScripts": 140,
+      "scriptTags": 143,
+      "uniqueScripts": 141,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -202,6 +202,7 @@
         "src/animation/ModernReferenceImage.js",
         "src/animation/ModernReferenceImageLibrary.js",
         "src/ui/modern/ModernReferenceImageImport.js",
+        "src/ui/modern/ModernImageUsageGraph.js",
         "src/ui/modern/ModernReferenceImageLibraryUI.js",
         "src/ui/modern/ModernImagePicker.js",
         "src/animation/ModernAnimationSequences.js",
@@ -475,6 +476,7 @@
       "src/ui/modern/ModernExperimentThumbnail.js",
       "src/ui/modern/ModernGpuCapabilities.js",
       "src/ui/modern/ModernImagePicker.js",
+      "src/ui/modern/ModernImageUsageGraph.js",
       "src/ui/modern/ModernLandmarkViewer.js",
       "src/ui/modern/ModernLocationCatalog.js",
       "src/ui/modern/ModernPerformanceReport.js",
@@ -521,7 +523,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 234,
+  "sourceJsCount": 235,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -3644,6 +3646,16 @@
       ],
       "commonJsTestCallers": [
         "tests/ModernImagePicker.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernImageUsageGraph.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
     },
