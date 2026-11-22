@@ -3600,7 +3600,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
         # The saved project can already have the matching keyframe before
         # navigation; wait for the asynchronous guarded view switch itself.
-        self.page.wait_for_function("() => CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.wait_for_timeout(600)
+        snapshot=self.page.evaluate("""() => ({
+            workspace:CurvatureModernApp.getWorkspaceMode(),
+            view:CurvatureModernApp.getAnimationStudioView(),
+            status:document.querySelector('.modern-image-usage-status')?.textContent,
+            library:document.querySelector('#ModernAnimationLibrary')?.textContent?.slice(0,1000),
+            active:CurvatureModernApp.getAnimationStudioDraft()?.libraryId
+        })""")
+        self.assertEqual(snapshot['view'],'editor',snapshot)
         self.page.wait_for_function("""async () => {
             const saved=(await CurvatureModernAnimationLibrary.list(indexedDB))
               .find(r=>r.project.name==='Usage graph bridge project');
