@@ -659,17 +659,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         active_row=panel.locator('[data-calibration-project-id="'+active+'"]')
         expect(active_row).to_contain_text('Independent scene',timeout=30000)
+        expect(active_row).to_have_class(re.compile(r'is-selected'))
         expect(active_row.locator('[data-calibration-project-delete]')).to_be_disabled()
         self.page.once('dialog',lambda dialog:dialog.accept('Renamed independent'))
         active_row.locator('[data-calibration-project-rename]').click()
         expect(active_row).to_contain_text('Renamed independent',timeout=30000)
-        workspace.locator('#ModernCalibrationProjectsToggle').click()
-        with self.page.expect_download() as exported:
-            workspace.locator('#ModernCalibrationExportExperiment').click()
-        self.assertEqual(exported.value.suggested_filename,
-                         'calibration-Renamed independent.json')
-        workspace.locator('#ModernCalibrationProjectsToggle').click()
-        active_row=panel.locator('[data-project-active="true"]')
         active_row.locator('[data-calibration-project-duplicate]').click()
         copy_row=panel.locator('[data-calibration-project-id]').filter(
             has_text='Renamed independent (copy)')
@@ -698,6 +692,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         imported=panel.locator('[data-calibration-project-id]').filter(
             has_text='Soundly regression raster')
         expect(imported).to_have_count(1,timeout=30000)
+        expect(imported).to_have_class(re.compile(r'is-selected'))
+        expect(imported).to_have_attribute('data-project-active','false')
         imported_id=imported.get_attribute('data-calibration-project-id')
         self.assertEqual(self.page.evaluate("""async id => {
             const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
@@ -712,6 +708,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel).to_be_hidden(timeout=30000)
         expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
             'Soundly',timeout=30000)
+        with self.page.expect_download() as exported:
+            workspace.locator('#ModernCalibrationExportExperiment').click()
+        self.assertEqual(exported.value.suggested_filename,
+                         'calibration-Soundly regression raster.json')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        opened=panel.locator('[data-calibration-project-id="'+imported_id+'"]')
+        expect(opened).to_have_class(re.compile(r'is-selected'))
+        expect(opened).to_have_attribute('data-project-active','true')
+        expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_project_library_selection_is_separate_from_guarded_open(self):
