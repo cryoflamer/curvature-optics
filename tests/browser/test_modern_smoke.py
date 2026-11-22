@@ -731,6 +731,46 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(opened.locator('[data-calibration-project-open]')).to_have_count(0)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_calibration_standalone_photo_draft_saves_complete_new_project(self):
+        # A photo-bearing standalone draft can become a new full checkpoint
+        # without one-time Adopt, export conversion, or editor replacement.
+        workspace=self.open_physical_calibration()
+        self.import_calibration_experiment(self.soundly_calibration_experiment())
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        button=panel.locator('#ModernCalibrationProjectsSaveDraft')
+        expect(button).to_be_visible(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept('Recovered photo draft'))
+        button.click()
+        card=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Recovered photo draft')
+        expect(card).to_have_count(1,timeout=30000)
+        expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'separate verified project',timeout=30000)
+        saved_id=card.get_attribute('data-calibration-project-id')
+        evidence=self.page.evaluate("""async id => {
+            const project=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            const draft=project.checkpoint.payload.draft;
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            return {photo:!!project.photo?.identity?.sha256,
+                rowCount:project.overview.rowCount,
+                sourceUnchanged:editor.projectPersistenceStatus()?.projectId??null,
+                photoFree:draft.record===null,
+                embedded:JSON.stringify(project).includes('data:image'),
+                stage:draft.stage};
+        }""",saved_id)
+        self.assertTrue(evidence['photo'],evidence)
+        self.assertGreater(evidence['rowCount'],0,evidence)
+        self.assertTrue(evidence['photoFree'],evidence)
+        self.assertFalse(evidence['embedded'],evidence)
+        self.assertIsNone(evidence['sourceUnchanged'],evidence)
+        card.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding().projectId"""),
+            saved_id)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_calibration_new_project_can_be_deleted_while_open(self):
         workspace=self.open_physical_calibration()
         panel=workspace.locator('#ModernCalibrationProjectsPanel')

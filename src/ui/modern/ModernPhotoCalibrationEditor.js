@@ -863,6 +863,7 @@
       projectsRefresh=$('ModernCalibrationProjectsRefresh'),
       projectsSave=$('ModernCalibrationProjectsSave'),
       projectsNew=$('ModernCalibrationProjectsNew'),
+      projectsSaveDraft=$('ModernCalibrationProjectsSaveDraft'),
       projectsImport=$('ModernCalibrationProjectsImport'),
       projectsImportFile=$('ModernCalibrationProjectsImportFile'),
       projectsAdopt=$('ModernCalibrationProjectsAdopt'),
@@ -1010,6 +1011,9 @@
       projectsRefresh.disabled=projectListBusy;
       projectsAdopt.disabled=projectListBusy;
       projectsNew.disabled=projectListBusy;
+      projectsSaveDraft.hidden=!!projectSession?.project()||!scene||!record;
+      projectsSaveDraft.disabled=projectListBusy||restoring||!!pendingPhotoLoads||
+        !!fitWorker||applyBusy||projectSwitchBusy;
       projectsImport.disabled=projectListBusy;
     }
     function projectStamp(ts){
@@ -1265,6 +1269,37 @@
       }catch(error){projectActionMessage(error,'New failed');}
       finally{projectListBusy=false;renderProjects();}
     }
+    async function saveCurrentDraftAsNew(){
+      if(projectListBusy||!scene||!record||projectSession?.project())return;
+      if(restoring||projectSwitchBusy||fitWorker||applyBusy||pendingPhotoLoads||
+         photoGestures.active||resultGestures.active){
+        projectsMessage('Finish fitting, loading or editing before saving this draft.',true);
+        return;
+      }
+      const title=env.prompt('Save current standalone calibration as a new project',
+        (record.title||'Recovered calibration').slice(0,160));
+      if(title===null)return;
+      projectListBusy=true;renderProjects();
+      projectsMessage('Verifying the complete draft and saving as a new Calibration Project…');
+      try{
+        // Capture synchronously, before asynchronous photo/storage operations.
+        const source=captureDraftState(),inline=captureInlineState();
+        const capturedMutation=editorMutation;
+        const {actions}=projectActions();
+        const created=await actions.saveDraftAsNew(env,source,inline,{title:title.trim()});
+        // Never replace the source editor; Open is a separate guarded action.
+        projectSelectedId=created.id;
+        projectListBusy=false;
+        await refreshProjectList();
+        projectsMessage('Saved "'+created.title+'" as a separate verified project. '+
+          (editorMutation!==capturedMutation?'Current editor changed during saving; ':
+            'Current standalone draft was retained; ')+
+          'choose Open on the new card to edit the saved copy.');
+      }catch(error){projectsMessage('Save current draft failed: '+error.message+
+        '. Your original draft remains in the editor.',true);}
+      finally{projectListBusy=false;renderProjects();}
+    }
+    projectsSaveDraft.onclick=()=>void saveCurrentDraftAsNew();
     async function renameCalibrationProject(entry,title){
       const {storage}=projectActions();
       const active=projectSession?.project()?.id===entry.id;

@@ -82,5 +82,22 @@
     await storage.create(env.indexedDB,project);
     return project;
   }
-  return Object.freeze({emptyDraft,importedDraft,createNew,duplicate,importAsNew});
+  async function saveDraftAsNew(env,draft,inline=null,{title='Recovered calibration',
+      storage=store,files=checkpoint,now=Date.now()}={}){
+    // A first-class current-draft recovery, independent of one-time Legacy
+    // migration and the subset of data carried by a portable experiment.
+    files.validateDraft(draft,inline);
+    const parts=await files.captureVerified(copy(draft),inline===null?null:copy(inline),env);
+    const project=model.fresh({id:model.createId(env.crypto),title,now,...parts});
+    await storage.create(env.indexedDB,project);
+    // A successful transaction alone is not a verified recovery: reread the
+    // same row and ensure its original can still be hydrated from the Library.
+    const durable=await storage.get(env.indexedDB,project.id);
+    if(!durable||durable.revision!==project.revision||
+       durable.photo?.identity.sha256!==project.photo?.identity.sha256)
+      throw Error('Recovered calibration project could not be verified after save');
+    await files.prepare(durable,env);
+    return durable;
+  }
+  return Object.freeze({emptyDraft,importedDraft,createNew,duplicate,importAsNew,saveDraftAsNew});
 }));
