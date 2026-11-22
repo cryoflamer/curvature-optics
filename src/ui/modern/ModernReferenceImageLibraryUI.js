@@ -153,7 +153,7 @@
       if(selected)void showUses(selected);
     });
     var usageStatus=el('p','Select a saved original to inspect known uses.',usage);
-    usageStatus.setAttribute('role','status');
+    usageStatus.className='modern-image-usage-status';usageStatus.setAttribute('aria-live','polite');
     var usageGroups=el('div',undefined,usage);usageGroups.className='modern-image-usage-groups';
     var usageEpoch=0;
     async function navigateUse(use){
