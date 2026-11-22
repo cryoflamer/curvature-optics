@@ -4224,6 +4224,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             card = other.locator('#ModernAnimationLibrary [data-animation-id="' + project_id + '"]')
             expect(card).to_be_visible()
             card.get_by_role('button', name='Open saved animation').click()
+            # If recovery already owns this project, Open is intentionally a
+            # no-op; selecting Editor is still a separate navigation action.
+            other.locator('#ModernAnimationViewEditor').click()
             other_studio = other.locator('#ModernAnimationStudio')
             expect(other_studio).to_be_visible()
             original = studio.locator('.modern-studio-header').inner_text()
