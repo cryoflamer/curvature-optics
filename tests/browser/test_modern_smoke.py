@@ -3670,6 +3670,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         editor = self.page.locator('#ModernAnimationStudio')
         expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         editor.locator('.modern-studio-keyframe').first.click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         links = editor.locator('.modern-studio-reference-links')
         links.get_by_text('Browse photographs', exact=True).click()
         picker=self.page.locator('dialog.modern-image-picker')
