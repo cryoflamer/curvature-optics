@@ -3302,6 +3302,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual([rows[0]['width'],rows[0]['height']],[13,9])
         self.assertEqual(rows[0]['sourceUrl'],'')
         self.assertEqual(rows[0]['title'],'Clipboard image')
+        self.page.evaluate("async () => navigator.clipboard.writeText('No image here')")
+        panel.get_by_role('button',name='Paste image').click()
+        expect(panel.get_by_role('status')).to_contain_text('Clipboard contains no supported')
         panel.get_by_label('Title',exact=True).fill('My edited title')
         panel.get_by_label('Title',exact=True).press('Control+v')
         self.assertEqual(len(self.page.evaluate("""async () =>
