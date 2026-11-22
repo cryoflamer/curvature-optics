@@ -314,11 +314,10 @@
       conflicts.push({id:id,forkId:forkId});
       return forkId;
     }
-    // Deletions must be guarded by the same baseline as edits. A different
-    // tab's newer edits take precedence over a stale delete.
-    var removalIds=new Set((prior?prior.workspaces:[]).filter(function(entry){
-      return !next.workspaces.some(function(e){return e.id===entry.id;});
-    }).map(function(e){return e.id;}));
+    // Only an explicit tombstone is evidence of deletion. A queued snapshot
+    // captured before a concurrent merge may omit newly recovered drafts:
+    // absence alone must never delete those remote workspaces.
+    var removalIds=new Set();
     (next.removed||[]).forEach(function(item){
       if(!previouslyDeleted.has(item.id))removalIds.add(item.id);
     });
@@ -332,6 +331,10 @@
     });
     next.workspaces.forEach(function(entry){
       var old=originals.get(entry.id),live=latest.get(entry.id);
+      // The writer can queue a snapshot before a newer local transaction
+      // updates its baseline. Never replay that older checkpoint as an edit,
+      // even if the remote record still matches the *new* baseline.
+      if(old&&entry.checkpoint.savedAt<old.savedAt)return;
       // Untouched workspaces belong to the durable version, not the stale tab.
       if(equal(entry.checkpoint,old))return;
       if((live&&!equal(live,old))||(!live&&deletions.has(entry.id))){
