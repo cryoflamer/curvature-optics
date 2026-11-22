@@ -6553,6 +6553,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
+        workspace_id=banner.get_attribute('data-workspace-id')
         expect(banner.get_by_role('button',name='Apply + Save to History')).to_be_enabled()
         self.page.locator('#ModernHeight').fill(str(old_height+7))
         self.page.locator('#ModernHeight').press('Tab')
@@ -6565,6 +6566,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             entries: await CurvatureModernApp.getHistoryStore().list(),
             draft: CurvatureModernApp.getAnimationStudioDraft().draft
         })""")
+        durable=self.page.evaluate("""async id => {
+            const api=CurvatureModernAnimationDraftAutosave;
+            return api.getWorkspace(await api.readCollection(indexedDB),id).draft;
+        }""",workspace_id)
+        self.assertEqual(durable,first['draft'],'History provenance and frame must be durable')
         frame=first['draft']['frames'][3]
         self.assertEqual(frame['experiment']['scene']['camera']['Height'],old_height+7)
         self.assertIsInstance(frame['sourceSnapshotId'],int)
