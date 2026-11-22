@@ -663,8 +663,23 @@ the partial result; a retry must first inspect History. Cross-tab revision
 guards are preserved, and the session's entry draft is serialized through
 the same canonical draft checkpoint normalization as IndexedDB, avoiding
 spurious conflicts caused only by JavaScript property order.
-**Duplicate & Edit** and **replace linked History snapshot** remain separate
-unimplemented actions, not hidden variants of Apply.
+**Duplicate & Edit** is a separate Studio timeline action, distinct from
+editing an existing frame and from saving to History. It creates an independent
+frame directly after the source, with a collision-free key, a “(copy)” name,
+no inherited History provenance, a validated owned experiment and copied
+annotations/references. The source and all subsequent frames keep their
+travel/hold settings; the duplicate contributes a 1-second arrival transition
+and zero hold, so total duration increases by one second. When an authored
+active-frame subset includes the source, the copy joins it immediately after
+the source; copying an excluded frame keeps that copy excluded. The 200-frame
+limit remains enforced. The creation is one Studio Undo/Redo action, and the
+copy must be durably checkpointed before opening the contract-locked
+Scene/Compare editor. **Cancel & Return** cancels only temporary edits to the
+new frame, leaving the deliberately created copy in the working Studio draft;
+ordinary Studio Undo removes it. **Apply & Return** updates only the copy
+through the existing guarded path; no History snapshot is created implicitly.
+**Replace linked History snapshot** is still a deferred, optional design
+decision, not a hidden variant of either action.
 
 # Experimental Effective Radius Preview (Animation Studio)
 
