@@ -48,6 +48,7 @@ jobs:
             tests/ModernAnimationDraftAutosave.test.js \
             tests/ModernAnimationWorkspacePersistence.test.js \
             tests/ModernAnimationWorkspaceRecovery.test.js \
+            tests/ModernAnimationWorkspaceViews.test.js \
             tests/ModernUiBootstrap.test.js \
             tests/ModernPrimaryEntry.test.js \
             tests/HistoricalDocumentationCleanup141276.test.js \
