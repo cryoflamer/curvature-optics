@@ -50,6 +50,7 @@ jobs:
             tests/ModernAnimationWorkspaceRecovery.test.js \
             tests/ModernAnimationWorkspaceSwitch.test.js \
             tests/ModernAnimationWorkspaceViews.test.js \
+            tests/ModernAnimationStudio.test.js \
             tests/ModernAnimationInitialFrame.test.js \
             tests/ModernUiBootstrap.test.js \
             tests/ModernPrimaryEntry.test.js \

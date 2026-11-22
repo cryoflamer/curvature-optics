@@ -1681,3 +1681,23 @@ button{cursor:pointer}
 #ModernCalibrationProjectsSave[hidden]{display:none!important}
 #ModernCalibrationProjectsSave:not(:disabled){font-weight:650;border-color:#5b99cc;background:#e5f3ff}
 #ModernCalibrationProjectsSave:disabled{opacity:.65;cursor:default}
+
+/* Stage 3: persistent timeline and independent Inspector. */
+.modern-studio-editor-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,355px);align-items:start;gap:14px;margin-top:12px;min-width:0}
+.modern-studio-timeline-pane{min-width:0}
+.modern-studio-inspector-pane{min-width:0;box-sizing:border-box;border:1px solid #c7dceb;border-radius:9px;background:#f9fcff;padding:10px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto}
+.modern-studio-inspector-nav{display:flex;gap:6px;margin-bottom:9px}
+.modern-studio-inspector-nav button{flex:1;min-width:0;font-weight:650}
+.modern-studio-inspector-nav button[aria-pressed="true"]{background:#dceeff;border-color:#80b3dc}
+.modern-studio-frame-panel[hidden],.modern-studio-project-panel[hidden]{display:none!important}
+.modern-studio-inspector-pane .modern-studio-basics,.modern-studio-inspector-pane .modern-studio-frame-fields{grid-template-columns:1fr}
+.modern-studio-inspector-pane .modern-studio-selected-frame{margin:0;padding:9px}
+.modern-studio-inspector-pane .modern-studio-sequences{margin:10px 0 0;padding:9px}
+.modern-studio-diagnostics-disclosure{margin:9px 0;border:1px solid #d9c6a8;border-radius:7px;background:#fffaf4;color:#704521}
+.modern-studio-diagnostics-disclosure>summary{padding:9px 10px;cursor:pointer;font-weight:650}
+.modern-studio-diagnostics-disclosure .modern-studio-compatibility{border:0;margin:0;padding:0 10px 10px;background:transparent}
+@media(max-width:830px){
+  .modern-studio-editor-workspace{grid-template-columns:minmax(0,1fr)}
+  .modern-studio-inspector-pane{position:static;max-height:none;overflow:visible}
+  .modern-studio-inspector-pane .modern-studio-basics,.modern-studio-inspector-pane .modern-studio-frame-fields{grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr))}
+}

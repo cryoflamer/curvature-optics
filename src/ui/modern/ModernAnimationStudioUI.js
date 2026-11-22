@@ -1139,8 +1139,9 @@
     options=options||{};
     var entries=options.entries||[];
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
-    var previousEditor=host.querySelector&&host.querySelector('.modern-studio-editor-details');
-    var editorOpen=!prepared||!previousEditor||previousEditor.open;
+    if(host.__studioLastSelectedKey!==undefined&&host.__studioLastSelectedKey!==(selected&&selected.key))
+      host.__studioInspectorMode='frame';
+    host.__studioLastSelectedKey=selected&&selected.key;
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');
     heading.appendChild(el(doc,'strong','',options.readOnly?'Built-in demo · Read-only':'Edit animation · Working draft'));
@@ -1172,14 +1173,8 @@
       }
       return;
     }
-    if(options.storyboard){
-      var editorDetails=el(doc,'details','modern-studio-editor-details');
-      editorDetails.open=editorOpen;
-      editorDetails.appendChild(el(doc,'summary','','Keyframe Editor · project and frame settings'));
-      host.appendChild(editorDetails);host=editorDetails;
-    }
     host.appendChild(el(doc,'p','modern-studio-hint',
-      'Select a keyframe to pause and jump to its arrival when compatible and included in the preview. Preview does not save a project; use Save project in Animation Library above to keep it. Changes never alter the live experiment.'));
+      'Select a timeline keyframe to edit it in the Inspector. Preview does not save a project; use Library for permanent saves. Changes never alter the live experiment.'));
     host.appendChild(previewBar(doc,result,actions,prepared,options,false));
     var toolbar=el(doc,'div','modern-studio-toolbar');
     var undo=button(doc,'Undo','Undo the last animation draft edit',function(){if(actions.undo)actions.undo();});
@@ -1192,6 +1187,32 @@
     if(!draft.contract)toolbar.appendChild(button(doc,'Replace with Camera Animation…',
       'Replace ALL current keyframes with the Camera Animation after confirmation',actions.importCamera));
     host.appendChild(toolbar);
+    // Both Inspector modes reuse existing controllers; switching does not rerender inputs.
+    var workspace=el(doc,'div','modern-studio-editor-workspace');
+    var timelinePane=el(doc,'section','modern-studio-timeline-pane');
+    timelinePane.setAttribute('aria-label','Animation keyframe timeline workspace');
+    var inspectorPane=el(doc,'aside','modern-studio-inspector-pane');
+    inspectorPane.setAttribute('aria-label','Animation inspector');
+    var nav=el(doc,'div','modern-studio-inspector-nav');
+    nav.setAttribute('role','group');nav.setAttribute('aria-label','Inspector modes');
+    var framePane=el(doc,'section','modern-studio-frame-panel');
+    framePane.id='modern-studio-frame-inspector';
+    var projectPane=el(doc,'section','modern-studio-project-panel');
+    projectPane.id='modern-studio-project-inspector';
+    function showInspector(mode){
+      var isProject=mode==='project'||!selected;
+      host.__studioInspectorMode=isProject?'project':'frame';
+      framePane.hidden=isProject;projectPane.hidden=!isProject;
+      frameTab.setAttribute('aria-pressed',String(!isProject));
+      projectTab.setAttribute('aria-pressed',String(isProject));
+    }
+    var frameTab=button(doc,'Keyframe','Inspect selected keyframe',function(){showInspector('frame');});
+    frameTab.disabled=!selected;frameTab.setAttribute('aria-controls',framePane.id);
+    var projectTab=button(doc,'Project settings','Inspect project settings',function(){showInspector('project');});
+    projectTab.setAttribute('aria-controls',projectPane.id);
+    nav.appendChild(frameTab);nav.appendChild(projectTab);
+    inspectorPane.appendChild(nav);inspectorPane.appendChild(framePane);inspectorPane.appendChild(projectPane);
+    workspace.appendChild(timelinePane);workspace.appendChild(inspectorPane);host.appendChild(workspace);
     var basics=el(doc,'div','modern-studio-basics');
     basics.appendChild(field(doc,'Project name',draft.name,'text',function(value){actions.edit('name',value);},null,
       function(value){if(actions.liveEdit)actions.liveEdit('name',value);}));
@@ -1223,8 +1244,8 @@
       });
       basics.appendChild(field(doc,'Variable to animate',draft.target,'select',function(value){actions.edit('target',value);},choices));
     }
-    host.appendChild(basics);
-    host.appendChild(sequenceChooser(doc,draft,options,actions));
+    projectPane.appendChild(basics);
+    projectPane.appendChild(sequenceChooser(doc,draft,options,actions));
     var status=el(doc,'div','modern-studio-status');
     status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     if(draft.frames.length<2){
@@ -1246,11 +1267,18 @@
           'Experimental projects preserve all valid snapshots. No interpolation or video export is supported.':
           'One animation supports camera motion OR one physical parameter; all other scene settings must stay fixed. Inspect the exact transitions below.'));
     }
-    host.appendChild(status);
+    timelinePane.appendChild(status);
     if(draft.frames.length>=2&&!(draft.contract&&draft.contract.mode==='experimental')&&
       (!result.compatible||options.diagnosticTransition!==null&&
-      options.diagnosticTransition!==undefined))
-      host.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
+      options.diagnosticTransition!==undefined)){
+      var disclosure=el(doc,'details','modern-studio-diagnostics-disclosure');
+      disclosure.open=options.diagnosticTransition!==null&&options.diagnosticTransition!==undefined;
+      disclosure.appendChild(el(doc,'summary','',
+        'Transition diagnostics · '+(result.transitions||[]).length+' transitions'+
+        (!result.compatible?' · preview blocked':'')));
+      disclosure.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
+      timelinePane.appendChild(disclosure);
+    }
 
     if(selected){
       var previewEntry=frameEntry(selected,entries,options.resolveFrame);
@@ -1263,7 +1291,7 @@
       previewCaption.appendChild(el(doc,'p','',snapshotPresentation.frameSummary(previewEntry)));
       previewCaption.appendChild(el(doc,'small','',
         'Keyframe thumbnail · use the independent optical viewport above to play a prepared project.'));
-      preview.appendChild(previewCaption);host.appendChild(preview);
+      preview.appendChild(previewCaption);framePane.appendChild(preview);
     }
 
     // Inclusion in the playback sequence and selection for editing are separate states.
@@ -1280,7 +1308,7 @@
         '− '+(draft.frames.length-includedCount)+' excluded'));
       if(selected)legend.appendChild(el(doc,'span','modern-studio-legend-editing',
         'Editing: '+selected.name));
-      host.appendChild(legend);
+      timelinePane.appendChild(legend);
     }
     var filmstrip=el(doc,'ol','modern-studio-filmstrip');
     filmstrip.setAttribute('aria-label','Animation keyframe timeline');
@@ -1292,6 +1320,7 @@
       var pick=button(doc,'','Edit animation frame '+(i+1)+': '+frame.name+
         (hasSelection?(inPreview?' (in preview)':' (excluded from preview)'):'')+
         (frame===selected?' (currently editing)':''),function(){
+        host.__studioInspectorMode='frame';
         if(actions.select)actions.select(frame.key);
       });
       pick.className='modern-studio-keyframe'+(frame===selected?' is-active':'')+
@@ -1323,7 +1352,7 @@
       filmstrip.appendChild(item);
     });
     filmstrip.appendChild(dropSlot(doc,draft.frames.length,actions,options.pickerSelectedCount||0));
-    host.appendChild(filmstrip);
+    timelinePane.appendChild(filmstrip);
     if(selected){
       var index=draft.frames.indexOf(selected);
       var panel=el(doc,'section','modern-studio-selected-frame');
@@ -1381,12 +1410,13 @@
       }
       panel.appendChild(fields);
       renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage);
-      host.appendChild(panel);
+      framePane.appendChild(panel);
     }
-    host.appendChild(previewBar(doc,result,actions,prepared,options,true));
-    host.appendChild(el(doc,'p','modern-studio-hint',
-      'After a successful Preview, the page moves to Playback above. Edits require another Preview. ' +
-      'Export PNG/video from Playback; JSON backup and permanent project saves are in Animation Library.'));
+    timelinePane.appendChild(previewBar(doc,result,actions,prepared,options,true));
+    timelinePane.appendChild(el(doc,'p','modern-studio-hint',
+      'Preview opens playback in its own view; return to Editor to continue editing. '+
+      'PNG/video export is in Preview, permanent project saves are in Library.'));
+    showInspector(host.__studioInspectorMode);
   }
   return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,
     renderStoryboard:renderStoryboard,createPreviewNavigation:createPreviewNavigation});

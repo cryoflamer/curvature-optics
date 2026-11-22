@@ -1064,24 +1064,14 @@ test('Storyboard uses prepared subsequence arrival times and shared key selectio
   editor.renderStoryboard(doc,host,draft,[],[],null,()=>{});assert.equal(host.hidden,true);
 });
 
-test('Storyboard replaces redundant read-only list while owned projects retain collapsible editing',()=>{
+test('Editor timeline remains present after preview preparation even with Storyboard',()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=45;
-  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
-  const {doc,host}=mockDom();
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]),{doc,host}=mockDom();
   editor.render(doc,host,draft,studio.inspect(draft),{},true,{readOnly:true,storyboard:true});
   assert.equal(collect(host,n=>n.className==='modern-studio-filmstrip').length,0);
-  assert.equal(collect(host,n=>n.tagName==='button').length,0);
-  host.children=[];
   editor.render(doc,host,draft,studio.inspect(draft),{},true,{storyboard:true});
-  const details=collect(host,n=>n.className==='modern-studio-editor-details')[0];
-  assert.equal(details.open,true);
-  assert.equal(collect(details,n=>n.className==='modern-studio-filmstrip').length,1);
-  details.open=false;host.querySelector=()=>details;host.children=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{},true,{storyboard:true});
-  assert.equal(collect(host,n=>n.className==='modern-studio-editor-details')[0].open,false);
-  host.children=[];
-  editor.render(doc,host,draft,studio.inspect(draft),{},false,{storyboard:true});
-  assert.equal(collect(host,n=>n.className==='modern-studio-editor-details')[0].open,true);
+  assert.equal(collect(host,n=>n.className==='modern-studio-filmstrip').length,1);
+  assert.equal(collect(host,n=>n.className==='modern-studio-editor-details').length,0);
 });
 
 
@@ -1137,4 +1127,47 @@ test('reference editor lists shared photographs, labels missing IDs, and issues 
   assert.deepEqual(calls.pop(),['history-2','referenceImageIds',['photo_A','missing']]);
   section.isConnected=false;unlink.listeners.click();assert.equal(calls.length,0);
   assert.deepEqual(draft.frames[1].referenceImageIds,['missing','photo_A']);
+});
+
+test('Editor Inspector toggles without remounting timeline or changing draft',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=65;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),events=[];
+  const actions={select:key=>events.push(key),edit(){},frame(){},move(){},prepare(){}};
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-1'});
+  const timeline=collect(host,n=>n.className==='modern-studio-timeline-pane')[0];
+  const frame=collect(host,n=>n.className==='modern-studio-frame-panel')[0];
+  const project=collect(host,n=>n.className==='modern-studio-project-panel')[0];
+  const nav=collect(host,n=>n.className==='modern-studio-inspector-nav')[0];
+  assert.ok(timeline);assert.ok(frame);assert.ok(project);
+  assert.equal(frame.hidden,false);assert.equal(project.hidden,true);
+  assert.ok(collect(frame,n=>n.textContent==='Frame name').length);
+  const input=collect(frame,n=>n.tagName==='input')[0],buttons=collect(nav,n=>n.tagName==='button');
+  buttons[1].listeners.click();
+  assert.equal(frame.hidden,true);assert.equal(project.hidden,false);
+  assert.equal(buttons[1]['aria-pressed'],'true');
+  assert.equal(collect(host,n=>n.className==='modern-studio-timeline-pane')[0],timeline);
+  buttons[0].listeners.click();
+  assert.equal(collect(frame,n=>n.tagName==='input')[0],input);
+  buttons[1].listeners.click();
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-1'});
+  assert.equal(collect(host,n=>n.className==='modern-studio-project-panel')[0].hidden,false);
+  const keys=collect(host,n=>n.tagName==='button'&&n.className.includes('modern-studio-keyframe'));
+  keys[1].listeners.click();assert.deepEqual(events,['history-2']);
+  editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2'});
+  assert.equal(collect(host,n=>n.className==='modern-studio-frame-panel')[0].hidden,false);
+});
+
+test('Editor diagnostics retain exact values behind a compact disclosure',()=>{
+  const a=experiment(),b=clone(a),c=clone(a);
+  b.scene.camera.Height=55;c.scene.temperatureProfile.gradientKPerKm=11;
+  const draft=studio.history([1,2,3],[entry(1,a),entry(2,b),entry(3,c)]);
+  const {doc,host}=mockDom(),result=studio.inspect(draft);
+  assert.equal(result.compatible,false);
+  editor.render(doc,host,draft,result,{edit(){},frame(){},prepare(){}},false,{});
+  let d=collect(host,n=>n.className==='modern-studio-diagnostics-disclosure')[0];
+  assert.ok(d);assert.equal(d.open,false);assert.ok(collect(d,n=>n.tagName==='td').length);
+  editor.render(doc,host,draft,result,{edit(){},frame(){},prepare(){}},false,{diagnosticTransition:1});
+  d=collect(host,n=>n.className==='modern-studio-diagnostics-disclosure')[0];
+  assert.equal(d.open,true);
 });
