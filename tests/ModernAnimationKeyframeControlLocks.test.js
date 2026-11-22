@@ -33,6 +33,17 @@ test('canvas drag is available only for camera Pan and Nick channels',()=>{
   assert.equal(locks.cameraDragAllowed(['scene.surface.curvature'],'scene'),false);
   assert.equal(locks.cameraDragAllowed(['*'],'camera'),false);
 });
+test('camera gesture permissions match the mutated fields',()=>{
+  const full=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField']
+    .map(k=>'camera.'+k);
+  for(const kind of ['rotate','translate','zoom','dolly','keyboard'])
+    assert.equal(locks.cameraGestureAllowed(full,'camera',kind),true);
+  assert.equal(locks.cameraGestureAllowed(full,'scene','rotate'),false);
+  assert.equal(locks.cameraGestureAllowed(['camera.Pan','camera.Nick'],'camera','translate'),false);
+  assert.equal(locks.cameraGestureAllowed(['camera.Pan','camera.Nick'],'camera','zoom'),false);
+  assert.equal(locks.cameraGestureAllowed(['camera.Pan','camera.Nick'],'camera','keyboard'),false);
+  assert.equal(locks.cameraGestureAllowed(full,'camera','unknown'),false);
+});
 test('unmapped and experimental paths fail closed',()=>{
   assert.throws(()=>locks.inputIds(['*'],'camera'),/explicit/);
   assert.throws(()=>locks.inputIds(['camera.Unknown'],'camera'),/No safe UI/);
@@ -89,17 +100,40 @@ test('camera canvas pointer events pass the capture lock, other events do not',(
   const guard=locks.create(workspace,['camera.Pan','camera.Nick'],'camera');
   assert.equal(guard.allowsCameraDrag,true);
   let stopped=0;
-  function event(type,target=canvas){
-    listeners.get(type)({type,target,cancelable:true,
+  function event(type,target=canvas,modifier={}){
+    listeners.get(type)({type,target,...modifier,cancelable:true,
       preventDefault(){stopped++;},stopImmediatePropagation(){stopped++;}});
   }
   event('pointerdown');event('mousedown');
   assert.equal(stopped,0);
   event('wheel');event('keydown');event('pointerdown',other);
   assert.equal(stopped,6);
+  event('pointerdown',canvas,{shiftKey:true});assert.equal(stopped,8);
   guard.release();
   const physical=locks.create(workspace,['scene.surface.curvature'],'scene');
   assert.equal(physical.allowsCameraDrag,false);
-  event('pointerdown');assert.equal(stopped,8);
+  event('pointerdown');assert.equal(stopped,10);
   physical.release();
+});
+test('full camera contract allows translation, wheel zoom/dolly and canvas keys',()=>{
+  const canvas=node('','CANVAS'),listeners=new Map();
+  const workspace={querySelectorAll:()=>[],
+    addEventListener:(type,fn)=>listeners.set(type,fn),
+    removeEventListener:type=>listeners.delete(type)};
+  const paths=['CameraEast','CameraNorth','Height','Pan','Nick','Roll','FocalLengthField']
+    .map(k=>'camera.'+k);
+  const lock=locks.create(workspace,paths,'camera');
+  let blocked=0;
+  function invoke(type,modifier={}){
+    listeners.get(type)({type,target:canvas,...modifier,cancelable:true,
+      preventDefault(){blocked++;},stopImmediatePropagation(){blocked++;}});
+  }
+  invoke('pointerdown',{shiftKey:true});
+  invoke('wheel',{shiftKey:true});
+  invoke('wheel',{altKey:true});
+  invoke('keydown');invoke('keyup');
+  assert.equal(blocked,0);
+  invoke('wheel');
+  assert.equal(blocked,2);
+  lock.release();
 });

@@ -37,9 +37,17 @@
     });
     return Object.freeze(result);
   }
+  function cameraGestureAllowed(paths,scope,gesture){
+    if(scope!=='camera'||!Array.isArray(paths))return false;
+    var fields={
+      rotate:['Pan','Nick'],translate:['Height','CameraEast','CameraNorth'],
+      zoom:['FocalLengthField'],dolly:['CameraEast','CameraNorth'],
+      keyboard:['CameraEast','CameraNorth','Height','Pan','Nick','Roll']
+    }[gesture];
+    return !!fields&&fields.every(function(field){return paths.includes('camera.'+field);});
+  }
   function cameraDragAllowed(paths,scope){
-    return scope==='camera'&&Array.isArray(paths)&&
-      paths.includes('camera.Pan')&&paths.includes('camera.Nick');
+    return cameraGestureAllowed(paths,scope,'rotate');
   }
   function create(workspace,paths,scope){
     if(!workspace||typeof workspace.querySelectorAll!=='function'||
@@ -47,6 +55,7 @@
       throw TypeError('Mounted physical editor is required');
     var allowed=new Set(inputIds(paths,scope)),original=new Map(),active=true;
     var allowsCameraDrag=cameraDragAllowed(paths,scope);
+    function allowsGesture(gesture){return cameraGestureAllowed(paths,scope,gesture);}
     var lockReason='Locked by the animation project contract; permitted channel: '+paths.join(', ');
     var types='input,select,textarea,button,a,[role="button"]';
     function permit(node){
@@ -80,10 +89,15 @@
       if(!active)return;
       var target=event.target;
       if(event.type==='wheel'&&!target?.closest?.('canvas'))return; // normal page scrolling
-      // Only a real camera drag reaches the canonical canvas handler; wheel,
-      // keyboard and other events remain locked until separately authorized.
-      if(allowsCameraDrag&&(event.type==='pointerdown'||event.type==='mousedown')&&
-         target?.closest?.('canvas'))return;
+      var onCanvas=!!target?.closest?.('canvas');
+      if(onCanvas){
+        if((event.type==='pointerdown'||event.type==='mousedown')&&
+           allowsGesture(event.shiftKey?'translate':'rotate'))return;
+        if(event.type==='wheel'&&
+           ((event.shiftKey&&!event.altKey&&allowsGesture('zoom'))||
+            (event.altKey&&!event.shiftKey&&allowsGesture('dolly'))))return;
+        if((event.type==='keydown'||event.type==='keyup')&&allowsGesture('keyboard'))return;
+      }
       if(permittedEvent(target))return;
       if(event.cancelable&&event.preventDefault)event.preventDefault();
       if(event.stopImmediatePropagation)event.stopImmediatePropagation();
@@ -94,7 +108,7 @@
     events.forEach(function(type){workspace.addEventListener(type,guard,true);});
     refresh();
     return Object.freeze({allowedInputs:Object.freeze(Array.from(allowed)),
-      allowsCameraDrag:allowsCameraDrag,refresh:refresh,
+      allowsCameraDrag:allowsCameraDrag,allowsGesture:allowsGesture,refresh:refresh,
       release:function(){
         if(!active)return;
         active=false;
@@ -110,5 +124,5 @@
         original.clear();
       }});
   }
-  return Object.freeze({inputIds:inputIds,cameraDragAllowed:cameraDragAllowed,create:create});
+  return Object.freeze({inputIds:inputIds,cameraDragAllowed:cameraDragAllowed,cameraGestureAllowed:cameraGestureAllowed,create:create});
 }));

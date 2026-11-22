@@ -6808,7 +6808,7 @@
     if(navigationKeyActive())navigationFrame=requestAnimationFrame(navigationTick);
   }
   function keyboardAllowed(event){
-    if(keyframeEditSession)return false; // Gestures are not a safe contract channel.
+    if(keyframeEditSession&&!(keyframeControlLocks&&keyframeControlLocks.allowsGesture('keyboard')))return false;
     if(!event||event.altKey||event.metaKey||state.demosActive||animationWorkspaceOpen||photoCalibrationWorkspaceOpen||activeCameraPointer)return false;
     var target=event.target||document.activeElement;
     if(target){
@@ -7156,7 +7156,8 @@
       if(event.preventDefault)event.preventDefault();
     });
     canvas.addEventListener('pointerdown',function(event){
-      if(keyframeEditSession&&!(keyframeControlLocks&&keyframeControlLocks.allowsCameraDrag))return;
+      if(keyframeEditSession&&!(keyframeControlLocks&&
+         keyframeControlLocks.allowsGesture(event.shiftKey?'translate':'rotate')))return;
       if(event.button===1){if(event.preventDefault)event.preventDefault();return;}
       if(activeCameraPointer||(cameraPreview&&cameraPreview.isHolding())||
         event.button!==0||event.isPrimary===false||
@@ -7342,7 +7343,8 @@
     if(!canvas||typeof canvas.addEventListener!=='function'||
        !interaction||typeof interaction.focalWheel!=='function')return;
     canvas.addEventListener('wheel',function(event){
-      if(keyframeEditSession)return;
+      if(keyframeEditSession&&!(keyframeControlLocks&&
+         keyframeControlLocks.allowsGesture(event.shiftKey?'zoom':event.altKey?'dolly':'none')))return;
       // Some Windows/Opera configurations remap Shift+vertical wheel to
       // horizontal deltaX. Accept that delta only if deltaY is zero.
       var delta=event.deltaY||event.deltaX||0;
