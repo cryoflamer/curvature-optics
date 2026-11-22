@@ -4087,6 +4087,66 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             second.close()
 
+    def test_image_library_where_used_unsent_session_backup_is_visible_without_false_navigation(self):
+        import base64
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Session backup owner')
+        gallery=self.open_image_library()
+        photo=base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        gallery.locator('input[accept^="image/png"]').set_input_files({
+            'name':'session-reference.png','mimeType':'image/png','buffer':photo})
+        expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        photo_id=self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        links=self.page.locator('#ModernAnimationStudio .modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',
+            name='Select image session-reference.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        workspace=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
+        self.page.wait_for_function("""({id,photo}) =>
+            CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
+                .then(c=>c?.workspaces.some(w=>w.id===id&&
+                    w.checkpoint.draft.frames.some(f=>
+                        f.referenceImageIds?.includes(photo))))
+        """,arg={'id':workspace,'photo':photo_id},timeout=30000)
+        created=self.page.evaluate("""id => {
+            const backup=CurvatureModernAnimationDraftAutosave;
+            return backup.readCollection(indexedDB).then(current=>{
+                const row=backup.getWorkspace(current,id);
+                const pending=backup.checkpoint({...row,
+                    draft:{...row.draft,name:'Unsent local owner'}},
+                    row.savedAt+25);
+                const staged=backup.withWorkspace(current,id,pending,current.savedAt+26);
+                backup.writeSessionLocal(localStorage,staged,'session_unsent_abcdef');
+                return {stored:row.draft.name,unsent:pending.draft.name};
+            });
+        }""",workspace)
+        self.assertEqual(created['stored'],'Session backup owner')
+        self.assertEqual(created['unsent'],'Unsent local owner')
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',
+            name='Inspect session-reference.png (Local original)').click()
+        section=gallery.locator('.modern-image-usage')
+        pending=section.locator('.modern-image-usage-item').filter(
+            has_text='Unsent local owner')
+        expect(pending).to_have_count(1,timeout=30000)
+        expect(pending).to_contain_text('recoverable local backup')
+        expect(pending).to_contain_text('restore it before navigating')
+        expect(pending.get_by_role('button',name='Open use')).to_have_count(0)
+        expect(section).to_contain_text('Session backup owner')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),
+                         'images')
+        self.assertEqual(len(self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
+        self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

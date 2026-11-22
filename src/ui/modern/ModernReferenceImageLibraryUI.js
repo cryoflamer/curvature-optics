@@ -189,6 +189,11 @@
           use.ownerId,use.frameKey,use.revision,selected&&selected.id,
           use.source,use.draftContent);
       }else if(use.type==='calibration-draft'){
+        var currentCalibration=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
+        var livePhoto=currentCalibration?.snapshot?.()?.referenceImageId;
+        var liveOwner=currentCalibration?.projectBinding?.()?.projectId||'current';
+        if(livePhoto!==(selected&&selected.id)||liveOwner!==use.ownerId)
+          throw Error('Calibration working session changed; refresh Where used?');
         var calibrationTab=doc.getElementById('ModernPhotoCalibrationOpen');
         if(!calibrationTab)throw Error('Calibration workspace unavailable');
         calibrationTab.click();
@@ -226,7 +231,9 @@
               (use.frameIndex?' · keyframe '+use.frameIndex+': '+use.frameName:'')+
               ' · '+use.source,item);
             detail.title=use.ownerId;
-            if(['animation','calibration','draft','calibration-draft'].includes(use.type)){
+            if(use.type==='draft'&&use.source==='recoverable local backup'){
+              el('small','Unsent local recovery snapshot · open Animation Studio recovery to restore it before navigating. This snapshot is not the currently loaded workspace.',item);
+            }else if(['animation','calibration','draft','calibration-draft'].includes(use.type)){
               var open=button('Open use',item,function(){
                 navigateUse(use).catch(function(error){
                   usageStatus.textContent='Cannot open use: '+error.message;

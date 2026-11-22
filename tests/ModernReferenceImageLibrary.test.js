@@ -582,3 +582,33 @@ test('Where used retains same-ID and same-timestamp divergent recovery snapshots
   assert.deepEqual(report.uses.map(use=>JSON.parse(use.draftContent).frames[0].key),
     ['key1','key1']);
 });
+
+test('Library is the sole manual reference-acquisition UI; project JSON and cover uploads stay distinct',()=>{
+  const from=path.join(__dirname,'..');
+  const read=file=>fs.readFileSync(path.join(from,file),'utf8');
+  const libraryUI=read('src/ui/modern/ModernReferenceImageLibraryUI.js');
+  const studioUI=read('src/ui/modern/ModernAnimationStudioUI.js');
+  const calibration=read('src/ui/modern/ModernPhotoCalibrationEditor.js');
+  const picker=read('src/ui/modern/ModernImagePicker.js');
+  const html=read('CurvatureModern.html');
+  assert.match(libraryUI,/var file=field\(toolbar,'Import image','input'\)/);
+  assert.match(libraryUI,/button\('Import URL'/);
+  assert.match(libraryUI,/button\('Paste image'/);
+  assert.match(studioUI,/button\(doc,'Open Image Library'/);
+  assert.match(html,/id="ModernCalibrationOpenImageLibrary"/);
+  assert.doesNotMatch(picker,/input\.type=['"]file['"]|clipboard\.read|Import photo/);
+  assert.doesNotMatch(calibration,/accept=['"]image\/|\.accept=['"]image\/|Import photo/);
+  const covers=[...studioUI.matchAll(/input\.accept='image\/png,image\/jpeg,image\/webp'/g)];
+  assert.equal(covers.length,1,'the only separate image chooser is a project cover, not a reference original');
+  assert.match(studioUI.slice(covers[0].index-100,covers[0].index+370),/actions\.uploadCover/);
+  const fileInputs=[...html.matchAll(/<input\b[^>]*type="file"[^>]*>/g)].map(x=>x[0]);
+  assert.ok(fileInputs.length>0);
+  assert.ok(fileInputs.every(x=>/accept="\.json,application\/json"/.test(x)),
+    'Calibration/History file inputs in HTML must be JSON project transport, not image import');
+});
+test('Where used explicitly describes reachable archived summaries and unreachable external backups',()=>{
+  const report=usageGraph.report('photo',null,{archives:[]});
+  assert.match(report.note,/local archived Calibration results/);
+  assert.match(report.note,/external exports/);
+  assert.match(report.note,/Never authorize deletion/);
+});

@@ -98,7 +98,7 @@
     var uses=collect(selectedId,selectedIdentity,sources),unavailable=(failures||[]).slice();
     return {uses:uses,count:uses.length,complete:unavailable.length===0,
       unavailable:unavailable,
-      note:'Known uses in accessible local records only. Other browsers, removed projects, archives and inaccessible tabs are not included; never authorize deletion from this list.'};
+      note:'Known uses in accessible local projects, local archived Calibration results and recovery snapshots only. Foreign browsers, external exports, removed records and inaccessible tabs are not covered. Never authorize deletion from this list.'};
   }
   async function discover(env,row){
     var failures=[],sources={animations:[],calibrations:[],archives:[],drafts:[]};

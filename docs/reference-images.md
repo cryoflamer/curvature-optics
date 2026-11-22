@@ -385,7 +385,10 @@ Undo/Redo records or inaccessible stores. Failed reads are reported as
 Storyboard links use guarded draft switching **only if** the corresponding
 workspace still exists in the active local recovery collection; inaccessible
 or foreign-tab drafts report a navigation error rather than reconstructing a
-different project. Saved owner navigation verifies the current project
+different project. An unsent session-local snapshot that differs from the
+loaded workspace remains visible as historical recovery evidence, without
+an **Open use** action that could silently select a different version.
+These records must first be restored through Animation Studio recovery. Saved owner navigation verifies the current project
 revision and refuses stale links until the inspector is refreshed.
 **Zero known uses never authorizes deletion**; the physical-delete control
 remains disabled until the Stage 5 lifecycle safety contract exists.
@@ -626,6 +629,12 @@ same digest and remain separate usage rows. A selected demo asset can have
 shipped demo frames as usages; their keys remain namespaced and must not
 show local users merely because an ID string collides. Deduplicate duplicate
 **displays** of the same persisted owner relation, not distinct authored uses.
+
+Project-cover images uploaded in Animation Studio are **presentation covers**,
+not linked reference photographs. That existing cover-specific file input is
+distinct from the Image Library's sole manual reference-image acquisition
+entry point. JSON project, calibration and History imports likewise remain
+portable-data transport exceptions.
 
 The current read-only local scanner also inspects immutable Calibration Result
 Archive summaries by SHA-256 and oriented dimensions. Archived results remain
