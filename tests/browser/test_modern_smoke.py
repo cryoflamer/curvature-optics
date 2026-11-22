@@ -7816,6 +7816,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             history.replaceState(history.state,'',url.href);
         }""")
         self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        self.assertEqual(self.page.evaluate("""() =>
+            new URL(location.href).searchParams.get('studioView')"""),'editor')
         before_count=self.page.evaluate("""async () =>
             (await CurvatureModernCalibrationProjectStore.list(indexedDB)).length""")
         self.page.reload(wait_until='load',timeout=30000)
