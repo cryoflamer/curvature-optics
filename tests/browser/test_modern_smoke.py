@@ -7160,8 +7160,16 @@ class ModernBrowserSmoke(unittest.TestCase):
                          'both checkpoint row counts must be durable before F5')
         self.page.reload(wait_until='load',timeout=30000)
         expect(workspace).to_be_visible(timeout=30000)
-        self.assertIsNone(self.page.evaluate("""() =>
-            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        # A clean, acknowledged Project now resumes on F5. Verify that the
+        # exact opened A (not the last imported/selected B) is rebound.
+        self.page.wait_for_function("""id => {
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const binding=editor.projectBinding(),status=editor.projectPersistenceStatus();
+            return binding?.projectId===id && status.projectId===id &&
+                   status.pending===0 && !status.unsaved;
+        }""",arg=a['id'],timeout=30000)
+        self.assertEqual(live_state(),state_a,
+                         'F5 must restore A with its exact original and correspondence state')
         after_reload=stored()
         self.assertEqual(after_reload,before_reload,
                          'IndexedDB rows must remain byte-logically unchanged by F5')
@@ -7594,13 +7602,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(damaged).to_contain_text('Photograph unavailable',timeout=30000)
         expect(intact.locator('img[alt="Reference photograph"]')).to_be_visible(
             timeout=30000)
-        intact.locator('[data-calibration-project-open]').click()
-        expect(panel).to_be_hidden(timeout=30000)
+        # Clean F5 has already rebound the intact B project. Its card has no
+        # redundant Open action; reopening it could conceal a wrong restore.
         self.page.wait_for_function("""id => {
-            const status=CurvatureModernPhotoCalibrationEditor.mount(document)
-                .projectPersistenceStatus();
-            return status?.projectId===id && status.pending===0 && !status.unsaved;
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const binding=editor.projectBinding(),status=editor.projectPersistenceStatus();
+            return binding?.projectId===id && status?.projectId===id &&
+                   status.pending===0 && !status.unsaved;
         }""",arg=b['id'],timeout=30000)
+        self.assertEqual(active(),b['id'])
+        expect(intact.locator('[data-calibration-project-open]')).to_have_count(0)
+        toggle.click()
+        expect(panel).to_be_hidden(timeout=30000)
         before_failed_open=stored()
         self.assertEqual(before_failed_open[0],baseline[0],
                          'a missing original must not alter its owning project')
