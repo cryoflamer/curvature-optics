@@ -1164,7 +1164,7 @@
       // failed Open, etc.) during the final card rerender.
       if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&
          !projectListBusy&&!projectsStatus.classList.contains('is-error')&&
-         /^(?:\\d+ saved Calibration Project|Current editor: standalone draft|Opened Calibration Project:)/.test(
+         /^(?:\d+ saved Calibration Project|Current editor: standalone draft|Opened Calibration Project:)/.test(
            projectsStatus.textContent))
         projectsMessage('Opened Calibration Project: '+projectSession.project().title+'.');
       if(!state?.projectId&&!projectListBusy&&projectInspection?.status!=='recovery-required'&&
