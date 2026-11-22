@@ -4343,6 +4343,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(recovered.count('Stage 5 follow-up on recovered B'), 1, str(after))
             self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
                              'Stage 5 protected change A')
+            other.reload(wait_until='load')
+            expect(other.locator('#ModernAnimationEditorView')).to_be_visible()
+            self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Stage 5 follow-up on recovered B',
+                             'later edits to the recovery fork must themselves survive F5')
+            other.wait_for_function("""async () => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c && c.workspaces.filter(w=>w.checkpoint.draft.name==='Stage 5 protected change A').length===1
+                    && c.workspaces.filter(w=>w.checkpoint.draft.name==='Stage 5 follow-up on recovered B').length===1;
+            }""", timeout=30000)
             self.assertEqual(other_errors, [])
             self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
         finally:
