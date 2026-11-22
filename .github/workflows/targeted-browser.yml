@@ -72,28 +72,44 @@ jobs:
 
   new-browser-tests:
     if: ${{ github.event_name == 'push' }}
-    name: Newly added Chromium smoke tests
+    name: Changed Chromium smoke tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
-      - name: Discover newly added test methods
+      - name: Discover added or modified test methods
         id: discover
         run: |
           python - <<'PY'
+          import ast
           import os
           import re
           import subprocess
-          diff = subprocess.check_output(
-              ['git', 'diff', '--unified=0', 'HEAD^', 'HEAD', '--',
-               'tests/browser/test_modern_smoke.py'], text=True)
-          names = sorted(set(re.findall(
-              r'^\+    def (test_[A-Za-z0-9_]+)\(self\):', diff, re.MULTILINE)))
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('names=' + ' '.join(names) + '\n')
-          print('New browser tests:', names)
+          from pathlib import Path
+
+          path='tests/browser/test_modern_smoke.py'
+          diff=subprocess.check_output(
+              ['git','diff','--unified=0','HEAD^','HEAD','--',path],text=True)
+          touched=set()
+          for start,count in re.findall(
+                  r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@',
+                  diff,re.MULTILINE):
+              first=int(start)
+              touched.update(range(first,first+max(1,int(count or 1))))
+          tree=ast.parse(Path(path).read_text(encoding='utf-8'))
+          names=sorted({
+              method.name
+              for cls in tree.body
+              if isinstance(cls,ast.ClassDef) and cls.name=='ModernBrowserSmoke'
+              for method in cls.body
+              if isinstance(method,ast.FunctionDef) and method.name.startswith('test_')
+              and any(method.lineno<=line<=method.end_lineno for line in touched)
+          })
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as output:
+              output.write('names='+' '.join(names)+'\n')
+          print('Added or modified browser tests:',names)
           PY
       - uses: actions/setup-python@v6
         if: ${{ steps.discover.outputs.names != '' }}
@@ -110,7 +126,7 @@ jobs:
         run: |
           python -m pip install playwright==1.57.0
           python -m playwright install --with-deps chromium
-      - name: Run newly added Chromium tests
+      - name: Run changed Chromium tests
         if: ${{ steps.discover.outputs.names != '' }}
         env:
           TEST_NAMES: ${{ steps.discover.outputs.names }}
