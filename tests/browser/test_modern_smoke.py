@@ -4005,21 +4005,28 @@ class ModernBrowserSmoke(unittest.TestCase):
         open_project(a)
         self.assertEqual(live_state(),state_a)
         # A's history remains usable even after B's independent save.
+        # Every Undo/Redo must be acknowledged at a *new* durable revision;
+        # matching an older checkpoint with the same row count is insufficient.
+        revision=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a['id'])
+        def await_revision(count,previous):
+            self.page.wait_for_function("""async ({id,count,previous}) => {
+                const status=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return status.projectId===id && !status.unsaved && status.pending===0 &&
+                    row?.revision>previous && row.checkpoint.payload.draft.rows.length===count;
+            }""",arg={'id':a['id'],'count':count,'previous':previous},timeout=30000)
+            return self.page.evaluate("""async id =>
+                (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a['id'])
         workspace.locator('#ModernCalibrationRedo').click()
         expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
             expected_counts[0]-1)
+        revision=await_revision(expected_counts[0]-1,revision)
         workspace.locator('#ModernCalibrationUndo').click()
         expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
             expected_counts[0])
+        revision=await_revision(expected_counts[0],revision)
         self.assertEqual(live_state(),state_a)
-        # Undo updates the editor synchronously, but the checkpoint is
-        # serialized asynchronously. F5 must follow its durable acknowledgement.
-        self.page.wait_for_function("""async ({id,count}) => {
-            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
-            const row=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
-            return s.projectId===id && !s.unsaved && s.pending===0 &&
-                row?.checkpoint.payload.draft.rows.length===count;
-        }""",arg={'id':a['id'],'count':expected_counts[0]},timeout=30000)
 
         stored=lambda: self.page.evaluate("""async ids => Promise.all(
             ids.map(async id => {
