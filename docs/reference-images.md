@@ -109,8 +109,9 @@ browser disk usage); individual limits are unchanged. Lists expose thumbnails
 and dimensions, not originals; a bounded `getAll` is used internally for atomic
 quota checks and listing. Browser quota, decode and transaction errors surface
 in the panel. Browser storage remains local and may be cleared/evicted by the
-browser; external backups are essential. Project exports include reference IDs but not these
-assets yet.
+browser; external backups are essential. As implemented in 7C.5, newly exported
+linked-animation bundles include their original assets, while older ID-only
+files do not; see **Portable transport** below.
 
 `ModernReferenceImageImport` inspects raster header dimensions before decoding,
 uses the browser image decoder and verifies decoded display dimensions against
@@ -286,3 +287,182 @@ original set is rechecked atomically; concurrent changes trigger bounded retry.
 Existing quota and portable Studio import semantics are unchanged. Scans are
 bounded by existing library limits; no persistent digest index or schema migration
 is introduced. This API is not yet called by an Apply UI.
+
+## Unified Image Library architecture and migration contract (#26)
+
+This section fixes the ownership, identity, migration and safety requirements
+**before any schema upgrade or shared-picker implementation**. The existing
+Reference Image Library remains the one physical source of user-imported
+originals. The following is the planned compatibility contract, **not** a claim
+that unified classification, a complete usage graph, or safe deletion already
+exists.
+
+### Existing owners and resolution boundaries
+
+| Source or owner | Durable identity and actual relationship | Discovery or hazard |
+| --- | --- | --- |
+| Local Reference Image Library | `curvature-modern-reference-images` IndexedDB v1, `observations`, records `{id,revision,record}`; `record.version===1` contains original raster, optional thumbnail, provenance and camera facts | Authoritative local raster. The existing 100-record / 64 Mi-character quota, revision CAS and disabled `remove()` remain. `list()` is metadata-only; `get()` returns the full original. |
+| Saved Animation Library | `curvature-modern-animation-library` IndexedDB v1 `projects`; `project.keyframes[].referenceImageIds` addresses **local** observation aliases | Scan all saved projects and their exact frame references. Project keyframes have **no independent stable frame ID** in the current portable v1/v2 format; ordinal/name are not long-lived identity. |
+| Animation Studio working state | `curvature-modern-animation-draft` IndexedDB v1, version-2 collection, saved checkpoints, removals/tombstones; tab-local session recovery and bounded editor Undo/Redo | Active and inactive persisted workspaces are distinct from the saved Library. Recoverable tab-local/other-tab edits may not be enumerable by another tab; never call a partial scan exhaustive. Studio draft frames have their own `key`. |
+| Built-in demos | `ModernDemoCatalog` bundles carry their own `referenceImages` alongside read-only projects | Shipped assets belong to `(demo, catalog ID, observation ID)`, not `(local, observation ID)`. Browsing a demo does not import its originals; explicit Create copy uses collision-aware import. |
+| Photo Calibration working editor | `ModernPhotoCalibrationEditor` carries a verified original and working correspondence/Undo state; `photoChoices()` currently combines local observation rows, saved animation project labels and built-in demos into a long dropdown | Selection alone does not create a local alias. `acceptPhoto()` calls `ensureOriginal()` before committing a new photograph and discards correspondences only through its existing confirmation path. |
+| Saved Calibration Projects | `curvature-photo-calibration` IndexedDB v2 `projects` plus summaries; `project.photo.identity={version:1,sha256,width,height}`, with separate `aliasId` and source; image bytes are **not** stored in project checkpoints | Find the asset by **verified digest + oriented dimensions**, not by alias or thumbnail; the stored alias is provenance, not a guaranteed current local row ID. Scan active *and inactive* projects, including conflict forks and their retained checkpoints. |
+| Calibration result archive | `curvature-modern-calibration-results` IndexedDB v1 `results`; the immutable result payload refers to verified photo identity | Results are separate durable users of an original, even when a Calibration Project is deleted or inactive. Do not deduce use from the current editor alone. |
+| Compare registration and presentation | Existing Compare/reference display and calibration-result navigation resolve originals through their owning archive or animation frame; generated simulation thumbnails live in separate caches | Count only actual durable photo links in the underlying owner, **not** image previews, temporary rendered pixels or repeated UI displays. New independently persisted presentation links require their own later relation adapter. |
+| Portable transport and recovery | `curvature-modern-animations` v1 for unlinked data, v2 with exact `referenceImages` for linked projects; calibration/photo formats and recovery checkpoints are distinct | Every referenced local ID must resolve before linked export. Import validates content and remaps conflicts before committing linked animation projects; an ID-only legacy linked file cannot safely choose a local original. Inaccessible exports and other browsers are **not** locally discoverable. |
+
+The image viewer, rendered History screenshots, gallery covers, calibrated
+residual plots and generated frame previews are **not automatically original
+observations**. They may become explicitly authored generated assets in a later
+feature, but must not be silently relabeled as independent photographic evidence.
+
+### Identity, namespaces, classification and quotas
+
+- **Canonical original:** use the existing verified `{version:1,sha256,width,height}`
+  identity, where SHA-256 covers **original encoded file bytes**, and dimensions
+  are browser-decoded/orientation-aware. Both `identify()` and
+  `ensureOriginal()/findOriginal()` must retain real decoder verification and
+  fail on inconsistent dimensions or digest collisions. A hash without decoded
+  verification is insufficient. Different encodings with identical visible
+  pixels remain **distinct originals**, not automatically interchangeable.
+- **Local alias:** `('local', observationId)` is never equivalent to
+  `('demo', demoId, observationId)` merely because the string IDs match.
+  Calibration identity can resolve multiple local aliases with the same
+  verified original. Such aliases need not have identical attribution or
+  image-kind metadata; never rewrite their provenance or the old links
+  merely to reduce duplicate rows.
+- **Image kind** describes the source material, not its use: photograph,
+  diagram, map, graph/plot, render, screenshot, illustration or other.
+  Existing observation v1 has no kind field: show a conservative
+  **legacy/unclassified** presentation until a user classifies it; do not infer
+  a scientific evidence claim from the MIME type or a filename. A simulation
+  screenshot may be a valid *presentation asset* without being an observation.
+- **Tags and collections** are optional bounded user metadata (no automatic
+  category from filenames, source URLs or imported captions). A role such as
+  calibration input, animation frame reference or illustration is derived from
+  a real owner relation; it must **not** become a single mutable `image.type`.
+- **Migration proposal:** keep `ModernReferenceImage` v1 raster/provenance
+  records and existing portable animation v1/v2 payloads unchanged. Store
+  classification/tags in a versioned **annotation store in the existing
+  Reference Image Library database**, keyed by local observation ID, with
+  its own optimistic revision. This is not a second original database.
+  The eventual IndexedDB schema bump must update **all** open-version callers,
+  including `list/get/create/update/importAssets/ensureOriginal/findOriginal`,
+  and must transact annotation and alias changes together. Missing annotation
+  defaults to unclassified at read time; do not eagerly rewrite every v1
+  original or generate thumbnails during upgrade.
+- **Compatibility:** existing observation rows, photo identity, metadata,
+  calibration project checkpoints, archive references and portable animation
+  v1/v2 exports must still load byte-identically. If classification is carried
+  in a future export, use an explicitly versioned optional transport extension
+  **without changing legacy payload interpretation**; older clients must
+  not silently misread annotations as original provenance. A newly upgraded
+  database may be unreadable by the older IndexedDB-v1 application
+  (`VersionError`): provide a validated legacy export and an explicit
+  backup/restore path *before* upgrade, not a claim of transparent rollback.
+- **Quota:** annotations/indexes and migration scratch space require explicit
+  bounded size accounting without weakening the 20 MiB original, 512 KiB
+  thumbnail, 100-original, or 64 Mi-character collection limits. Prevent a
+  partial upgrade, oversized tag entry or browser quota failure from silently
+  dropping original bytes; retain disabled deletion as the default.
+
+### “Where used?” relation and completeness contract
+
+“**All known local uses**” means all references discoverable from the
+**successfully scanned, accessible** authoritative sources listed above at the
+time of inspection. Results must carry a per-source status (`scanned`,
+`unavailable`, `stale` or `unsupported`), read revision and explanation.
+An error in one source is *partial visibility*, never “zero uses”.
+
+Recommended read-only relation descriptor:
+
+- `asset`: namespaced local/demo key **and/or** verified original identity,
+  with a distinction between an exact alias link and a content-identity match;
+- `owner`: type and stable project/result/workspace ID, source database,
+  revision or generation, and a readable project name;
+- `location`: selected keyframe identity or locator, calibration photo role
+  or archived-result ID; `role` reflects actual field usage, not user tags;
+- `evidence`: exact source path and lookup time, plus availability/revision
+  status; `navigate` is offered only when its target can be revalidated.
+
+For saved animations the current schema supplies **frame ordinal and project
+revision**, not a permanent frame UUID. A “Go to frame” link must fetch the
+project again, check its saved revision and original reference at the ordinal,
+and either navigate to that confirmed frame or show **moved/changed**, without
+silently opening another frame. Adding stable frame IDs later requires its own
+versioned project-migration design; do not repurpose `sourceSnapshotId` (History
+provenance) as a frame key. Studio working drafts already have frame `key`,
+but a stored checkpoint or a concurrent tab may supersede them.
+
+Calibration links match photo identity, **not** just `aliasId`. Saved
+Calibration Projects and separately archived results can both reference the
+same digest and remain separate usage rows. A selected demo asset can have
+shipped demo frames as usages; their keys remain namespaced and must not
+show local users merely because an ID string collides. Deduplicate duplicate
+**displays** of the same persisted owner relation, not distinct authored uses.
+
+A projected usage index may accelerate the inspector, but every view must
+reconcile against the appropriate authoritative records; never use cached
+counts or absent index rows as proof of global non-use. Explicitly label
+unavailable other-browser data, unopened external files, superseded session
+states and older application tabs as **outside guaranteed coverage**.
+Navigation must pass the owner’s existing unsaved-changes, revision and
+workspace-routing guards. Missing owners or unresolved images get actionable
+error states; no title-based or nearest-match substitution.
+
+**Delete remains disabled** until the system has a defensible deletion
+protocol across all durable stores *and* pending/in-memory/recoverable state
+in other tabs. Different IndexedDB databases do not share a transaction.
+A successful usage scan followed by an unrelated asset deletion is not
+atomic. A cross-tab lease/index can be stale, and cannot by itself prove
+absence of an older-tab Undo/recovery reference. If an authoritative,
+transaction-bound revalidation or stronger shared ownership protocol cannot
+guarantee safety, fail closed. Unlinking is a change to **one verified owner
+relation only**, and never deletes or recodes the original.
+
+### Rollout and pre-migration verification gates
+
+1. **Read-only usage scanner and coverage reporting first.** Enumerate saved
+   animation projects, all durable Studio workspaces, Calibration Projects
+   (including inactive/forks) and result archives by their own native APIs.
+   Include demos separately. Test partial/read errors, unverified aliases,
+   cloned or stale tabs, removed owners and missing originals. Keep global
+   deletion disabled.
+2. **Shared picker contract next, before replacing either UI:** context
+   supplied by caller (`calibration` single-select verified original versus
+   `animation-reference` bounded multiselect local alias), namespaced choice
+   keys, thumbnails, search and metadata, explicit Apply/Cancel and a
+   post-selection domain recheck. Browse/select/cancel performs **no write**.
+   Reuse calibration’s existing decoder/SHA/dimension/`ensureOriginal` path
+   only after the user confirms replacement; preserve correspondences and
+   unsaved project state on any failure. Never attach demo IDs directly as
+   local frame reference IDs.
+3. **Migration tests before an annotation-store upgrade:** seed actual v1
+   IndexedDB rows, linked animation v1/v2 projects, two different attribution
+   aliases with one original, active/inactive drafts, verified calibration
+   identities and archived results; then upgrade and assert unchanged
+   originals, revisions, IDs, provenance, camera metadata, links and decoded
+   hashes. Test malformed/oversized kind or tag data, quota abort, blocked
+   upgrade with old tabs, corrupted/missing annotation rows, and explicit
+   legacy backup export. The old v1 application must either safely fail to
+   open the newer schema or use a separately verified read-only fallback:
+   never write a downgrade migration that discards classifications or photos.
+4. **Portable / multi-owner tests:** ensure project import ID remapping never
+   redirects existing links; repeated import is idempotent; linked v2 bundle
+   includes one original for multiple uses; old ID-only linked exports fail
+   safely; duplicate demo/local ID strings stay separate; cross-browser
+   restore hydrates calibration identities only from verified originals.
+   Verify undo/recovery/tombstones, owner deletion and concurrent-tab
+   revisions; failed second-database writes must be retryable without
+   half-linked projects or unacknowledged orphan removal.
+5. **Browser and safety acceptance:** after the above APIs exist, targeted
+   Chromium tests must exercise both pickers, browse/cancel/no mutation,
+   missing and invalid originals, Where used? navigation and per-source
+   incomplete coverage. Manual Opera verification and real-data export/import
+   acceptance are separate. Do not close #26 on a green unit test or a
+   decorative use counter.
+
+This design deliberately defers the storage schema, metadata migration,
+shared visual picker and deletion enablement until the corresponding
+targeted implementation stages can enforce these contracts.
+
