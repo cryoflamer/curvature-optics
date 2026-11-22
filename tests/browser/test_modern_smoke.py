@@ -741,8 +741,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         # reason to return to Scene or reopen an already visible editor.
         workspace=self.page.locator('#ModernPhotoCalibration')
         expect(workspace).to_be_visible(timeout=30000)
-        workspace.locator('#ModernCalibrationProjectsToggle').click()
         panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        if not panel.is_visible():
+            workspace.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel).to_be_visible(timeout=30000)
         expect(panel.locator('[data-calibration-project-id="'+project_id+'"]')).to_have_count(0,timeout=30000)
         if remaining:
             expect(panel.locator('[data-project-active="true"]')).to_have_count(1,timeout=30000)
@@ -787,6 +789,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace=self.page.locator('#ModernPhotoCalibration')
         expect(workspace).to_be_visible(timeout=30000)
         panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        if not panel.is_visible():
+            workspace.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel).to_be_visible(timeout=30000)
         expect(panel.locator('[data-calibration-project-id="'+prior_id+'"]')).to_have_count(1,timeout=30000)
         active=panel.locator('[data-project-active="true"]')
         expect(active).to_have_count(1,timeout=30000)
