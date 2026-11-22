@@ -734,9 +734,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.once('dialog',lambda dialog:dialog.accept())
         with self.page.expect_navigation(wait_until='domcontentloaded'):
             active.locator('[data-calibration-project-delete]').click()
-        self.page.wait_for_function(
-            "() => !!window.CurvatureModernPhotoCalibrationEditor",timeout=30000)
-        workspace=self.open_physical_calibration()
+        # Reload retains the Calibration workspace preference; there is no
+        # reason to return to Scene or reopen an already visible editor.
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible(timeout=30000)
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         panel=workspace.locator('#ModernCalibrationProjectsPanel')
         expect(panel.locator('[data-calibration-project-id="'+project_id+'"]')).to_have_count(0,timeout=30000)
