@@ -8782,6 +8782,20 @@
       }
       var target=referenced(saved.draft);
       if(!target)throw Error('Referenced draft keyframe or photograph changed; refresh Where used?');
+      if(source!=='current'){
+        // A locally loaded checkpoint may have been superseded in IndexedDB
+        // by another tab since Where used? last scanned it. Re-read the
+        // durable owner before any workspace/tab side effect.
+        var inspectedGeneration=studioDraftGeneration;
+        var inspectedWorkspace=studioWorkspaceId;
+        var latest=await studioDraftAutosave.readCollection(root.indexedDB);
+        var durable=latest&&studioDraftAutosave.getWorkspace(latest,workspaceId);
+        if((source==='recoverable'&&!durable)||
+           (durable&&durable.savedAt!==expectedSavedAt))
+          throw Error('Recoverable Storyboard changed in another tab; refresh Where used?');
+        if(studioDraftGeneration!==inspectedGeneration||studioWorkspaceId!==inspectedWorkspace)
+          throw Error('Storyboard changed during recovery check; refresh Where used?');
+      }
       var tab=newUiEl('ModernAnimationTab');
       if(!tab)throw Error('Animation workspace unavailable');
       tab.click();

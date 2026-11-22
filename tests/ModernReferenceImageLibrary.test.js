@@ -549,3 +549,20 @@ test('Shipped demo uses are namespaced separately from local aliases with identi
   assert.deepEqual(usageGraph.demoReferences(demo,'different'),[],
     'a frame ID without a shipped original is not a resolved demo asset');
 });
+
+test('Where used retains both local photo owners after a separate Storyboard fork',()=>{
+  const photo='same_original';
+  const frame={key:'same_frame',name:'Linked frame',referenceImageIds:[photo]};
+  const drafts=[
+    {id:'project_owned',source:'recoverable',checkpoint:{savedAt:150,
+      draft:{name:'Tab B photo edits',frames:[frame]}}},
+    {id:'draft_forked',source:'recoverable',checkpoint:{savedAt:170,
+      draft:{name:'Tab A recovered photo edits',frames:[frame]}}}
+  ];
+  const result=usageGraph.report(photo,null,{drafts});
+  assert.equal(result.complete,true);
+  assert.equal(result.count,2);
+  assert.deepEqual(result.uses.map(u=>u.ownerId),['draft_forked','project_owned']);
+  assert.equal(new Set(result.uses.map(u=>u.frameKey)).size,1,
+    'equal frame keys do not collapse independent recovery owners');
+});

@@ -3902,6 +3902,127 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
 
+    def test_image_library_where_used_two_tab_storyboard_fork_and_stale_checkpoint(self):
+        import base64
+        self.open_modern()
+        self.open_animation()
+        self.create_camera_project('Shared photo in two tabs')
+        gallery=self.open_image_library()
+        payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElEQVQIHWP4z8AAAAMBAQD3mGvBAAAAAElFTkSuQmCC')
+        gallery.locator('input[accept^="image/png"]').set_input_files({
+            'name':'two-tabs-reference.png','mimeType':'image/png','buffer':payload})
+        expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        image_id=self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0].id""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        links=studio.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image two-tabs-reference.png (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        workspace=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
+        self.assertTrue(workspace.startswith('project_'),workspace)
+        self.page.wait_for_function("""({id,photo}) => {
+            return CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
+                .then(c => c?.workspaces.some(w=>w.id===id &&
+                    w.checkpoint.draft.frames.some(f=>f.referenceImageIds?.includes(photo))));
+        }""",arg={'id':workspace,'photo':image_id},timeout=30000)
+
+        second=self.context.new_page()
+        errors=[]
+        second.on('pageerror',lambda exc:errors.append(str(exc)))
+        try:
+            self.assertEqual(second.goto(self.base_url,wait_until='load').status,200)
+            second.locator('#ModernAnimationTab').click()
+            second.locator('#ModernAnimationViewEditor').click()
+            second_studio=second.locator('#ModernAnimationStudio')
+            expect(second_studio).to_be_visible()
+            self.assertEqual(second.evaluate(
+                'CurvatureModernApp.getAnimationStudioWorkspaceId()'),workspace)
+            self.assertEqual(second.evaluate("""() =>
+                CurvatureModernApp.getAnimationStudioDraft().draft.frames[0]
+                    .referenceImageIds?.length"""),1)
+
+            # Tab A inspects the real persisted checkpoint before B changes it.
+            gallery=self.open_image_library()
+            gallery.get_by_role('button',name='Inspect two-tabs-reference.png (Local original)').click()
+            where=gallery.locator('.modern-image-usage')
+            stale=where.get_by_role('button',
+                name='Open draft Shared photo in two tabs frame 1 · recoverable')
+            expect(stale).to_be_visible(timeout=30000)
+            initial=self.page.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.find(w=>w.id===id).checkpoint.savedAt;
+            }""",workspace)
+
+            # Tab B changes the real shared workspace and commits to IndexedDB.
+            second_studio.get_by_role('button',name='Inspect project settings').click()
+            change=second_studio.get_by_label('Project name')
+            change.fill('Tab B photo edits')
+            change.press('Tab')
+            second.wait_for_function("""id => 
+                CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
+                    .then(c=>c?.workspaces.some(w=>w.id===id &&
+                        w.checkpoint.draft.name==='Tab B photo edits'))
+            """,arg=workspace,timeout=30000)
+            changed=self.page.evaluate("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c.workspaces.find(w=>w.id===id).checkpoint.savedAt;
+            }""",workspace)
+            self.assertGreater(changed,initial)
+            stale.click()
+            expect(where.locator('.modern-image-usage-status')).to_contain_text(
+                'Recoverable Storyboard changed in another tab')
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),
+                             'images')
+
+            # An independent A edit from the stale baseline must fork, not
+            # overwrite B's photo-linked frame. Both remain durable owners.
+            self.page.locator('#ModernAnimationTab').click()
+            self.page.locator('#ModernAnimationViewEditor').click()
+            studio=self.page.locator('#ModernAnimationStudio')
+            studio.get_by_role('button',name='Inspect project settings').click()
+            edit=studio.get_by_label('Project name')
+            edit.fill('Tab A recovered photo edits')
+            edit.press('Tab')
+            self.page.wait_for_function("""({id,photo}) =>
+                CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
+                    .then(c => c && c.workspaces.some(w=>w.id===id &&
+                        w.checkpoint.draft.name==='Tab B photo edits' &&
+                        w.checkpoint.draft.frames.some(f=>f.referenceImageIds?.includes(photo))) &&
+                        c.workspaces.some(w=>w.id.startsWith('draft_') &&
+                        w.checkpoint.draft.name==='Tab A recovered photo edits' &&
+                        w.checkpoint.draft.frames.some(f=>f.referenceImageIds?.includes(photo))))
+            """,arg={'id':workspace,'photo':image_id},timeout=30000)
+            fork=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
+            self.assertTrue(fork.startswith('draft_'),fork)
+            before=self.page.evaluate("""async ({photo,first,fork}) => {
+                const row=await CurvatureModernReferenceImageLibrary.get(indexedDB,photo);
+                const report=await CurvatureModernImageUsageGraph.discover(window,row);
+                const owners=report.uses.filter(u=>u.type==='draft' &&
+                    u.source==='recoverable' && [first,fork].includes(u.ownerId));
+                return {owners:owners.map(u=>[u.ownerId,u.title,u.frameIndex]),
+                    complete:report.complete,unavailable:report.unavailable};
+            }""",{'photo':image_id,'first':workspace,'fork':fork})
+            self.assertCountEqual(before['owners'],[
+                [workspace,'Tab B photo edits',1],
+                [fork,'Tab A recovered photo edits',1]],before)
+            gallery=self.open_image_library()
+            gallery.get_by_role('button',name='Inspect two-tabs-reference.png (Local original)').click()
+            where=gallery.locator('.modern-image-usage')
+            expect(where).to_contain_text('Tab B photo edits')
+            expect(where).to_contain_text('Tab A recovered photo edits')
+            self.assertEqual(len(self.page.evaluate("""async () =>
+                await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
+            self.assertEqual(errors,[])
+            self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                             self.console)
+        finally:
+            second.close()
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()
