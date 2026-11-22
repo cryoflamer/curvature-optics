@@ -1701,3 +1701,8 @@ button{cursor:pointer}
   .modern-studio-inspector-pane{position:static;max-height:none;overflow:visible}
   .modern-studio-inspector-pane .modern-studio-basics,.modern-studio-inspector-pane .modern-studio-frame-fields{grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr))}
 }
+
+.modern-studio-sequences-disclosure{margin:9px 0;border:1px solid #b7d5ed;border-radius:8px;background:#f4f9ff;color:#254e70}
+.modern-studio-sequences-disclosure>summary{padding:9px 10px;cursor:pointer;font-weight:650}
+.modern-studio-sequences-disclosure .modern-studio-sequences{margin:0;border:0;background:transparent;padding:0 9px 9px}
+.modern-studio-sequences-disclosure .modern-studio-sequences>strong{display:none}

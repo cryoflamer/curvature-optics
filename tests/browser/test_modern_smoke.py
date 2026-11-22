@@ -4005,6 +4005,28 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_editor_sequence_disclosure_retains_open_state(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        inspector = studio.locator('.modern-studio-project-panel')
+        expect(inspector).to_be_visible()
+        disclosure = inspector.locator('.modern-studio-sequences-disclosure')
+        expect(disclosure).to_be_visible()
+        expect(disclosure).not_to_have_attribute('open', '')
+        disclosure.locator('summary').click()
+        expect(disclosure).to_have_attribute('open', '')
+        # A valid project field commit rerenders the Studio, but should not
+        # collapse the user's open compatibility choices.
+        name = inspector.get_by_label('Project name')
+        name.fill('Sequence inspector disclosure')
+        name.press('Tab')
+        expect(disclosure).to_have_attribute('open', '')
+        expect(studio.locator('.modern-studio-filmstrip')).to_be_visible()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
     def test_animation_studio_views_share_draft_and_playback(self):
         self.open_modern()
         self.open_animation()

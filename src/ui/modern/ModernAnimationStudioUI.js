@@ -1139,6 +1139,12 @@
     options=options||{};
     var entries=options.entries||[];
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
+    // Preserve open disclosures across model-driven renders, without persisting
+    // transient UI choices in the animation project schema.
+    var previousSequences=host.querySelector&&host.querySelector('.modern-studio-sequences-disclosure');
+    var previousDiagnostics=host.querySelector&&host.querySelector('.modern-studio-diagnostics-disclosure');
+    if(previousSequences)host.__studioSequencesOpen=previousSequences.open;
+    if(previousDiagnostics)host.__studioDiagnosticsOpen=previousDiagnostics.open;
     if(host.__studioLastSelectedKey!==(selected&&selected.key))
       host.__studioInspectorMode=selected?'frame':'project';
     host.__studioLastSelectedKey=selected&&selected.key;
@@ -1245,7 +1251,19 @@
       basics.appendChild(field(doc,'Variable to animate',draft.target,'select',function(value){actions.edit('target',value);},choices));
     }
     projectPane.appendChild(basics);
-    projectPane.appendChild(sequenceChooser(doc,draft,options,actions));
+    if(draft.contract){
+      // Locked projects already explain their immutable contract in Basics.
+      projectPane.appendChild(sequenceChooser(doc,draft,options,actions));
+    }else{
+      var sequences=el(doc,'details','modern-studio-sequences-disclosure');
+      sequences.open=!!host.__studioSequencesOpen;
+      sequences.appendChild(el(doc,'summary','',
+        'Compatible sequences · '+(options.sequences||[]).length+' options'+
+        (draft.activeFrameKeys?' · '+draft.activeFrameKeys.length+' frames in preview':'')));
+      sequences.appendChild(sequenceChooser(doc,draft,options,actions));
+      sequences.addEventListener('toggle',function(){host.__studioSequencesOpen=sequences.open;});
+      projectPane.appendChild(sequences);
+    }
     var status=el(doc,'div','modern-studio-status');
     status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     if(draft.frames.length<2){
@@ -1273,7 +1291,9 @@
       (!result.compatible||options.diagnosticTransition!==null&&
       options.diagnosticTransition!==undefined)){
       disclosure=el(doc,'details','modern-studio-diagnostics-disclosure');
-      disclosure.open=options.diagnosticTransition!==null&&options.diagnosticTransition!==undefined;
+      disclosure.open=!!host.__studioDiagnosticsOpen||
+        options.diagnosticTransition!==null&&options.diagnosticTransition!==undefined;
+      disclosure.addEventListener('toggle',function(){host.__studioDiagnosticsOpen=disclosure.open;});
       disclosure.appendChild(el(doc,'summary','',
         'Transition diagnostics · '+(result.transitions||[]).length+' transitions'+
         (!result.compatible?' · preview blocked':'')));

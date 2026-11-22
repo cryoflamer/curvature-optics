@@ -1177,4 +1177,26 @@ test('Editor diagnostics retain exact values behind a compact disclosure',()=>{
   editor.render(doc,host,draft,result,{edit(){},frame(){},prepare(){}},false,{diagnosticTransition:1});
   d=collect(host,n=>n.className==='modern-studio-diagnostics-disclosure')[0];
   assert.equal(d.open,true);
+  d.open=false;
+  d.listeners.toggle();
+  editor.render(doc,host,draft,result,{edit(){},frame(){},prepare(){}},false,{});
+  d=collect(host,n=>n.className==='modern-studio-diagnostics-disclosure')[0];
+  assert.equal(d.open,false,'user-collapsed diagnostics stay collapsed after rerender');
+});
+
+test('Compatible sequences disclosure stays compact and preserves user-open state',()=>{
+  const a=experiment(),b=clone(a);b.scene.camera.Height=90;
+  const draft=studio.history([1,2],[entry(1,a),entry(2,b)]);
+  const {doc,host}=mockDom(),actions={edit(){},frame(){},prepare(){}};
+  const result=studio.inspect(draft);
+  editor.render(doc,host,draft,result,actions,false,{});
+  let disclosure=collect(host,n=>n.className==='modern-studio-sequences-disclosure')[0];
+  assert.ok(disclosure);assert.equal(disclosure.open,false,'sequence choices are closed by default');
+  assert.equal(collect(disclosure,n=>n.className==='modern-studio-sequences').length,1);
+  disclosure.open=true;
+  disclosure.listeners.toggle();
+  editor.render(doc,host,draft,result,actions,false,{});
+  disclosure=collect(host,n=>n.className==='modern-studio-sequences-disclosure')[0];
+  assert.equal(disclosure.open,true,'user-open sequence choices survive a draft render');
+  assert.deepEqual(draft.frames.map(f=>f.key),['history-1','history-2']);
 });
