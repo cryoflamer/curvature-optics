@@ -4116,6 +4116,13 @@ class ModernBrowserSmoke(unittest.TestCase):
                     w.checkpoint.draft.frames.some(f=>
                         f.referenceImageIds?.includes(photo))))
         """,arg={'id':workspace,'photo':photo_id},timeout=30000)
+        self.page.wait_for_timeout(850)
+        self.page.wait_for_function("""({id,photo}) =>
+            CurvatureModernAnimationDraftAutosave.readCollection(indexedDB)
+                .then(c=>c?.workspaces.some(w=>w.id===id&&
+                    w.checkpoint.draft.frames.some(f=>
+                        f.referenceImageIds?.includes(photo))))
+        """,arg={'id':workspace,'photo':photo_id},timeout=30000)
         created=self.page.evaluate("""id => {
             const backup=CurvatureModernAnimationDraftAutosave;
             return backup.readCollection(indexedDB).then(current=>{
@@ -4125,11 +4132,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                     row.savedAt+25);
                 const staged=backup.withWorkspace(current,id,pending,current.savedAt+26);
                 backup.writeSessionLocal(localStorage,staged,'session_unsent_abcdef');
-                return {stored:row.draft.name,unsent:pending.draft.name};
+                return {stored:row.draft.name,unsent:pending.draft.name,
+                    storedRefs:row.draft.frames[0].referenceImageIds||[],
+                    unsentRefs:pending.draft.frames[0].referenceImageIds||[]};
             });
         }""",workspace)
         self.assertEqual(created['stored'],'Session backup owner')
         self.assertEqual(created['unsent'],'Unsent local owner')
+        self.assertIn(photo_id,created['storedRefs'],created)
+        self.assertIn(photo_id,created['unsentRefs'],created)
         def inspect_backup():
             return self.page.evaluate("""async photo => {
                 const api=CurvatureModernAnimationDraftAutosave;
