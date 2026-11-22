@@ -194,14 +194,14 @@ The automatic push CI on `main` is a curated *fast* gate, not full verification.
 
 - The agent owns authoring, triggering (when supported), monitoring and diagnosing
   automated browser tests; do not routinely delegate test commands to the user.
-- New `test_...` methods added to `tests/browser/test_modern_smoke.py` on
-  `main` trigger the separate `targeted-browser.yml` push job, which discovers
-  newly added test methods from the pushed diff and runs **only those tests**.
+- Added **or modified** `test_...` methods in `tests/browser/test_modern_smoke.py`
+  on `main` trigger the separate `targeted-browser.yml` push job, which
+  selects only methods touched by that commit's diff and runs **those tests**.
   The agent must inspect the actual Actions run and logs before claiming PASS.
 - The same workflow retains manual `workflow_dispatch` with exact `test_name`
-  for rerunning a failed test or an existing modified test. If connected GitHub
-  tools lack dispatch permission, explicitly disclose that limitation; never
-  claim a manual dispatch was initiated. Prefer the automatic push path for new
+  for an unchanged existing test. If connected GitHub tools lack dispatch
+  permission, explicitly disclose that limitation; never claim a manual
+  dispatch was initiated. Prefer the automatic push path for new **and revised**
   tests; ask the user for a manual dispatch only when no automated route exists.
 - A green fast Node workflow is not Chromium evidence. A workflow skipped
   because no new test method was added is not a browser PASS. The automatic
