@@ -4318,6 +4318,30 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames.length'), 9)
         self.assertIsNone(self.page.evaluate("""() =>
             sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+    def test_animation_keyframe_f5_restores_pending_numeric_input(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        previous=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(previous+17))
+        # Reload immediately, without blur or the 420 ms input debounce.
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=previous+17)
+        expect(banner.get_by_role('button',name='Undo',exact=True)).to_be_enabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),previous)
 
     def test_animation_keyframe_f5_physical_compare_b_and_cancel_cleanup(self):
         self.open_modern()
@@ -4423,6 +4447,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(banner).to_be_visible()
         finally:
             popup.close()
+        # The opener still owns its clean editing checkpoint across F5.
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
         banner.get_by_role('button',name='Cancel & Return').click()
 
     def test_animation_keyframe_f5_recovery_does_not_overwrite_other_tab(self):
@@ -4483,6 +4511,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name;
         }""",workspace_id)
         self.assertEqual(remote_name,'Other tab owns this revision')
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name;
+        }""",workspace_id),'Other tab owns this revision')
 
     def test_animation_keyframe_edit_back_forward_and_second_tab_isolation(self):
         self.open_modern()
