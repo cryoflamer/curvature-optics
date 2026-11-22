@@ -4130,8 +4130,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             return after
 
         open_project(a)
+        self.assertIsNotNone(live_view(),
+                             'imported photo must start with a fitted viewport')
         view_a=zoom_and_save(a,-490)
         open_project(b)
+        self.assertIsNotNone(live_view(),
+                             'duplicate photo must have a valid initial viewport')
         self.assertNotEqual(live_view(),view_a['view'],
                             'a duplicate starts with the original fit viewport')
         view_b=zoom_and_save(b,370)
