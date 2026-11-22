@@ -3593,7 +3593,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(go).to_be_visible()
         go.click()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
-        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.page.wait_for_function("""async () => {
             const saved=(await CurvatureModernAnimationLibrary.list(indexedDB))
               .find(r=>r.project.name==='Usage graph bridge project');
@@ -3601,6 +3600,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             return saved&&current&&current.libraryId===saved.id&&
               current.selectedKey===saved.project.keyframes[0].key;
         }""")
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertEqual(self.page.evaluate("""async () => {
             const rows=await CurvatureModernReferenceImageLibrary.list(indexedDB);
             return rows.length;
