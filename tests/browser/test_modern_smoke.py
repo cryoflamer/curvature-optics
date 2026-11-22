@@ -5404,15 +5404,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(studio.locator('.modern-studio-preview-bar')).to_have_count(0)
         card = studio.locator('.modern-studio-filmstrip-item').nth(3)
         controls = card.locator('.modern-studio-card-actions')
-        expect(controls.locator('button')).to_have_count(2)
+        expect(controls.locator('button')).to_have_count(3)
+        expect(controls.get_by_role('button', name=re.compile(r'^Edit '))).to_have_count(1)
+        expect(controls.get_by_role('button', name=re.compile(r'^Duplicate and edit '))).to_have_count(1)
         self.assertEqual(self.page.evaluate('''() => {
             const card=document.querySelectorAll('.modern-studio-filmstrip-item')[3];
             const info=card.querySelector('.modern-card-info-button').getBoundingClientRect();
             const controls=[...card.querySelectorAll('.modern-studio-card-icon')].map(b=>b.getBoundingClientRect());
             const remove=card.querySelector('.modern-card-delete').getBoundingClientRect();
-            return controls.length===2 && info.right<=controls[0].left &&
-                   controls[0].right<=controls[1].left && controls[1].right<=remove.left;
-        }'''), True, 'Info, Properties, Edit and Remove must not overlap')
+            return controls.length===3 && info.right<=controls[0].left &&
+                   controls[0].right<=controls[1].left &&
+                   controls[1].right<=controls[2].left && controls[2].right<=remove.left;
+        }'''), True, 'Info, Properties, Edit, Duplicate and Remove must not overlap')
         card.get_by_role('button', name='Show details for').click()
         expect(self.page.get_by_role('dialog', name='Saved snapshot or animation details')).to_be_visible()
         self.page.get_by_role('button', name='Close details').click()
@@ -5425,7 +5428,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             draft: JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft),
             saved: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
         })""")
-        controls.get_by_role('button', name='Edit 04').click()
+        controls.get_by_role('button', name=re.compile(r'^Edit ')).click()
         banner = self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
         expect(banner).to_contain_text('04 · Low view, hidden spans')
