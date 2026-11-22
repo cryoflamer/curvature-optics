@@ -73,7 +73,10 @@
     var toolbar=el('div','modern-image-picker-toolbar',undefined,dialog);
     function control(label,tag){
       var wrapper=el('label','',undefined,toolbar);
-      el('span','',label,wrapper);return el(tag,'',undefined,wrapper);
+      el('span','',label,wrapper);
+      var input=el(tag,'',undefined,wrapper);
+      input.setAttribute('aria-label',label);
+      return input;
     }
     var search=control('Search images','input');search.type='search';search.placeholder='Title, author or usage';
     var source=control('Source','select'),kind=control('Kind','select'),sort=control('Sort','select');
