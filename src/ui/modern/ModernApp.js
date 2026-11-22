@@ -4374,6 +4374,14 @@
       var historyNotice='',historyError=false;
       if(saveToHistory){
         try{
+          // Finish the keyframe draft transaction before recording external
+          // provenance. The next edit must see the same durable revision, even
+          // if the user immediately reopens this frame in the same tab.
+          saveStudioDraft(false);
+          if(!await persistStudioWorkspace({requireDurable:true}))
+            throw Error('The applied keyframe could not be confirmed in durable storage');
+          if(studioWorkspaceId!==session.projectId)
+            throw Error('The working project changed during keyframe persistence');
           if(!experimentHistory||!historySnapshot)
             throw Error('History storage is unavailable');
           var saved=await experimentHistory.record(historySnapshot,'manual',historyImage);
@@ -4384,6 +4392,12 @@
                JSON.stringify(frame.experiment)===JSON.stringify(historySnapshot);}))
             throw Error('History saved, but the working keyframe changed before its link was attached');
           commit(second,saved.entry.id);
+          // A History link is also a draft edit. Do not report complete until
+          // it is durably acknowledged; otherwise immediate re-edit can hit a
+          // legitimate stale-revision guard on the previous checkpoint.
+          saveStudioDraft(false);
+          if(!await persistStudioWorkspace({requireDurable:true}))
+            throw Error('History saved, but its frame link could not be confirmed durably');
           historyNotice=' History snapshot #'+saved.entry.id+
             (saved.created?' saved.':' reused (identical snapshot).');
           resetHistoryBaseline();
