@@ -8746,6 +8746,26 @@
       }
       return {id:id,frameKey:frameKey||null};
     },
+    // Recoverable drafts are opened through the existing guarded workspace
+    // switch; unavailable snapshots are never silently reconstructed by ID.
+    openImageUsageDraft:async function(workspaceId,frameKey){
+      if(!studioWorkspaces||!studioWorkspaces.workspaces.some(function(w){return w.id===workspaceId;}))
+        throw Error('Recoverable draft is not in the current local workspace; inspect recovery before opening');
+      var tab=newUiEl('ModernAnimationTab');
+      if(!tab)throw Error('Animation workspace unavailable');
+      tab.click();
+      if(currentWorkspaceMode()!=='animation')throw Error('Animation workspace navigation blocked');
+      if(studioWorkspaceId!==workspaceId)await requestStudioSwitch('draft',workspaceId);
+      if(studioWorkspaceId!==workspaceId)throw Error('Draft switch was cancelled or blocked');
+      if(frameKey!==null&&frameKey!==undefined){
+        if(!studioDraft.frames.some(function(frame){return frame.key===frameKey;}))
+          throw Error('Referenced keyframe is missing from this recovered draft');
+        studioSelectedKey=frameKey;
+      }
+      setStudioView('editor',true,'push');
+      renderAnimationStudio(studioHistoryEntries);
+      return {workspaceId:workspaceId,frameKey:frameKey||null};
+    },
     getCalibrationView:function(){return workspaceState.calibrationView;},
     rememberCalibrationView:rememberCalibrationView,
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},
