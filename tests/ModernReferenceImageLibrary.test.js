@@ -421,3 +421,39 @@ test('malformed backup and missing v2 classification store fail before mutation'
   assert.equal((await library.list(target)).length,1);
   assert.equal(target.annotations.size,0);
 });
+
+
+const usageGraph=require('../src/ui/modern/ModernImageUsageGraph');
+test('Where used resolves exact animation frames, saved Calibration identity and independent drafts',()=>{
+  const image='original_1',identity={version:1,sha256:'a'.repeat(64),width:1176,height:791};
+  const saved=[
+    {id:'a1',updatedAt:1,project:{name:'Bridge A',keyframes:[
+      {key:'one',name:'First view',referenceImageIds:[image]},
+      {key:'two',name:'Second view',referenceImageIds:[image]}]}},
+    {id:'a2',updatedAt:2,project:{name:'Bridge B',keyframes:[
+      {key:'three',name:'Comparison',referenceImageIds:[image,'other']}]}}
+  ];
+  const drafts=[{id:'draft_local',checkpoint:{savedAt:4,draft:{
+    name:'Unpublished',frames:[{key:'four',name:'Draft frame',referenceImageIds:[image]}]}}}];
+  const calibrations=[
+    {id:'cal1',title:'Calibration 1',photo:identity,revision:4},
+    {id:'cal2',title:'Different dimensions',photo:{...identity,height:792},revision:1}
+  ];
+  const result=usageGraph.report(image,identity,{animations:saved,drafts,calibrations});
+  assert.equal(result.count,5);
+  assert.deepEqual(result.uses.filter(x=>x.type==='animation').map(x=>x.frameName),
+    ['First view','Second view','Comparison']);
+  assert.deepEqual(result.uses.filter(x=>x.type==='calibration').map(x=>x.ownerId),['cal1']);
+  assert.deepEqual(result.uses.filter(x=>x.type==='draft').map(x=>x.ownerId),['draft_local']);
+  assert.match(result.note,/never authorize deletion/);
+});
+test('Where used reports failed stores as incomplete and never joins different namespaced identities',()=>{
+  const id='same-id',identity={version:1,sha256:'f'.repeat(64),width:1,height:1};
+  assert.equal(usageGraph.identityKey({...identity,sha256:'z'.repeat(64)}),null);
+  const result=usageGraph.report(id,identity,{animations:[],calibrations:[
+    {id:'different',title:'Demo ID collision',photo:{...identity,sha256:'e'.repeat(64)}}]},
+    ['Animation Library unavailable']);
+  assert.equal(result.count,0);
+  assert.equal(result.complete,false);
+  assert.deepEqual(result.unavailable,['Animation Library unavailable']);
+});
