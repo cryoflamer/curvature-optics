@@ -581,9 +581,22 @@ the selected Scene/Compare A/B physical target. The separate
 Scene/Compare inputs; this mapping defines UI bindings, not new permitted
 physics. It disables every other physical control, preset, model switch,
 bulk action and alternate gesture path, and restores the previous disabled
-state on exit. Each candidate is also checked by
+state on exit. Compare A/B selection remains view-only; physical inputs are
+read-only when inspecting the opposite (non-contract) model. Each candidate is also checked by
 `ModernAnimationContract.inspectCandidate()` before a physical redraw;
 rejected changes restore the last valid preview.
+
+**Local Undo/Redo.** The active keyframe editor owns a bounded (30-step)
+temporary snapshot history with semantic gesture grouping: camera drags,
+held keyboard navigation and wheel bursts count as single edits, as do
+committed form edits. A/B inspection selection never changes the keyframe
+candidate or its history. The UI exposes Undo/Redo and the conventional
+Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z shortcuts outside active text inputs, where
+native editing shortcuts retain priority. A fresh edit clears redo.
+Cancel discards the local history; Apply commits only the current validated
+candidate through the separate Studio history below. No temporary history
+is saved to Library, History or the page's normal experiment session.
+F5 recovery of this temporary history is deferred to its own stage.
 
 **Apply.** `Apply & Return` checks the session's project/keyframe identity
 and generation, the persisted Library revision (if linked), and the Studio

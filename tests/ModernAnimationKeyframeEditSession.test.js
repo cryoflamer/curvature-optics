@@ -22,6 +22,36 @@ test('candidate and originals remain isolated from caller and workspace',()=>{
   assert.equal(s.original.camera.Height,10);
   assert.deepEqual(s.allowedPaths,['camera.Height']);
 });
+test('temporary undo/redo is isolated, grouped, bounded and invalidated by a new edit',()=>{
+  const s=sessions.begin(input()),initial=s.snapshot();
+  assert.deepEqual(s.history(),{undo:0,redo:0,dirty:false});
+  s.beginGroup('pointer');
+  s.replace({...initial,camera:{Height:11}});
+  s.replace({...initial,camera:{Height:12}});
+  s.endGroup('pointer');
+  assert.deepEqual(s.history(),{undo:1,redo:0,dirty:true});
+  assert.equal(s.undo().camera.Height,10);
+  assert.deepEqual(s.history(),{undo:0,redo:1,dirty:false});
+  assert.equal(s.redo().camera.Height,12);
+  assert.equal(s.undo().camera.Height,10);
+  s.replace({...initial,camera:{Height:15}});
+  assert.deepEqual(s.history(),{undo:1,redo:0,dirty:true});
+  assert.equal(s.redo(),null);
+  for(let h=16;h<=60;h++)s.replace({...initial,camera:{Height:h}});
+  assert.equal(s.history().undo,30);
+  assert.equal(s.prepareApply({projectId:'project-1',revision:'rev-1',
+    frameKey:'frame-1'}).experiment.camera.Height,60);
+  s.cancel();
+  assert.throws(()=>s.undo(),/ended/);
+});
+test('a gesture returning to its original pose leaves no undo step',()=>{
+  const s=sessions.begin(input()),initial=s.snapshot();
+  s.beginGroup('wheel');
+  s.replace({...initial,camera:{Height:16}});
+  s.replace(initial);
+  s.endGroup('wheel');
+  assert.deepEqual(s.history(),{undo:0,redo:0,dirty:false});
+});
 test('cancel restores preserved workspace and makes session terminal',()=>{
   const s=sessions.begin(input());
   s.replace({...s.snapshot(),camera:{Height:30}});

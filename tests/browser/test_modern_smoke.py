@@ -4199,6 +4199,55 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_keyframe_temporary_undo_redo_and_shortcuts(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        draft_before=self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        undo=banner.get_by_role('button',name='Undo',exact=True)
+        redo=banner.get_by_role('button',name='Redo',exact=True)
+        expect(undo).to_be_disabled()
+        expect(redo).to_be_disabled()
+        self.page.locator('#ModernModelTabA').click()
+        self.page.locator('#ModernModelTabB').click()
+        expect(undo).to_be_disabled()  # navigation is not an edit
+        before=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(before+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+3)
+        expect(undo).to_be_enabled()
+        expect(redo).to_be_disabled()
+        expect(banner).to_contain_text('Unsaved changes')
+        undo.click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before)
+        expect(redo).to_be_enabled()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""),draft_before)
+        redo.click()
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+3)
+        # Undo via shortcut outside native input and then branch the history.
+        redo.focus()
+        self.page.keyboard.press('Control+z')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before)
+        self.page.locator('#ModernHeight').fill(str(before+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+5)
+        expect(redo).to_be_disabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""),draft_before)
+
     def test_animation_keyframe_edit_session_f5_discards_preview(self):
         self.open_modern()
         before_mode = self.page.evaluate('CurvatureModernApp.getMode()')
@@ -4350,6 +4399,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.wait_for_function(
             'p => Math.abs(CurvatureModernApp.getModel().Pan-p)>0.0001',
             arg=original)
+        changed=self.page.evaluate('CurvatureModernApp.getModel().Pan')
+        undo=banner.get_by_role('button',name='Undo',exact=True)
+        redo=banner.get_by_role('button',name='Redo',exact=True)
+        expect(undo).to_be_enabled()
+        undo.click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',arg=original)
+        expect(undo).to_be_disabled()  # a full drag is exactly one action
+        redo.click()
+        self.page.wait_for_function(
+            'p => Math.abs(CurvatureModernApp.getModel().Pan-p)<0.0001',arg=changed)
         expect(self.page.locator('#ModernAtmosphere')).to_be_disabled()
         banner.get_by_role('button',name='Cancel & Return').click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()

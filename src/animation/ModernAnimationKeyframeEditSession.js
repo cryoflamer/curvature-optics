@@ -38,14 +38,51 @@
     var paths=options.contractApi.allowedPaths(contract);
     var workspace=clone(options.workspaceExperiment);
     var candidate=clone(original),active=true;
+    // Only candidate snapshots are recorded. This is independent from the
+    // persistent Studio edit history and disappears with the edit session.
+    var past=[],future=[],group=null,groupRecorded=false,limit=30;
+    var originalFingerprint=JSON.stringify(original);
     function assertActive(){if(!active)throw Error('Keyframe edit session has ended');}
     function snapshot(){assertActive();return clone(candidate);}
+    function history(){assertActive();return Object.freeze({
+      undo:past.length,redo:future.length,
+      dirty:JSON.stringify(candidate)!==originalFingerprint
+    });}
+    function beginGroup(token){
+      assertActive();
+      if(typeof token!=='string'||!token)throw TypeError('A gesture identity is required');
+      if(group!==token){group=token;groupRecorded=false;}
+    }
+    function endGroup(token){
+      assertActive();
+      if(token===undefined||group===token){group=null;groupRecorded=false;}
+    }
     function replace(next){
       assertActive();
       var copy=clone(next);
       if(!copy.display||copy.display.mode!==mode)
         throw RangeError('Keyframe editor mode cannot change');
-      candidate=copy;
+      if(JSON.stringify(copy)===JSON.stringify(candidate))return snapshot();
+      if(!groupRecorded){
+        past.push(clone(candidate));
+        if(past.length>limit)past.shift();
+        groupRecorded=!!group;
+      }else if(past.length&&JSON.stringify(copy)===JSON.stringify(past[past.length-1])){
+        // Returning to the gesture's starting pose is a no-op, not an
+        // extra history entry waiting to be undone.
+        past.pop();groupRecorded=false;
+      }
+      candidate=copy;future=[];
+      return snapshot();
+    }
+    function travel(direction){
+      assertActive();endGroup();
+      var from=direction==='undo'?past:future;
+      var to=direction==='undo'?future:past;
+      if(!from.length)return null;
+      to.push(clone(candidate));
+      if(to.length>limit)to.shift();
+      candidate=from.pop();
       return snapshot();
     }
     function cancel(){
@@ -66,6 +103,8 @@
     return Object.freeze({projectId:projectId,revision:revision,frameKey:frameKey,
       mode:mode,allowedPaths:immutable(clone(paths)),original:immutable(original),
       workspace:immutable(workspace),snapshot:snapshot,replace:replace,
+      history:history,beginGroup:beginGroup,endGroup:endGroup,
+      undo:function(){return travel('undo');},redo:function(){return travel('redo');},
       cancel:cancel,prepareApply:prepareApply,finish:finish,
       active:function(){return active;}});
   }

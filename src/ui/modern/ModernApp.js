@@ -583,7 +583,8 @@
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
   var keyframeEditReturnView=null,keyframeEditShellLocks=null;
   var keyframeControlLocks=null,keyframeEditUIBaseline=null,keyframeEditApplying=false;
-  var keyframeEditDraftAtEntry=null;
+  var keyframeEditDraftAtEntry=null,keyframeEditHistoryControls=null;
+  var keyframeEditRestoring=false,keyframeEditWheelGroupTimer=null;
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
@@ -4079,14 +4080,52 @@
     keyframeEditShellLocks.forEach(function(item){item.node.inert=item.inert;});
     keyframeEditShellLocks=null;
   }
+  function syncKeyframeEditHistoryControls(){
+    if(!keyframeEditSession||!keyframeEditHistoryControls)return;
+    var state=keyframeEditSession.history(),controls=keyframeEditHistoryControls;
+    controls.undo.disabled=keyframeEditApplying||!state.undo;
+    controls.redo.disabled=keyframeEditApplying||!state.redo;
+    controls.status.textContent=state.dirty?'Unsaved changes':'No changes';
+    controls.status.classList.toggle('is-dirty',state.dirty);
+  }
+  function endKeyframeEditWheelGroup(){
+    if(keyframeEditWheelGroupTimer!==null){
+      clearTimeout(keyframeEditWheelGroupTimer);keyframeEditWheelGroupTimer=null;
+    }
+    if(keyframeEditSession)keyframeEditSession.endGroup('wheel');
+  }
+  function restoreKeyframeEditHistory(direction){
+    if(!keyframeEditSession||keyframeEditApplying)return false;
+    endKeyframeEditWheelGroup();
+    cancelEdits();cancelPending();
+    stopCameraKeyboard(true);abortCameraDrag();stopAutoCameraPreview();
+    var session=keyframeEditSession;
+    var restored=direction==='undo'?session.undo():session.redo();
+    if(!restored)return false;
+    var selected=state.compareSelected;
+    keyframeEditRestoring=true;
+    try{
+      applyExperiment(restored);
+      // A/B inspection is a UI choice, not part of temporary undo history.
+      if(restored.display.mode==='compare')state.compareSelected=selected;
+      syncNumericInputs();syncCompareEditor();redraw();
+    }finally{keyframeEditRestoring=false;}
+    syncKeyframeEditHistoryControls();
+    return true;
+  }
   function validateKeyframePreview(){
-    if(!keyframeEditSession||keyframeEditEntering)return true;
+    if(!keyframeEditSession||keyframeEditEntering||keyframeEditRestoring)return true;
     try{
       var candidate=experimentSnapshot();
+      // Compare inspection selection must never enter the authored frame,
+      // where only the contract-authorized physical/camera fields may vary.
+      if(candidate&&candidate.compare&&keyframeEditSession.original.compare)
+        candidate.compare.selected=keyframeEditSession.original.compare.selected;
       var verdict=studioContractApi.inspectCandidate(studioDraft.contract,candidate);
       if(!verdict.allowed)
         throw RangeError('The animation contract rejected '+(verdict.issues[0]&&verdict.issues[0].path||'this edit'));
       keyframeEditSession.replace(candidate);
+      syncKeyframeEditHistoryControls();
       return true;
     }catch(error){
       var previous=keyframeEditSession.snapshot();
@@ -4108,7 +4147,7 @@
   async function applyStudioKeyframeEdit(button,commit){
     if(!keyframeEditSession||keyframeEditApplying)return;
     var session=keyframeEditSession;
-    keyframeEditApplying=true;button.disabled=true;
+    keyframeEditApplying=true;button.disabled=true;syncKeyframeEditHistoryControls();
     try{
       if(!validateKeyframePreview())
         throw RangeError('The candidate is not compatible with this project contract');
@@ -4159,6 +4198,7 @@
     }finally{
       keyframeEditApplying=false;
       if(keyframeEditSession===session)button.disabled=false;
+      syncKeyframeEditHistoryControls();
     }
   }
   // The existing Scene/Compare renderer remains authoritative; locks map
@@ -4220,6 +4260,25 @@
     banner.appendChild(explanation);
     var actions=document.createElement('div');
     actions.className='modern-keyframe-edit-actions';
+    var historyActions=document.createElement('div');
+    historyActions.className='modern-keyframe-edit-history-actions';
+    var undo=document.createElement('button');
+    undo.type='button';undo.className='modern-keyframe-edit-undo';
+    undo.textContent='Undo';undo.disabled=true;
+    undo.title='Undo this keyframe edit (Ctrl+Z)';
+    undo.addEventListener('click',function(){restoreKeyframeEditHistory('undo');});
+    historyActions.appendChild(undo);
+    var redo=document.createElement('button');
+    redo.type='button';redo.className='modern-keyframe-edit-redo';
+    redo.textContent='Redo';redo.disabled=true;
+    redo.title='Redo this keyframe edit (Ctrl+Y / Ctrl+Shift+Z)';
+    redo.addEventListener('click',function(){restoreKeyframeEditHistory('redo');});
+    historyActions.appendChild(redo);
+    var historyStatus=document.createElement('span');
+    historyStatus.className='modern-keyframe-edit-history-status';
+    historyStatus.textContent='No changes';
+    historyActions.appendChild(historyStatus);
+    actions.appendChild(historyActions);
     var cancel=document.createElement('button');
     cancel.type='button';cancel.className='modern-keyframe-edit-cancel';
     cancel.textContent='Cancel & Return';
@@ -4237,6 +4296,7 @@
     keyframeEditUIBaseline={sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:workspaceState.compareModel};
     keyframeEditSession=session;keyframeEditBanner=banner;
+    keyframeEditHistoryControls={undo:undo,redo:redo,status:historyStatus};
     physical.parentNode.insertBefore(banner,physical);
     document.body.classList.add('modern-keyframe-edit-active');
     try{
@@ -4251,6 +4311,7 @@
         target.parameter==='surface.curvature'?'Surface':'Atmosphere',false,false);
       physical.inert=false;
       keyframeControlLocks=keyframeControlLocksApi.create(physical,session.allowedPaths,scope);
+      syncKeyframeEditHistoryControls();
       lockKeyframeShell();
     }catch(error){
       document.body.classList.remove('modern-keyframe-edit-active');
@@ -4258,6 +4319,7 @@
       physical.inert=false;unlockKeyframeShell();
       if(banner.parentNode)banner.parentNode.removeChild(banner);
       keyframeEditSession=null;keyframeEditBanner=null;
+      keyframeEditHistoryControls=null;
       keyframeEditEntering=false;
       applyExperiment(session.cancel());syncNumericInputs();syncCompareEditor();
       resetHistoryBaseline();setMode('animation',false);
@@ -4269,8 +4331,9 @@
   }
   function cancelStudioKeyframeEdit(routeAction){
     if(!keyframeEditSession)return false;
+    endKeyframeEditWheelGroup();
     var session=keyframeEditSession,original=session.cancel();
-    keyframeEditSession=null;
+    keyframeEditSession=null;keyframeEditHistoryControls=null;
     document.body.classList.remove('modern-keyframe-edit-active');
     unlockKeyframeControls();
     var physical=newUiEl('ModernWorkspace');
@@ -4294,6 +4357,50 @@
     renderAnimationStudio(studioHistoryEntries);
     keyframeEditReturnView=null;keyframeEditDraftAtEntry=null;
     return true;
+  }
+  // Keyframe editor gesture grouping stays separate from Studio draft Undo.
+  // Text controls keep native undo while focused; once committed, a gesture
+  // becomes a single temporary keyframe history entry.
+  if(document&&typeof document.addEventListener==='function'){
+    document.addEventListener('focusin',function(event){
+      var workspace=newUiEl('ModernWorkspace'),node=event.target;
+      if(keyframeEditSession&&workspace&&workspace.contains(node)&&
+         node.matches&&node.matches('input,select,textarea')&&!node.disabled)
+        keyframeEditSession.beginGroup('field');
+    },true);
+    document.addEventListener('focusout',function(event){
+      var session=keyframeEditSession,node=event.target;
+      if(session&&node.matches&&node.matches('input,select,textarea'))
+        setTimeout(function(){if(keyframeEditSession===session)session.endGroup('field');},0);
+    },true);
+    document.addEventListener('pointerdown',function(event){
+      var workspace=newUiEl('ModernWorkspace'),node=event.target;
+      if(!keyframeEditSession||!workspace||!workspace.contains(node))return;
+      if(node.closest&&node.closest('canvas.modern-camera-draggable')&&event.button===0&&
+         keyframeControlLocks&&keyframeControlLocks.allowsGesture(event.shiftKey?'translate':'rotate'))
+        keyframeEditSession.beginGroup('pointer');
+      else if(node.matches&&node.matches('input[type=range]:not(:disabled)'))
+        keyframeEditSession.beginGroup('pointer');
+    },true);
+    ['pointerup','pointercancel'].forEach(function(type){
+      document.addEventListener(type,function(){
+        var session=keyframeEditSession;
+        if(session)setTimeout(function(){if(keyframeEditSession===session)session.endGroup('pointer');},0);
+      },true);
+    });
+    document.addEventListener('keydown',function(event){
+      if(!keyframeEditSession||keyframeEditApplying||!(event.ctrlKey||event.metaKey)||
+         event.altKey)return;
+      var node=event.target,tag=String(node&&node.tagName||'').toLowerCase();
+      if(['input','textarea','select'].includes(tag)||
+         node&&(node.isContentEditable||node.closest&&node.closest('[contenteditable]')))return;
+      var key=String(event.key||'').toLowerCase();
+      var direction=key==='z'?(event.shiftKey?'redo':'undo'):
+        key==='y'&&!event.shiftKey?'redo':null;
+      if(!direction)return;
+      event.preventDefault();event.stopPropagation();
+      restoreKeyframeEditHistory(direction);
+    },true);
   }
   // Animation Studio owns an independent draft, thumbnail picker and timeline.
   // Only an explicitly confirmed Camera Animation import replaces keyframes.
@@ -6819,6 +6926,7 @@
     navigationStamp=null;navigationModifiers={fast:false,precise:false};
     if(navigationMoved){navigationMoved=false;markCustom();if(!deferRender)redraw();}
     else if(wasPreviewing&&!deferRender)redraw();
+    if(keyframeEditSession)keyframeEditSession.endGroup('keyboard');
   }
   function navigationTick(now){
     navigationFrame=null;
@@ -6878,6 +6986,7 @@
       if(!action||!keyboardAllowed(event))return;
       if(event.preventDefault)event.preventDefault();
       if(navigationKeys[action])return;
+      if(keyframeEditSession)keyframeEditSession.beginGroup('keyboard');
       var interruptedSequence=stopCameraTransition(false,'Transition interrupted by keyboard navigation',true);
       var settledWheel=!navigationKeyActive()&&settleCameraWheel();
       cancelEdits();
@@ -7396,6 +7505,11 @@
         }else next=interaction.focalWheel(model.FocalLengthField,delta,event.deltaMode);
       }catch(error){updateStatus('Camera movement: '+error.message,true);return;}
       if(event.preventDefault)event.preventDefault();
+      if(keyframeEditSession){
+        keyframeEditSession.beginGroup('wheel');
+        if(keyframeEditWheelGroupTimer!==null)clearTimeout(keyframeEditWheelGroupTimer);
+        keyframeEditWheelGroupTimer=setTimeout(endKeyframeEditWheelGroup,450);
+      }
       if(event.altKey){
         if(next.CameraEast===model.CameraEast&&next.CameraNorth===model.CameraNorth)return;
         cancelEdits();model.CameraEast=next.CameraEast;model.CameraNorth=next.CameraNorth;
