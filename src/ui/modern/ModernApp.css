@@ -1419,8 +1419,17 @@ button{cursor:pointer}
 #ModernAnimationAtmosphereControl[hidden]{display:none!important}
 #ModernAnimationAtmosphereNote{max-width:340px;color:#587087}
 
-/* Independent observation library: deliberately collapsed by default. */
-.modern-reference-library{margin:10px 0;padding:10px 14px;border:1px solid #c6d8e9;border-radius:8px;background:#f7fbff;color:#183550}
+/* The Image Library is a first-class, independent Modern workspace. */
+.modern-image-library-workspace{box-sizing:border-box;width:min(1480px,calc(100% - 40px));margin:26px auto 48px}
+.modern-image-library-heading{margin:0 0 18px}
+.modern-image-library-heading h1{font-size:24px;color:#183550;margin:0 0 6px}
+.modern-image-library-heading p{color:#637c94;font-size:13px;line-height:1.5;margin:0}
+.modern-reference-library{padding:18px 20px;border:1px solid #c6d8e9;border-radius:11px;background:#f7fbff;color:#183550}
+.modern-image-library-workspace .modern-image-library-gallery{max-height:min(54vh,650px)}
+@media(max-width:650px){.modern-image-library-workspace{width:calc(100% - 20px);margin:12px auto 32px}
+  .modern-reference-library{padding:12px}}
+@media(min-width:851px) and (max-width:1450px){.modern-tabs{flex-wrap:wrap;justify-content:center}
+  .modern-tab{padding:8px clamp(7px,1vw,15px)}}
 .modern-reference-library>summary{font-weight:600;cursor:pointer}
 .modern-reference-body{display:grid;gap:8px;margin-top:10px}
 .modern-reference-body p{margin:4px 0;overflow-wrap:anywhere}
