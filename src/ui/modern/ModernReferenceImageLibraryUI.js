@@ -33,6 +33,51 @@
     el('p','Shared Image Library · original images remain local to this browser. Categories and tags are optional metadata, independent of how projects use an asset. Keep complete backups of your originals.',body);
     var toolbar=el('div',undefined,body);toolbar.className='modern-reference-toolbar';
     var file=field(toolbar,'Import image','input');file.type='file';file.accept='image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp';
+    var urlInput=field(toolbar,'Image URL','input');urlInput.type='url';
+    urlInput.placeholder='https://example.com/photo.jpg';urlInput.maxLength=4096;
+    var addUrl=button('Import URL',toolbar,function(){
+      if(!allowDiscard())return;
+      run(async function(){
+        var source=new URL(urlInput.value.trim());
+        if(!['http:','https:'].includes(source.protocol)||source.username||source.password)
+          throw Error('Enter an HTTP(S) image URL without credentials');
+        var response=await env.fetch(source.href,{mode:'cors',credentials:'omit',redirect:'follow'});
+        if(!response.ok)throw Error('Image download failed (HTTP '+response.status+')');
+        if(!response.body||!response.body.getReader)throw Error('Streaming image download is unavailable');
+        var reader=response.body.getReader(),chunks=[],total=0;
+        try{
+          while(true){
+            var part=await reader.read();if(part.done)break;
+            total+=part.value.byteLength;
+            if(total>20*1024*1024)throw RangeError('Image URL exceeds 20 MiB limit');
+            chunks.push(part.value);
+          }
+        }finally{reader.releaseLock();if(total>20*1024*1024)await response.body.cancel().catch(function(){});}
+        if(!total)throw Error('Image URL returned an empty file');
+        var bytes=new Uint8Array(total),offset=0;
+        chunks.forEach(function(chunk){bytes.set(chunk,offset);offset+=chunk.length;});
+        var basename=source.pathname.split('/').pop()||'URL image';
+        var name;
+        try{name=decodeURIComponent(basename);}catch(error){name='URL image';}
+        var imported=await ingestSource(new env.Blob([bytes]),name,source.href);
+        urlInput.value='';
+        return imported;
+      });
+    });
+    var paste=button('Paste image',toolbar,function(){
+      if(!allowDiscard())return;
+      run(async function(){
+        if(!env.navigator.clipboard||!env.navigator.clipboard.read)
+          throw Error('Clipboard image reading is unavailable. Use Ctrl+V inside Image Library instead.');
+        var items=await env.navigator.clipboard.read(),blob=null;
+        for(var i=0;i<items.length&&!blob;i++){
+          var type=items[i].types.find(function(t){return /^image\/(png|jpeg|webp)$/.test(t);});
+          if(type)blob=await items[i].getType(type);
+        }
+        if(!blob)throw Error('Clipboard contains no supported PNG, JPEG or WebP image');
+        return ingestSource(blob,'Clipboard image');
+      });
+    });
     var backup=button('Download full backup',toolbar,function(){run(async function(){
       var payload=await library.exportBackup(db),
         blob=new env.Blob([JSON.stringify(payload)],{type:'application/json'});
@@ -99,7 +144,8 @@
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;
       search.disabled=value;sourceFilter.disabled=value;kindFilter.disabled=value;
-      backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;gallery.inert=value;
+      backup.disabled=value;restoreFile.disabled=value;enable.disabled=value||classificationReady;
+      urlInput.disabled=value;addUrl.disabled=value;paste.disabled=value;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
@@ -233,9 +279,36 @@
         return 'Restored '+result.created+' original images and '+result.annotationsAdded+' classification records.';
       });
     });
+    async function ingestSource(blob,name,sourceUrl){
+      if(!blob||!Number.isSafeInteger(blob.size)||blob.size<1||blob.size>20*1024*1024)
+        throw RangeError('Select a PNG, JPEG or WebP image up to 20 MiB');
+      // Preserve the exact provided bytes; neither import nor deduplication recodes the original.
+      var fileLike={size:blob.size,name:name||'Image',arrayBuffer:function(){return blob.arrayBuffer();}};
+      var record=await importer.ingest(fileLike,library.makeId(env.crypto),env);
+      if(sourceUrl)record={...record,sourceUrl:sourceUrl};
+      var result=await library.ensureOriginal(db,record,env.crypto,function(r){return importer.verifyOriginal(r,env);});
+      await reload(result.row.id);
+      return result.reused?'Existing original reused; its attribution was not overwritten.':
+        'Image imported. Original bytes retained.';
+    }
     file.addEventListener('change',function(){var chosen=file.files[0];file.value='';if(!chosen||!allowDiscard())return;
-      run(async function(){var record=await importer.ingest(chosen,library.makeId(env.crypto),env);
-        await library.create(db,record);await reload(record.id);},'Photograph imported. Original bytes retained.');});
+      run(function(){return ingestSource(chosen,chosen.name);});});
+    host.addEventListener('paste',function(event){
+      if(busy||!host.open||event.defaultPrevented)return;
+      var target=event.target;
+      if(target&&target.closest&&target.closest('input,textarea,[contenteditable]'))return;
+      var items=event.clipboardData&&event.clipboardData.items;
+      if(!items)return;
+      var imageItem=null;
+      for(var i=0;i<items.length;i++){
+        if(/^image\/(png|jpeg|webp)$/.test(items[i].type)){imageItem=items[i];break;}
+      }
+      if(!imageItem)return;
+      event.preventDefault();
+      if(!allowDiscard())return;
+      var blob=imageItem.getAsFile();
+      run(function(){return ingestSource(blob,'Clipboard image');});
+    });
     editor.addEventListener('input',function(){dirty=true;});editor.addEventListener('change',function(){dirty=true;});
     editor.addEventListener('submit',function(event){event.preventDefault();if(!selected)return;
       run(async function(){var metadata={},cameraMetadata={};
