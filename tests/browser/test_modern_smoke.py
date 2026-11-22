@@ -3200,6 +3200,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(restored['hasBytes'])
         self.assertEqual(restored['total'], 1)
 
+    def test_image_library_direct_url_import_reuses_verified_original(self):
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.page.evaluate("""() => {
+            const originalFetch=window.fetch.bind(window);
+            window.fetch=(url,opts)=>{
+                if(url==='https://images.example.test/field-photo.png'){
+                    const c=document.createElement('canvas');c.width=15;c.height=11;
+                    c.getContext('2d').fillRect(0,0,15,11);
+                    return new Promise(resolve=>c.toBlob(blob=>resolve(
+                        new Response(blob,{status:200,headers:{'Content-Type':'image/png'}})),'image/png'));
+                }
+                return originalFetch(url,opts);
+            };
+        }""")
+        panel.get_by_label('Image URL').fill('https://images.example.test/field-photo.png')
+        panel.get_by_role('button',name='Import URL').click()
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        first=self.page.evaluate("""async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB))[0]""")
+        self.assertEqual(first['record']['sourceUrl'],'https://images.example.test/field-photo.png')
+        self.assertEqual([first['record']['original']['width'],first['record']['original']['height']],[15,11])
+        panel.get_by_label('Image URL').fill('https://images.example.test/field-photo.png')
+        panel.get_by_role('button',name='Import URL').click()
+        expect(panel.get_by_role('status')).to_contain_text('Existing original reused')
+        saved=self.page.evaluate("""async () => await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual(len(saved),1)
+        self.assertEqual(saved[0]['id'],first['id'])
+        self.assertEqual(saved[0]['record']['original'],first['record']['original'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_image_library_clipboard_button_imports_without_text_field_side_effects(self):
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.context.grant_permissions(['clipboard-read','clipboard-write'])
+        self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=13;c.height=9;
+            c.getContext('2d').fillRect(0,0,13,9);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        }""")
+        panel.get_by_role('button',name='Paste image').click()
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        rows=self.page.evaluate("""async () => await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual(len(rows),1)
+        self.assertEqual([rows[0]['width'],rows[0]['height']],[13,9])
+        panel.get_by_label('Title',exact=True).fill('My edited title')
+        panel.get_by_label('Title',exact=True).press('Control+v')
+        self.assertEqual(len(self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
