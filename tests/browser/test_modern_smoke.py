@@ -1150,9 +1150,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
             }""",project_id)
             self.assertEqual(after,committed)
-            self.assertEqual(self.page.evaluate("""() =>
-                CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""),None,
-                'reload must not silently activate a project')
+            self.page.wait_for_function("""id => {
+                const binding=CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding();
+                return binding?.projectId===id;
+            }""",arg=project_id,timeout=30000)
         finally:
             self.page.evaluate("""() => {
                 if(window.__calibrationQuotaPut)
@@ -7788,6 +7789,50 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(current['sha'],expected['sha'])
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
+
+    def test_calibration_clean_project_f5_resumes_despite_stale_studio_route(self):
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        data=self.soundly_calibration_experiment()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'resume-original.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')})
+        entry=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(entry).to_have_count(1,timeout=30000)
+        project_id=entry.get_attribute('data-calibration-project-id')
+        entry.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        self.page.wait_for_function("""id => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s?.projectId===id && s.pending===0 && !s.unsaved && !s.error;
+        }""",arg=project_id,timeout=30000)
+        # Stale Studio subroute from an earlier SPA visit.
+        self.page.evaluate("""() => {
+            const url=new URL(location.href);
+            url.searchParams.set('studioView','editor');
+            history.replaceState(history.state,'',url.href);
+        }""")
+        self.assertEqual(self.page.evaluate("CurvatureModernApp.getWorkspaceMode()"),'calibration')
+        self.page.reload(wait_until='load',timeout=30000)
+        self.page.wait_for_function("""id => {
+            return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
+              CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus()?.projectId===id;
+        }""",arg=project_id,timeout=30000)
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+            'Soundly',timeout=30000)
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        if not panel.is_visible():
+            workspace.locator('#ModernCalibrationProjectsToggle').click()
+        opened=panel.locator('[data-calibration-project-id="'+project_id+'"]')
+        expect(opened).to_have_attribute('data-project-active','true',timeout=30000)
+        expect(opened).to_contain_text('Opened')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
         import json

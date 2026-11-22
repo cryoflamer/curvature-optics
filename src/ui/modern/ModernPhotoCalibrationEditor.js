@@ -873,6 +873,17 @@
     const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
     const DELETED_PROJECT_HANDOFF_KEY='curvature-calibration-deleted-project-handoff-v1';
     const PREVIOUS_PROJECT_KEY='curvature-calibration-previous-opened-project-v1';
+    const RELOAD_PROJECT_KEY='curvature-calibration-clean-reload-project-v1';
+    // A clean, acknowledged project may be restored after reload. Keep only
+    // identity in sessionStorage; unsaved or failed writes must not auto-bind.
+    env.addEventListener('pagehide',()=>{
+      try{
+        const s=projectSession?.state();
+        if(s?.projectId&&!s.unsaved&&!s.pending&&!s.error)
+          env.sessionStorage?.setItem(RELOAD_PROJECT_KEY,s.projectId);
+        else env.sessionStorage?.removeItem(RELOAD_PROJECT_KEY);
+      }catch(_ignored){/* Optional session identity, never photo bytes. */}
+    });
     function rememberPreviousProject(previous,opened){
       if(!previous||previous===opened)return;
       try{env.sessionStorage?.setItem(PREVIOUS_PROJECT_KEY,previous);}catch(_ignored){}
@@ -965,10 +976,15 @@
       // project rows, preference storage or any other persistent cache.
       const photos=new Map(projectRows.filter(row=>row.photo).map(row=>
         [photoPreviewKey(row.photo),row.photo]));
-      for(const [key,identity] of photos){
-        if(token!==projectListToken||projectsPanel.hidden)return;
-        if(projectPreviews.has(key))continue;
-        let preview=null;
+      const pending=[...photos].filter(([key])=>!projectPreviews.has(key));
+      // Independently verified images can load concurrently, with a bounded
+      // worker count rather than waiting for every prior full photo decode.
+      let cursor=0;
+      async function worker(){
+        while(cursor<pending.length){
+          if(token!==projectListToken||projectsPanel.hidden)return;
+          const [key,identity]=pending[cursor++];
+          let preview=null;
         try{
           const found=await library.findOriginal(env.indexedDB,identity,env.crypto,
             original=>importer.verifyOriginal(original,env));
@@ -992,10 +1008,12 @@
             }
           }
         }catch(error){env.console?.warn?.('Calibration Project preview unavailable:',error);}
-        if(token!==projectListToken||projectsPanel.hidden)return;
-        projectPreviews.set(key,preview);
-        renderProjects();
+          if(token!==projectListToken||projectsPanel.hidden)return;
+          projectPreviews.set(key,preview);
+          renderProjects();
+        }
       }
+      await Promise.all(Array.from({length:Math.min(3,pending.length)},()=>worker()));
     }
     function projectsMessage(text,error=false){
       projectsStatus.textContent=text;
@@ -1144,6 +1162,11 @@
       // A generic library count may be replaced with editor context, but
       // never erase an explicit operation result (Adopt, Delete, Import,
       // failed Open, etc.) during the final card rerender.
+      if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&
+         !projectListBusy&&!projectsStatus.classList.contains('is-error')&&
+         /^(?:\\d+ saved Calibration Project|Current editor: standalone draft|Opened Calibration Project:)/.test(
+           projectsStatus.textContent))
+        projectsMessage('Opened Calibration Project: '+projectSession.project().title+'.');
       if(!state?.projectId&&!projectListBusy&&projectInspection?.status!=='recovery-required'&&
           !projectsStatus.classList.contains('is-error')&&
           /^(?:\d+ saved Calibration Project|Current editor: standalone draft)/.test(
@@ -1724,6 +1747,29 @@
         projectSwitchBusy=false;workspace.inert=formerInert;
         if(!activated&&switchInterference&&scene)void persist();
         syncFitControls();
+      }
+    }
+    async function resumeCleanProjectAfterReload(){
+      // No automatic activation without a clean tab-scoped exit identity;
+      // never replace the standalone recovery state after a failed write.
+      if(deletedProjectHandoff!==null||projectSession?.project()||
+         env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')return;
+      let id=null;
+      try{
+        id=env.sessionStorage?.getItem(RELOAD_PROJECT_KEY)||null;
+        env.sessionStorage?.removeItem(RELOAD_PROJECT_KEY);
+      }catch(_ignored){return;}
+      if(!id)return;
+      try{
+        env.CurvatureModernCalibrationProject.id(id);
+        const opened=await openCalibrationProject(id);
+        projectSelectedId=opened.project.id;
+        projectStartupStatus={status:'active',projectId:opened.project.id};
+        if(!projectsPanel.hidden)await refreshProjectList();
+        projectsMessage('Opened Calibration Project: '+opened.project.title+'.');
+      }catch(error){
+        projectsMessage('Last Calibration Project was not reopened: '+error.message+
+          '. Your standalone recovery draft remains available.',true);
       }
     }
     async function resumeAfterDeletedProject(){
@@ -2693,7 +2739,7 @@
     syncFitControls();syncPairToolbar();
     mounted={enter,restore:restoreDraft,inspectProjectStartup,
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
-      openCalibrationProject,adoptLegacyCalibrationDraft,
+      openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,
       projectBinding,linkArchivedResult,
       captureProjectCheckpoint,prepareProjectCheckpoint,calibrationStage:()=>({...calibrationStageState(stage,!!fitBest,resultCamera),resultViews:jsonCopy(resultViews)}),exportExperiment,importExperiment,objectSelection:()=>selectedObjectKey===null?null:jsonCopy(packages.get(selectedObjectKey)),inlineViewerState:()=>inlineViewer.snapshot(),inlineViewerCorrespondences:()=>inlineViewer.correspondences(),activeCorrespondence:()=>workflow.activePair,pairWorkflow:()=>workflow.snapshot(),fitResult:()=>fitBest?JSON.parse(JSON.stringify(fitBest)):null,fitProjectionFailures:()=>jsonCopy(fitFailures),snapshot:()=>scene&&record?{model:JSON.parse(JSON.stringify(scene.model)),physics:{...scene.physics},

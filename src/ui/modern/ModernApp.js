@@ -8626,7 +8626,9 @@
       var historyEntry=root.history&&root.history.state;
       var allowStudioRoute=!!initialStudioRoute&&!persistence.explicitUrl&&
         !['scene','compare','demos'].includes(explicitMode)&&
-        !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='images');
+        !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='images')&&
+        !(workspaceState.mode==='calibration'&&
+          !(historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]==='animation'));
       var startupMode=applicationPreferences&&applicationPreferences.startupWorkspace?
         applicationPreferences.startupWorkspace(workspaceState.mode,state.mode,explicitMode,
           persistence.explicitUrl,historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]):
@@ -8679,6 +8681,8 @@
         // Resume only the one-shot handoff explicitly requested by Delete.
         // Ordinary F5 preserves the existing no-auto-activation policy.
         return editor&&editor.resumeAfterDeletedProject&&editor.resumeAfterDeletedProject();
+      }).then(function(){
+        return editor&&editor.resumeCleanProjectAfterReload&&editor.resumeCleanProjectAfterReload();
       }).catch(function(error){
         preferencesStatus('Calibration deletion handoff failed: '+error.message,true);
       });
