@@ -158,7 +158,7 @@
           if(busy||!allowDiscard())return;
           run(async function(){
             if(entry.source==='library'){
-              activeChoice=null;
+              activeChoice=null;demoDetails.hidden=true;
               fill(await library.get(db,entry.id));
             }else{
               fill(null);activeChoice=entry.key;
