@@ -4468,6 +4468,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height"""),
             original+6)
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].project.keyframes[3].value.Height"""),
+            original+6, 'persisted embedded value must survive F5 without History')
 
     def test_animation_keyframe_apply_rejects_stale_two_tab_workspace(self):
         self.open_modern()
@@ -4562,6 +4565,47 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernKeyframeEditBanner').get_by_role(
             'button',name='Cancel & Return').click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+
+
+    def test_animation_keyframe_apply_compare_b_curvature_preserves_a_and_undo(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        studio=self.create_physical_keyframe_project(
+            'B','Earth curvature','CI Compare B Apply')
+        before=self.page.evaluate("""() => {
+            const f=CurvatureModernApp.getAnimationStudioDraft().draft.frames[0];
+            return {A:JSON.stringify(f.experiment.compare.A),
+                    B:JSON.stringify(f.experiment.compare.B)};
+        }""")
+        slider=self.page.locator('#ModernModelCurvature')
+        expect(slider).to_be_enabled()
+        slider.evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""old =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==old""",arg=before['B'])
+        self.page.locator('#ModernKeyframeEditBanner').get_by_role(
+            'button',name='Apply & Return').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        changed=self.page.evaluate("""() => {
+            const f=CurvatureModernApp.getAnimationStudioDraft().draft.frames[0];
+            return {A:JSON.stringify(f.experiment.compare.A),
+                    B:JSON.stringify(f.experiment.compare.B)};
+        }""")
+        self.assertEqual(changed['A'],before['A'])
+        self.assertNotEqual(changed['B'],before['B'])
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].experiment.compare.B)"""),
+            before['B'])
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].experiment.compare.B)"""),
+            changed['B'])
 
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
