@@ -4531,7 +4531,19 @@
     actions.appendChild(applyWithHistory);
     banner.appendChild(actions);
     keyframeEditReturnView=recovered?recovered.returnView:studioView;
-    keyframeEditDraftAtEntry=JSON.stringify(studioDraft);
+    // Use the durable checkpoint's canonical field order for the opening
+    // revision guard. Studio copy/replace operations can reorder JS properties
+    // without changing the underlying project; raw JSON.stringify(draft)
+    // would falsely diagnose those as a competing-tab edit.
+    keyframeEditDraftAtEntry=JSON.stringify(studioDraftAutosave.checkpoint({
+      draft:studioDraft,selectedKey:studioSelectedKey,
+      quality:studioPlaybackQuality,prepared:!!studioPrepared,
+      libraryId:studioLibraryActive?studioLibraryActive.id:
+        studioLibraryPending?studioLibraryPending.id:null,
+      libraryRevision:studioLibraryActive?studioLibraryActive.updatedAt:
+        studioLibraryPending?studioLibraryPending.revision:null,
+      positionMs:studioPlayback?studioPlayback.status().positionMs:0
+    },Math.max(1,studioDraftSavedAt||Date.now())).draft);
     keyframeEditUIBaseline=recovered?recovered.uiBaseline:
       {sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
        compareModel:workspaceState.compareModel};
