@@ -3591,6 +3591,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(where).to_contain_text('Usage graph bridge project')
         go=where.get_by_role('button',name='Open Usage graph bridge project frame 1')
         expect(go).to_be_visible()
+        prompts=[]
+        def approve_navigation(dialog):
+            prompts.append(dialog.message)
+            dialog.accept()
+        self.page.on('dialog',approve_navigation)
         go.click()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
         self.page.wait_for_function("""async () => {
