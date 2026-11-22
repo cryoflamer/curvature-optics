@@ -341,7 +341,11 @@ only: it does not change the active Scene/Compare physical experiment, open
 or create an animation project, or start a separate IndexedDB store.
 The Image Library mode (`images`) is a validated browser-local application
 navigation preference, not an optics or animation-project mode.
-The gallery loads its existing local and demo references lazily on entry.
+A deliberate selection of this tab is also retained in the current browser
+history entry, so an older `studioView` URL parameter cannot unexpectedly
+reactivate Animation Studio on F5; the previous Studio subview remains available
+when returning to Animation. The gallery loads its existing local and demo
+references lazily on entry.
 
 Calibration and Storyboard **Open Image Library** controls use this same
 top-level tab. The originating flow enables a conditional **Return to
