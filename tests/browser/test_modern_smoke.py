@@ -3215,6 +3215,33 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(restored['hasBytes'])
         self.assertEqual(restored['total'], 1)
 
+    def test_calibration_image_library_roundtrip_preserves_working_draft(self):
+        workspace=self.open_physical_calibration()
+        calibration=self.soundly_calibration_experiment()
+        self.import_calibration_experiment(calibration)
+        before=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment();
+            return {observations:e.observations,original:e.referenceImage.original};
+        }""")
+        self.assertGreater(len(before['observations']),0)
+        expect(workspace.locator('#ModernCalibrationFile')).to_have_count(0)
+        workspace.locator('#ModernCalibrationOpenImageLibrary').click()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        expect(panel).to_have_attribute('open','')
+        expect(panel.get_by_role('button',name='Return to Calibration')).to_be_visible()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'animation')
+        panel.get_by_role('button',name='Return to Calibration').click()
+        expect(workspace).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'calibration')
+        after=self.page.evaluate("""() => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment();
+            return {observations:e.observations,original:e.referenceImage.original};
+        }""")
+        self.assertEqual(after,before)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_direct_url_import_reuses_verified_original(self):
         self.open_modern()
         self.open_animation()
@@ -3271,6 +3298,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         rows=self.page.evaluate("""async () => await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
         self.assertEqual(len(rows),1)
         self.assertEqual([rows[0]['width'],rows[0]['height']],[13,9])
+        self.assertEqual(rows[0]['sourceUrl'],'')
+        self.assertEqual(rows[0]['title'],'Clipboard image')
         panel.get_by_label('Title',exact=True).fill('My edited title')
         panel.get_by_label('Title',exact=True).press('Control+v')
         self.assertEqual(len(self.page.evaluate("""async () =>
