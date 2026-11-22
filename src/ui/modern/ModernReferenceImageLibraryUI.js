@@ -90,10 +90,13 @@
     });
     var returnToStoryboard=button('Return to Storyboard',toolbar,function(){
       if(busy)return;
-      var tab=doc.getElementById('ModernAnimationViewEditor');
-      if(!tab)return;
-      tab.click();
-      if(tab.getAttribute('aria-selected')==='true'){
+      var studio=doc.getElementById('ModernAnimationTab'),
+        editor=doc.getElementById('ModernAnimationViewEditor');
+      if(!studio||!editor)return;
+      studio.click();
+      if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='animation')return;
+      if(editor.getAttribute('aria-selected')!=='true')editor.click();
+      if(editor.getAttribute('aria-selected')==='true'){
         env.CurvatureImageLibraryReturnToStoryboard=false;
         syncReturnNavigation();
       }
@@ -351,14 +354,16 @@
         dirty=false;await reload(saved.id);
       },'Observation metadata saved.');});
     // Library edits never change the camera or open Animation/Calibration projects.
-    host.addEventListener('curvature-library-navigation',syncReturnNavigation);
-    host.addEventListener('toggle',function(){
+    function activated(){
       syncReturnNavigation();
-      if(host.open&&!loaded)run(function(){return reload(null);});
-    });
-    if(host.open)run(function(){return reload(null);});
+      if(!busy&&!dirty)run(function(){return reload(selected&&selected.id);});
+    }
+    host.addEventListener('curvature-library-navigation',activated);
+    // The standalone workspace is initially hidden. It is activated by the
+    // top-level tab, not by a nested <details> disclosure inside Studio.
+    if(env.CurvatureModernApp?.getWorkspaceMode?.()==='images')activated();
   }
-  // Loaded only by Modern. The collapsed Library does no storage work at startup.
+  // Loaded only by Modern. The standalone Library remains lazy until its tab opens.
   if(env.document&&library&&importer)env.document.addEventListener('DOMContentLoaded',function(){
     var host=env.document.getElementById('ModernReferenceImageLibrary');if(host)mount(host,env.indexedDB);
   });
