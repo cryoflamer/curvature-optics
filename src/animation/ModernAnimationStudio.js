@@ -236,6 +236,39 @@
     next.frames[index].sourceSnapshotId=id;
     return next;
   }
+  // Duplicate a frame adjacent to its source, without rewriting the original
+  // key, source History record, arrival settings or embedded experiment.
+  function duplicateFrame(draft,key){
+    if(!draft||!draft.contract||!['camera','physical'].includes(draft.contract.mode))
+      throw RangeError('Duplication requires an editable Camera or Physical contract');
+    if(!Array.isArray(draft.frames)||draft.frames.length>=MAX_FRAMES)
+      throw RangeError('Animation has a maximum of '+MAX_FRAMES+' keyframes');
+    var next=copy(draft),index=next.frames.findIndex(function(frame){return frame.key===key;});
+    if(index<0)throw RangeError('Unknown Studio frame');
+    var original=next.frames[index],used=new Set(next.frames.map(function(frame){return frame.key;}));
+    var suffix=1,newKey;
+    do{newKey=key+'-copy-'+suffix++;}while(used.has(newKey));
+    var duplicate=Object.assign({},original,{
+      key:newKey,sourceSnapshotId:null,
+      name:original.name.slice(0,113)+' (copy)',
+      experiment:state.validate(original.experiment),
+      travelMs:1000,holdMs:0
+    });
+    if(duplicate.referenceImageIds)duplicate.referenceImageIds=duplicate.referenceImageIds.slice();
+    next.frames.splice(index+1,0,duplicate);
+    if(next.activeFrameKeys&&next.activeFrameKeys.includes(key)){
+      var position=next.activeFrameKeys.indexOf(key);
+      next.activeFrameKeys.splice(position+1,0,newKey);
+    }
+    // Preserve any excluded sequence and all other frame timings. A duplicate
+    // is an independent, 1-second identical-state arrival with no added hold.
+    var review=contracts.inspectFrames(next.contract,next.frames.map(function(frame){
+      return frame.experiment;
+    }));
+    if(!review.accepted||!review.previewCompatible&&next.frames.length>=2)
+      throw RangeError('Duplicated keyframe is incompatible with this animation contract');
+    return {draft:next,key:newKey};
+  }
   function move(draft,key,step){
     var next=copy(draft),index=next.frames.findIndex(function(f){return f.key===key;});
     if(index<0||![1,-1].includes(step)||index+step<0||index+step>=next.frames.length)
@@ -411,7 +444,7 @@
   return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     createEditHistory:createEditHistory,recordEdit:recordEdit,endEditGroup:endEditGroup,
     stepEditHistory:stepEditHistory,
-    edit:edit,editFrame:editFrame,replaceFrameExperiment:replaceFrameExperiment,attachFrameHistory:attachFrameHistory,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
+    edit:edit,editFrame:editFrame,replaceFrameExperiment:replaceFrameExperiment,attachFrameHistory:attachFrameHistory,duplicateFrame:duplicateFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
     activeFrames:activeFrames,keyframeArrival:keyframeArrival,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));

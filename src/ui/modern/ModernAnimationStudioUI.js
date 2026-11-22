@@ -1364,6 +1364,16 @@
         editButton.title='Editing requires a supported, validated animation contract';
       }else editButton.title='Open the contract-locked keyframe editor';
       frameActions.appendChild(editButton);
+      var duplicateButton=cardIcon(doc,'⧉','Duplicate and edit '+frame.name,function(){
+        if(actions.duplicateEditKeyframe)actions.duplicateEditKeyframe(frame.key);
+      });
+      duplicateButton.className+=' modern-studio-duplicate-edit';
+      duplicateButton.disabled=!actions.duplicateEditKeyframe||
+        !actions.canEditKeyframe||!actions.canEditKeyframe(frame.key)||draft.frames.length>=200;
+      duplicateButton.title=duplicateButton.disabled?
+        'Duplication requires an editable contract and fewer than 200 frames':
+        'Create an independent frame immediately after this one, then edit it';
+      frameActions.appendChild(duplicateButton);
       item.appendChild(frameActions);
       if(inspector)inspector.infoButton(item,{name:frame.name,description:'Animation keyframe '+(i+1),
         experiment:frame.experiment,thumbnail:entry.thumbnail,

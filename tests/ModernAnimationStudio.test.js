@@ -1276,3 +1276,55 @@ test('explicit History provenance is attached only to the unchanged embedded key
   const stale=clone(draft.frames[1].experiment);stale.scene.camera.Height++;
   assert.throws(()=>studio.attachFrameHistory(draft,key,27,stale),/changed/);
 });
+
+
+test('Duplicate & Edit creates one independent adjacent contracted keyframe and preserves timeline',()=>{
+  const base=experiment('scene'),moving=clone(base);moving.scene.camera.Height+=20;
+  const contract=contracts.create(base,{mode:'camera'});
+  const original=animation.createV2(contract,[
+    {name:'Start',experiment:base,travelMs:0,holdMs:2000,easing:'linear'},
+    {name:'End',experiment:moving,travelMs:4300,holdMs:1500,easing:'smoothstep'}
+  ],{id:'dup-check',name:'Duplicate test'});
+  const draft=studio.fromProject(original),before=clone(draft),key=draft.frames[0].key;
+  const duplicated=studio.duplicateFrame(draft,key),copy=duplicated.draft.frames[1];
+  assert.equal(duplicated.draft.frames.length,3);
+  assert.equal(copy.key,duplicated.key);
+  assert.equal(copy.name,'Start (copy)');
+  assert.equal(copy.sourceSnapshotId,null);
+  assert.equal(copy.travelMs,1000);
+  assert.equal(copy.holdMs,0);
+  assert.deepEqual(copy.experiment,draft.frames[0].experiment);
+  assert.notStrictEqual(copy.experiment,draft.frames[0].experiment);
+  assert.deepEqual(duplicated.draft.frames[0],draft.frames[0]);
+  assert.deepEqual(duplicated.draft.frames[2],draft.frames[1]);
+  assert.deepEqual(draft,before);
+  const saved=studio.buildSaved(duplicated.draft,'dup-saved');
+  assert.equal(saved.keyframes.length,3);
+  assert.equal(saved.keyframes[1].travelMs,1000);
+  const changed=clone(copy.experiment);changed.scene.camera.Height+=4;
+  const edited=studio.replaceFrameExperiment(duplicated.draft,duplicated.key,changed);
+  assert.equal(edited.frames[1].experiment.scene.camera.Height,changed.scene.camera.Height);
+  assert.deepEqual(edited.frames[0],draft.frames[0]);
+  assert.deepEqual(edited.frames[2],draft.frames[1]);
+  assert.throws(()=>studio.duplicateFrame({contract:contract,frames:Array(200).fill(copy)},key),/maximum/);
+  assert.throws(()=>studio.duplicateFrame(draft,'missing'),/Unknown/);
+});
+
+test('duplicate preserves active sequence inclusion and independent History provenance',()=>{
+  const base=experiment('scene'),other=clone(base);other.scene.camera.Height+=5;
+  const contract=contracts.create(base,{mode:'camera'});
+  const draft=studio.fromProject(animation.createV2(contract,[
+    {name:'Start',experiment:base},{name:'Middle',experiment:other},
+    {name:'End',experiment:base}
+  ],{id:'dup-active',name:'Active sequence'}));
+  draft.frames[1].sourceSnapshotId=25;
+  draft.activeFrameKeys=[draft.frames[0].key,draft.frames[2].key];
+  const excluded=studio.duplicateFrame(draft,draft.frames[1].key);
+  assert.deepEqual(excluded.draft.activeFrameKeys,draft.activeFrameKeys);
+  assert.equal(excluded.draft.frames[2].sourceSnapshotId,null);
+  assert.equal(excluded.draft.frames[1].sourceSnapshotId,25);
+  const included=studio.duplicateFrame(draft,draft.frames[0].key);
+  assert.deepEqual(included.draft.activeFrameKeys,
+    [draft.frames[0].key,included.key,draft.frames[2].key]);
+  assert.deepEqual(draft.activeFrameKeys,[draft.frames[0].key,draft.frames[2].key]);
+});

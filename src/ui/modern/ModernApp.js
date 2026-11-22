@@ -4851,6 +4851,27 @@
         try{beginStudioKeyframeEdit(key,keyframeEditCommit);}
         catch(error){report(error);}
       },
+      duplicateEditKeyframe:function(key){
+        if(studioActiveDemo)return;
+        // Commit duplication through the ordinary Studio Undo and persistence
+        // path. The new frame remains independent even when editing is Cancelled.
+        try{
+          if(keyframeEditSession)throw Error('Finish the current keyframe edit first');
+          var duplicate=studioApi.duplicateFrame(studioDraft,key);
+          var oldSelection=studioSelectedKey;
+          studioSelectedKey=duplicate.key;
+          update(duplicate.draft,{beforeSelectedKey:oldSelection,endGroup:true});
+          // A temporary editor must only start from an acknowledged durable
+          // draft. Otherwise its unchangedDraft guard would compare the new
+          // frame against the prior IndexedDB state and falsely see a conflict.
+          persistStudioWorkspace({requireDurable:true}).then(function(saved){
+            if(!saved||studioSelectedKey!==duplicate.key||
+               !studioDraft.frames.some(function(f){return f.key===duplicate.key;}))
+              throw Error('The duplicate is in the working draft, but durable storage was not confirmed; retry after saving');
+            beginStudioKeyframeEdit(duplicate.key,keyframeEditCommit);
+          }).catch(report);
+        }catch(error){report(error);}
+      },
       focusTransition:function(index){
         if(!studioEditing.focusTransition(index))return;
         var chosen=host.querySelector&&host.querySelector('.modern-studio-keyframe.is-transition-to');
