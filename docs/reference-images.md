@@ -90,14 +90,17 @@ measurement):
 
 ## Local Library (7C.2)
 
-Open **Reference Image Library** below Animation Library in Animation Studio.
-Import a local file, select a saved observation, edit its details and click
+Open **Image Library** directly from the top-level Modern workspace tabs,
+beside Animation Studio and Photo Calibration. It is no longer nested inside
+Animation Studio's project Library. Import a local file, direct image URL or
+clipboard image there; select a saved observation, edit its details and click
 **Save details**. Camera facts have individual statuses, values, numeric
 uncertainties and notes. Not recorded is distinct from explicit Unknown. No
 EXIF facts are automatically inferred; the original file retains embedded
 metadata. Use **Download original** to retain an external copy, **Refresh** to
 reload the current list, or inspect the disabled **Delete observation** control. 7C.2 initially allowed deletion; 7C.3 disables it to protect references. The panel is outside the presentation
-stage. No storage is accessed merely by loading Modern with the panel closed.
+stage. Image records are not loaded merely by opening Modern without entering
+the Image Library workspace.
 
 `ModernReferenceImageLibrary` uses its own IndexedDB database, version 1,
 `observations` store keyed by stable ID. Explicit metadata updates retain the
@@ -328,6 +331,28 @@ adopted via a supported project operation. Generated simulation screenshots,
 render thumbnails and preview pixels are **not** reference photographs and are
 not automatically added by Storyboard or a picker.
 
+## Top-level workspace navigation (#26 Stage 3 structural follow-up)
+
+Image Library owns **one** UI mount at `#ModernReferenceImageLibrary`, hosted
+in `#ModernImageLibraryWorkspace` and activated by
+`#ModernImageLibraryTab` in the existing `CurvatureModern.html`. Its gallery
+is no longer inside `#ModernAnimationLibraryView`. The workspace is presentation
+only: it does not change the active Scene/Compare physical experiment, open
+or create an animation project, or start a separate IndexedDB store.
+The Image Library mode (`images`) is a validated browser-local application
+navigation preference, not an optics or animation-project mode.
+The gallery loads its existing local and demo references lazily on entry.
+
+Calibration and Storyboard **Open Image Library** controls use this same
+top-level tab. The originating flow enables a conditional **Return to
+Calibration** or **Return to Storyboard** action in the gallery; opening the
+Image Library tab directly has neither return action. Return restores the
+existing editor/workspace rather than importing a new copy. All consumers
+retain their existing selection-only Image Picker flow. Retained drafts and
+linked originals must survive workspace navigation and reload. Verification
+is tracked in Issue #26; no Chromium success substitutes for manual Opera
+acceptance of real clipboard permissions, image download CORS and layout.
+
 ## Shared context-aware Image Picker (#26 Stage 2)
 
 Stage 2 replaces the two different selection surfaces with the single
@@ -381,8 +406,8 @@ browser's archive/restore behavior.
 
 ## Unified Image Library — classification and opt-in migration (#26 Stage 3)
 
-The **Image Library** (the former collapsed Reference Image Library panel)
-now has a thumbnail gallery, search over names/attribution/tags/collections,
+The **Image Library** (formerly the nested Reference Image Library panel,
+now a standalone top-level workspace) has a thumbnail gallery, search over names/attribution/tags/collections,
 source (local vs built-in demo) and independent kind filters, and a local
 record inspector. Local records retain the original import and camera-fact
 editing form, full-resolution original download and disabled physical delete.
