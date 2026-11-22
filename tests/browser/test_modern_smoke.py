@@ -3859,6 +3859,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             second.close()
 
+    def test_image_library_where_used_demo_alias_is_separate_from_local_id(self):
+        import base64
+        self.open_modern()
+        gallery=self.open_image_library()
+        image=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
+        gallery.locator('input[accept^="image/png"]').set_input_files({
+            'name':'local-shared.png','mimeType':'image/png','buffer':image})
+        expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.evaluate("""async () => {
+            const photo=(await CurvatureModernReferenceImageLibrary.list(indexedDB))[0];
+            const catalog=CurvatureModernDemoCatalog;
+            const shipped=catalog.load()[0];
+            const project={...shipped.project,keyframes:shipped.project.keyframes.map(
+                (frame,i)=>({...frame,referenceImageIds:i===0?[photo.id]:[]})
+            )};
+            CurvatureModernDemoCatalog={...catalog,load:()=>[{
+                ...shipped,id:'synthetic-demo',project,
+                referenceImages:[{...photo.record,title:'Built-in alias'}]
+            }]};
+        }""")
+        gallery.get_by_role('button',name='Refresh',exact=True).click()
+        expect(gallery.get_by_role('status')).to_contain_text('ready')
+        local=gallery.get_by_role('button',name='Inspect local-shared.png (Local original)')
+        demo=gallery.get_by_role('button',name='Inspect Built-in alias (Built-in demo)')
+        expect(local).to_be_visible()
+        expect(demo).to_be_visible()
+        local.click()
+        expect(gallery.locator('.modern-image-usage-status')).to_contain_text(
+            '0 known local uses',timeout=30000)
+        demo.click()
+        details=gallery.locator('.modern-image-library-demo')
+        expect(details).to_be_visible()
+        expect(details.locator('.modern-image-usage')).to_contain_text(
+            '1 shipped demo keyframe use')
+        expect(details.locator('.modern-image-usage')).to_contain_text('keyframe 1')
+        expect(details.locator('.modern-image-usage')).to_contain_text(
+            'separate from local projects')
+        self.assertEqual(self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length"""),1)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

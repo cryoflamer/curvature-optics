@@ -533,3 +533,19 @@ test('Where used reports an unreadable calibration archive rather than asserting
   assert.equal(result.complete,false);
   assert.match(result.unavailable.join('; '),/Calibration result archive.*blocked in another tab/);
 });
+
+test('Shipped demo uses are namespaced separately from local aliases with identical IDs',()=>{
+  const id='same-id',project={name:'Shipped view',keyframes:[
+    {name:'First',referenceImageIds:[id]},
+    {name:'Second',referenceImageIds:['different']},
+    {name:'Third',referenceImageIds:[id]}
+  ]};
+  const demo={id:'soundly',project,referenceImages:[{id}]};
+  const uses=usageGraph.demoReferences(demo,id);
+  assert.deepEqual(uses.map(x=>[x.type,x.ownerId,x.frameIndex,x.source]),
+    [['demo','demo_soundly',1,'shipped'],['demo','demo_soundly',3,'shipped']]);
+  const local=usageGraph.report(id,null,{animations:[],calibrations:[]});
+  assert.equal(local.count,0,'shipped IDs must not count as local references');
+  assert.deepEqual(usageGraph.demoReferences(demo,'different'),[],
+    'a frame ID without a shipped original is not a resolved demo asset');
+});

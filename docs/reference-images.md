@@ -622,6 +622,15 @@ shipped demo frames as usages; their keys remain namespaced and must not
 show local users merely because an ID string collides. Deduplicate duplicate
 **displays** of the same persisted owner relation, not distinct authored uses.
 
+The current read-only local scanner also inspects immutable Calibration Result
+Archive summaries by SHA-256 and oriented dimensions. Archived results remain
+listed independently of any surviving Calibration Project; without a dedicated
+result viewer, they carry no misleading substitute project navigation.
+Built-in demo images are inspected separately in their shipped namespace.
+The inspector shows their exact shipped keyframe ordinals without importing
+the asset or joining a coincidentally equal local image ID. These read-only
+demo rows currently have no direct frame-navigation action.
+
 A projected usage index may accelerate the inspector, but every view must
 reconcile against the appropriate authoritative records; never use cached
 counts or absent index rows as proof of global non-use. Explicitly label

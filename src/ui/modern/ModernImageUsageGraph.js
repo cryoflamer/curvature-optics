@@ -28,6 +28,15 @@
     });
     return found;
   }
+  // Shipped demo aliases have their own namespace. A matching bare string ID
+  // is never evidence that a local original participates in a shipped frame.
+  function demoReferences(demo,imageId){
+    if(!demo||!demo.project||!Array.isArray(demo.referenceImages)||
+       !demo.referenceImages.some(function(image){return image&&image.id===imageId;}))
+      return [];
+    return imagesFromFrames(demo.project.keyframes,imageId,'demo','demo_'+demo.id,
+      demo.project.name||demo.id,null,'shipped');
+  }
   function collect(selectedId,selectedIdentity,sources){
     if(typeof selectedId!=='string'||!selectedId)throw TypeError('Selected original ID required');
     sources=sources||{};
@@ -134,5 +143,5 @@
     return report(row.id,identity,sources,failures);
   }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,
-    collect:collect,report:report,discover:discover});
+    demoReferences:demoReferences,collect:collect,report:report,discover:discover});
 }));

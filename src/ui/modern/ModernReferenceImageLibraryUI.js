@@ -314,7 +314,7 @@
               title:record.title,author:record.author||'',license:record.license||'',
               width:record.original.width,height:record.original.height,
               thumbnail:record.thumbnail||null,kind:'unclassified',record:record,
-              demoName:demo.name||demo.title||demo.id};
+              demo:demo,demoName:demo.name||demo.title||demo.id};
           });
         });
       }catch(error){
@@ -350,6 +350,28 @@
               el('p','Read-only demo original. Browsing does not import it into local storage.',demoDetails);
               if(entry.author)el('p','Author: '+entry.author,demoDetails);
               if(entry.license)el('p','License: '+entry.license,demoDetails);
+              var demoUsage=el('section',undefined,demoDetails);
+              demoUsage.className='modern-image-usage';
+              demoUsage.setAttribute('aria-label','Where used?');
+              el('strong','Where used?',demoUsage);
+              var graph=env.CurvatureModernImageUsageGraph;
+              if(!graph?.demoReferences){
+                el('p','Shipped demo usage cannot be checked. No zero-use claim.',demoUsage);
+              }else{
+                var demoUses=graph.demoReferences(entry.demo,entry.record.id);
+                el('p',demoUses.length+' shipped demo keyframe use'+
+                  (demoUses.length===1?'':'s')+' · separate from local projects.',demoUsage);
+                demoUses.forEach(function(use){
+                  var item=el('div',undefined,demoUsage);
+                  item.className='modern-image-usage-item';
+                  var location=el('span',use.title+' · keyframe '+
+                    use.frameIndex+': '+use.frameName+' · shipped',item);
+                  location.title=use.ownerId;
+                });
+                if(!demoUses.length)
+                  el('p','No references in this bundled demo\'s keyframes.',demoUsage);
+                el('p','Read-only demo references have no direct frame-navigation action. No photograph was imported.',demoUsage);
+              }
               var image=el('img',undefined,demoDetails);
               image.src=(entry.record.thumbnail||entry.record.original).dataUrl;
               image.alt=entry.title;
