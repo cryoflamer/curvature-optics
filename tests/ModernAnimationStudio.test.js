@@ -1216,3 +1216,44 @@ test('Compatible sequences disclosure stays compact and preserves user-open stat
   assert.equal(disclosure.open,true,'user-open sequence choices survive a draft render');
   assert.deepEqual(draft.frames.map(f=>f.key),['history-1','history-2']);
 });
+
+
+test('contract-validated replacement changes one embedded keyframe and preserves every animation annotation',()=>{
+  const base=experiment('scene');
+  const contract=contracts.create(base,{mode:'camera'});
+  const changed=clone(base);changed.scene.camera.Height=40;
+  const original=animation.createV2(contract,[
+    {name:'First',experiment:base,travelMs:0,holdMs:750,easing:'linear'},
+    {name:'Second',experiment:changed,travelMs:2700,holdMs:1000,
+      easing:'smoothstep',description:'Observations',narrativeTitle:'Near surface'}
+  ],{id:'replacer',name:'Replacement test'});
+  const draft=studio.fromProject(original),before=clone(draft);
+  const key=draft.frames[1].key,candidate=clone(draft.frames[1].experiment);
+  candidate.scene.camera.Height=55;
+  candidate.display.showTemperatureProfile=!candidate.display.showTemperatureProfile;
+  const next=studio.replaceFrameExperiment(draft,key,candidate);
+  assert.equal(next.frames[1].experiment.scene.camera.Height,55);
+  assert.deepEqual(next.frames[1].experiment.display,contract.referenceExperiment.display,
+    'presentation-only edits cannot leak beyond immutable base experiment');
+  assert.deepEqual(next.frames[0],draft.frames[0],
+    'unrelated keyframe keeps embedded state and all metadata');
+  for(const field of ['name','sourceSnapshotId','narrativeTitle','description',
+      'travelMs','holdMs','easing'])
+    assert.deepEqual(next.frames[1][field],draft.frames[1][field],field+' preserved');
+  assert.deepEqual(draft,before,'original draft is never mutated');
+  const stored=studio.buildSaved(next,'save_test');
+  assert.equal(animation.frameExperiment(stored,1).scene.camera.Height,55);
+  assert.equal(animation.frameExperiment(stored,0).scene.camera.Height,base.scene.camera.Height);
+});
+test('physical or object changes cannot enter a camera keyframe replacement',()=>{
+  const base=experiment('scene'),contract=contracts.create(base,{mode:'camera'});
+  const edited=clone(base);edited.scene.camera.Height+=10;
+  const draft=studio.fromProject(animation.createV2(contract,[
+    {name:'Start',experiment:base},{name:'End',experiment:edited}
+  ],{id:'guard',name:'Guarded test'}));
+  const key=draft.frames[1].key,invalid=clone(draft.frames[1].experiment);
+  invalid.scene.surface.rEarth=6800000;
+  assert.throws(()=>studio.replaceFrameExperiment(draft,key,invalid),/contract/);
+  assert.throws(()=>studio.replaceFrameExperiment(draft,'missing',edited),/Unknown Studio frame/);
+  assert.throws(()=>studio.replaceFrameExperiment(studio.blank(),'missing',edited),/contract/);
+});

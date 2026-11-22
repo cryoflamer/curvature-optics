@@ -204,6 +204,27 @@
     if(next.frames[0])next.frames[0].travelMs=0;
     return next;
   }
+  // Atomic draft-level replacement: all metadata, timings, ordering and
+  // unrelated frame experiments remain the same. Build the canonical compact
+  // V2 project first: its reconstruction strips any cosmetic or disallowed
+  // edits from the candidate while preserving the immutable reference.
+  function replaceFrameExperiment(draft,key,candidate){
+    if(!draft||!draft.contract||draft.contract.mode==='experimental')
+      throw RangeError('Keyframe replacement requires a supported project contract');
+    var next=copy(draft),index=next.frames.findIndex(function(f){return f.key===key;});
+    if(index<0)throw RangeError('Unknown Studio frame');
+    var snapshot=state.validate(candidate),review=contracts.inspectCandidate(next.contract,snapshot);
+    if(!review.allowed){
+      var error=new RangeError('Replacement violates animation project contract');
+      error.issues=review.issues;throw error;
+    }
+    next.frames[index].experiment=snapshot;
+    var canonical=projects.createV2(next.contract,next.frames,
+      {id:'studio_keyframe_check',name:next.name,description:next.description,
+        interpolation:next.interpolation,cameraHudAppearance:next.cameraHudAppearance||undefined});
+    next.frames[index].experiment=projects.frameExperiment(canonical,index);
+    return next;
+  }
   function move(draft,key,step){
     var next=copy(draft),index=next.frames.findIndex(function(f){return f.key===key;});
     if(index<0||![1,-1].includes(step)||index+step<0||index+step>=next.frames.length)
@@ -379,7 +400,7 @@
   return Object.freeze({suggestName:suggestName,blank:blank,history:history,importCamera:importCamera,fromProject:fromProject,
     createEditHistory:createEditHistory,recordEdit:recordEdit,endEditGroup:endEditGroup,
     stepEditHistory:stepEditHistory,
-    edit:edit,editFrame:editFrame,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
+    edit:edit,editFrame:editFrame,replaceFrameExperiment:replaceFrameExperiment,move:move,reorder:reorder,insertSnapshots:insertSnapshots,remove:remove,inspect:inspect,build:build,buildSaved:buildSaved,
     activeFrames:activeFrames,keyframeArrival:keyframeArrival,
     findSequences:findSequences,selectSequence:selectSequence,clearSequence:clearSequence});
 }));
