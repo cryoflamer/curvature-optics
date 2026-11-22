@@ -220,6 +220,38 @@ expected test fixtures or regression coverage merely to make CI green.
 Scientific correctness and fast UI approximation have distinct acceptance
 criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
 
+## Modern UI visual consistency — mandatory review
+
+- **Reuse the existing Modern UI design language** for every new or modified
+  visible control. Inspect the nearby components and shared rules in
+  `src/ui/modern/ModernApp.css` **before** adding HTML, DOM-generated controls
+  or CSS. Match established button variants, input heights, typography,
+  spacing, border radii, colors, focus rings and disabled/hover states.
+  Do not create a new visual style merely because a feature is new.
+- **No unintended browser-native controls in the finished interface.**
+  Explicitly review `button`, `input` (including `type=file` and its
+  `::file-selector-button`), `select`, `textarea`, checkboxes and
+  disclosures. Where a native control must remain for accessibility or
+  platform behavior, style its visible parts consistently with adjacent
+  controls; preserve the native functionality, keyboard interaction and
+  accessible label. Do not hide a real file input behind a nonfunctional
+  decorative button.
+- **DOM-generated UI is not exempt.** A control created in JavaScript must
+  receive the same semantic class/variant and states as equivalent static
+  markup. Prefer existing reusable classes and scoped CSS over ad hoc inline
+  styles, generic global selectors or repeated one-off overrides.
+- **Check the whole surface, not just the changed element.** For a new tab,
+  gallery, toolbar or form, visually compare all adjacent controls and
+  alignment at normal desktop and narrow viewport widths; check wrapping,
+  long labels/localized browser text, keyboard focus, disabled/busy and error
+  states. Do not approve a UI solely because its actions function correctly.
+- **Acceptance evidence:** use targeted DOM/CSS contracts and affected
+  Chromium screenshots or browser smoke tests where appropriate; request
+  manual Opera visual acceptance when the user-facing styling matters.
+  Distinguish automated behavioral PASS from unverified visual consistency.
+  Fix visible regressions in the same scope before declaring the UI stage
+  accepted; record outstanding visual issues in the relevant GitHub Issue.
+
 ## Work boundaries and delivery
 
 - Implement only what was requested or agreed; surface any scope expansion.
