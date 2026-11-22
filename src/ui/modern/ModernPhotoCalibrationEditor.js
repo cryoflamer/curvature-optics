@@ -2269,7 +2269,7 @@
       // Prefer the saved project's user-facing name; a standalone draft
       // falls back to the original reference photo's title.
       const title=projectSession?.project()?.title||record?.title||'calibration';
-      const safe=String(title).normalize('NFKC').replace(/[\\/:*?"<>|\\x00-\\x1f]/g,'-')
+      const safe=String(title).normalize('NFKC').replace(/[\\/:*?"<>|\x00-\x1f]/g,'-')
         .replace(/\s+/g,' ').replace(/[. ]+$/g,'').trim().slice(0,120)
         .replace(/[. ]+$/g,'');
       return 'calibration-'+(safe||'untitled')+'.json';
