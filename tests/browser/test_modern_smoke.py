@@ -4206,6 +4206,151 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
 
+    def test_calibration_project_apply_preserves_exact_history_and_portable_exports(self):
+        # Qualification: the *outgoing* Scene, not the fitted replacement,
+        # survives Apply in pinned History; project JSON exports remain
+        # self-contained and independent across switch and F5.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        self.page.locator('#ModernPhotoCalibrationClose').click()
+        self.page.locator('#ModernRender').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        outgoing=self.page.evaluate("""async () =>
+            (await CurvatureModernSessionAutosave.read(indexedDB)).experiment""")
+        self.assertEqual(outgoing['display']['mode'],'scene')
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible(timeout=30000)
+        fixture=self.soundly_calibration_experiment()
+        toggle.click()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'portable-history-a.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        original=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(original).to_have_count(1,timeout=30000)
+        a=original.get_attribute('data-calibration-project-id')
+        original.locator('[data-calibration-project-duplicate]').click()
+        duplicate=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png (copy)')
+        expect(duplicate).to_have_count(1,timeout=30000)
+        b=duplicate.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(a,b)
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            panel.locator('[data-calibration-project-id="'+id+'"] '
+                          '[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def export_file():
+            with self.page.expect_download() as downloaded:
+                workspace.locator('#ModernCalibrationExportExperiment').click()
+            with open(downloaded.value.path(),encoding='utf-8') as stream:
+                data=json.load(stream)
+            self.assertEqual(data['format'],'curvature-photo-calibration')
+            self.assertEqual(data['referenceImage']['original'],
+                             fixture['referenceImage']['original'])
+            self.assertEqual(data['observations'],fixture['observations'])
+            self.assertFalse(data['fit']['running'])
+            return data
+
+        def history():
+            return self.page.evaluate("""async () =>
+                CurvatureModernApp.getHistoryStore().list()""")
+
+        def durable(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {resultIds:p.resultIds,rows:p.checkpoint.payload.draft.rows,
+                    photo:p.photo.identity.sha256};
+            }""",id)
+
+        open_project(b)
+        export_b=export_file()
+        snapshot_b=durable(b)
+        self.assertEqual(snapshot_b['resultIds'],[])
+        open_project(a)
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        fit=workspace.locator('#ModernCalibrationRunFit')
+        expect(fit).to_be_enabled(timeout=30000)
+        fit.click()
+        apply=workspace.locator('#ModernCalibrationApplyScene')
+        expect(apply).to_be_enabled(timeout=120000)
+        fitted=export_file()
+        self.assertTrue(fitted['fit']['result']['evaluation']['valid'])
+        self.assertGreater(fitted['fit']['result']['acceptedSteps'],0)
+        self.assertLess(fitted['fit']['result']['evaluation']['rmsPx'],15)
+        self.assertEqual(durable(b),snapshot_b,
+                         'fitting A must not mutate B or its original photo')
+        before_history=history()
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        apply.click()
+        expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+            'Applied to Scene',timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_have_attribute(
+            'aria-pressed','true',timeout=30000)
+        self.page.wait_for_function("""async id => {
+            const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return p?.resultIds.length===1;
+        }""",arg=a,timeout=30000)
+        result_id=durable(a)['resultIds'][0]
+        self.assertEqual(durable(b),snapshot_b)
+        after_history=history()
+        recovery=[row for row in after_history
+                  if row['pinned'] and row['source']=='recovery'
+                  and row['experiment']==outgoing]
+        self.assertEqual(len(recovery),1,
+                         'Apply must pin the exact outgoing Scene, not the fitted Scene')
+        recovery_id=recovery[0]['id']
+        self.assertFalse(any(
+            (row['experiment'].get('calibrationOrigin') or {}).get('resultId')==result_id
+            for row in after_history),
+            'outgoing History must not be rewritten with fitted attribution')
+        self.assertGreaterEqual(len(after_history),len(before_history))
+
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(workspace).to_be_visible(timeout=30000)
+        open_project(a)
+        export_a=export_file()
+        self.assertEqual(export_a,fitted)
+        open_project(b)
+        self.assertEqual(export_file(),export_b)
+        self.assertEqual(durable(b),snapshot_b)
+
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        current_history=history()
+        pinned=[row for row in current_history if row['id']==recovery_id]
+        self.assertEqual(len(pinned),1)
+        self.assertTrue(pinned[0]['pinned'])
+        self.assertEqual(pinned[0]['source'],'recovery')
+        self.assertEqual(pinned[0]['experiment'],outgoing)
+        self.assertEqual(durable(a)['resultIds'],[result_id])
+        self.assertEqual(durable(b),snapshot_b)
+        for id,expected in [(a,export_a),(b,export_b)]:
+            open_project(id)
+            self.assertEqual(export_file(),expected,
+                             'portable export changed after project switch/F5')
+        archived=self.page.evaluate("""async id => {
+            const p=await CurvatureModernCalibrationResultArchive.get(indexedDB,id);
+            return {project:p.record.provenance.projectId,
+                original:p.record.payload.photo.sha256,
+                valid:p.record.payload.fit.result.evaluation.valid};
+        }""",result_id)
+        self.assertEqual(archived['project'],a)
+        self.assertTrue(archived['valid'])
+        self.assertEqual(archived['original'],durable(a)['photo'])
+        self.assertFalse([x for x in self.console if x.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_projects_independent_photo_viewports_survive_reload(self):
         # Real wheel zoom must durably save each independently bound project
         # without requiring a project switch to flush its viewport.
