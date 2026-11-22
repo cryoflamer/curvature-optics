@@ -4031,6 +4031,11 @@ class ModernBrowserSmoke(unittest.TestCase):
                         w.checkpoint.draft.name==='Tab A recovered photo edits' &&
                         w.checkpoint.draft.frames.some(f=>f.referenceImageIds?.includes(photo))))
             """,arg={'id':workspace,'photo':image_id},timeout=30000)
+            # IndexedDB transaction.oncomplete precedes the UI coordinator's
+            # onFork callback; wait for the live editor to adopt the new ID.
+            self.page.wait_for_function("""() =>
+                CurvatureModernApp.getAnimationStudioWorkspaceId()?.startsWith('draft_')
+            """,timeout=30000)
             fork=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
             self.assertTrue(fork.startswith('draft_'),fork)
             before=self.page.evaluate("""async ({photo,first,fork}) => {
