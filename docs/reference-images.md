@@ -344,6 +344,70 @@ Studio reference attachment, Undo/Redo, missing originals and retry. These
 tests do not replace a manual Opera acceptance pass or test every external
 browser's archive/restore behavior.
 
+## Unified Image Library — classification and opt-in migration (#26 Stage 3)
+
+The **Image Library** (the former collapsed Reference Image Library panel)
+now has a thumbnail gallery, search over names/attribution/tags/collections,
+source (local vs built-in demo) and independent kind filters, and a local
+record inspector. Local records retain the original import and camera-fact
+editing form, full-resolution original download and disabled physical delete.
+Built-in demo originals are browsable with a **read-only** inspector, and
+their keys are namespaced as `['demo', demoId, observationId]`; no shipped
+data are automatically copied to the browser's local observations.
+
+**Storage ownership and backward compatibility:**
+- Original `ModernReferenceImage` records are **still exactly v1** and
+  remain in the `observations` store of
+  `curvature-modern-reference-images`. Their encoded raster bytes, IDs,
+  verified identity, attribution, license, source URL and typed camera
+  metadata are not modified merely by introducing classifications.
+- Classification is separate: `kind` (unclassified, photograph, diagram,
+  map, graph, render, screenshot, illustration, other), bounded `tags`
+  (maximum 20 × 64 characters) and `collections` (12 × 80 characters).
+  A new `annotations` object store in **the same IndexedDB database**
+  uses observation IDs and **independent optimistic revisions**.
+  Missing annotations are always displayed as **Unclassified (legacy)**;
+  no kind or scientific evidence claim is inferred from the MIME type,
+  filename or currently linked project.
+- Ordinary reads, imports and observation metadata edits use an
+  *unversioned* IndexedDB open, so a user's existing v1 database is **not
+  automatically upgraded**. The classification editor remains disabled
+  until explicitly activated. A user first clicks **Download full backup**,
+  verifies the JSON file was saved, then confirms **Enable kind & tags**.
+  That explicitly upgrades the same database to schema v2 without rewriting
+  observations. If another tab blocks the upgrade, it fails visibly; closing
+  the blocking tab and retrying is necessary. An older application version
+  that opens `curvature-modern-reference-images` with version 1 may then
+  fail with `VersionError`; there is **no silent downgrade**.
+- The full local-library backup has
+  `{format:'curvature-image-library-backup',version:1,observations,annotations}`;
+  it includes **all original bytes**, validated record revisions and optional
+  classifications, distinct from portable Animation Project JSON. The
+  **Restore complete backup (merge)** input validates every record and
+  annotation and actually decodes each raster before any IndexedDB write.
+  It inserts originals and their annotations within **one transaction**.
+  Existing rows and classifications are not overwritten or deleted. IDs with
+  conflicting provenance are safely remapped, retaining both aliases.
+  Attempting to restore annotated data into a v1 database fails closed until
+  classification is explicitly enabled. This is a *non-destructive merge*,
+  not a destructive whole-browser rollback or a cloud backup service.
+- The original observation metadata revision and independent classification
+  revision must both match when saving details; an editor save is one
+  `readwrite` transaction across both stores. Stale tabs, invalid tags,
+  size/quota violations, missing originals and corrupted classification rows
+  must fail without changing the photograph or its provenance.
+  Import/export of existing Animation v1/v2 bundles remains unchanged;
+  classification is **not silently inserted** into their project schemas.
+
+**Testing and acceptance:** targeted Node tests cover a seeded v1 database,
+version-neutral reading, explicit v2 upgrade, byte-for-byte original
+preservation, atomic two-revision edits, annotation validation, import ID
+collision, corrupt backup/decoder failure and safe merge/restore. Targeted
+Chromium covers the actual download → upgrade → classification → reload →
+backup restore path, and read-only built-in/local ID separation. These
+checks are distinct from manual Opera UX acceptance and from Stage 4's
+authoritative **Where used?** usage graph. Asset deletion remains disabled.
+
 ## Unified Image Library architecture and migration contract (#26)
 
 This section fixes the ownership, identity, migration and safety requirements
@@ -397,16 +461,15 @@ feature, but must not be silently relabeled as independent photographic evidence
   category from filenames, source URLs or imported captions). A role such as
   calibration input, animation frame reference or illustration is derived from
   a real owner relation; it must **not** become a single mutable `image.type`.
-- **Migration proposal:** keep `ModernReferenceImage` v1 raster/provenance
-  records and existing portable animation v1/v2 payloads unchanged. Store
-  classification/tags in a versioned **annotation store in the existing
-  Reference Image Library database**, keyed by local observation ID, with
-  its own optimistic revision. This is not a second original database.
-  The eventual IndexedDB schema bump must update **all** open-version callers,
-  including `list/get/create/update/importAssets/ensureOriginal/findOriginal`,
-  and must transact annotation and alias changes together. Missing annotation
-  defaults to unclassified at read time; do not eagerly rewrite every v1
-  original or generate thumbnails during upgrade.
+- **Implemented migration design:** keep `ModernReferenceImage` v1
+  raster/provenance records and portable animation v1/v2 payloads unchanged.
+  Classification/tags live in the versioned `annotations` store in the
+  **same** Reference Image Library database with independent optimistic
+  revisions. All original read/write call sites use version-neutral opens;
+  explicit upgrade to schema v2 occurs only after backup and confirmation.
+  Metadata edits that involve annotations are atomic. Missing annotations
+  default to unclassified without rewriting any v1 original or generating
+  thumbnails during upgrade.
 - **Compatibility:** existing observation rows, photo identity, metadata,
   calibration project checkpoints, archive references and portable animation
   v1/v2 exports must still load byte-identically. If classification is carried
