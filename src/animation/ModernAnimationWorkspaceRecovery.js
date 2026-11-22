@@ -70,8 +70,16 @@
           options.onRemoteRestored();
         }
         // Reconcile local-only drafts using the editor-owned serialized writer.
-        if(best&&JSON.stringify(best)!==JSON.stringify(remote))options.persist();
-        if(options.onSettled)options.onSettled(remote,null);
+        // A locally backed-up Studio draft may not have reached IDB at
+        // pagehide. F5 Keyframe recovery must wait for reconciliation to
+        // become durable before judging the workspace revision.
+        var saving=best&&JSON.stringify(best)!==JSON.stringify(remote)?
+          options.persist():null;
+        Promise.resolve(saving).then(function(){
+          if(options.onSettled)options.onSettled(remote,null);
+        },function(error){
+          if(options.onSettled)options.onSettled(null,error);
+        });
       }).catch(function(error){
         if(!local)options.status('Animation workspace recovery unavailable: '+error.message,true);
         if(options.onSettled)options.onSettled(null,error);

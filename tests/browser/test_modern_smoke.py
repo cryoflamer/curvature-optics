@@ -4317,6 +4317,65 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(self.page.evaluate("""() =>
             sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
 
+    def test_animation_keyframe_f5_recovery_does_not_overwrite_other_tab(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        project_id=self.page.evaluate("""async () =>
+            (await CurvatureModernAnimationLibrary.list(indexedDB))[0].id""")
+        workspace_id='project_'+project_id
+        self.page.wait_for_function("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return !!c?.workspaces.find(w=>w.id===id);
+        }""",arg=workspace_id,timeout=30000)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        before=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(before+13))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function('h => CurvatureModernApp.getModel().Height===h',
+                                    arg=before+13)
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        other=self.context.new_page()
+        try:
+            response=other.goto(self.base_url,wait_until='load')
+            self.assertEqual(response.status,200)
+            other.locator('#ModernAnimationTab').click()
+            other.locator('#ModernAnimationViewLibrary').click()
+            card=other.locator('#ModernAnimationLibrary [data-animation-id="'+project_id+'"]')
+            expect(card).to_be_visible()
+            card.get_by_role('button',name='Open saved animation').click()
+            other.locator('#ModernAnimationViewEditor').click()
+            other_studio=other.locator('#ModernAnimationStudio')
+            other_studio.get_by_role('button',name='Inspect project settings').click()
+            name=other_studio.get_by_label('Project name')
+            name.fill('Other tab owns this revision')
+            name.press('Tab')
+            other.wait_for_function("""async id => {
+                const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+                return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name===
+                    'Other tab owns this revision';
+            }""",arg=workspace_id,timeout=30000)
+        finally:
+            other.close()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            document.getElementById('ModernAnimationDraftStatus')?.textContent
+                ?.includes('Keyframe recovery was not applied')""",timeout=30000)
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertIsNotNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""),
+            'the rejected session remains available in this tab')
+        remote_name=self.page.evaluate("""async id => {
+            const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
+            return c?.workspaces.find(w=>w.id===id)?.checkpoint?.draft?.name;
+        }""",workspace_id)
+        self.assertEqual(remote_name,'Other tab owns this revision')
+
     def test_animation_keyframe_edit_back_forward_and_second_tab_isolation(self):
         self.open_modern()
         normal_height = self.page.evaluate('CurvatureModernApp.getModel().Height')

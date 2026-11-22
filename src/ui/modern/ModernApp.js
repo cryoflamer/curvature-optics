@@ -4140,10 +4140,7 @@
          saved.draftAtEntry!==JSON.stringify(studioDraft)||
          !['library','editor','preview'].includes(saved.returnView))
         throw Error('active working project or revision does not match');
-      var remote=keyframeRecoveryRemote&&
-        studioDraftAutosave.getWorkspace(keyframeRecoveryRemote,studioWorkspaceId);
-      if(!remote||JSON.stringify(remote.draft)!==saved.draftAtEntry)
-        throw Error('the durable working project was changed or is unavailable');
+      if(!root.indexedDB)throw Error('durable workspace storage is unavailable');
       var frame=studioDraft.frames.find(function(item){return item.key===saved.session.frameKey;});
       if(!frame||JSON.stringify(frame.experiment)!==JSON.stringify(saved.session.original))
         throw Error('the selected keyframe no longer matches');
@@ -4154,19 +4151,26 @@
       var navigationAtStart=workspaceNavigationVersion;
       var checkLibrary=saved.libraryId&&studioLibrary?
         studioLibrary.get(root.indexedDB,saved.libraryId):Promise.resolve(null);
-      Promise.resolve(checkLibrary).then(function(library){
-        if(saved.libraryId&&(!library||library.updatedAt!==saved.libraryRevision))
-          throw Error('the Animation Library project changed in another tab');
-        if(keyframeEditSession||!persistence.ready||studioWorkspaceId!==saved.session.projectId||
-           JSON.stringify(studioDraft)!==saved.draftAtEntry||
-           workspaceNavigationVersion!==navigationAtStart)
-          throw Error('the workspace changed while recovery was being checked');
-        renderAnimationStudio(studioHistoryEntries);
-        if(typeof keyframeEditCommit!=='function')
-          throw Error('the Animation Studio editor is not ready');
-        beginStudioKeyframeEdit(saved.session.frameKey,keyframeEditCommit,saved);
-        keyframeRecoveryPending=null;
-      }).catch(function(error){blocked(error.message);});
+      Promise.all([studioDraftAutosave.readCollection(root.indexedDB),checkLibrary])
+        .then(function(records){
+          // Never trust the initial IDB read if local-session reconciliation
+          // has just written a newer draft after F5.
+          var latest=records[0],library=records[1];
+          var remote=latest&&studioDraftAutosave.getWorkspace(latest,saved.session.projectId);
+          if(!remote||JSON.stringify(remote.draft)!==saved.draftAtEntry)
+            throw Error('the durable working project was changed or is unavailable');
+          if(saved.libraryId&&(!library||library.updatedAt!==saved.libraryRevision))
+            throw Error('the Animation Library project changed in another tab');
+          if(keyframeEditSession||!persistence.ready||studioWorkspaceId!==saved.session.projectId||
+             JSON.stringify(studioDraft)!==saved.draftAtEntry||
+             workspaceNavigationVersion!==navigationAtStart)
+            throw Error('the workspace changed while recovery was being checked');
+          renderAnimationStudio(studioHistoryEntries);
+          if(typeof keyframeEditCommit!=='function')
+            throw Error('the Animation Studio editor is not ready');
+          beginStudioKeyframeEdit(saved.session.frameKey,keyframeEditCommit,saved);
+          keyframeRecoveryPending=null;
+        }).catch(function(error){blocked(error.message);});
     }catch(error){blocked(error.message);}
   }
   function syncKeyframeEditHistoryControls(){
