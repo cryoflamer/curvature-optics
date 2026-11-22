@@ -4466,10 +4466,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             timeout=30000)
         intact.locator('[data-calibration-project-open]').click()
         expect(panel).to_be_hidden(timeout=30000)
-        self.page.wait_for_function("""id =>
-            CurvatureModernPhotoCalibrationEditor.mount(document)
-                .projectPersistenceStatus()?.projectId===id""",
-            arg=b['id'],timeout=30000)
+        self.page.wait_for_function("""id => {
+            const status=CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus();
+            return status?.projectId===id && status.pending===0 && !status.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        before_failed_open=stored()
+        self.assertEqual(before_failed_open[0],baseline[0],
+                         'a missing original must not alter its owning project')
         toggle.click()
         damaged=panel.locator('[data-calibration-project-id="'+a['id']+'"]')
         damaged.locator('[data-calibration-project-open]').click()
@@ -4480,7 +4484,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
             'The current editor was retained.',timeout=30000)
         self.assertEqual(active(),b['id'])
-        self.assertEqual(stored(),baseline,
+        self.assertEqual(stored(),before_failed_open,
                          'failed activation must not rewrite either checkpoint')
         self.assertEqual(self.page.evaluate("""() =>
             CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()"""),
@@ -4505,7 +4509,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 rowId:result.row.id};
         }""",first['referenceImage'])
         self.assertEqual(restored['sha'],a['sha'])
-        self.assertEqual(stored(),baseline)
+        self.assertEqual(stored(),before_failed_open)
         panel.locator('[data-calibration-project-id="'+a['id']+'"] '
                       '[data-calibration-project-open]').click()
         expect(panel).to_be_hidden(timeout=30000)
