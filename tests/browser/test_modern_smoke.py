@@ -4399,6 +4399,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         import_bundle()
         expect(library).to_contain_text('Imported 0 animations; 1 already present')
         self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 2)
+        # A remapped portable reference belongs to the imported original,
+        # never to the same-name or same-byte local alias. Both remain
+        # non-deletable even after the repeated idempotent import.
+        gallery=self.open_image_library()
+        gallery.get_by_role('button',name='Inspect Imported observation (Local original)').click()
+        uses=gallery.locator('.modern-image-usage')
+        expect(uses).to_contain_text('Saved animations (2)',timeout=30000)
+        gallery.get_by_role('button',name='Check deletion safety').click()
+        warning=gallery.locator('.modern-reference-editor .modern-image-usage-warning').first
+        expect(warning).to_contain_text('Deletion blocked')
+        expect(gallery.get_by_role('button',name='Delete observation')).to_be_disabled()
+        gallery.get_by_role('button',name='Inspect Local observation (Local original)').click()
+        expect(uses.locator('.modern-image-usage-status')).to_contain_text(
+            '0 known local uses',timeout=30000)
+        gallery.get_by_role('button',name='Check deletion safety').click()
+        expect(warning).to_contain_text('Deletion blocked')
+        expect(gallery.get_by_role('button',name='Delete observation')).to_be_disabled()
+        self.assertEqual(self.page.evaluate('async () => (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length'), 2)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
     def assert_preview_fills_panels(self):
