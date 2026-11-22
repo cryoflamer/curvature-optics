@@ -1,0 +1,66 @@
+name: Curvature targeted Chromium
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_name:
+        description: 'Exact Chromium smoke test method (test_...)'
+        type: string
+        required: true
+        default: test_calibration_project_indexeddb_abort_retains_unsaved_retry
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-browser:
+    name: Targeted Chromium smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TEST_NAME: ${{ inputs.test_name }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Validate exactly one selected browser case
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          name = os.environ['TEST_NAME']
+          if not re.fullmatch(r'test_[A-Za-z0-9_]{1,180}', name):
+              sys.exit('Expected a single test_... method name (letters, digits, underscores)')
+          result = subprocess.run(
+              [sys.executable, 'tools/run-browser-smoke.py', '--match', name, '--list'],
+              text=True, capture_output=True, check=True,
+          )
+          cases = [line for line in result.stdout.splitlines()
+                   if line.startswith('test_modern_smoke.ModernBrowserSmoke.')]
+          if len(cases) != 1 or cases[0] != 'test_modern_smoke.ModernBrowserSmoke.' + name:
+              sys.exit(f'Expected exactly one exact test, got {cases!r}')
+          print('Selected:', cases[0])
+          PY
+      - name: Cache Playwright Chromium downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.57.0-ubuntu-24.04
+      - name: Install Playwright and browser dependencies
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Run only the selected Chromium test
+        run: python tools/run-browser-smoke.py --match "$TEST_NAME"
+      - name: Upload browser diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: targeted-chromium-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: browser-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
