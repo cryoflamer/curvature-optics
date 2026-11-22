@@ -3452,7 +3452,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         picker=self.page.locator('dialog.modern-image-picker')
         expect(picker).to_be_visible()
         expect(picker.locator('.modern-image-picker-choice')).to_have_count(1)
-        picker.get_by_role('button',name='Select image storyboard-photo.png (Local)').click()
+        choice=picker.locator('.modern-image-picker-choice')
+        self.assertEqual(choice.get_attribute('aria-label'),'Select image storyboard-photo.png (Local)')
+        expect(choice).to_be_visible()
+        choice.click()
         picker.get_by_role('button',name='Attach selected').click()
         expect(links).to_contain_text('Reference photographs (1)')
         self.assertEqual(self.page.evaluate("""async () =>
