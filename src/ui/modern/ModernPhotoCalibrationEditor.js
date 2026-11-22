@@ -2265,11 +2265,20 @@
       message('Calibration experiment imported.');persist();return true;
       }finally{endPhotoLoad();}
     }
+    function experimentFilename(){
+      // Prefer the saved project's user-facing name; a standalone draft
+      // falls back to the original reference photo's title.
+      const title=projectSession?.project()?.title||record?.title||'calibration';
+      const safe=String(title).normalize('NFKC').replace(/[\\/:*?"<>|\\x00-\\x1f]/g,'-')
+        .replace(/\s+/g,' ').replace(/[. ]+$/g,'').trim().slice(0,120)
+        .replace(/[. ]+$/g,'');
+      return 'calibration-'+(safe||'untitled')+'.json';
+    }
     exportButton.onclick=()=>{
       try{
         const data=exportExperiment(),blob=new env.Blob([JSON.stringify(data,null,2)],{type:'application/json'});
         const url=env.URL.createObjectURL(blob),a=doc.createElement('a');
-        a.href=url;a.download='calibration-'+record.id+'.json';doc.body.append(a);a.click();a.remove();
+        a.href=url;a.download=experimentFilename();doc.body.append(a);a.click();a.remove();
         env.setTimeout(()=>env.URL.revokeObjectURL(url),30000);
         exchangeStatus.textContent='Experiment exported · original photo embedded.';
       }catch(error){exchangeStatus.textContent='Export failed: '+error.message;}
