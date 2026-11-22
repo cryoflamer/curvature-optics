@@ -6586,10 +6586,14 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const saved=api.getWorkspace(collection,id);
                 const live=CurvatureModernApp.getAnimationStudioDraft().draft;
                 const a=JSON.stringify(saved&&saved.draft),b=JSON.stringify(live);
-                let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;
+                const rec=JSON.parse(sessionStorage.getItem(
+                    'curvature-modern-keyframe-edit-recovery-v1')||'null');
+                const entry=rec&&rec.draftAtEntry||'';
+                let i=0;while(i<a.length&&i<entry.length&&a[i]===entry[i])i++;
                 return {same:a===b,storedLength:a.length,liveLength:b.length,
+                    entryLength:entry.length,entrySame:a===entry,
                     mismatch:i,stored:a.slice(Math.max(0,i-130),i+180),
-                    live:b.slice(Math.max(0,i-130),i+180)};
+                    entry:entry.slice(Math.max(0,i-130),i+180)};
             }""",banner.get_attribute('data-workspace-id'))
             self.fail('Second Apply remained open: '+banner.locator('p').inner_text()+
                       ' diagnostic='+str(diagnostic))
