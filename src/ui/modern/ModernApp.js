@@ -8731,7 +8731,10 @@
       if(!tab)throw Error('Animation workspace unavailable');
       tab.click();
       if(currentWorkspaceMode()!=='animation')throw Error('Animation workspace navigation blocked');
-      await requestStudioSwitch('open',id);
+      // Opening the currently active project again would unnecessarily ask
+      // to replace its unsaved working draft. Reuse that exact owner instead.
+      if(!studioLibraryActive||studioLibraryActive.id!==id)
+        await requestStudioSwitch('open',id);
       if(!studioLibraryActive||studioLibraryActive.id!==id)
         throw Error('Animation switch was cancelled or blocked');
       if(frameKey!==null&&frameKey!==undefined){
