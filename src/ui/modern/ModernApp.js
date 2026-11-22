@@ -8039,6 +8039,7 @@
       stopCameraTransition(false,'Image Library opened',false);
       stopAutoCameraPreview();stopCameraKeyboard(true);abortCameraDrag();cancelEdits();
       if(persistence.dirty)flushWorkingSession();
+      cancelPending();stopShimmerFrame();
       if(state.demosActive&&root.CurvatureModernDemos)root.CurvatureModernDemos.deactivate();
       state.demosActive=false;
       var imageDemosPanel=newUiEl('ModernDemosPanel');if(imageDemosPanel)imageDemosPanel.hidden=true;
