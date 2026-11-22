@@ -3567,7 +3567,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'name':'usage-photo.png','mimeType':'image/png','buffer':image})
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         expect(panel.locator('.modern-image-usage')).to_be_visible()
-        expect(panel.locator('.modern-image-usage [role=status]')).to_contain_text('known local use')
+        expect(panel.locator('.modern-image-usage-status')).to_contain_text('known local use')
         self.page.locator('#ModernAnimationTab').click()
         self.page.locator('#ModernAnimationViewEditor').click()
         editor=self.page.locator('#ModernAnimationStudio')
