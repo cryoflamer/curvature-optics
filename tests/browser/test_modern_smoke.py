@@ -142,10 +142,18 @@ class ModernBrowserSmoke(unittest.TestCase):
     def open_animation(self):
         self.page.locator('#ModernAnimationTab').click()
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
-        # Library buttons set aria-label to their *description*, not their
-        # visible caption. get_by_role(name='New project') cannot match one.
-        # Match the visible text and wait for the asynchronous library render.
-        expect(self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True)).to_be_visible(timeout=15000)
+        # Navigation may restore Library, Editor or Preview independently.
+        # Do not switch subviews here: F5 assertions must observe the resumed
+        # workspace rather than accidentally masking a wrong restore.
+        views = [self.page.locator('#ModernAnimation' + name + 'View')
+                 for name in ('Library', 'Editor', 'Preview')]
+        self.assertEqual(sum(view.is_visible() for view in views), 1,
+                         'exactly one Animation Studio subview must be visible')
+        if views[0].is_visible():
+            # The Library renders asynchronously and the button's accessible
+            # name is its description rather than the visible caption.
+            expect(self.page.locator('#ModernAnimationLibrary').get_by_text(
+                'New project', exact=True)).to_be_visible(timeout=15000)
 
     def open_image_library(self):
         self.page.locator('#ModernImageLibraryTab').click()
@@ -4992,6 +5000,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""" % json.dumps(original))
         self.page.reload(wait_until='load')
         self.open_animation()
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
         demo.get_by_text('Open demo', exact=True).click()
         expect(image).to_have_attribute('src', original)
         self.page.locator('#ModernAnimationViewLibrary').click()
@@ -5047,6 +5057,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.reload(wait_until='load')
         self.open_animation()
         self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         expect(studio.get_by_label('Project name')).to_have_value(
             'Soundly Causeway · Bridge Camera Study (copy)')
         self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
@@ -6959,7 +6970,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.wait_for_timeout(750)
         self.page.reload(wait_until='load')
         self.open_animation()
-        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value(
             'CI autosave workspace'
         )
@@ -6985,6 +6996,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.create_camera_project('CI Camera Motion')
         self.page.reload(wait_until='load')
         self.open_animation()
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
         expect(self.page.locator('#ModernAnimationLibrary')).to_contain_text('CI Camera Motion')
 
     def test_keyframe_undo_redo_after_focus_leaves_editor(self):
