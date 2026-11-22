@@ -4366,11 +4366,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             'button',name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         expect(banner).to_be_visible()
-        token=self.page.evaluate("""() => ({
-            session: JSON.parse(sessionStorage.getItem(
-                'curvature-modern-keyframe-edit-recovery-v1')).tabId,
-            window: window.name
-        })""")
+        token=self.page.evaluate("""() => {
+            const raw=sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1');
+            return {session:raw?JSON.parse(raw).tabId:null,window:window.name,
+                notice:document.querySelector('.modern-keyframe-edit-hint')?.textContent};
+        }""")
+        self.assertIsNotNone(token['session'],'No F5 checkpoint: '+str(token))
         with self.page.expect_popup() as info:
             self.page.evaluate("window.open(location.href,'_blank')")
         popup=info.value

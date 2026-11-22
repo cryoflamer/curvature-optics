@@ -657,7 +657,7 @@
       var previous=root.name||'';
       if(/^curvature_optics_keyframe_[A-Za-z0-9_-]{8,110}$/.test(previous))
         return previous;
-      if(previous)return null; // Do not overwrite a caller-assigned target name.
+      if(previous)return previous; // Preserve a caller-assigned stable tab name.
       var token=root.crypto&&typeof root.crypto.randomUUID==='function'?
         root.crypto.randomUUID().replace(/-/g,''):
         Math.random().toString(36).slice(2)+Date.now().toString(36);
