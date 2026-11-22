@@ -887,10 +887,15 @@
     // Record the last durable state before viewer pagehide listeners can
     // synthesize another autosave. The unload event must not erase a clean
     // marker through a late in-flight, unrelated viewer snapshot.
-    env.addEventListener('pagehide',()=>{
+    function markCleanProjectOnLeave(){
+      if(leavingPage)return;
+      // beforeunload runs before the viewer's pagehide autosave; the latter
+      // must not revoke a previously acknowledged project on ordinary F5.
       rememberCleanProjectState(projectSession?.state());
       leavingPage=true;
-    },true);
+    }
+    env.addEventListener('beforeunload',markCleanProjectOnLeave,true);
+    env.addEventListener('pagehide',markCleanProjectOnLeave,true);
     function rememberPreviousProject(previous,opened){
       if(!previous||previous===opened)return;
       try{env.sessionStorage?.setItem(PREVIOUS_PROJECT_KEY,previous);}catch(_ignored){}
