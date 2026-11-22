@@ -6543,6 +6543,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
             'Create copy', exact=True).click()
         studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
         initial=self.page.evaluate("""async () => ({
             count: (await CurvatureModernApp.getHistoryStore().list()).length,
             draft: CurvatureModernApp.getAnimationStudioDraft().draft
