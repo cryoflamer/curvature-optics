@@ -4056,6 +4056,31 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(where).to_contain_text('Tab A recovered photo edits')
             self.assertEqual(len(self.page.evaluate("""async () =>
                 await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
+            # F5 must rehydrate BOTH durable references without creating a
+            # third recovery fork or losing the one original photograph.
+            self.page.reload(wait_until='load')
+            gallery=self.open_image_library()
+            gallery.get_by_role('button',name='Inspect two-tabs-reference.png (Local original)').click()
+            where=gallery.locator('.modern-image-usage')
+            expect(where).to_contain_text('Tab B photo edits',timeout=30000)
+            expect(where).to_contain_text('Tab A recovered photo edits')
+            post=self.page.evaluate("""async ({photo,first,fork}) => {
+                const collection=await CurvatureModernAnimationDraftAutosave
+                    .readCollection(indexedDB);
+                const row=await CurvatureModernReferenceImageLibrary.get(indexedDB,photo);
+                const inspected=await CurvatureModernImageUsageGraph.discover(window,row);
+                const owners=inspected.uses.filter(u=>u.type==='draft'&&
+                    u.source==='recoverable'&&[first,fork].includes(u.ownerId));
+                return {ids:collection.workspaces.map(w=>w.id),
+                    owners:owners.map(u=>[u.ownerId,u.title,u.frameIndex]),
+                    originals:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length};
+            }""",{'photo':image_id,'first':workspace,'fork':fork})
+            self.assertCountEqual(post['owners'],[
+                [workspace,'Tab B photo edits',1],
+                [fork,'Tab A recovered photo edits',1]],post)
+            self.assertIn(workspace,post['ids'])
+            self.assertIn(fork,post['ids'])
+            self.assertEqual(post['originals'],1,post)
             self.assertEqual(errors,[])
             self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                              self.console)
