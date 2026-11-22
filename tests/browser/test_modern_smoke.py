@@ -3959,7 +3959,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(diag).to_contain_text('Rendered t=20.95s', timeout=30000)
         optics = self.page.locator('#ModernAnimationPlaybackOptics')
         optics.select_option('fast')
-        expect(diag).to_contain_text('Requested optics: Fast Preview', timeout=30000)
+        expect(diag).to_contain_text('Requested optics: Fast if supported · Effective: Fast Preview', timeout=30000)
         optics.select_option('canvas-direct')
         expect(diag).to_contain_text('Requested optics: Canvas Direct', timeout=30000)
         storyboard = self.page.locator('#ModernAnimationStoryboard')
