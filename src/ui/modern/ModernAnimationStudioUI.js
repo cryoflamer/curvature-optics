@@ -48,6 +48,25 @@
     });
     return remove;
   }
+  // Non-destructive keyframe actions share the same drag/selection isolation
+  // as Remove and Info, but do not alter the timeline or History themselves.
+  function cardIcon(doc,glyph,description,action){
+    var control=button(doc,glyph,description,function(event){
+      if(event&&event.stopPropagation)event.stopPropagation();
+      action();
+    });
+    control.className='modern-studio-card-icon';
+    control.title=description;control.draggable=false;
+    control.setAttribute('data-no-thumbnail-preview','true');
+    ['pointerdown','mousedown','dblclick','dragstart'].forEach(function(type){
+      control.addEventListener(type,function(event){
+        if(event&&event.stopPropagation)event.stopPropagation();
+        if((type==='mousedown'||type==='dragstart')&&event&&event.preventDefault)
+          event.preventDefault();
+      });
+    });
+    return control;
+  }
   // Same isolated control for saved projects and independent working drafts.
   function libraryDelete(doc,description,action,extraClass){
     var remove=cardRemove(doc,description,action);
@@ -1333,10 +1352,10 @@
       summary.title=summary.textContent;pick.appendChild(summary);
       item.appendChild(pick);
       var frameActions=el(doc,'div','modern-studio-card-actions');
-      frameActions.appendChild(button(doc,'Properties','Edit animation properties for '+frame.name,function(){
+      frameActions.appendChild(cardIcon(doc,'☷','Properties for '+frame.name,function(){
         host.__studioInspectorMode='frame';if(actions.select)actions.select(frame.key);
       }));
-      frameActions.appendChild(button(doc,'Edit','Edit '+frame.name+' in Scene or Compare (coming soon)',function(){
+      frameActions.appendChild(cardIcon(doc,'✎','Edit '+frame.name+' (coming soon)',function(){
         if(actions.editKeyframe)actions.editKeyframe(frame.key);
       }));
       item.appendChild(frameActions);

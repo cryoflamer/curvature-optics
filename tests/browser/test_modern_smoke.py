@@ -3944,8 +3944,24 @@ class ModernBrowserSmoke(unittest.TestCase):
         timeline = studio.locator('.modern-studio-keyframe')
         expect(timeline).to_have_count(9)
         expect(studio.locator('.modern-studio-preview-bar')).to_have_count(0)
-        controls = studio.locator('.modern-studio-card-actions').nth(3)
-        controls.get_by_text('Edit', exact=True).click()
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        controls = card.locator('.modern-studio-card-actions')
+        expect(controls.locator('button')).to_have_count(2)
+        self.assertEqual(self.page.evaluate('''() => {
+            const card=document.querySelectorAll('.modern-studio-filmstrip-item')[3];
+            const info=card.querySelector('.modern-card-info-button').getBoundingClientRect();
+            const controls=[...card.querySelectorAll('.modern-studio-card-icon')].map(b=>b.getBoundingClientRect());
+            const remove=card.querySelector('.modern-card-delete').getBoundingClientRect();
+            return controls.length===2 && info.right<=controls[0].left &&
+                   controls[0].right<=controls[1].left && controls[1].right<=remove.left;
+        }'''), True, 'Info, Properties, Edit and Remove must not overlap')
+        card.get_by_role('button', name='Show details for').click()
+        expect(self.page.get_by_role('dialog', name='Saved snapshot or animation details')).to_be_visible()
+        self.page.get_by_role('button', name='Close details').click()
+        controls.get_by_role('button', name='Properties for').click()
+        expect(studio.get_by_label('Frame name')).to_have_value('04 · Low view, hidden spans')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        controls.get_by_role('button', name='Edit 04').click()
         expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         timeline.nth(3).click()
