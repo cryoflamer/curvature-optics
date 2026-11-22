@@ -1694,6 +1694,7 @@
           const ack=persist(true);
           if(ack)await ack;
         }
+        if(cleanReload)projectsMessage('Reopening saved Calibration Project: waiting for storage…');
         await writeQueue;
         observed=editorMutation;
         requireGuard();
@@ -1719,8 +1720,10 @@
         }
         // A project is independently verified and decoded before the first
         // mutation of the live editor. prepareOpen rechecks the DB revision.
+        if(cleanReload)projectsMessage('Reopening saved Calibration Project: verifying checkpoint…');
         const prepared=await session.prepareOpen(id,guard);
         requireGuard();
+        if(cleanReload)projectsMessage('Reopening saved Calibration Project: decoding photograph…');
         const incoming=await prepareVisualProject(prepared);
         requireGuard();
         oldView=scene?{
