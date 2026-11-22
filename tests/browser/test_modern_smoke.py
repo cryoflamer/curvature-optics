@@ -4776,6 +4776,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
         inspector.get_by_role('button', name='Inspect project settings').click()
         expect(inspector.locator('.modern-studio-project-panel')).to_be_visible()
+        expect(inspector.get_by_role('button', name='Inspect project settings')).to_have_attribute('aria-pressed', 'true')
         name = editor.get_by_label('Project name')
         name.fill('Soundly navigation check')
         name.press('Tab')
@@ -4803,6 +4804,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         # siblings inert, not each descendant of those blocked panels.
         self.assertTrue(self.page.locator('#ModernAnimationLibrary').evaluate(
             '(el) => !!el.closest("[inert]")'))
+        self.assertTrue(self.page.locator('#ModernAnimationEditorView').evaluate(
+            '(el) => el.inert'))
         story = self.page.locator('#ModernAnimationStoryboard')
         cards = story.locator('.modern-animation-storyboard-card')
         settings = self.page.locator('#ModernAnimationPresentationSettingsToggle')
@@ -4853,6 +4856,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationPlaybackTime')).to_contain_text('20.95')
         self.assertFalse(self.page.locator('#ModernAnimationLibrary').evaluate(
             '(el) => !!el.closest("[inert]")'))
+        self.assertFalse(self.page.locator('#ModernAnimationEditorView').evaluate(
+            '(el) => el.inert'))
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'), 'soundly')
         expect(story.get_by_role('button', name='Export without thumbnails', exact=True)).to_be_visible()
         expect(self.page.locator('#ModernAnimationAtmosphere')).to_be_visible()
@@ -4913,6 +4918,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         editor.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Properties for').click()
         expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
+        expect(editor.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
         heading = editor.get_by_label('Presentation title (optional)')
         heading.fill('Real observation')
         heading.press('Tab')
