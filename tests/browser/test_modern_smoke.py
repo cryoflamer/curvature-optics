@@ -3605,6 +3605,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             return saved&&current&&current.libraryId===saved.id&&
               current.selectedKey===saved.project.keyframes[0].key;
         }""")
+        diagnostic=self.page.evaluate("""() => ({
+            mode:CurvatureModernApp.getWorkspaceMode(),
+            studioView:CurvatureModernApp.getAnimationStudioView(),
+            usageStatus:document.querySelector('.modern-image-usage-status')?.textContent,
+            editorSelected:document.querySelector('#ModernAnimationViewEditor')?.getAttribute('aria-selected')
+        })""")
+        self.assertEqual(diagnostic['studioView'],'editor',diagnostic)
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertEqual(self.page.evaluate("""async () => {
             const rows=await CurvatureModernReferenceImageLibrary.list(indexedDB);
