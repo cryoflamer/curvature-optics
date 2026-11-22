@@ -3311,6 +3311,37 @@ class ModernBrowserSmoke(unittest.TestCase):
             await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_keyboard_paste_scoped_to_gallery(self):
+        self.open_modern()
+        self.open_animation()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        panel.locator('summary').first.click()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.context.grant_permissions(['clipboard-read','clipboard-write'])
+        self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=19;c.height=14;
+            c.getContext('2d').fillRect(0,0,19,14);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+        }""")
+        # Pasting on a non-editable Gallery element imports an image.
+        summary=panel.locator('summary').first
+        summary.focus()
+        summary.press('Control+v')
+        expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
+        rows=self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual(len(rows),1)
+        self.assertEqual([rows[0]['width'],rows[0]['height']],[19,14])
+        # The same image pasted into a text field must not cause another import.
+        title=panel.get_by_label('Title',exact=True)
+        title.focus()
+        title.press('Control+v')
+        count=self.page.evaluate("""async () =>
+            (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length""")
+        self.assertEqual(count,1)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_reference_image_library_roundtrip(self):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
