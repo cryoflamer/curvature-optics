@@ -183,6 +183,29 @@ test('photo identity is verified and reused; no false link to a new title or ali
   assert.throws(()=>checkpoint.extract({...d,record:null,rows:[]},null,a.photo.identity),
     /No-photo|cannot contain/);
 });
+test('picker thumbnail is stripped from retryable project checkpoint without losing provenance',async()=>{
+  const d=draft(),image=copy(d);
+  d.activeSource={...d.activeSource,thumbnail:{
+    dataUrl:'data:image/png;base64,'+base64,width:1,height:1},
+    tags:['causeway'],links:['Original']};
+  const input=copy(d);
+  const {project,environment,library}=await capture(d);
+  assert.deepEqual(d,input); // the live and retryable source snapshot is not mutated
+  assert.equal(project.checkpoint.payload.draft.activeSource.thumbnail,undefined);
+  assert.equal(JSON.stringify(project).includes('data:image'),false);
+  assert.equal(project.checkpoint.payload.draft.activeSource.key,d.activeSource.key);
+  assert.deepEqual(project.checkpoint.payload.draft.activeSource.links,d.activeSource.links);
+  assert.deepEqual(project.checkpoint.payload.draft.rows,d.rows);
+  const restored=await checkpoint.prepare(project,environment,library,importer);
+  assert.equal(restored.draft.activeSource.thumbnail,undefined);
+  assert.deepEqual(restored.draft.activeSource.tags,['causeway']);
+  assert.equal(restored.photo.original.dataUrl,d.record.original.dataUrl);
+  const unsafe=copy(d);
+  unsafe.activeSource.unrelated={dataUrl:'data:image/png;base64,'+base64};
+  assert.throws(()=>checkpoint.extract(unsafe,inline(unsafe),project.photo.identity),
+    /Unsafe or embedded-photo calibration checkpoint field/);
+});
+
 test('editor source retains legacy persist and portable export while exposing staged project APIs',()=>{
   const source=fs.readFileSync(path.resolve(__dirname,'../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
   const html=fs.readFileSync(path.resolve(__dirname,'../CurvatureModern.html'),'utf8');

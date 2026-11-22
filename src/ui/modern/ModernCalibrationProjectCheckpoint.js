@@ -143,6 +143,12 @@
          checked.height!==d.record.original.height)
         throw Error('Photo identity dimensions do not match captured draft');
     }else if(identity!==null)throw RangeError('No-photo project must not claim a photo');
+    // Picker choices may carry thumbnail.dataUrl for UI preview only.
+    // Do not persist that redundant raster in the photo-free project checkpoint.
+    // Normalize the copied draft here so Retry save also repairs snapshots
+    // captured before this correction, without modifying the live editor.
+    if(d.activeSource&&Object.prototype.hasOwnProperty.call(d.activeSource,'thumbnail'))
+      delete d.activeSource.thumbnail;
     const source=d.activeSource,sourceKind=source?.imported?'imported':
       ['demo','library','local'].includes(source?.source)?source.source:'unknown';
     const key=typeof source?.key==='string'&&source.key.length<=160&&source.key?
