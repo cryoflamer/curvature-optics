@@ -210,8 +210,8 @@
         <button type="button" id="ModernCalibrationReset" title="Discard the draft and capture the latest Scene">New session</button>
       </div>
       <div class="modern-calibration-toolbar">
-        <label>Existing photo <select id="ModernCalibrationSource"><option value="">Choose an existing photograph…</option></select></label>
-        <button type="button" id="ModernCalibrationUsePhoto" disabled>Use original</button>
+        <select id="ModernCalibrationSource" aria-hidden="true" tabindex="-1" hidden><option value="">Choose an existing photograph…</option></select>
+        <button type="button" id="ModernCalibrationUsePhoto" disabled>Browse photographs</button>
         <button type="button" id="ModernCalibrationRefreshPhotos">Refresh photos</button>
       </div>
       <p id="ModernCalibrationSourceStatus" role="status"></p>

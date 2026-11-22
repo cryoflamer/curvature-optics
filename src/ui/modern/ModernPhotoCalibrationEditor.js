@@ -231,6 +231,7 @@
     const choices=libraryRows.map(row=>({
       key:JSON.stringify(['library',row.id]),id:row.id,source:'library',
       title:row.title,width:row.width,height:row.height,author:row.author||'',
+      thumbnail:row.thumbnail||null,kind:'unclassified',
       links:[...new Set(linked.get(row.id)||[])]
     }));
     for(const demo of demos){
@@ -239,7 +240,8 @@
           (frame.referenceImageIds||[]).includes(record.id)?[demo.project.name+' / '+(frame.name||'Keyframe '+(i+1))]:[]);
         choices.push({key:JSON.stringify(['demo',demo.id,record.id]),source:'demo',demoId:demo.id,
           id:record.id,title:record.title,width:record.original.width,height:record.original.height,
-          author:record.author||'',links:[...new Set(links)]});
+          thumbnail:record.thumbnail||null,kind:'unclassified',
+          author:record.author||'',license:record.license||'',links:[...new Set(links)]});
       }
     }
     return choices;
@@ -1799,7 +1801,7 @@
         (c.source==='demo'?'Built-in demo':c.links.length?'Saved project':'Reference library')+
         ' · '+c.title+' ('+c.width+' × '+c.height+')'+(c.links.length?' — '+c.links.join('; '):'')])]);
       if(choices.some(c=>c.key===previous))sourcePicker.value=previous;
-      sourceLoad.disabled=!sourcePicker.value;sourceRefresh.disabled=false;
+      sourceLoad.disabled=!choices.length;sourceRefresh.disabled=false;
       sourceStatus.textContent=choices.length+' available photographs'+(errors.length?' · '+errors.join(' · '):'');
     }
     function photoDetails(next,source){
@@ -1840,14 +1842,20 @@
       message(next.title+' · '+next.original.width+' × '+next.original.height+' px · verified original retained in Library');
       persist();return true;
     }
-    sourcePicker.onchange=()=>{sourceLoad.disabled=!sourcePicker.value;};
+    // The old source dropdown remains inert only as a compatibility anchor.
+    // Browsing/Cancel never touches Calibration; apply still uses the verified
+    // decoder, SHA-256 ensureOriginal and correspondence-loss confirmation.
+    sourcePicker.onchange=()=>{};
     sourceRefresh.onclick=refreshSources;
-    sourceLoad.onclick=async()=>{
-      const choice=choices.find(c=>c.key===sourcePicker.value);
-      if(!choice)return;
-      if(activeSource?.key===choice.key&&record){message('This photograph is already loaded.');return;}
-      if(!confirmReplacement())return;
-      const token=++loadToken;beginPhotoLoad();message('Loading original photograph…');
+    async function useExistingPhoto(key){
+      const choice=choices.find(c=>c.key===key);
+      if(!choice)throw Error('The chosen photograph is no longer available; refresh the list.');
+      if(activeSource?.key===choice.key&&record){
+        message('This photograph is already loaded.');return true;
+      }
+      if(!confirmReplacement())return false;
+      const token=++loadToken;beginPhotoLoad();
+      message('Loading verified original photograph…');
       try{
         let next;
         if(choice.source==='library'){
@@ -1857,9 +1865,26 @@
           next=demoRecords.find(d=>d.id===choice.demoId)?.referenceImages.find(r=>r.id===choice.id);
         }
         if(!next)throw Error('Original photograph no longer available; refresh the list.');
-        await acceptPhoto(next,choice,token);
-      }catch(e){if(token===loadToken)message('Cannot load photograph: '+e.message);}
-      finally{endPhotoLoad();}
+        const applied=await acceptPhoto(next,choice,token);
+        if(!applied)throw Error('Photo selection was superseded; current editor unchanged.');
+        sourcePicker.value=key;return true;
+      }catch(error){
+        if(token===loadToken)message('Cannot load photograph: '+error.message);
+        throw error;
+      }finally{endPhotoLoad();}
+    }
+    sourceLoad.onclick=async()=>{
+      if(!env.CurvatureModernImagePicker?.open){
+        sourceStatus.textContent='Shared image picker is unavailable';return;
+      }
+      if(!choices.length)await refreshSources();
+      if(!choices.length){
+        sourceStatus.textContent='No available photographs. Import one in Image Library.';return;
+      }
+      env.CurvatureModernImagePicker.open({
+        document:doc,choices:choices,mode:'single',title:'Choose a calibration photograph',
+        applyLabel:'Use original',onApply:async keys=>useExistingPhoto(keys[0])
+      });
     };
     function message(s){status.textContent=s;}
     function photoDraw(){
@@ -2213,7 +2238,7 @@
       try{next=prepareScene(env.CurvatureModernApp.getPhotoCalibrationScene());}
       catch(e){message('Cannot start a new session: '+e.message);return;}
       loadToken++;record=null;image=null;view=null;activeSource=null;workflow.replaceAll();photoGestures.cancel();photoGhost=null;file.value='';
-      referenceTools.open=true;photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=true;resetPending();
+      referenceTools.open=true;photoInfo.replaceChildren();sourcePicker.value='';sourceLoad.disabled=!choices.length;resetPending();
       showScene(next);setStage("correspondences",{camera:"best"});void refreshSources();
     };
     file.onchange=async()=>{
@@ -2359,7 +2384,7 @@
       photoGestures.cancel();photoGhost=null;
       record=data.referenceImage;image=decoded;workflow.replaceAll(data.observations);
       activeSource={...(data.referenceSource||{}),key:null,links:data.referenceSource?.links||[],imported:true};
-      view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=true;
+      view=null;resetPending();sourcePicker.value='';sourceLoad.disabled=!choices.length;
       showScene(next);photoDetails(record,activeSource);fitPhoto();
       applyFreeFields(data.fit.freeParameters);
       restoreFit(data.fit.result,data.fit.running?'Imported interrupted fit · best saved candidate only':data.fit.status);
