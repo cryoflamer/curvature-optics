@@ -4361,7 +4361,7 @@
   // Keyframe editor gesture grouping stays separate from Studio draft Undo.
   // Text controls keep native undo while focused; once committed, a gesture
   // becomes a single temporary keyframe history entry.
-  if(document&&typeof document.addEventListener==='function'){
+  if(typeof document!=='undefined'&&typeof document.addEventListener==='function'){
     document.addEventListener('focusin',function(event){
       var workspace=newUiEl('ModernWorkspace'),node=event.target;
       if(keyframeEditSession&&workspace&&workspace.contains(node)&&

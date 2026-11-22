@@ -4205,11 +4205,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
             'Create copy', exact=True).click()
         studio=self.page.locator('#ModernAnimationStudio')
-        draft_before=self.page.evaluate("""() =>
-            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button',name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        draft_before=self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
         undo=banner.get_by_role('button',name='Undo',exact=True)
         redo=banner.get_by_role('button',name='Redo',exact=True)
         expect(undo).to_be_disabled()
