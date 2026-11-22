@@ -4188,11 +4188,79 @@ class ModernBrowserSmoke(unittest.TestCase):
             return {timelineTop:t.top,inspectorTop:i.top};
         }""")
         self.assertGreater(narrow['inspectorTop'], narrow['timelineTop'])
-        studio.locator('.modern-studio-card-actions').nth(1).get_by_text('Properties').click()
+        studio.locator('.modern-studio-card-actions').nth(1).get_by_role('button', name='Properties for').click()
         expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
         expect(strip.nth(1)).to_have_attribute('aria-pressed', 'true')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+
+    def test_animation_stage5_end_to_end_narrow_history_and_state_recovery(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        editor = self.page.locator('#ModernAnimationViewEditor')
+        preview = self.page.locator('#ModernAnimationViewPreview')
+        library = self.page.locator('#ModernAnimationViewLibrary')
+        filmstrip = studio.locator('.modern-studio-filmstrip')
+        inspector = studio.locator('.modern-studio-inspector-pane')
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+
+        self.page.set_viewport_size({'width': 390, 'height': 780})
+        expect(filmstrip).to_be_visible()
+        expect(inspector).to_be_visible()
+        position = self.page.evaluate("""() => {
+            const left=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
+            const right=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
+            return {left: left.top, right: right.top,
+              bodyWidth: document.documentElement.scrollWidth,
+              viewportWidth: window.innerWidth};
+        }""")
+        self.assertGreater(position['right'], position['left'],
+                           'narrow layout stacks Inspector after the timeline')
+        self.assertLessEqual(position['bodyWidth'], position['viewportWidth'] + 3,
+                             'no page-wide horizontal overflow on a narrow screen')
+
+        studio.get_by_role('button', name='Open saved experiments to select animation keyframes').click()
+        picker = self.page.locator('.modern-studio-picker-head')
+        expect(picker.get_by_text('Snapshot Picker')).to_be_visible()
+        self.assertTrue(self.page.locator('#ModernAnimationWorkspace').evaluate(
+            "el => el.classList.contains('has-snapshot-picker')"))
+        picker.get_by_role('button', name='Close Snapshot Picker').click()
+        expect(picker).to_have_count(0)
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        card.get_by_role('button', name='Properties for').click()
+        frame = studio.get_by_label('Frame name')
+        frame.fill('Stage 5 selected camera position')
+        frame.press('Tab')
+        key = self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey')
+        card = studio.locator('.modern-studio-filmstrip-item').nth(3)
+        card.get_by_role('button', name='Edit 04').click()
+        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        card.locator('.modern-studio-keyframe').click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs === 20950')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), 20950)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+
+        editor.click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
+        library.click()
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        editor.click()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.get_by_label('Frame name')).to_have_value('Stage 5 selected camera position')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().selectedKey'), key)
+        expect(studio.locator('.modern-studio-keyframe')).to_have_count(9)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
     def test_animation_editor_undo_redo_scroll_and_persistence_after_reorder(self):
         self.open_modern()

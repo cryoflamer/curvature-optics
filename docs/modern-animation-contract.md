@@ -228,6 +228,47 @@ semantics belong to Stage 2. The wizard and reference library remain in Library;
 History picker and keyframe edit controls remain in Editor. The stage does not
 change physics, schemas, exports or Timeline/Inspector layout.
 
+## Animation Studio Preview and Editor UX boundaries (#27, Stages 3–5)
+
+The Editor is a persistent timeline beside an animation-properties Inspector
+(on narrow viewports these stack). **Clicking a keyframe thumbnail opens Preview
+at that frame's exact arrival time**; it does not directly edit its optical
+configuration. The existing `Info` icon shows saved experiment details;
+`Properties` selects the frame for timing, narrative, references and easing
+inside the Inspector. The separate `Edit` icon is deliberately a **non-mutating
+placeholder**, not a Scene/Compare editing session. That session requires
+the revision-safe, contract-locked workflow in
+[Issue #25](https://github.com/cryoflamer/curvature-optics/issues/25).
+`Remove` acts only on the working draft and is Undo/Redo-able.
+Project-wide name, description, mode and compatible sequence controls live in
+the Inspector's **Project settings** tab. History snapshot selection remains a
+secondary picker; it must not replace the Studio timeline or mutate the
+independent Scene/Compare experiment on merely opening or cancelling.
+
+The Preview tab lazily prepares a compatible draft the first time it is
+entered; the Editor has no redundant Preview button. Reopening Preview
+preserves the prepared player and paused playhead. Re-selecting an already
+painted paused keyframe avoids an unnecessary optical repaint, except when
+there is pending restoration, an invalidated/failed frame, a pending thumbnail
+capture, explicit refresh, live playback or viewport geometry change.
+Edits invalidate prepared playback, while view switches and Inspector
+selection alone do not. Quality changes, explicit Retry, and exports retain
+their separate repaint/task controls. PNG/video export jobs remain independent
+of Preview visibility; leaving Preview must not silently cancel or restart
+them.
+
+The existing reference-image attachment UI is retained until the unified
+context-aware picker from
+[Issue #26](https://github.com/cryoflamer/curvature-optics/issues/26)
+is implemented; no second asset store is introduced by the workspace
+refactor. Stage 5 integration tests protect the existing external entry
+points and project/History identity, **not** implementation of the future
+#25/#26 workflows. Focused Chromium acceptance covers the current Library →
+Editor → Preview → Editor loop, narrow-screen timeline/Inspector stacking,
+History picker cancellation and F5 recovery. **Manual Opera UX acceptance,
+future #25/#26 integration and a full release test suite remain separate
+acceptance gates**, not inferred from fast CI.
+
 ## Animation Workspace recovery boundary
 
 Modern Animation has three distinct state owners. None is the physical Scene/Compare
