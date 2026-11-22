@@ -6669,5 +6669,92 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['history'],before['history'],
                          'duplicating and editing a frame never implicitly writes History')
 
+
+    def test_animation_keyframe_camera_live_canvas_pixels_and_cancel_restoration(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        before=self.page.evaluate("""() => ({
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft,
+            model: JSON.stringify(CurvatureModernApp.getModel())
+        })""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        canvas=self.page.locator('#ModernWorkspace canvas.modern-camera-draggable:visible').first
+        expect(canvas).to_be_visible()
+        # Real rendered canvas pixels, not merely model field values. The
+        # comparison is on the same viewport before/after a camera adjustment.
+        self.page.evaluate("""() => {
+            const canvas=document.querySelector('#ModernWorkspace canvas.modern-camera-draggable:not([hidden])');
+            if(!canvas || !canvas.width || !canvas.height)
+                throw Error('No initialized camera render canvas');
+            window.__keyframePixelBaseline=canvas.toDataURL('image/png');
+        }""")
+        height=self.page.locator('#ModernHeight')
+        value=float(height.input_value())
+        height.fill(str(value+45))
+        height.press('Tab')
+        self.page.wait_for_function("""v =>
+            Math.abs(CurvatureModernApp.getModel().Height-v)<0.0001""",arg=value+45)
+        self.page.wait_for_function("""() => {
+            const c=document.querySelector('#ModernWorkspace canvas.modern-camera-draggable:not([hidden])');
+            return c&&c.toDataURL('image/png')!==window.__keyframePixelBaseline;
+        }""",timeout=30000)
+        banner.get_by_role('button',name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft"""),before['draft'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getModel())"""),before['model'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_animation_keyframe_deleted_history_provenance_remains_editable(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        original=self.page.evaluate("""() =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].experiment.scene.camera.Height""")
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        saved=self.page.evaluate("""async () => ({
+            key: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].key,
+            id: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId,
+            count: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertIsInstance(saved['id'],int)
+        self.assertTrue(self.page.evaluate("""async id =>
+            CurvatureModernApp.getHistoryStore().remove(id)""",saved['id']))
+        count=self.page.evaluate("""async () =>
+            (await CurvatureModernApp.getHistoryStore().list()).length""")
+        self.assertEqual(count,saved['count']-1)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        self.page.locator('#ModernHeight').fill(str(original+11))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply & Return').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        result=self.page.evaluate("""async () => ({
+            frame: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3],
+            count: (await CurvatureModernApp.getHistoryStore().list()).length
+        })""")
+        self.assertEqual(result['frame']['experiment']['scene']['camera']['Height'],original+11)
+        self.assertEqual(result['frame']['sourceSnapshotId'],saved['id'],
+                         'History provenance is informative, never a live dependency')
+        self.assertEqual(result['count'],count,
+                         'default Apply must not recreate missing source History')
+
 if __name__ == '__main__':
     unittest.main()
