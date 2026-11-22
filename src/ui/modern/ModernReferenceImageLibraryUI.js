@@ -170,8 +170,18 @@
         var editorApi=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
         if(!editorApi?.openCalibrationProject)throw Error('Calibration Projects unavailable');
         await editorApi.openCalibrationProject(use.ownerId);
+      }else if(use.type==='draft'){
+        if(!env.CurvatureModernApp?.openImageUsageDraft)
+          throw Error('Guarded Storyboard navigation unavailable');
+        await env.CurvatureModernApp.openImageUsageDraft(use.ownerId,use.frameKey);
+      }else if(use.type==='calibration-draft'){
+        var calibrationTab=doc.getElementById('ModernPhotoCalibrationOpen');
+        if(!calibrationTab)throw Error('Calibration workspace unavailable');
+        calibrationTab.click();
+        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')
+          throw Error('Calibration workspace navigation blocked');
       }else{
-        throw Error('This recoverable draft has no safe direct-open action yet; open its owner workspace manually');
+        throw Error('Unknown image use type');
       }
     }
     async function showUses(row){
@@ -199,7 +209,7 @@
               (use.frameIndex?' · keyframe '+use.frameIndex+': '+use.frameName:'')+
               ' · '+use.source,item);
             detail.title=use.ownerId;
-            if(use.type==='animation'||use.type==='calibration'){
+            if(['animation','calibration','draft','calibration-draft'].includes(use.type)){
               var open=button('Open use',item,function(){
                 navigateUse(use).catch(function(error){
                   usageStatus.textContent='Cannot open use: '+error.message;
