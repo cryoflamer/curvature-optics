@@ -7826,6 +7826,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.add_init_script("""window.__calibrationMarkerAtDocumentStart=
             sessionStorage.getItem('curvature-calibration-clean-reload-project-v1');""")
         self.page.reload(wait_until='load',timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            "window.__calibrationMarkerAtDocumentStart"),project_id,
+            'a clean project marker must survive unload before startup scripts')
         try:
             self.page.wait_for_function("""id => {
                 return CurvatureModernApp.getWorkspaceMode()==='calibration' &&
