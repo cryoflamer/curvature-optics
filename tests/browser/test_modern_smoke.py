@@ -3935,6 +3935,126 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
+    def test_animation_preview_short_png_and_webm_exports_produce_real_files(self):
+        import struct
+        import zipfile
+
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        # A short, compatible, two-keyframe real project keeps this browser
+        # acceptance focused; no long 59-second video render is started.
+        for _ in range(7):
+            editor.locator('.modern-studio-filmstrip-item').nth(2).locator(
+                '.modern-card-delete').click(force=True)
+        expect(editor.locator('.modern-studio-filmstrip-item')).to_have_count(2)
+        editor.get_by_label('Hold after arrival (s)').fill('0.1')
+        editor.get_by_label('Hold after arrival (s)').press('Tab')
+        editor.locator('.modern-studio-card-actions').nth(1).get_by_role(
+            'button', name='Properties for').click()
+        editor.get_by_label('Travel to frame (s)').fill('0.2')
+        editor.get_by_label('Travel to frame (s)').press('Tab')
+        editor.get_by_label('Hold after arrival (s)').fill('0.1')
+        editor.get_by_label('Hold after arrival (s)').press('Tab')
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() !== null')
+        before = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+
+        png = self.page.locator('#ModernAnimationFrameExportSection')
+        png.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('5')
+        self.page.locator('#ModernAnimationFrameExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationFrameExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationFrameExportWorkers').select_option('1')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
+        with self.page.expect_download(timeout=120000) as download:
+            self.page.locator('#ModernAnimationFrameExportStart').click()
+        archive = Path(download.value.path())
+        self.assertTrue(download.value.suggested_filename.endswith('.zip'))
+        with zipfile.ZipFile(archive) as z:
+            self.assertIsNone(z.testzip(), 'every ZIP member passes CRC verification')
+            names = z.namelist()
+            frames = [name for name in names if name.endswith('.png')]
+            self.assertGreaterEqual(len(frames), 2)
+            first = z.read(frames[0])
+            self.assertEqual(first[:8], b'\\x89PNG\\r\\n\\x1a\\n')
+            self.assertEqual(struct.unpack('>II', first[16:24]), (640, 360))
+            self.assertGreater(len(first), 1000)
+        expect(self.page.locator('#ModernAnimationFrameExportStatus')).to_contain_text(
+            'PNG archive ready')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), before)
+
+        video = self.page.locator('#ModernAnimationVideoExportSection')
+        video.locator('summary').click()
+        self.page.locator('#ModernAnimationVideoExportFormat').select_option('webm')
+        self.page.locator('#ModernAnimationVideoExportFps').select_option('5')
+        self.page.locator('#ModernAnimationVideoExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationVideoExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationVideoExportWorkers').select_option('1')
+        with self.page.expect_download(timeout=120000) as download:
+            self.page.locator('#ModernAnimationVideoExportStart').click()
+        video_file = Path(download.value.path())
+        self.assertTrue(download.value.suggested_filename.endswith('.webm'))
+        video_bytes = video_file.read_bytes()
+        self.assertTrue(video_bytes.startswith(b'\\x1a\\x45\\xdf\\xa3'), 'valid WebM EBML header')
+        self.assertGreater(len(video_bytes), 1000)
+        expect(self.page.locator('#ModernAnimationVideoExportStatus')).to_contain_text(
+            'export ready:')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), before)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+    def test_animation_preview_png_video_cancellation_and_keyboard_focus(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        self.page.wait_for_function('CurvatureModernApp.getStudioPlayback() !== null')
+        downloads = []
+        self.page.on('download', lambda item: downloads.append(item.suggested_filename))
+
+        png = self.page.locator('#ModernAnimationFrameExportSection')
+        png.locator('summary').click()
+        self.page.locator('#ModernAnimationFrameExportFps').select_option('5')
+        self.page.locator('#ModernAnimationFrameExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationFrameExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationFrameExportDestination').select_option('memory')
+        self.page.locator('#ModernAnimationFrameExportStart').click()
+        cancel_png = self.page.locator('#ModernAnimationFrameExportCancel')
+        expect(cancel_png).to_be_enabled()
+        cancel_png.click()
+        expect(self.page.locator('#ModernAnimationFrameExportStatus')).to_contain_text(
+            'cancelled', timeout=30000)
+        expect(self.page.locator('#ModernAnimationFrameExportStart')).to_be_enabled(timeout=30000)
+
+        video = self.page.locator('#ModernAnimationVideoExportSection')
+        video.locator('summary').click()
+        self.page.locator('#ModernAnimationVideoExportFps').select_option('5')
+        self.page.locator('#ModernAnimationVideoExportSize').select_option('640x360')
+        self.page.locator('#ModernAnimationVideoExportRenderer').select_option('canvas-direct')
+        self.page.locator('#ModernAnimationVideoExportStart').click()
+        cancel_video = self.page.locator('#ModernAnimationVideoExportCancel')
+        expect(cancel_video).to_be_enabled()
+        cancel_video.click()
+        expect(self.page.locator('#ModernAnimationVideoExportStatus')).to_contain_text(
+            'cancelled', timeout=30000)
+        expect(self.page.locator('#ModernAnimationVideoExportStart')).to_be_enabled(timeout=30000)
+        self.assertEqual(downloads, [], 'cancelled exports must not produce a file')
+
+        preview_tab = self.page.locator('#ModernAnimationViewPreview')
+        preview_tab.focus()
+        self.page.keyboard.press('ArrowLeft')
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_have_attribute(
+            'aria-selected', 'true')
+        self.page.keyboard.press('ArrowRight')
+        expect(preview_tab).to_have_attribute('aria-selected', 'true')
+        expect(self.page.locator('#ModernAnimationPlaybackStage')).to_be_visible()
+        self.assertIsNotNone(self.page.evaluate('CurvatureModernApp.getStudioPlayback()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_preview_reuses_painted_frame_and_preserves_render_export_controls(self):
         self.open_modern()
         self.open_animation()
