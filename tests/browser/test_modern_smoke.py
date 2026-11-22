@@ -4060,6 +4060,147 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
 
+    def test_calibration_projects_two_real_fits_apply_without_cross_binding(self):
+        # Real Chromium Worker fits and Apply for two separate project IDs,
+        # with independent verified originals and preserved outgoing drafts.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');c.width=1176;c.height=791;
+            const g=c.getContext('2d');g.fillStyle='#334f8c';
+            g.fillRect(0,0,c.width,c.height);
+            g.fillStyle='#efc650';g.fillRect(100,110,190,110);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Second fit original.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        self.assertNotEqual(first['referenceImage']['original']['dataUrl'],
+                            second['referenceImage']['original']['dataUrl'])
+        toggle.click()
+        for index,(filename,data) in enumerate(
+                [('fit-a.json',first),('fit-b.json',second)],start=1):
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+            expect(panel.locator('[data-calibration-project-id]')).to_have_count(
+                index,timeout=30000)
+        records=self.page.evaluate("""async () => {
+            const store=CurvatureModernCalibrationProjectStore;
+            const summaries=await store.list(indexedDB);
+            return Promise.all(summaries.map(async r=>{
+                const p=await store.get(indexedDB,r.id);
+                return {id:p.id,sha:p.photo?.identity.sha256,results:p.resultIds,
+                    observations:p.checkpoint.payload.draft.rows.length};
+            }));
+        }""")
+        self.assertEqual(len(records),2)
+        a,b=records
+        self.assertNotEqual(a['sha'],b['sha'])
+        self.assertEqual((a['observations'],b['observations']),(14,14))
+        self.assertEqual((a['results'],b['results']),([],[]))
+        original_b=self.page.evaluate("""async id => {
+            const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return {checkpoint:p.checkpoint,photo:p.photo,resultIds:p.resultIds};
+        }""",b['id'])
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            panel.locator('[data-calibration-project-id="'+id+'"] '
+                          '[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def saved(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {photo:p.photo,checkpoint:p.checkpoint,resultIds:p.resultIds};
+            }""",id)
+
+        results={}
+        for index,project in enumerate((a,b)):
+            if index:
+                expect(self.page.locator('#ModernSceneTab')).to_have_attribute(
+                    'aria-pressed','true',timeout=30000)
+                self.page.locator('#ModernPhotoCalibrationOpen').click()
+                expect(workspace).to_be_visible(timeout=30000)
+            open_project(project['id'])
+            expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_be_visible()
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectBinding()?.projectId"""),project['id'])
+            self.assertEqual(saved(project['id'])['photo']['identity']['sha256'],
+                             project['sha'])
+            workspace.locator('[data-calibration-stage="calibration"]').click()
+            run=workspace.locator('#ModernCalibrationRunFit')
+            expect(run).to_be_enabled(timeout=30000)
+            run.click()
+            button=workspace.locator('#ModernCalibrationApplyScene')
+            expect(button).to_be_enabled(timeout=120000)
+            fitted=self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document).exportExperiment()""")
+            fit=fitted['fit']['result']
+            self.assertTrue(fit['evaluation']['valid'])
+            self.assertGreater(fit['acceptedSteps'],0)
+            self.assertEqual(len(fit['evaluation']['points']),14)
+            self.assertLess(fit['evaluation']['rmsPx'],15)
+            self.assertEqual(fitted['observations'],first['observations'])
+            self.assertEqual(fitted['referenceImage']['original'],
+                             (first if index==0 else second)['referenceImage']['original'])
+            if index==0:
+                self.assertEqual(saved(b['id'])['checkpoint'],original_b['checkpoint'])
+                self.assertEqual(saved(b['id'])['resultIds'],[])
+            self.page.once('dialog',lambda prompt:prompt.accept())
+            button.click()
+            expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+                'Applied to Scene',timeout=30000)
+            self.page.wait_for_function("""id => {
+                const a=CurvatureModernApp;
+                return a.getWorkspaceMode()==='scene' &&
+                    document.querySelector('#ModernSceneTab')?.getAttribute('aria-pressed')==='true';
+            }""",arg=project['id'],timeout=30000)
+            self.page.wait_for_function("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return p?.resultIds.length===1;
+            }""",arg=project['id'],timeout=30000)
+            applied=saved(project['id'])
+            results[project['id']]=applied['resultIds'][0]
+            self.assertEqual(applied['photo']['identity']['sha256'],project['sha'])
+            self.assertEqual(len(applied['checkpoint']['payload']['draft']['rows']),14)
+            self.assertEqual(applied['checkpoint']['payload']['draft']['fitBest']['evaluation']['valid'],True)
+            if index==0:
+                # Applying A must not create a link or change B's checkpoint.
+                self.assertEqual(saved(b['id'])['checkpoint'],original_b['checkpoint'])
+                self.assertEqual(saved(b['id'])['resultIds'],[])
+        self.assertNotEqual(results[a['id']],results[b['id']])
+        archive=self.page.evaluate("""async ids => {
+            const store=CurvatureModernCalibrationResultArchive;
+            const rows=await Promise.all(ids.map(id=>store.get(indexedDB,id)));
+            return rows.map(x=>({
+                photo:x.record.payload.photo.identity.sha256,
+                project:x.record.provenance.projectId,
+                valid:x.record.payload.fit.result.evaluation.valid}));
+        }""",[results[a['id']],results[b['id']]])
+        self.assertEqual([row['project'] for row in archive],[a['id'],b['id']])
+        self.assertEqual([row['valid'] for row in archive],[True,True])
+        self.assertEqual([row['photo'] for row in archive],[a['sha'],b['sha']])
+        self.page.reload(wait_until='load',timeout=30000)
+        after=[saved(a['id']),saved(b['id'])]
+        self.assertEqual([v['resultIds'] for v in after],
+                         [[results[a['id']]],[results[b['id']]]])
+        self.assertEqual([v['photo']['identity']['sha256'] for v in after],
+                         [a['sha'],b['sha']])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_projects_independent_photo_viewports_survive_reload(self):
         # Real wheel zoom must durably save each independently bound project
         # without requiring a project switch to flush its viewport.
