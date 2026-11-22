@@ -194,6 +194,23 @@ audits. Actual visual interaction and IndexedDB behavior still require
 acceptance testing in the target Opera/Chromium installation.
 
 
+## Animation Studio internal views (#27, Stage 1)
+
+`CurvatureModern.html` keeps one Animation Workspace with permanent Library,
+Editor and Preview DOM nodes. `ModernAnimationWorkspaceViews.js` handles only
+tab navigation and visibility; `ModernApp.js` retains the live draft, frame
+selection, edit history and playback. Opening a saved project/new draft selects
+Editor; a built-in read-only demo selects Preview. A successful Preview action
+switches views rather than scrolling the document.
+
+Switching away from playing Preview pauses but retains its player/playhead.
+Returning repaints only for pending/stale pixels or changed canvas geometry;
+real edits still invalidate prepared playback. Stage 1 does not persist the
+active internal view in project JSON or URL: reload and browser history
+semantics belong to Stage 2. The wizard and reference library remain in Library;
+History picker and keyframe edit controls remain in Editor. The stage does not
+change physics, schemas, exports or Timeline/Inspector layout.
+
 ## Animation Workspace recovery boundary
 
 Modern Animation has three distinct state owners. None is the physical Scene/Compare

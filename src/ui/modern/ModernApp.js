@@ -30,6 +30,7 @@
   var studioEditingApi=root.CurvatureModernAnimationStudioEditing;
   var studioContractApi=root.CurvatureModernAnimationContract;
   var studioUI=root.CurvatureModernAnimationStudioUI;
+  var studioViewsApi=root.CurvatureModernAnimationWorkspaceViews;
   var studioProjects=root.CurvatureModernAnimationProject;
   var studioPlaybackApi=root.CurvatureModernAnimationPlayback;
   var studioPlaybackControlsApi=root.CurvatureModernAnimationPlaybackControls;
@@ -579,6 +580,7 @@
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
+  var studioView='library',studioViewController=null;
   var studioPrepared=null;
   // A one-shot navigation request belongs to the explicit Preview click, not
   // to autosave, project restore, Playback seek or background frame painting.
@@ -827,6 +829,31 @@
       animation.classList.toggle('has-snapshot-picker',animationWorkspaceOpen&&studioPickerOpen);}
 
     syncHistoryNavigation();
+  }
+  // Switch presentation only: preserve one draft, one edit history and one player.
+  function setStudioView(view,focus){
+    if(!['library','editor','preview'].includes(view))return false;
+    var previous=studioView;
+    if(previous==='preview'&&view!=='preview'&&studioPlayback&&studioPlaybackControls){
+      studioPlaybackControls.halt();
+      syncStudioPlaybackControls();
+      saveStudioDraft(false);
+    }
+    studioView=view;
+    if(studioViewController)studioViewController.show(view,!!focus);
+    if(view==='preview'&&previous!==view&&studioPlayback&&animationWorkspaceOpen){
+      if(studioPreviewLifecycle)studioPreviewLifecycle.checkSize();
+      if(studioRestorePreviewPending||studioPlaybackRenderedAt!==studioPlayback.status().positionMs)
+        scheduleStudioInitialPaint('view');
+    }
+    return true;
+  }
+  function bindStudioViews(){
+    if(!studioViewsApi||!studioViewsApi.bind)return;
+    studioViewController=studioViewsApi.bind(document,function(view,focus){
+      setStudioView(view,focus);
+    });
+    if(studioViewController)studioViewController.show(studioView,false);
   }
   function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
   function workspaceSectionValue(scope,suffix){
@@ -1485,6 +1512,7 @@
     studioWizardPickerFilters=historyFiltersApi?historyFiltersApi.normalize():null;
     studioWizardPickerQueryDraft='';studioWizardPickerAdvancedOpen=false;
     studioWizardPickerScroll=0;
+    setStudioView('library',false);
     renderStudioWizard();
     var host=newUiEl('ModernAnimationProjectWizard');
     if(host&&host.scrollIntoView)host.scrollIntoView({behavior:'smooth',block:'start'});
@@ -2198,6 +2226,7 @@
     studioLibraryError=kind==='open'&&studioLibraryPending!==null;
     var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value=studioPlaybackQuality;
     saveStudioDraft(false);syncStudioPlaybackControls();syncWorkspaceVisibility();
+    setStudioView(kind==='demo'?'preview':'editor',true);
     if(wasDemo&&kind!=='demo')refreshStudioLibrary();
     if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('library');
     if(experimentHistory)refreshHistoryList().catch(function(){renderAnimationStudio([]);});
@@ -2485,7 +2514,7 @@
         player:function(){return studioPlayback;},
         mode:function(){return studioPrepared&&studioPrepared.mode;},
         now:profileNow,
-        open:function(){return animationWorkspaceOpen;},
+        open:function(){return animationWorkspaceOpen&&studioView==='preview';},
         pending:function(){return studioRestorePreviewPending;},
         requestFrame:function(fn){return requestAnimationFrame(fn);},
         cancelFrame:function(frame){cancelAnimationFrame(frame);},
@@ -2533,6 +2562,8 @@
     if(!stage)return;
     var ready=!!(studioPrepared&&studioPlayback);
     stage.hidden=!ready;
+    var empty=newUiEl('ModernAnimationPreviewEmpty');
+    if(empty)empty.hidden=ready;
     var camera=ready&&studioPrepared.mode==='camera';
     var interpolationLabel=newUiEl('ModernAnimationPlaybackInterpolationLabel');
     var interpolation=newUiEl('ModernAnimationPlaybackInterpolation');
@@ -2603,8 +2634,8 @@
       requestFrame:function(fn){return requestAnimationFrame(fn);},
       cancelFrame:function(id){cancelAnimationFrame(id);},
       ready:function(){return !!(studioPlayback&&studioPrepared);},
-      open:function(){return animationWorkspaceOpen;},
-      visible:function(){return animationWorkspaceOpen&&!document.hidden;},
+      open:function(){return animationWorkspaceOpen&&studioView==='preview';},
+      visible:function(){return animationWorkspaceOpen&&studioView==='preview'&&!document.hidden;},
       playing:function(){return studioPlayback.status().playing;},
       position:function(){return studioPlayback.status().positionMs;},
       markPending:function(value){studioRestorePreviewPending=value;},
@@ -4150,21 +4181,10 @@
             if(root.CurvatureModernStatusMessage)
               root.CurvatureModernStatusMessage.decorate(status,studioPlayback?'success':'error');}
           if(studioPlayback){
-            if(studioPreviewNavigation)studioPreviewNavigation.start();
+            setStudioView('preview',true);
             scheduleStudioInitialPaint('prepared');
-          }else if(status){
-            status.classList.add('is-error');
-            if(studioPreviewNavigation){studioPreviewNavigation.start();
-              studioPreviewNavigation.finish(status);}
-          }
-        }catch(error){
-          report(error);
-          if(studioPreviewNavigation){
-            studioPreviewNavigation.start();
-            var invalid=host.querySelector&&host.querySelector('.modern-studio-status.is-invalid');
-            studioPreviewNavigation.finish(invalid||newUiEl('ModernAnimationStudioMessage'));
-          }
-        }
+          }else if(status)status.classList.add('is-error');
+        }catch(error){report(error);}
       },
       dragStart:function(payload,event){
         if(studioActiveDemo){if(event&&event.preventDefault)event.preventDefault();return;}
@@ -7711,6 +7731,7 @@
     });
   }
   function bind(){
+    bindStudioViews();
     bindStudioDraftPersistence();
     bindStudioLibrary();
     bindStudioPlayback();
