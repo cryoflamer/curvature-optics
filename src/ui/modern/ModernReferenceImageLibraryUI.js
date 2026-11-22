@@ -160,24 +160,9 @@
       if(busy||!allowDiscard())return;
       var tab=null;
       if(use.type==='animation'){
-        tab=doc.getElementById('ModernAnimationTab');if(!tab)throw Error('Animation tab unavailable');
-        tab.click();
-        if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='animation')throw Error('Animation navigation was blocked');
-        doc.getElementById('ModernAnimationViewLibrary')?.click();
-        var card=Array.from(doc.querySelectorAll('#ModernAnimationLibrary [data-animation-id]'))
-          .find(function(node){return node.getAttribute('data-animation-id')===use.ownerId;});
-        if(!card)throw Error('Saved animation not visible: project may be deleted or filtered');
-        var open=card.querySelector('[aria-label^="Open saved animation"]');
-        if(!open||open.disabled)throw Error('Saved animation cannot be opened');
-        open.click();
-        // Select the recorded frame only when the newly opened project
-        // presents the same project identity. No approximation by title.
-        if(use.frameIndex&&env.CurvatureModernApp?.getAnimationStudioDraft?.()?.libraryId===use.ownerId){
-          doc.getElementById('ModernAnimationViewEditor')?.click();
-          var frames=doc.querySelectorAll('#ModernAnimationStudio .modern-studio-keyframe');
-          var frame=frames[use.frameIndex-1];
-          if(frame)frame.click();
-        }
+        if(!env.CurvatureModernApp?.openImageUsageAnimation)
+          throw Error('Guarded Animation navigation is unavailable');
+        await env.CurvatureModernApp.openImageUsageAnimation(use.ownerId,use.frameKey);
       }else if(use.type==='calibration'){
         tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
         tab.click();
