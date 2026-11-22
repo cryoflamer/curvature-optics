@@ -610,5 +610,5 @@ test('Where used explicitly describes reachable archived summaries and unreachab
   const report=usageGraph.report('photo',null,{archives:[]});
   assert.match(report.note,/local archived Calibration results/);
   assert.match(report.note,/external exports/);
-  assert.match(report.note,/Never authorize deletion/);
+  assert.match(report.note,/never authorize deletion/);
 });
