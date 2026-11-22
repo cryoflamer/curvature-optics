@@ -85,6 +85,24 @@
       read('Recoverable Storyboards',function(){return env.CurvatureModernAnimationDraftAutosave.readCollection(db);},
         v=>{sources.drafts=v?v.workspaces.map(function(w){return {...w,source:'recoverable'};}):[];})
     ]);
+    try{
+      var autosave=env.CurvatureModernAnimationDraftAutosave;
+      if(autosave){
+        var local=autosave.readCollectionLocal(env.localStorage);
+        var sessions=autosave.readSessionLocals(env.localStorage);
+        var all=[...sources.drafts];
+        [local,...sessions].filter(Boolean).forEach(function(collection){
+          collection.workspaces.forEach(function(item){
+            // A second same-ID checkpoint is not necessarily identical; count
+            // both if the draft content differs instead of silently dropping it.
+            if(!all.some(function(existing){return existing.id===item.id&&
+              JSON.stringify(existing.checkpoint.draft)===JSON.stringify(item.checkpoint.draft);}))
+              all.push({...item,source:'recoverable local backup'});
+          });
+        });
+        sources.drafts=all;
+      }
+    }catch(error){failures.push('Local workspace recovery: '+error.message);}
     try{sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;}
     catch(error){failures.push('Current Storyboard: '+error.message);}
     try{
