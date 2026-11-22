@@ -6577,7 +6577,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             'button', name='Edit 04').click()
         banner=self.page.locator('#ModernKeyframeEditBanner')
         banner.get_by_role('button',name='Apply + Save to History').click()
-        expect(banner).to_have_count(0,timeout=30000)
+        try:
+            expect(banner).to_have_count(0,timeout=6000)
+        except AssertionError:
+            self.fail('Second Apply remained open: '+banner.locator('p').inner_text())
         self.page.wait_for_function("""id =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId===id""",
             arg=frame['sourceSnapshotId'])
