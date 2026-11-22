@@ -6536,5 +6536,56 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
 
+
+    def test_animation_keyframe_explicit_history_save_and_dedup(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        initial=self.page.evaluate("""async () => ({
+            count: (await CurvatureModernApp.getHistoryStore().list()).length,
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft
+        })""")
+        original=initial['draft']['frames'][3]
+        old_height=original['experiment']['scene']['camera']['Height']
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner.get_by_role('button',name='Apply + Save to History')).to_be_enabled()
+        self.page.locator('#ModernHeight').fill(str(old_height+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        self.page.wait_for_function("""async count =>
+            (await CurvatureModernApp.getHistoryStore().list()).length > count""",
+            arg=initial['count'],timeout=30000)
+        first=self.page.evaluate("""async () => ({
+            entries: await CurvatureModernApp.getHistoryStore().list(),
+            draft: CurvatureModernApp.getAnimationStudioDraft().draft
+        })""")
+        frame=first['draft']['frames'][3]
+        self.assertEqual(frame['experiment']['scene']['camera']['Height'],old_height+7)
+        self.assertIsInstance(frame['sourceSnapshotId'],int)
+        self.assertEqual(next(x for x in first['entries'] if x['id']==frame['sourceSnapshotId'])['experiment'],
+                         frame['experiment'])
+        self.assertEqual(first['draft']['frames'][:3],initial['draft']['frames'][:3])
+        self.assertEqual(first['draft']['frames'][4:],initial['draft']['frames'][4:])
+        # An identical explicit save must reuse rather than duplicate History.
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        banner.get_by_role('button',name='Apply + Save to History').click()
+        expect(banner).to_have_count(0,timeout=30000)
+        self.page.wait_for_function("""id =>
+            CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId===id""",
+            arg=frame['sourceSnapshotId'])
+        second=self.page.evaluate("""async () => ({
+            entries: await CurvatureModernApp.getHistoryStore().list(),
+            frame: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3]
+        })""")
+        self.assertEqual(len(second['entries']),len(first['entries']))
+        self.assertEqual(second['frame']['sourceSnapshotId'],frame['sourceSnapshotId'])
+
 if __name__ == '__main__':
     unittest.main()
