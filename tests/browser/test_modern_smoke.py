@@ -4201,9 +4201,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             new URL(location.href).searchParams.get('studioView')"""), 'library')
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
             'Create copy', exact=True).click()
-        self.assertEqual(self.page.evaluate("""() =>
-            new URL(location.href).searchParams.get('studioView')"""), 'editor')
         studio = self.page.locator('#ModernAnimationStudio')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        self.page.wait_for_function("""() =>
+            new URL(location.href).searchParams.get('studioView') === 'editor'""")
         draft_before = self.page.evaluate("""() =>
             JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)""")
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
