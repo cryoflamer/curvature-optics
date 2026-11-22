@@ -3887,6 +3887,138 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
 
+    def test_calibration_projects_distinct_photos_history_and_reload_isolation(self):
+        # Two independently imported originals must not exchange correspondence
+        # history, calibration stage or photo binding across switches and F5.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        first=self.soundly_calibration_experiment()
+        second_photo=self.page.evaluate("""async () => {
+            const c=document.createElement('canvas');
+            c.width=1176;c.height=791;
+            const ctx=c.getContext('2d');
+            ctx.fillStyle='#2855a5';ctx.fillRect(0,0,c.width,c.height);
+            ctx.fillStyle='#edbc42';ctx.fillRect(65,90,200,150);
+            const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+            return CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Distinct second original.png',{type:'image/png'}),
+                'calibration-regression',window);
+        }""")
+        second=self.soundly_calibration_experiment(reference=second_photo)
+        self.assertNotEqual(first['referenceImage']['original']['dataUrl'],
+                            second['referenceImage']['original']['dataUrl'])
+        # Keep valid fixture topology while giving B an observably distinct
+        # observation bank, even when the reference scene is the same.
+        self.assertGreater(len(second['observations']),1)
+        second['observations']=second['observations'][:-1]
+        expected_counts=[len(first['observations']),len(second['observations'])]
+        self.assertNotEqual(*expected_counts)
+
+        toggle.click()
+        for filename,data in [('first-original.json',first),('second-original.json',second)]:
+            panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+                'name':filename,'mimeType':'application/json',
+                'buffer':json.dumps(data).encode('utf-8')})
+        entries=self.page.evaluate("""async () => {
+            const rows=await CurvatureModernCalibrationProjectStore.list(indexedDB);
+            return Promise.all(rows.filter(r=>r.photo).map(async r=>({
+                id:r.id,sha:r.photo.identity.sha256,
+                count:(await CurvatureModernCalibrationProjectStore.get(indexedDB,r.id))
+                    .checkpoint.payload.draft.rows.length
+            })));
+        }""")
+        by_count={r['count']:r for r in entries}
+        self.assertTrue(all(n in by_count for n in expected_counts),entries)
+        a,b=(by_count[n] for n in expected_counts)
+        self.assertNotEqual(a['id'],b['id'])
+        self.assertNotEqual(a['sha'],b['sha'])
+
+        def open_project(project):
+            if panel.is_hidden():
+                toggle.click()
+            panel.locator('[data-calibration-project-id="'+project['id']+'"] '
+                          '[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectPersistenceStatus().projectId"""),project['id'])
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=project['id'],timeout=30000)
+
+        def live_state():
+            return self.page.evaluate("""() => {
+                const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+                const photo=editor.exportExperiment().referenceImage;
+                return {stage:document.querySelector('#ModernPhotoCalibration').dataset.calibrationStage,
+                    count:editor.exportExperiment().observations.length,
+                    image:photo.original.dataUrl};
+            }""")
+
+        open_project(a)
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0],timeout=30000)
+        workspace.locator('#ModernCalibrationPairs tr').first.get_by_role(
+            'button',name='Delete').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        workspace.locator('#ModernCalibrationRedo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        state_a=live_state()
+        self.assertEqual((state_a['stage'],state_a['count']),
+                         ('correspondences',expected_counts[0]))
+
+        open_project(b)
+        state_b=live_state()
+        self.assertEqual(state_b['count'],expected_counts[1])
+        self.assertNotEqual(state_a['image'],state_b['image'])
+        workspace.locator('[data-calibration-stage="calibration"]').click()
+        self.page.wait_for_function("""id => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s.projectId===id && s.pending===0 && !s.unsaved;
+        }""",arg=b['id'],timeout=30000)
+        state_b=live_state()
+        self.assertEqual(state_b['stage'],'calibration')
+
+        open_project(a)
+        self.assertEqual(live_state(),state_a)
+        # A's history remains usable even after B's independent save.
+        workspace.locator('#ModernCalibrationRedo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0]-1)
+        workspace.locator('#ModernCalibrationUndo').click()
+        expect(workspace.locator('#ModernCalibrationPairs tr')).to_have_count(
+            expected_counts[0])
+        self.assertEqual(live_state(),state_a)
+
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        self.assertIsNone(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        for project,expected in [(b,state_b),(a,state_a)]:
+            open_project(project)
+            self.assertEqual(live_state(),expected)
+            durable=self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {sha:p.photo.identity.sha256,
+                    stage:p.checkpoint.payload.draft.stage,
+                    count:p.checkpoint.payload.draft.rows.length};
+            }""",project['id'])
+            self.assertEqual(durable,{'sha':project['sha'],
+                'stage':expected['stage'],'count':expected['count']})
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
         import json
         workspace=self.open_physical_calibration()
