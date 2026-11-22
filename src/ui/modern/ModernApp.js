@@ -8771,8 +8771,10 @@
       var active=studioWorkspaceId===workspaceId;
       if(source==='current'&&!active)
         throw Error('Current Storyboard changed; refresh Where used?');
+      // The inspector captures the normalized public checkpoint. Compare
+      // that same representation, not the editor's richer mutable draft.
       var saved=source==='current'?
-        {draft:studioDraft,savedAt:Math.max(1,studioDraftSavedAt||Date.now())}:
+        root.CurvatureModernApp?.getAnimationStudioDraft?.():
         studioDraftAutosave.getWorkspace(studioWorkspaces,workspaceId);
       if(!saved||saved.savedAt!==expectedSavedAt||
          JSON.stringify(saved.draft)!==expectedDraftContent)
@@ -8807,8 +8809,9 @@
       if(studioWorkspaceId!==workspaceId)await requestStudioSwitch('draft',workspaceId);
       if(studioWorkspaceId!==workspaceId)throw Error('Draft switch was cancelled or blocked');
       var current=referenced(studioDraft);
+      var normalizedLive=root.CurvatureModernApp?.getAnimationStudioDraft?.()?.draft;
       if(!current||current.name!==target.name||
-         JSON.stringify(studioDraft)!==expectedDraftContent)
+         JSON.stringify(normalizedLive)!==expectedDraftContent)
         throw Error('Selected Storyboard keyframe changed during navigation; refresh Where used?');
       studioSelectedKey=frameKey;
       setStudioView('editor',true,'push');

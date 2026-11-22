@@ -3750,6 +3750,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         current=where.get_by_role('button',
             name='Open draft Current Storyboard usage frame 1 · current')
         expect(current).to_be_visible(timeout=30000)
+        signature_matches=self.page.evaluate("""async id => {
+            const photo=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+            const inspected=await CurvatureModernImageUsageGraph.discover(window,photo);
+            const use=inspected.uses.find(u=>u.type==='draft'&&u.source==='current');
+            const normalized=CurvatureModernApp.getAnimationStudioDraft().draft;
+            return !!use&&use.draftContent===JSON.stringify(normalized);
+        }""",before['imageId'])
+        self.assertTrue(signature_matches,
+            'Current usage must capture the normalized public checkpoint')
         current.click()
         self.page.wait_for_function("""expected => {
             const app=CurvatureModernApp,checkpoint=app.getAnimationStudioDraft();
