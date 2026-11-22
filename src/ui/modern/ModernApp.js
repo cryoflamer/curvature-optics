@@ -8720,10 +8720,12 @@
     getAnimationStudioView:function(){return studioView;},
     // A verified saved owner can be opened without relying on visible Library
     // cards (which may be filtered). Existing switch guards own unsaved drafts.
-    openImageUsageAnimation:async function(id,frameKey){
+    openImageUsageAnimation:async function(id,frameKey,expectedUpdatedAt){
       if(!studioLibrary||!root.indexedDB)throw Error('Animation Library unavailable');
       var record=await studioLibrary.get(root.indexedDB,id);
       if(!record)throw Error('Saved animation no longer exists');
+      if(expectedUpdatedAt!==undefined&&record.updatedAt!==expectedUpdatedAt)
+        throw Error('Saved animation changed since usage inspection; refresh Where used?');
       if(frameKey!==null&&frameKey!==undefined&&
          !record.project.keyframes.some(function(f){return f.key===frameKey;}))
         throw Error('Referenced keyframe is missing from the current project revision');
