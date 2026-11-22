@@ -572,9 +572,10 @@ camera gestures and Animation Studio background draft checkpoints are
 suppressed. In particular, a hidden tab must not replay an old Studio
 checkpoint through `visibilitychange` or `pagehide`. Browser F5 now restores a tab-local candidate and its bounded Undo/Redo
 history **only after** the physical workspace and Studio draft complete
-startup recovery. Recovery verifies project ID, exact opening draft,
-keyframe identity, permitted channel, durable working-draft contents and
-linked Library revision before remounting the temporary editor. Unsafe or
+startup recovery. Recovery verifies project ID, the schema-normalized contents of the
+opening draft (not incidental JSON property order), keyframe identity,
+permitted channel, durable working-draft contents and linked Library
+revision before remounting the temporary editor. Unsafe or
 unavailable recovery leaves the checkpoint intact and reports a conflict
 without applying its candidate. Browser Back and explicit Cancel still
 discard the temporary edit session.

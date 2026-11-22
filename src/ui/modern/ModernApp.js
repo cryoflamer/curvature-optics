@@ -4142,6 +4142,19 @@
         ' · Apply or Cancel before refreshing';
     }
   }
+  function sameKeyframeRecoveryDraft(candidate,serialized){
+    try{
+      var source=JSON.parse(serialized);
+      // The Wizard may serialize an equivalent draft in different property
+      // order from the version returned by workspace recovery. Validate both
+      // through the canonical draft schema before comparing their content.
+      function canonical(draft){
+        return studioDraftAutosave.checkpoint({draft:draft,
+          selectedKey:null,quality:'auto',prepared:false,positionMs:0},1).draft;
+      }
+      return JSON.stringify(canonical(candidate))===JSON.stringify(canonical(source));
+    }catch(error){return false;}
+  }
   function tryResumeKeyframeRecovery(){
     if(!keyframeRecoveryPending||keyframeRecoveryAttempted||!keyframeRecoverySettled||
        !persistence.ready||!studioWorkspaceReady||!studioRouteReady||keyframeEditSession)
@@ -4157,7 +4170,7 @@
          !keyframeRecoveryWindowId||saved.windowId!==keyframeRecoveryWindowId||
          !saved.session||saved.session.projectId!==studioWorkspaceId||
          !studioDraft||!studioDraft.contract||
-         saved.draftAtEntry!==JSON.stringify(studioDraft)||
+         !sameKeyframeRecoveryDraft(studioDraft,saved.draftAtEntry)||
          !['library','editor','preview'].includes(saved.returnView))
         throw Error('active working project or revision does not match');
       if(!root.indexedDB)throw Error('durable workspace storage is unavailable');
@@ -4177,12 +4190,12 @@
           // has just written a newer draft after F5.
           var latest=records[0],library=records[1];
           var remote=latest&&studioDraftAutosave.getWorkspace(latest,saved.session.projectId);
-          if(!remote||JSON.stringify(remote.draft)!==saved.draftAtEntry)
+          if(!remote||!sameKeyframeRecoveryDraft(remote.draft,saved.draftAtEntry))
             throw Error('the durable working project was changed or is unavailable');
           if(saved.libraryId&&(!library||library.updatedAt!==saved.libraryRevision))
             throw Error('the Animation Library project changed in another tab');
           if(keyframeEditSession||!persistence.ready||studioWorkspaceId!==saved.session.projectId||
-             JSON.stringify(studioDraft)!==saved.draftAtEntry||
+             !sameKeyframeRecoveryDraft(studioDraft,saved.draftAtEntry)||
              workspaceNavigationVersion!==navigationAtStart)
             throw Error('the workspace changed while recovery was being checked');
           renderAnimationStudio(studioHistoryEntries);

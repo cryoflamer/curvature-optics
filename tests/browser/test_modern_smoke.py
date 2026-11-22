@@ -4363,6 +4363,14 @@ class ModernBrowserSmoke(unittest.TestCase):
                     draftEqual:JSON.stringify(current?.draft)===saved?.draftAtEntry,
                     remoteEqual:JSON.stringify(remote?.draft)===saved?.draftAtEntry,
                     frameEqual:JSON.stringify(frame?.experiment)===JSON.stringify(saved?.session?.original),
+                    normalizedEqual:(() => {
+                        try {
+                            const canonical=d=>CurvatureModernAnimationDraftAutosave.checkpoint({
+                                draft:d,selectedKey:null,quality:'auto',prepared:false,positionMs:0},1).draft;
+                            return JSON.stringify(canonical(current.draft))===
+                                JSON.stringify(canonical(JSON.parse(saved.draftAtEntry)));
+                        }catch(e){return 'invalid: '+e.message;}
+                    })(),
                     message:document.getElementById('ModernAnimationDraftStatus')?.textContent,
                     appMode:CurvatureModernApp.getWorkspaceMode()};
             }""")
