@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 138,
-      "uniqueScripts": 136,
+      "scriptTags": 139,
+      "uniqueScripts": 137,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -233,6 +233,7 @@
         "src/animation/ModernAnimationBackgroundVideoExport.js",
         "src/ui/modern/ModernStatusMessage.js",
         "src/ui/modern/ModernAnimationProjectWizardUI.js",
+        "src/ui/modern/ModernAnimationWorkspaceViews.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
@@ -435,6 +436,7 @@
       "src/ui/modern/ModernAnimationPreviewGraph.js",
       "src/ui/modern/ModernAnimationProjectWizardUI.js",
       "src/ui/modern/ModernAnimationStudioUI.js",
+      "src/ui/modern/ModernAnimationWorkspaceViews.js",
       "src/ui/modern/ModernApp.js",
       "src/ui/modern/ModernApplicationPreferences.js",
       "src/ui/modern/ModernAtmosphericPresentation.js",
@@ -513,7 +515,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 230,
+  "sourceJsCount": 231,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -3021,6 +3023,16 @@
         "tests/ModernSnapshotPresentation.test.js",
         "tests/ModernStatusMessageSurfaces.test.js",
         "tests/ModernThumbnailPreview.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/ui/modern/ModernAnimationWorkspaceViews.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernAnimationWorkspaceViews.test.js"
       ],
       "commonJsToolCallers": []
     },
