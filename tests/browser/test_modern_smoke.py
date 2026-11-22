@@ -4139,7 +4139,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(banner).to_be_visible()
         expect(banner).to_contain_text('04 · Low view, hidden spans')
         expect(banner.get_by_role('button', name='Apply & Return')).to_be_enabled()
-        expect(banner).to_contain_text('Camera mouse and keyboard navigation are available')
+        expect(banner).to_contain_text('Animation Studio / Keyframe Editor')
+        expect(banner).to_contain_text('Only camera controls can change')
+        self.assertNotIn('camera.CameraEast',banner.inner_text())
+        self.assertTrue(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
+        self.assertEqual(self.page.evaluate(
+            "getComputedStyle(document.body).backgroundColor"),'rgb(240, 237, 250)')
         styles=banner.evaluate("""el => {
             const cancel=getComputedStyle(el.querySelector('.modern-keyframe-edit-cancel'));
             const apply=getComputedStyle(el.querySelector('.modern-keyframe-edit-apply'));
@@ -4169,6 +4175,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)"""), before['saved'])
         banner.get_by_role('button', name='Cancel & Return').click()
         expect(banner).to_have_count(0)
+        self.assertFalse(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before['mode'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before['height'])
@@ -4202,8 +4210,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
             'button', name='Edit 04').click()
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.assertTrue(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
         self.page.reload(wait_until='load')
         expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        self.assertFalse(self.page.locator('body').evaluate(
+            "(el) => el.classList.contains('modern-keyframe-edit-active')"))
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before_mode)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before_height)

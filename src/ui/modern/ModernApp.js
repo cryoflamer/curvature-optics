@@ -4194,10 +4194,29 @@
     banner.id='ModernKeyframeEditBanner';banner.className='modern-keyframe-edit-banner';
     banner.setAttribute('aria-label','Temporary keyframe editor');
     banner.setAttribute('data-workspace-id',session.projectId);
+    var identity=document.createElement('div');
+    identity.className='modern-keyframe-edit-identity';
+    var eyebrow=document.createElement('span');
+    eyebrow.className='modern-keyframe-edit-eyebrow';
+    eyebrow.textContent='Animation Studio / Keyframe Editor';
+    identity.appendChild(eyebrow);
     var title=document.createElement('strong');
-    title.textContent='Editing keyframe · '+frame.name;banner.appendChild(title);
+    title.className='modern-keyframe-edit-title';
+    title.textContent=frame.name;
+    title.title=frame.name;
+    identity.appendChild(title);
+    banner.appendChild(identity);
+    var mode=document.createElement('span');
+    mode.className='modern-keyframe-edit-mode';
+    mode.textContent=studioDraft.contract.mode==='camera'?'Camera':
+      'Physical · '+studioDraft.contract.target.parameter.split('.').pop();
+    mode.title='Only channels authorized by this animation contract can change';
+    banner.appendChild(mode);
     var explanation=document.createElement('p');
-    explanation.textContent='Only '+session.allowedPaths.join(', ')+' may change. Camera mouse and keyboard navigation are available when permitted by this contract; unrelated controls stay locked. Apply updates only this working-draft keyframe; Library saves are separate.';
+    explanation.className='modern-keyframe-edit-hint';
+    explanation.textContent='Only '+(studioDraft.contract.mode==='camera'?
+      'camera controls':'the selected physical channel')+
+      ' can change · Apply updates this keyframe only';
     banner.appendChild(explanation);
     var actions=document.createElement('div');
     actions.className='modern-keyframe-edit-actions';
@@ -4219,6 +4238,7 @@
       compareModel:workspaceState.compareModel};
     keyframeEditSession=session;keyframeEditBanner=banner;
     physical.parentNode.insertBefore(banner,physical);
+    document.body.classList.add('modern-keyframe-edit-active');
     try{
       applyExperiment(frame.experiment);
       var target=studioDraft.contract.target;
@@ -4233,6 +4253,7 @@
       keyframeControlLocks=keyframeControlLocksApi.create(physical,session.allowedPaths,scope);
       lockKeyframeShell();
     }catch(error){
+      document.body.classList.remove('modern-keyframe-edit-active');
       unlockKeyframeControls();
       physical.inert=false;unlockKeyframeShell();
       if(banner.parentNode)banner.parentNode.removeChild(banner);
@@ -4250,6 +4271,7 @@
     if(!keyframeEditSession)return false;
     var session=keyframeEditSession,original=session.cancel();
     keyframeEditSession=null;
+    document.body.classList.remove('modern-keyframe-edit-active');
     unlockKeyframeControls();
     var physical=newUiEl('ModernWorkspace');
     if(physical)physical.inert=false;

@@ -1711,18 +1711,50 @@ button{cursor:pointer}
 .modern-studio-sequences-disclosure .modern-studio-sequences{margin:0;border:0;background:transparent;padding:0 9px 9px}
 .modern-studio-sequences-disclosure .modern-studio-sequences>strong{display:none}
 
-/* Temporary keyframe editor uses the same blue/white action language as Modern UI. */
-.modern-keyframe-edit-banner{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 16px;border:2px solid #75a0c1;border-radius:9px;margin:10px 0;background:#eff7fd;color:#1c4260}
-.modern-keyframe-edit-banner strong{font-weight:750}
-.modern-keyframe-edit-banner p{flex:1 1 320px;margin:0;font-size:.9rem}
+/* Keyframe editing is a distinct, temporary authoring mode. Never recolor
+ * canvas pixels, rendered optical data or the underlying experiment itself. */
+body.modern-keyframe-edit-active{background:#f0edfa}
+body.modern-keyframe-edit-active .modern-header{border-bottom-color:#7656ad}
+body.modern-keyframe-edit-active .modern-workspace:not(.is-demos)>.modern-sidebar{
+  background:#faf8ff;border-color:#d5c9eb;box-shadow:0 3px 22px #59408012
+}
+body.modern-keyframe-edit-active .modern-settings-tab.is-active{
+  background:#7454b8;border-color:#7454b8;color:white
+}
+body.modern-keyframe-edit-active .modern-settings-tab:focus-visible{
+  outline-color:#7454b8
+}
+body.modern-keyframe-edit-active .modern-viewport-panel{
+  border-color:#8167b2;box-shadow:0 10px 28px #60438d22
+}
+body.modern-keyframe-edit-active .modern-primary-button:not(:disabled){
+  background:#7454b8
+}
+body.modern-keyframe-edit-active .modern-primary-button:hover:not(:disabled){
+  background:#60409d
+}
+.modern-keyframe-edit-banner{
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+  padding:10px 16px;border:1px solid #a994d0;border-left:4px solid #7454b8;
+  border-radius:9px;margin:10px 0;background:#faf8ff;color:#3c3157;
+  box-shadow:0 3px 15px #59408013;min-width:0
+}
+.modern-keyframe-edit-identity{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 210px}
+.modern-keyframe-edit-eyebrow{font-size:10px;letter-spacing:.075em;text-transform:uppercase;color:#7454b8;font-weight:750}
+.modern-keyframe-edit-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:750}
+.modern-keyframe-edit-mode{padding:5px 9px;border-radius:999px;background:#e8e0f7;color:#65459e;font-size:11px;font-weight:700;white-space:nowrap}
+.modern-keyframe-edit-hint{flex:1 1 190px;margin:0;font-size:11px;color:#6b6380;line-height:1.4}
 .modern-keyframe-edit-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto}
 .modern-keyframe-edit-actions button{min-height:38px;padding:8px 14px;border-radius:8px;font-weight:650;line-height:1.3;white-space:nowrap;transition:background-color .15s ease,border-color .15s ease}
-.modern-keyframe-edit-cancel{background:#f4f8ff;color:#24619d;border:1px solid #b8d0e9}
-.modern-keyframe-edit-cancel:hover:not(:disabled){background:#e3effd;border-color:#7eadd8}
-.modern-keyframe-edit-apply{background:#1d66b3;color:#fff;border:1px solid #1d66b3}
-.modern-keyframe-edit-apply:hover:not(:disabled){background:#135294;border-color:#135294}
-.modern-keyframe-edit-actions button:focus-visible{outline:2px solid #2c83d3;outline-offset:2px}
+.modern-keyframe-edit-cancel{background:#faf8ff;color:#65459e;border:1px solid #c7b7e1}
+.modern-keyframe-edit-cancel:hover:not(:disabled){background:#eee7fa;border-color:#a58bce}
+.modern-keyframe-edit-apply{background:#7454b8;color:#fff;border:1px solid #7454b8}
+.modern-keyframe-edit-apply:hover:not(:disabled){background:#60409d;border-color:#60409d}
+.modern-keyframe-edit-actions button:focus-visible{outline:2px solid #7454b8;outline-offset:2px}
 .modern-keyframe-edit-actions button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:850px){
+  .modern-keyframe-edit-hint{order:3;flex-basis:100%}
+}
 @media(max-width:650px){
   .modern-keyframe-edit-actions{width:100%;margin-left:0}
   .modern-keyframe-edit-actions button{flex:1 1 150px}
