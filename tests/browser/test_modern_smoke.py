@@ -6580,7 +6580,19 @@ class ModernBrowserSmoke(unittest.TestCase):
         try:
             expect(banner).to_have_count(0,timeout=6000)
         except AssertionError:
-            self.fail('Second Apply remained open: '+banner.locator('p').inner_text())
+            diagnostic=self.page.evaluate("""async id => {
+                const api=CurvatureModernAnimationDraftAutosave;
+                const collection=await api.readCollection(indexedDB);
+                const saved=api.getWorkspace(collection,id);
+                const live=CurvatureModernApp.getAnimationStudioDraft().draft;
+                const a=JSON.stringify(saved&&saved.draft),b=JSON.stringify(live);
+                let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;
+                return {same:a===b,storedLength:a.length,liveLength:b.length,
+                    mismatch:i,stored:a.slice(Math.max(0,i-130),i+180),
+                    live:b.slice(Math.max(0,i-130),i+180)};
+            }""",banner.get_attribute('data-workspace-id'))
+            self.fail('Second Apply remained open: '+banner.locator('p').inner_text()+
+                      ' diagnostic='+str(diagnostic))
         self.page.wait_for_function("""id =>
             CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId===id""",
             arg=frame['sourceSnapshotId'])
