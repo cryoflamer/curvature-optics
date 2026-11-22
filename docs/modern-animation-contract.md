@@ -194,6 +194,17 @@ audits. Actual visual interaction and IndexedDB behavior still require
 acceptance testing in the target Opera/Chromium installation.
 
 
+## Animation Studio browser navigation (#27, Stage 2)
+
+The active Library/Editor/Preview tab uses a UI-only `studioView` URL query
+parameter, never physical experiment or Animation project JSON. Tab changes and
+successful project/demo handoffs add browser history entries. Back/Forward
+restores the visible tab without replaying project operations or replacing a
+working draft. Refresh restores the tab from the URL; existing guarded autosave
+restores the project, selected frame and playback position. An explicit shared
+experiment URL or physical Scene/Compare/Demos mode takes precedence over a
+Studio-only route. No additional persistence store or schema was introduced.
+
 ## Animation Studio internal views (#27, Stage 1)
 
 `CurvatureModern.html` keeps one Animation Workspace with permanent Library,

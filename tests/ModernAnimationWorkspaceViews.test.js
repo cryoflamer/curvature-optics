@@ -38,3 +38,29 @@ test('one active mounted panel with accessible keyboard tabs',()=>{
   assert.equal(controller.show('invalid'),false);
 });
 test('incomplete markup is not bound',()=>{assert.equal(views.bind({getElementById(){return null;}}),null);});
+
+test('Studio view route preserves experiment query and hash',()=>{
+  const href='https://example.test/CurvatureModern.html?experiment=abc%2Bdef%3D#camera';
+  const updated=views.address(href,'editor'),url=new URL(updated);
+  assert.equal(url.searchParams.get('experiment'),'abc+def=');
+  assert.equal(url.hash,'#camera');
+  assert.equal(views.route(updated),'editor');
+  assert.equal(views.route(href),null);
+  assert.equal(views.route(updated.replace('studioView=editor','studioView=bogus')),null);
+  assert.throws(()=>views.address(href,'invalid'),RangeError);
+});
+test('View history pushes only changed tabs and preserves external state',()=>{
+  const calls=[];
+  const root={location:{href:'https://example.test/CurvatureModern.html?experiment=abc'},
+    history:{state:{external:true},pushState(state,title,href){
+      calls.push({action:'push',state,href});root.location.href=href;
+    },replaceState(state,title,href){
+      calls.push({action:'replace',state,href});root.location.href=href;
+    }}};
+  assert.equal(views.navigate(root,'editor',false),true);
+  assert.equal(views.navigate(root,'editor',false),true);
+  assert.equal(views.navigate(root,'preview',true),true);
+  assert.deepEqual(calls.map(x=>x.action),['push','replace']);
+  assert.deepEqual(calls[1].state,{external:true});
+  assert.equal(views.route(root.location.href),'preview');
+});

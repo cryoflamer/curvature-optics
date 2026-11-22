@@ -3840,6 +3840,29 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_studio_view_url_back_forward_and_reload(self):
+        self.open_modern()
+        self.open_animation()
+        library = self.page.locator('#ModernAnimationViewLibrary')
+        editor = self.page.locator('#ModernAnimationViewEditor')
+        preview = self.page.locator('#ModernAnimationViewPreview')
+        expect(library).to_have_attribute('aria-selected', 'true')
+        editor.click()
+        self.assertEqual(self.page.evaluate("new URL(location.href).searchParams.get('studioView')"), 'editor')
+        self.page.locator('#ModernAnimationStudio').get_by_label('Project name').fill('URL view retention')
+        preview.click()
+        self.assertEqual(self.page.evaluate("new URL(location.href).searchParams.get('studioView')"), 'preview')
+        self.page.go_back()
+        expect(editor).to_have_attribute('aria-selected', 'true')
+        expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value('URL view retention')
+        self.page.go_forward()
+        expect(preview).to_have_attribute('aria-selected', 'true')
+        self.page.reload()
+        expect(preview).to_have_attribute('aria-selected', 'true')
+        editor.click()
+        expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name')).to_have_value('URL view retention')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
     def test_animation_studio_views_share_draft_and_playback(self):
         self.open_modern()
         self.open_animation()

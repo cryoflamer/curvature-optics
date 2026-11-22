@@ -580,7 +580,7 @@
   var studioDiagnosticTransition=null;
   var studioEditHistory=studioApi&&studioApi.createEditHistory?studioApi.createEditHistory():null;
   var studioFilmstripScroll=0;
-  var studioView='library',studioViewController=null;
+  var studioView='library',studioViewController=null,studioRouteReady=false;
   var studioPrepared=null;
   // A one-shot navigation request belongs to the explicit Preview click, not
   // to autosave, project restore, Playback seek or background frame painting.
@@ -831,7 +831,7 @@
     syncHistoryNavigation();
   }
   // Switch presentation only: preserve one draft, one edit history and one player.
-  function setStudioView(view,focus){
+  function setStudioView(view,focus,routeAction){
     if(!['library','editor','preview'].includes(view))return false;
     var previous=studioView;
     if(previous==='preview'&&view!=='preview'&&studioPlayback&&studioPlaybackControls){
@@ -840,6 +840,9 @@
       saveStudioDraft(false);
     }
     studioView=view;
+    if(studioRouteReady&&!persistence.explicitUrl&&studioViewsApi&&studioViewsApi.navigate&&
+       (routeAction==='push'||routeAction==='replace'))
+      studioViewsApi.navigate(root,view,routeAction==='replace');
     if(studioViewController)studioViewController.show(view,!!focus);
     if(view==='preview'&&previous!==view&&studioPlayback&&animationWorkspaceOpen){
       if(studioPreviewLifecycle)studioPreviewLifecycle.checkSize();
@@ -851,7 +854,7 @@
   function bindStudioViews(){
     if(!studioViewsApi||!studioViewsApi.bind)return;
     studioViewController=studioViewsApi.bind(document,function(view,focus){
-      setStudioView(view,focus);
+      setStudioView(view,focus,'push');
     });
     if(studioViewController)studioViewController.show(studioView,false);
   }
@@ -1512,7 +1515,7 @@
     studioWizardPickerFilters=historyFiltersApi?historyFiltersApi.normalize():null;
     studioWizardPickerQueryDraft='';studioWizardPickerAdvancedOpen=false;
     studioWizardPickerScroll=0;
-    setStudioView('library',false);
+    setStudioView('library',false,'push');
     renderStudioWizard();
     var host=newUiEl('ModernAnimationProjectWizard');
     if(host&&host.scrollIntoView)host.scrollIntoView({behavior:'smooth',block:'start'});
@@ -2226,7 +2229,7 @@
     studioLibraryError=kind==='open'&&studioLibraryPending!==null;
     var optics=newUiEl('ModernAnimationPlaybackOptics');if(optics)optics.value=studioPlaybackQuality;
     saveStudioDraft(false);syncStudioPlaybackControls();syncWorkspaceVisibility();
-    setStudioView(kind==='demo'?'preview':'editor',true);
+    setStudioView(kind==='demo'?'preview':'editor',true,'push');
     if(wasDemo&&kind!=='demo')refreshStudioLibrary();
     if(studioPlayback&&animationWorkspaceOpen)scheduleStudioInitialPaint('library');
     if(experimentHistory)refreshHistoryList().catch(function(){renderAnimationStudio([]);});
@@ -4181,7 +4184,7 @@
             if(root.CurvatureModernStatusMessage)
               root.CurvatureModernStatusMessage.decorate(status,studioPlayback?'success':'error');}
           if(studioPlayback){
-            setStudioView('preview',true);
+            setStudioView('preview',true,'push');
             scheduleStudioInitialPaint('prepared');
           }else if(status)status.classList.add('is-error');
         }catch(error){report(error);}
@@ -7732,6 +7735,14 @@
   }
   function bind(){
     bindStudioViews();
+    // History navigation never replays a library operation or replaces a draft.
+    if(root.addEventListener)root.addEventListener('popstate',function(){
+      var view=studioViewsApi&&studioViewsApi.route&&
+        studioViewsApi.route(root.location&&root.location.href);
+      if(!animationWorkspaceOpen)return;
+      if(view)setStudioView(view,false);
+      else if(studioRouteReady)setStudioView('library',false);
+    });
     bindStudioDraftPersistence();
     bindStudioLibrary();
     bindStudioPlayback();
@@ -7863,11 +7874,16 @@
       var params=typeof URLSearchParams==='function'?
         new URLSearchParams(root.location&&root.location.search||''):{get:function(){return null;}};
       var explicitMode=params.get('mode'),explicitTab=params.get('tab'),explicitModel=params.get('model');
+      var initialStudioRoute=studioViewsApi&&studioViewsApi.route&&
+        studioViewsApi.route(root.location&&root.location.href);
+      var allowStudioRoute=!!initialStudioRoute&&!persistence.explicitUrl&&
+        !['scene','compare','demos'].includes(explicitMode);
       var historyEntry=root.history&&root.history.state;
       var startupMode=applicationPreferences&&applicationPreferences.startupWorkspace?
         applicationPreferences.startupWorkspace(workspaceState.mode,state.mode,explicitMode,
           persistence.explicitUrl,historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]):
         (['scene','compare','demos'].includes(explicitMode)?explicitMode:state.mode);
+      if(allowStudioRoute)startupMode='animation';
       if(!persistence.explicitUrl&&workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
       if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
       // Initialize physical controls before restoring an auxiliary workspace.
@@ -7894,6 +7910,8 @@
       }
       var editor=root.CurvatureModernPhotoCalibrationEditor&&root.CurvatureModernPhotoCalibrationEditor.mount(document);
       if(startupMode!=='calibration')restoreWorkspace();
+      if(allowStudioRoute)setStudioView(initialStudioRoute,false);
+      studioRouteReady=true;
       Promise.resolve(editor&&editor.restore()).then(function(){
         // The legacy draft is restored first. Inspect the new project
         // marker only after its v1 connection has been closed; never
@@ -7931,6 +7949,7 @@
       return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
+    getAnimationStudioView:function(){return studioView;},
     getCalibrationView:function(){return workspaceState.calibrationView;},
     rememberCalibrationView:rememberCalibrationView,
     getLastRender:function(){return state.last;},getPreset:function(){return state.preset;},

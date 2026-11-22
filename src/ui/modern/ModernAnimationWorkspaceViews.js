@@ -46,5 +46,27 @@
     });
     return Object.freeze({show:show});
   }
-  return Object.freeze({bind:bind,names:names.slice()});
+  // UI-only query route; never write to experiment/project data.
+  var routeKey='studioView';
+  function route(href){
+    try{var v=new URL(href).searchParams.get(routeKey);return names.includes(v)?v:null;}
+    catch(error){return null;}
+  }
+  function address(href,view){
+    if(!names.includes(view))throw RangeError('Unknown Studio view');
+    var url=new URL(href);url.searchParams.set(routeKey,view);return url.href;
+  }
+  function navigate(root,view,replace){
+    if(!root||!root.history||!root.location)return false;
+    try{
+      var href=address(root.location.href,view);
+      if(href===root.location.href)return true;
+      var previous=root.history.state,state=Object.assign({},
+        previous&&typeof previous==='object'?previous:{});
+      var method=replace?'replaceState':'pushState';
+      if(typeof root.history[method]!=='function')return false;
+      root.history[method](state,'',href);return true;
+    }catch(error){return false;}
+  }
+  return Object.freeze({bind:bind,names:names.slice(),route:route,address:address,navigate:navigate});
 }));
