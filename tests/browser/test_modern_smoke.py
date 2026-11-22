@@ -3636,6 +3636,88 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""),1)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_where_used_opens_real_calibration_and_saves_outgoing_work(self):
+        import json
+        workspace=self.open_physical_calibration()
+        projects=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        fixture=self.soundly_calibration_experiment()
+        projects.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'image-usage-calibration.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        original=projects.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png')
+        expect(original).to_have_count(1,timeout=30000)
+        original_id=original.get_attribute('data-calibration-project-id')
+        original.locator('[data-calibration-project-duplicate]').click()
+        copy=projects.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png (copy)')
+        expect(copy).to_have_count(1,timeout=30000)
+        copy_id=copy.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(original_id,copy_id)
+        original.locator('[data-calibration-project-open]').click()
+        expect(projects).to_be_hidden(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('14 correspondences')
+        # A real editor mutation is pending/autosaved when leaving for Library.
+        pairs=workspace.locator('#ModernCalibrationPairList')
+        if not pairs.is_visible():
+            pairs.locator('summary').click()
+        workspace.locator('#ModernCalibrationPairs tr').first.get_by_role(
+            'button',name='Delete',exact=True).click()
+        expect(workspace.locator('#ModernCalibrationCount')).to_have_text('13 correspondences')
+        outgoing=self.page.evaluate("""() => ({
+            rows:CurvatureModernPhotoCalibrationEditor.mount(document)
+                .exportExperiment().observations,
+            binding:CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectBinding().projectId
+        })""")
+        self.assertEqual(outgoing['binding'],original_id)
+        self.assertEqual(len(outgoing['rows']),13)
+        gallery=self.open_image_library()
+        originals=self.page.evaluate("""async () =>
+            await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
+        self.assertEqual(len(originals),1,'Calibration import must reuse the one local original')
+        gallery.locator('.modern-image-library-card[data-image-id]').first.click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Calibration projects (2)')).to_be_visible(timeout=30000)
+        go=where.get_by_role('button',
+            name='Open calibration Soundly regression raster.png (copy) · saved')
+        expect(go).to_be_visible()
+        go.click()
+        self.page.wait_for_function("""id => {
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const failed=document.querySelector('.modern-image-usage-status')
+                ?.textContent?.startsWith('Cannot open use:');
+            return editor.projectBinding()?.projectId===id || failed;
+        }""",arg=copy_id,timeout=30000)
+        snapshot=self.page.evaluate("""() => ({
+            mode:CurvatureModernApp.getWorkspaceMode(),
+            binding:CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectBinding()?.projectId,
+            status:document.querySelector('.modern-image-usage-status')?.textContent
+        })""")
+        self.assertEqual(snapshot['mode'],'calibration',snapshot)
+        self.assertEqual(snapshot['binding'],copy_id,snapshot)
+        expect(workspace).to_be_visible()
+        self.assertEqual(len(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document)
+                .exportExperiment().observations""")),14)
+        self.page.wait_for_function("""async ({id,rows}) => {
+            const stored=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return JSON.stringify(stored?.checkpoint?.payload?.draft?.rows)===JSON.stringify(rows);
+        }""",arg={'id':original_id,'rows':outgoing['rows']},timeout=30000)
+        saved=self.page.evaluate("""async ids => {
+            const store=CurvatureModernCalibrationProjectStore;
+            const a=await store.get(indexedDB,ids[0]),
+                b=await store.get(indexedDB,ids[1]);
+            return {a:a.checkpoint.payload.draft.rows.length,
+                b:b.checkpoint.payload.draft.rows.length,
+                samePhoto:JSON.stringify(a.photo.identity)===JSON.stringify(b.photo.identity),
+                libraryCount:(await CurvatureModernReferenceImageLibrary.list(indexedDB)).length};
+        }""",[original_id,copy_id])
+        self.assertEqual(saved,{'a':13,'b':14,'samePhoto':True,'libraryCount':1})
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()
