@@ -357,6 +357,40 @@ linked originals must survive workspace navigation and reload. Verification
 is tracked in Issue #26; no Chromium success substitutes for manual Opera
 acceptance of real clipboard permissions, image download CORS and layout.
 
+## Known local uses — read-only usage graph (#26 Stage 4)
+
+Image Library's **Where used?** inspector queries the existing **Animation
+Library** project store, **Calibration Projects** metadata store, and
+**Animation Studio** recoverable workspace collection. Browser-local recovery
+copies and the live Studio/Calibration state are included when accessible.
+This is a bounded, on-demand read, not a second authoritative cross-project
+index. The inspector groups linked saved animation keyframes, Calibration
+Projects, recoverable Storyboards and currently mounted editing contexts.
+Each result identifies an owner, its source and — for animation — the exact
+keyframe; multiple owners may reference the same original.
+
+**Identity rules:** animation keyframes reference local image IDs; saved
+Calibration Projects instead store verified SHA-256 original identity **plus
+oriented width/height**. Calibration matching must compare those values, not
+an arbitrary matching alias ID or a demo's bare ID. Saved animation navigation
+opens the actual project through the existing guarded switch and selects its
+exact keyframe; Calibration navigation uses the project's guarded open
+operation. Neither path silently imports or replaces original bytes.
+
+**Honest coverage and deletion safety:** the inspector only reports discoverable
+local records. It cannot authoritatively prove the absence of references in
+other browsers, unreachable tabs, portable files, exported archives, stale
+Undo/Redo records or inaccessible stores. Failed reads are reported as
+**incomplete**; they are never interpreted as an empty list. Recoverable
+draft links are shown without pretending a direct navigation action exists.
+**Zero known uses never authorizes deletion**; the physical-delete control
+remains disabled until the Stage 5 lifecycle safety contract exists.
+
+A visually consistent Image Library file chooser and toolbar are scoped to
+this workspace; the cross-application design system remains tracked by #46.
+Automated browser and targeted Node tests do not substitute for manual Opera
+acceptance of owner navigation and real stored project data.
+
 ## Shared context-aware Image Picker (#26 Stage 2)
 
 Stage 2 replaces the two different selection surfaces with the single
