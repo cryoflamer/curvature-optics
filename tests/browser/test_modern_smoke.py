@@ -3929,6 +3929,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                     count:p.checkpoint.payload.draft.rows.length};
             }));
         }""")
+        self.assertEqual(len(entries),2,'two imported photos must produce two distinct project rows')
         by_count={r['count']:r for r in entries}
         self.assertTrue(all(n in by_count for n in expected_counts),entries)
         a,b=(by_count[n] for n in expected_counts)
