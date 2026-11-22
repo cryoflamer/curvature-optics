@@ -3868,7 +3868,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             'name':'local-shared.png','mimeType':'image/png','buffer':image})
         expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
         self.page.evaluate("""async () => {
-            const photo=(await CurvatureModernReferenceImageLibrary.list(indexedDB))[0];
+            const listing=(await CurvatureModernReferenceImageLibrary.list(indexedDB))[0];
+            const photo=(await CurvatureModernReferenceImageLibrary.get(indexedDB,listing.id)).record;
             const catalog=CurvatureModernDemoCatalog;
             const shipped=catalog.load()[0];
             const project={...shipped.project,keyframes:shipped.project.keyframes.map(
@@ -3876,7 +3877,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             )};
             CurvatureModernDemoCatalog={...catalog,load:()=>[{
                 ...shipped,id:'synthetic-demo',project,
-                referenceImages:[{...photo.record,title:'Built-in alias'}]
+                referenceImages:[{...photo,title:'Built-in alias'}]
             }]};
         }""")
         gallery.get_by_role('button',name='Refresh',exact=True).click()
