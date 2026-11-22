@@ -3960,6 +3960,51 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
 
+    def test_animation_editor_undo_redo_scroll_and_persistence_after_reorder(self):
+        self.open_modern()
+        self.open_animation()
+        demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
+        demo.get_by_text('Create copy', exact=True).click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        studio = self.page.locator('#ModernAnimationStudio')
+        strip = studio.locator('.modern-studio-filmstrip')
+        cards = strip.locator('.modern-studio-keyframe')
+        expect(cards).to_have_count(9)
+        cards.nth(4).click()
+        original = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        strip.evaluate('(el) => { el.scrollLeft = 260; }')
+        scroll_before = strip.evaluate('(el) => el.scrollLeft')
+        self.assertGreater(scroll_before, 0)
+        studio.get_by_role('button', name='Move animation frame 5 earlier').click()
+        moved = self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
+        self.assertEqual(moved[3], original[4])
+        self.assertEqual(moved[4], original[3])
+        self.assertAlmostEqual(strip.evaluate('(el) => el.scrollLeft'), scroll_before, delta=2)
+        expect(cards.nth(3)).to_have_attribute('aria-pressed', 'true')
+        studio.locator('.modern-studio-edit-undo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), original)
+        studio.locator('.modern-studio-edit-redo').first.click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+
+        studio.get_by_role('button', name='Inspect project settings').click()
+        expect(strip).to_be_visible()
+        name = studio.get_by_label('Project name')
+        name.fill('Reordered timeline checkpoint')
+        name.press('Tab')
+        self.page.wait_for_timeout(750)
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)'), moved)
+        studio.get_by_role('button', name='Inspect project settings').click()
+        expect(studio.get_by_label('Project name')).to_have_value('Reordered timeline checkpoint')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
     def test_animation_studio_views_share_draft_and_playback(self):
         self.open_modern()
         self.open_animation()

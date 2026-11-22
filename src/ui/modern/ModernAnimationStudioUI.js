@@ -1268,16 +1268,16 @@
           'One animation supports camera motion OR one physical parameter; all other scene settings must stay fixed. Inspect the exact transitions below.'));
     }
     timelinePane.appendChild(status);
+    var disclosure=null;
     if(draft.frames.length>=2&&!(draft.contract&&draft.contract.mode==='experimental')&&
       (!result.compatible||options.diagnosticTransition!==null&&
       options.diagnosticTransition!==undefined)){
-      var disclosure=el(doc,'details','modern-studio-diagnostics-disclosure');
+      disclosure=el(doc,'details','modern-studio-diagnostics-disclosure');
       disclosure.open=options.diagnosticTransition!==null&&options.diagnosticTransition!==undefined;
       disclosure.appendChild(el(doc,'summary','',
         'Transition diagnostics · '+(result.transitions||[]).length+' transitions'+
         (!result.compatible?' · preview blocked':'')));
       disclosure.appendChild(compatibilityDiagnostics(doc,result,draft,actions,options));
-      timelinePane.appendChild(disclosure);
     }
 
     if(selected){
@@ -1353,6 +1353,8 @@
     });
     filmstrip.appendChild(dropSlot(doc,draft.frames.length,actions,options.pickerSelectedCount||0));
     timelinePane.appendChild(filmstrip);
+    // Detailed diagnostics follow the timeline, even when a focused transition is expanded.
+    if(disclosure)timelinePane.appendChild(disclosure);
     if(selected){
       var index=draft.frames.indexOf(selected);
       var panel=el(doc,'section','modern-studio-selected-frame');
