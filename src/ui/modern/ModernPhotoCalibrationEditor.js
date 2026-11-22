@@ -869,6 +869,11 @@
       projectsList=$('ModernCalibrationProjectsList');
     const LAST_PROJECT_KEY='curvature-calibration-last-opened-project-v1';
     const DELETED_PROJECT_HANDOFF_KEY='curvature-calibration-deleted-project-handoff-v1';
+    const PREVIOUS_PROJECT_KEY='curvature-calibration-previous-opened-project-v1';
+    function rememberPreviousProject(previous,opened){
+      if(!previous||previous===opened)return;
+      try{env.sessionStorage?.setItem(PREVIOUS_PROJECT_KEY,previous);}catch(_ignored){}
+    }
     // A single explicit Delete may request exactly one startup handoff.
     // Never auto-open an arbitrary last-used project on an ordinary F5.
     let deletedProjectHandoff=null;
@@ -1191,7 +1196,9 @@
       projectListBusy=true;renderProjects();
       projectsMessage('Saving current work and verifying the selected project…');
       try{
+        const previous=projectSession?.state()?.projectId;
         const outcome=await openCalibrationProject(id);
+        rememberPreviousProject(previous,outcome.project.id);
         projectSelectedId=outcome.project.id;
         try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,outcome.project.id);}
         catch(_ignored){/* Session selection is optional. Never store photo bytes. */}
@@ -1237,7 +1244,9 @@
         prepareScene(snapshot); // Explicit Globe / supported-atmosphere preflight.
         const created=await actions.createNew(env,snapshot,{title:title.trim()});
         try{
+          const previous=projectSession?.state()?.projectId;
           const opened=await openCalibrationProject(created.id);
+          rememberPreviousProject(previous,opened.project.id);
           projectSelectedId=opened.project.id;
           try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
           projectListBusy=false;showProjectList(false);
@@ -1338,8 +1347,12 @@
           // Only this explicit Delete may reopen the next remaining project.
           // Empty string means a clean standalone editor, not an old draft.
           const remaining=await storage.list(env.indexedDB);
-          const next=remaining.find(row=>row.id!==entry.id)?.id||'';
+          let previous=null;
+          try{previous=env.sessionStorage?.getItem(PREVIOUS_PROJECT_KEY);}catch(_ignored){}
+          const next=remaining.find(row=>row.id===previous)?.id||
+            remaining.find(row=>row.id!==entry.id)?.id||'';
           try{
+            env.sessionStorage?.removeItem(PREVIOUS_PROJECT_KEY);
             env.sessionStorage?.removeItem(LAST_PROJECT_KEY);
             env.sessionStorage?.setItem(DELETED_PROJECT_HANDOFF_KEY,next);
           }catch(_ignored){/* Reload must still be safe without optional storage. */}
