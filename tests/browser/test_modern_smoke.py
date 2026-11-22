@@ -3793,6 +3793,72 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_where_used_detects_real_second_tab_calibration_change(self):
+        import json
+        workspace=self.open_physical_calibration()
+        projects=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        fixture=self.soundly_calibration_experiment()
+        projects.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'cross-tab-calibration.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        card=projects.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png')
+        expect(card).to_have_count(1,timeout=30000)
+        project_id=card.get_attribute('data-calibration-project-id')
+        gallery=self.open_image_library()
+        gallery.locator('.modern-image-library-card[data-image-id]').first.click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Calibration projects (1)')).to_be_visible(timeout=30000)
+        stale=where.get_by_role('button',
+            name='Open calibration Soundly regression raster.png · saved')
+        expect(stale).to_be_visible()
+        second=self.context.new_page()
+        try:
+            response=second.goto(self.base_url,wait_until='load',timeout=30000)
+            self.assertEqual(response.status,200)
+            second.wait_for_function('window.CurvatureModernCalibrationProjectStore != null')
+            revision=second.evaluate("""async id => {
+                const store=CurvatureModernCalibrationProjectStore;
+                const before=await store.get(indexedDB,id);
+                const after=await store.rename(indexedDB,id,before.revision,
+                    'Renamed from second tab');
+                return [before.revision,after.revision];
+            }""",project_id)
+            self.assertEqual(revision[1],revision[0]+1)
+            # The first tab's inspector is intentionally stale. A real IDB
+            # revision change must be rejected before leaving Image Library.
+            stale.click()
+            expect(where.locator('.modern-image-usage-status')).to_contain_text(
+                'Calibration project changed since usage inspection')
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+            expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+            gallery.get_by_role('button',name='Refresh uses').click()
+            fresh=where.get_by_role('button',
+                name='Open calibration Renamed from second tab · saved')
+            expect(fresh).to_be_visible(timeout=30000)
+            fresh.click()
+            self.page.wait_for_function("""id => {
+                const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+                return editor.projectBinding()?.projectId===id ||
+                    document.querySelector('.modern-image-usage-status')
+                        ?.textContent?.startsWith('Cannot open use:');
+            }""",arg=project_id,timeout=30000)
+            self.assertEqual(self.page.evaluate(
+                'CurvatureModernApp.getWorkspaceMode()'),'calibration')
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .projectBinding()?.projectId"""),project_id)
+            self.assertEqual(self.page.evaluate("""async id =>
+                (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).title""",
+                project_id),'Renamed from second tab')
+            self.assertEqual(len(self.page.evaluate("""async () =>
+                await CurvatureModernReferenceImageLibrary.list(indexedDB)""")),1)
+            self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                self.console)
+        finally:
+            second.close()
+
     def test_image_library_where_used_stale_calibration_does_not_change_workspace(self):
         import base64
         self.open_modern()

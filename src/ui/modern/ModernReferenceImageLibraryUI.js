@@ -209,13 +209,16 @@
           (report.complete?' · accessible stores inspected':' · incomplete discovery');
         var groups=[
           ['animation','Saved animations'],['calibration','Calibration projects'],
-          ['draft','Recoverable Storyboards'],['calibration-draft','Current Calibration']
+          ['archive','Archived results'],['draft','Recoverable Storyboards'],
+          ['calibration-draft','Current Calibration']
         ];
         groups.forEach(function(group){
           var found=report.uses.filter(function(use){return use.type===group[0];});
           if(!found.length)return;
           var section=el('section',undefined,usageGroups);
           el('h3',group[1]+' ('+found.length+')',section);
+          if(group[0]==='archive')
+            el('p','Immutable historical evidence. No direct result viewer; opening a different project is not equivalent.',section);
           found.forEach(function(use){
             var item=el('div',undefined,section);item.className='modern-image-usage-item';
             var detail=el('span',use.title+

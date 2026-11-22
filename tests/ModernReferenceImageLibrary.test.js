@@ -496,3 +496,40 @@ test('Where used uses the real active Storyboard workspace identity',()=>{
   const missing=usageGraph.report(image,null,{currentStudio:current});
   assert.equal(missing.count,0,'a placeholder current ID must never become a navigation link');
 });
+
+test('Where used includes immutable archived calibration results without misidentifying project copies',()=>{
+  const selected='photo_alias',identity={version:1,sha256:'c'.repeat(64),width:1176,height:791};
+  const archives=[
+    {id:'calibration-result-v1-'+ '1'.repeat(64),photo:identity,createdAt:50},
+    {id:'calibration-result-v1-'+ '2'.repeat(64),photo:identity,createdAt:51},
+    {id:'calibration-result-v1-'+ '3'.repeat(64),photo:{...identity,width:1175},createdAt:52},
+    {id:'calibration-result-v1-'+ '4'.repeat(64),photo:{...identity,sha256:'d'.repeat(64)},createdAt:53}
+  ];
+  const found=usageGraph.report(selected,identity,{archives,calibrations:[
+    {id:'project_a',title:'Original calibration',photo:identity,revision:4}
+  ]});
+  assert.equal(found.count,3);
+  assert.deepEqual(found.uses.filter(use=>use.type==='archive').map(use=>use.ownerId),
+    archives.slice(0,2).map(use=>use.id));
+  assert.equal(found.uses.filter(use=>use.type==='calibration').length,1);
+  assert.equal(usageGraph.report(selected,null,{archives}).count,0);
+});
+test('Where used reports an unreadable calibration archive rather than asserting zero results',async()=>{
+  const identity={version:1,sha256:'e'.repeat(64),width:16,height:9};
+  const env={
+    indexedDB:{},localStorage:{},
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>{
+      throw Error('Result store blocked in another tab');
+    }},
+    CurvatureModernAnimationDraftAutosave:{
+      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+    },
+    CurvatureModernReferenceImageImport:{identify:async()=>identity}
+  };
+  const result=await usageGraph.discover(env,{id:'local',record:{}});
+  assert.equal(result.count,0);
+  assert.equal(result.complete,false);
+  assert.match(result.unavailable.join('; '),/Calibration result archive.*blocked in another tab/);
+});

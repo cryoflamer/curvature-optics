@@ -51,10 +51,18 @@
         draft.name||row.id,row.checkpoint.savedAt,row.source||'recoverable').forEach(add);
     });
     var target=identityKey(selectedIdentity);
-    if(target)(sources.calibrations||[]).forEach(function(row){
-      if(row&&identityKey(row.photo)===target)add({type:'calibration',ownerId:row.id,
-        title:row.title||row.id,revision:row.revision,source:'saved'});
-    });
+    if(target){
+      (sources.calibrations||[]).forEach(function(row){
+        if(row&&identityKey(row.photo)===target)add({type:'calibration',ownerId:row.id,
+          title:row.title||row.id,revision:row.revision,source:'saved'});
+      });
+      // Immutable calibration results live in a different IndexedDB store
+      // and may outlive their owning project. Do not alias them by project ID.
+      (sources.archives||[]).forEach(function(row){
+        if(row&&identityKey(row.photo)===target)add({type:'archive',ownerId:row.id,
+          title:'Calibration result '+row.id.slice(-12),revision:null,source:'archived'});
+      });
+    }
     if(sources.currentCalibration&&sources.currentCalibration.referenceImageId===selectedId)
       add({type:'calibration-draft',ownerId:sources.currentCalibration.projectId||'current',
         title:'Current Calibration working session',revision:null,source:'current'});
@@ -65,7 +73,7 @@
         'current').forEach(add);
     }
     uses.sort(function(a,b){
-      var groups=['animation','calibration','draft','calibration-draft'];
+      var groups=['animation','calibration','archive','draft','calibration-draft'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });
@@ -78,13 +86,14 @@
       note:'Known uses in accessible local records only. Other browsers, removed projects, archives and inaccessible tabs are not included; never authorize deletion from this list.'};
   }
   async function discover(env,row){
-    var failures=[],sources={animations:[],calibrations:[],drafts:[]};
+    var failures=[],sources={animations:[],calibrations:[],archives:[],drafts:[]};
     async function read(name,fn,set){try{set(await fn());}
       catch(error){failures.push(name+': '+(error&&error.message||String(error)));}}
     var db=env.indexedDB;
     await Promise.all([
       read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.list(db);},v=>{sources.animations=v;}),
       read('Calibration Projects',function(){return env.CurvatureModernCalibrationProjectStore.list(db);},v=>{sources.calibrations=v;}),
+      read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.list(db);},v=>{sources.archives=v;}),
       read('Recoverable Storyboards',function(){return env.CurvatureModernAnimationDraftAutosave.readCollection(db);},
         v=>{sources.drafts=v?v.workspaces.map(function(w){return {...w,source:'recoverable'};}):[];})
     ]);
