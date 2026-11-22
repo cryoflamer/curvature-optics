@@ -30,6 +30,9 @@ function memoryIndexedDB(){
           let pending=0,finished=false;
           const copies=Object.fromEntries(included.map(n=>[n,
             new Map([...stores[n]].map(([k,v])=>[k,structuredClone(v)]))]));
+          // Browser IndexedDB also completes a transaction with no requests.
+          // This happens when querying schema status without scanning rows.
+          queueMicrotask(()=>{if(pending===0&&!finished){finished=true;tx.oncomplete&&tx.oncomplete();}});
           const tx={oncomplete:null,onabort:null,onerror:null,error:null,
             abort(){if(finished)return;finished=true;queueMicrotask(()=>tx.onabort&&tx.onabort());},
             objectStore(name){

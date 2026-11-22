@@ -126,13 +126,17 @@ function memoryStorage(){
   const databases=new Map(),faults={abortNextArchive:false,failOpen:false,failImage:false};
   return {databases,faults,open(name,version){
     if(faults.failOpen)throw Error('Storage denied');
-    assert.equal(version,1);
+    // The observation library deliberately opens the current version
+    // without an upgrade request; the result archive retains pinned v1.
+    assert.equal(version,name===library.DATABASE?undefined:1);
     const request={result:null,error:null};
     queueMicrotask(()=>{
       const fresh=!databases.has(name);
       if(fresh)databases.set(name,new Map());
       const records=databases.get(name);
-      request.result={close(){},createObjectStore(store,opts){
+      request.result={close(){},
+        objectStoreNames:{contains:store=>store===(name===storage.DATABASE?storage.STORE:library.STORE)},
+        createObjectStore(store,opts){
         assert.equal(store,name===storage.DATABASE?storage.STORE:library.STORE);
         assert.equal(opts.keyPath,'id');
       },transaction(store,mode){
