@@ -1710,3 +1710,10 @@ button{cursor:pointer}
 .modern-studio-sequences-disclosure>summary{padding:9px 10px;cursor:pointer;font-weight:650}
 .modern-studio-sequences-disclosure .modern-studio-sequences{margin:0;border:0;background:transparent;padding:0 9px 9px}
 .modern-studio-sequences-disclosure .modern-studio-sequences>strong{display:none}
+
+/* Isolated keyframe preview entry: authoring context without live controls yet. */
+.modern-keyframe-edit-banner{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 16px;border:2px solid #75a0c1;border-radius:9px;margin:10px 0;background:#eff7fd;color:#1c4260}
+.modern-keyframe-edit-banner strong{font-weight:750}
+.modern-keyframe-edit-banner p{flex:1 1 320px;margin:0;font-size:.9rem}
+.modern-keyframe-edit-banner button{white-space:nowrap}
+.modern-keyframe-edit-banner button:disabled{opacity:.5;cursor:not-allowed}

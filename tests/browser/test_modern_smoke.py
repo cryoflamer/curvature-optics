@@ -4102,7 +4102,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(details.get_by_role('button', name=action)).to_be_visible()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
 
-    def test_animation_timeline_thumbnail_opens_preview_at_frame_and_edit_is_stub(self):
+    def test_animation_timeline_thumbnail_opens_preview_at_frame_and_edit_cancel_restores(self):
         self.open_modern()
         self.open_animation()
         library = self.page.locator('#ModernAnimationLibrary')
@@ -4128,9 +4128,30 @@ class ModernBrowserSmoke(unittest.TestCase):
         controls.get_by_role('button', name='Properties for').click()
         expect(studio.get_by_label('Frame name')).to_have_value('04 · Low view, hidden spans')
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        before = self.page.evaluate("""() => ({
+            mode: CurvatureModernApp.getMode(),
+            height: CurvatureModernApp.getModel().Height,
+            draft: JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft),
+            saved: localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
+        })""")
         controls.get_by_role('button', name='Edit 04').click()
-        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('coming soon')
+        banner = self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        expect(banner).to_contain_text('04 · Low view, hidden spans')
+        expect(banner.get_by_role('button', name='Apply & Return')).to_be_disabled()
+        self.assertTrue(self.page.locator('#ModernWorkspace').evaluate('(el) => el.inert'))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'), 'scene')
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        self.page.wait_for_timeout(700)
+        self.assertEqual(self.page.evaluate("""() =>
+            localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)"""), before['saved'])
+        banner.get_by_role('button', name='Cancel & Return').click()
+        expect(banner).to_have_count(0)
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before['mode'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before['height'])
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getAnimationStudioDraft().draft)"""), before['draft'])
         timeline.nth(3).click()
         expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
         self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs > 0')
@@ -4146,6 +4167,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')], self.console)
+
+
+    def test_animation_keyframe_edit_session_f5_discards_preview(self):
+        self.open_modern()
+        before_mode = self.page.evaluate('CurvatureModernApp.getMode()')
+        before_height = self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio = self.page.locator('#ModernAnimationStudio')
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button', name='Edit 04').click()
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_be_visible()
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getMode()'), before_mode)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'), before_height)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames.length'), 9)
 
     def test_animation_editor_timeline_inspector_and_responsive_layout(self):
         self.open_modern()
