@@ -7823,10 +7823,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate("""() =>
             sessionStorage.getItem('curvature-calibration-clean-reload-project-v1')"""),
             project_id,'a clean acknowledged project must have a same-tab resume marker')
-        self.page.add_init_script("""() => {
-            window.__calibrationMarkerAtDocumentStart=sessionStorage.getItem(
-                'curvature-calibration-clean-reload-project-v1');
-        }""")
+        self.page.add_init_script("""window.__calibrationMarkerAtDocumentStart=
+            sessionStorage.getItem('curvature-calibration-clean-reload-project-v1');""")
         self.page.reload(wait_until='load',timeout=30000)
         try:
             self.page.wait_for_function("""id => {
