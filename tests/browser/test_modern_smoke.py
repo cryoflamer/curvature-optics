@@ -4130,12 +4130,27 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""",workspace)
         self.assertEqual(created['stored'],'Session backup owner')
         self.assertEqual(created['unsent'],'Unsent local owner')
+        def inspect_backup():
+            return self.page.evaluate("""async photo => {
+                const api=CurvatureModernAnimationDraftAutosave;
+                const stored=api.readSessionLocals(localStorage);
+                const row=await CurvatureModernReferenceImageLibrary.get(indexedDB,photo);
+                const report=await CurvatureModernImageUsageGraph.discover(window,row);
+                return {sessionNames:stored.flatMap(c=>c.workspaces.map(w=>w.checkpoint.draft.name)),
+                    uses:report.uses.map(u=>[u.title,u.source,u.ownerId]),
+                    unavailable:report.unavailable};
+            }""",photo_id)
+        before=inspect_backup()
+        self.assertIn('Unsent local owner',before['sessionNames'],before)
+        self.assertIn('Unsent local owner',[u[0] for u in before['uses']],before)
         gallery=self.open_image_library()
         gallery.get_by_role('button',
             name='Inspect session-reference.png (Local original)').click()
         section=gallery.locator('.modern-image-usage')
         pending=section.locator('.modern-image-usage-item').filter(
             has_text='Unsent local owner')
+        after=inspect_backup()
+        self.assertIn('Unsent local owner',[u[0] for u in after['uses']],after)
         expect(pending).to_have_count(1,timeout=30000)
         expect(pending).to_contain_text('recoverable local backup')
         expect(pending).to_contain_text('restore it before navigating')
