@@ -311,8 +311,12 @@ Picker and apply only verified Library originals. Any future image-backed UI mus
 reuse this boundary; no independent file/URL/clipboard acquisition controls are
 allowed. Picker cancellation or a failed selection leaves the original and
 current project state untouched. When no suitable image exists, use Image Library
-first, then return to the consumer without losing unsaved state. A dedicated
-one-click round-trip navigation is a follow-up acceptance criterion in #26.
+first, then return to the consumer without losing unsaved state. The
+current Calibration and Storyboard editors provide explicit **Open Image Library**
+and corresponding **Return to Calibration / Return to Storyboard** controls.
+These same-document transitions must retain unsaved correspondences, Studio
+working drafts and existing reference links; targeted Chromium and manual Opera
+acceptance remain required under #26.
 
 **Necessary transport exception:** restoring/importing existing portable animation,
 calibration or complete library backups can restore embedded, verified originals
