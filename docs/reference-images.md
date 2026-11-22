@@ -293,6 +293,37 @@ Existing quota and portable Studio import semantics are unchanged. Scans are
 bounded by existing library limits; no persistent digest index or schema migration
 is introduced. This API is not yet called by an Apply UI.
 
+## Single entry point for manual image acquisition (#26)
+
+**Permanent architecture rule:** users manually add reference-image originals **only in
+Image Library**. Its explicit acquisition surfaces are local PNG/JPEG/WebP files,
+direct HTTP(S) image URLs (subject to browser CORS and the 20 MiB limit), and
+PNG/JPEG/WebP clipboard image data (Paste image button or scoped paste shortcut).
+Image uploads validate signatures, image decode/dimensions and retained original
+bytes; `ensureOriginal()` reuses verified byte-identical originals without
+overwriting previously saved metadata. Downloading from arbitrary webpages or
+bypassing CORS is not supported. A source URL describes provenance, not proof
+of photographic authenticity.
+
+**Consumers select existing assets, never manually import them.** Photo Calibration
+and Animation Studio Storyboard references use the common, selection-only Image
+Picker and apply only verified Library originals. Any future image-backed UI must
+reuse this boundary; no independent file/URL/clipboard acquisition controls are
+allowed. Picker cancellation or a failed selection leaves the original and
+current project state untouched. When no suitable image exists, use Image Library
+first, then return to the consumer without losing unsaved state. A dedicated
+one-click round-trip navigation is a follow-up acceptance criterion in #26.
+
+**Necessary transport exception:** restoring/importing existing portable animation,
+calibration or complete library backups can restore embedded, verified originals
+and reconcile aliases to preserve project integrity. Those internal low-level
+functions are not alternative manual upload UI. Preserve ID namespace separation,
+SHA-256 and oriented-dimension verification, original bytes, provenance, and
+linked project references. Existing demo originals are separate until explicitly
+adopted via a supported project operation. Generated simulation screenshots,
+render thumbnails and preview pixels are **not** reference photographs and are
+not automatically added by Storyboard or a picker.
+
 ## Shared context-aware Image Picker (#26 Stage 2)
 
 Stage 2 replaces the two different selection surfaces with the single
