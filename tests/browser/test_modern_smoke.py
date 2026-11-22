@@ -4262,10 +4262,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             }""", arg=workspace_id, timeout=30000)
             names = other.evaluate("""async () => {
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
-                return c.workspaces.map(w => [w.id,w.checkpoint.draft.name]);
+                return c.workspaces.map(w => [w.id,w.checkpoint.draft.name,w.checkpoint.savedAt]);
             }""")
-            self.assertEqual(sum(1 for _, value in names if value=='Stage 5 protected change A'), 1)
-            self.assertEqual(sum(1 for _, value in names if value=='Stage 5 protected change B'), 1)
+            diagnostic = {'remote': names,
+                'A_live': self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                'B_live': other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                'A_status': self.page.locator('#ModernPersistenceStatus').inner_text(),
+                'B_status': other.locator('#ModernPersistenceStatus').inner_text()}
+            self.assertEqual(sum(1 for _, value, _ in names if value=='Stage 5 protected change A'), 1,
+                             str(diagnostic))
+            self.assertEqual(sum(1 for _, value, _ in names if value=='Stage 5 protected change B'), 1)
             self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
                              'Stage 5 protected change A')
             self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
