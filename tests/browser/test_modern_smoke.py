@@ -4323,6 +4323,7 @@ class ModernBrowserSmoke(unittest.TestCase):
 
     def test_animation_keyframe_f5_restores_pending_numeric_input(self):
         self.open_modern()
+        workspace_height=self.page.evaluate('CurvatureModernApp.getModel().Height')
         self.open_animation()
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
             'Create copy', exact=True).click()
@@ -4341,7 +4342,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                                     arg=previous+17)
         expect(banner.get_by_role('button',name='Undo',exact=True)).to_be_enabled()
         banner.get_by_role('button',name='Cancel & Return').click()
-        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),previous)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),workspace_height)
 
     def test_animation_keyframe_f5_physical_compare_b_and_cancel_cleanup(self):
         self.open_modern()
