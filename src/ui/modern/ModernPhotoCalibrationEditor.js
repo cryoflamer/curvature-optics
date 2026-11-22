@@ -876,14 +876,21 @@
     const RELOAD_PROJECT_KEY='curvature-calibration-clean-reload-project-v1';
     // A clean, acknowledged project may be restored after reload. Keep only
     // identity in sessionStorage; unsaved or failed writes must not auto-bind.
-    env.addEventListener('pagehide',()=>{
+    let leavingPage=false;
+    function rememberCleanProjectState(state){
       try{
-        const s=projectSession?.state();
-        if(s?.projectId&&!s.unsaved&&!s.pending&&!s.error)
-          env.sessionStorage?.setItem(RELOAD_PROJECT_KEY,s.projectId);
+        if(state?.projectId&&!state.unsaved&&!state.pending&&!state.error)
+          env.sessionStorage?.setItem(RELOAD_PROJECT_KEY,state.projectId);
         else env.sessionStorage?.removeItem(RELOAD_PROJECT_KEY);
       }catch(_ignored){/* Optional session identity, never photo bytes. */}
-    });
+    }
+    // Record the last durable state before viewer pagehide listeners can
+    // synthesize another autosave. The unload event must not erase a clean
+    // marker through a late in-flight, unrelated viewer snapshot.
+    env.addEventListener('pagehide',()=>{
+      rememberCleanProjectState(projectSession?.state());
+      leavingPage=true;
+    },true);
     function rememberPreviousProject(previous,opened){
       if(!previous||previous===opened)return;
       try{env.sessionStorage?.setItem(PREVIOUS_PROJECT_KEY,previous);}catch(_ignored){}
@@ -1501,6 +1508,9 @@
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
         projectSession=helper.create(env,{onChange:()=>{
+          // Bind/save/failure acknowledgments maintain the tab-scoped durable
+          // identity. No auto-resume token is kept for unresolved edits.
+          if(!leavingPage)rememberCleanProjectState(projectSession?.state());
           if(!projectsPanel.hidden)renderProjects();
         }});
       }
