@@ -289,7 +289,7 @@
       var result=await library.ensureOriginal(db,record,env.crypto,function(r){return importer.verifyOriginal(r,env);});
       await reload(result.row.id);
       return result.reused?'Existing original reused; its attribution was not overwritten.':
-        'Image imported. Original bytes retained.';
+        'Photograph imported. Original bytes retained.';
     }
     file.addEventListener('change',function(){var chosen=file.files[0];file.value='';if(!chosen||!allowDiscard())return;
       run(function(){return ingestSource(chosen,chosen.name);});});
