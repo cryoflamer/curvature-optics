@@ -731,6 +731,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(active).to_contain_text('Disposable calibration',timeout=30000)
         expect(active.locator('[data-calibration-project-delete]')).to_be_enabled()
         project_id=active.get_attribute('data-calibration-project-id')
+        remaining=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.list(indexedDB))
+            .filter(row => row.id !== id).map(row => row.id)""",project_id)
         self.page.once('dialog',lambda dialog:dialog.accept())
         with self.page.expect_navigation(wait_until='domcontentloaded'):
             active.locator('[data-calibration-project-delete]').click()
@@ -741,9 +744,60 @@ class ModernBrowserSmoke(unittest.TestCase):
         workspace.locator('#ModernCalibrationProjectsToggle').click()
         panel=workspace.locator('#ModernCalibrationProjectsPanel')
         expect(panel.locator('[data-calibration-project-id="'+project_id+'"]')).to_have_count(0,timeout=30000)
+        if remaining:
+            expect(panel.locator('[data-project-active="true"]')).to_have_count(1,timeout=30000)
+            expect(panel.locator('[data-project-active="true"]')).to_have_attribute(
+                'data-calibration-project-id',remaining[0])
+            expect(panel.locator('[data-project-active="true"]')).to_have_class(
+                re.compile(r'is-selected'))
+            expect(panel.locator('[data-project-active="true"]')).to_contain_text('Opened')
+        else:
+            expect(panel.locator('[data-project-active="true"]')).to_have_count(0)
+            expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_be_empty()
         self.assertEqual(self.page.evaluate("""async id =>
             (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)) === null""",
             project_id),True)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
+    def test_calibration_delete_new_project_reopens_previous_photo_project(self):
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        import json
+        experiment=self.soundly_calibration_experiment()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'prior-photo.json','mimeType':'application/json',
+            'buffer':json.dumps(experiment).encode('utf-8')})
+        prior=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(prior).to_have_count(1,timeout=30000)
+        prior_id=prior.get_attribute('data-calibration-project-id')
+        prior.locator('[data-calibration-project-open]').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.once('dialog',lambda dialog:dialog.accept('Temporary new project'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        temporary=panel.locator('[data-project-active="true"]')
+        expect(temporary).to_contain_text('Temporary new project',timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        with self.page.expect_navigation(wait_until='domcontentloaded'):
+            temporary.locator('[data-calibration-project-delete]').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible(timeout=30000)
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        expect(panel.locator('[data-calibration-project-id="'+prior_id+'"]')).to_have_count(1,timeout=30000)
+        active=panel.locator('[data-project-active="true"]')
+        expect(active).to_have_count(1,timeout=30000)
+        expect(active).to_have_attribute('data-calibration-project-id',prior_id)
+        expect(active).to_have_class(re.compile(r'is-selected'))
+        expect(active.locator('[data-calibration-project-open]')).to_have_count(0)
+        expect(workspace.locator('#ModernCalibrationPhotoInfo')).to_contain_text(
+            'Soundly regression raster',timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId"""),
+            prior_id)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
     def test_calibration_project_library_selection_is_separate_from_guarded_open(self):
