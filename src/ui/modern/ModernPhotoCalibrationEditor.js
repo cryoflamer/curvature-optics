@@ -628,6 +628,11 @@
         // unrelated photo/toolbar event. Avoid recursion from persist().
         if(projectSession?.project()){
           if(!fromPersist){
+            // The integrated viewer emits an unconditional sessionChanged()
+            // on pagehide. That is not an edit: after the unload identity
+            // checkpoint, do not create another durable Project revision.
+            // Actual viewer gestures already save via onSessionChange.
+            if(leavingPage)return;
             const saved=persist();
             if(saved)void saved.catch(()=>{});
           }
