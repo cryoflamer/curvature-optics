@@ -1139,8 +1139,8 @@
     options=options||{};
     var entries=options.entries||[];
     var selected=draft.frames.find(function(f){return f.key===options.selectedKey;})||draft.frames[0];
-    if(host.__studioLastSelectedKey!==undefined&&host.__studioLastSelectedKey!==(selected&&selected.key))
-      host.__studioInspectorMode='frame';
+    if(host.__studioLastSelectedKey!==(selected&&selected.key))
+      host.__studioInspectorMode=selected?'frame':'project';
     host.__studioLastSelectedKey=selected&&selected.key;
     host.textContent='';
     var heading=el(doc,'div','modern-studio-header');

@@ -3322,9 +3322,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         observations.locator('input[type=file]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
         self.page.locator('#ModernAnimationViewEditor').click()
-        editor = self.page.locator('#ModernAnimationStudio .modern-studio-editor-details')
-        if editor.get_attribute('open') is None:
-            editor.locator('summary').click()
+        editor = self.page.locator('#ModernAnimationStudio')
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         editor.locator('.modern-studio-keyframe').first.click()
         links = editor.locator('.modern-studio-reference-links')
         links.get_by_text('Load photographs', exact=True).click()
@@ -3598,9 +3597,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         demo = self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]')
         demo.get_by_text('Create copy', exact=True).click()
         editor = self.page.locator('#ModernAnimationStudio')
-        details = editor.locator('.modern-studio-editor-details')
-        if not details.locator('summary').evaluate('(el) => el.parentElement.open'):
-            details.locator('summary').click()
+        expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
         editor.locator('.modern-studio-keyframe').nth(3).click()
         heading = editor.get_by_label('Presentation title (optional)')
         heading.fill('Real observation')
@@ -3928,6 +3925,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         inspector = studio.locator('.modern-studio-inspector-pane')
         expect(strip).to_have_count(9)
         expect(inspector.locator('.modern-studio-frame-panel')).to_be_visible()
+        expect(inspector.get_by_role('button', name='Inspect selected keyframe')).to_have_attribute(
+            'aria-pressed', 'true')
         layout = self.page.evaluate("""() => {
             const t=document.querySelector('.modern-studio-timeline-pane').getBoundingClientRect();
             const i=document.querySelector('.modern-studio-inspector-pane').getBoundingClientRect();
