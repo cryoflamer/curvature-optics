@@ -4060,6 +4060,92 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
                          self.console)
 
+    def test_calibration_projects_independent_photo_viewports_survive_reload(self):
+        # Real wheel zoom must durably save each independently bound project
+        # without requiring a project switch to flush its viewport.
+        import json
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        fixture=self.soundly_calibration_experiment()
+        toggle.click()
+        panel.locator('#ModernCalibrationProjectsImportFile').set_input_files({
+            'name':'viewport-source.json','mimeType':'application/json',
+            'buffer':json.dumps(fixture).encode('utf-8')})
+        source=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster')
+        expect(source).to_have_count(1,timeout=30000)
+        a=source.get_attribute('data-calibration-project-id')
+        source.locator('[data-calibration-project-duplicate]').click()
+        duplicate=panel.locator('[data-calibration-project-id]').filter(
+            has_text='Soundly regression raster.png (copy)')
+        expect(duplicate).to_have_count(1,timeout=30000)
+        b=duplicate.get_attribute('data-calibration-project-id')
+        self.assertNotEqual(a,b)
+
+        def open_project(id):
+            if panel.is_hidden():
+                toggle.click()
+            panel.locator('[data-calibration-project-id="'+id+'"] '
+                          '[data-calibration-project-open]').click()
+            expect(panel).to_be_hidden(timeout=30000)
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.pending===0 && !s.unsaved;
+            }""",arg=id,timeout=30000)
+
+        def stored(id):
+            return self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,view:p.checkpoint.payload.draft.view,
+                    sha:p.photo.identity.sha256};
+            }""",id)
+
+        def live_view():
+            return self.page.evaluate("""async () =>
+                (await CurvatureModernPhotoCalibrationEditor.mount(document)
+                    .captureProjectCheckpoint()).checkpoint.payload.draft.view""")
+
+        def zoom_and_save(id,delta):
+            before=stored(id)
+            photo=workspace.locator('#ModernCalibrationPhoto')
+            expect(photo).to_be_visible()
+            photo.hover(position={'x':80,'y':65})
+            self.page.mouse.wheel(0,delta)
+            self.page.wait_for_function("""async ({id,revision}) => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return p.revision>revision && s.projectId===id && !s.unsaved && s.pending===0;
+            }""",arg={'id':id,'revision':before['revision']},timeout=30000)
+            after=stored(id)
+            self.assertNotEqual(after['view'],before['view'])
+            self.assertEqual(live_view(),after['view'])
+            self.assertEqual(after['sha'],before['sha'])
+            return after
+
+        open_project(a)
+        view_a=zoom_and_save(a,-490)
+        open_project(b)
+        self.assertNotEqual(live_view(),view_a['view'],
+                            'a duplicate starts with the original fit viewport')
+        view_b=zoom_and_save(b,370)
+        self.assertNotEqual(view_a['view'],view_b['view'])
+        open_project(a)
+        self.assertEqual(live_view(),view_a['view'])
+        self.assertEqual(stored(b),view_b)
+        self.page.reload(wait_until='load',timeout=30000)
+        expect(workspace).to_be_visible(timeout=30000)
+        self.assertIsNone(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""))
+        for id,expected in [(b,view_b),(a,view_a)]:
+            open_project(id)
+            self.assertEqual(live_view(),expected['view'])
+            current=stored(id)
+            self.assertEqual(current['view'],expected['view'])
+            self.assertEqual(current['sha'],expected['sha'])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_projects_thumbnail_and_workspace_view_survive_reload(self):
         import json
         workspace=self.open_physical_calibration()
