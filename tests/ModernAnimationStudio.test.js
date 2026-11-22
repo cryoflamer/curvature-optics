@@ -1127,29 +1127,30 @@ test('History source ID never displays an image for a changed keyframe',()=>{
   assert.equal(collect(host,n=>n.tagName==='img').length,0);
 });
 
-test('reference editor lists shared photographs, labels missing IDs, and issues only selected frame edits',async()=>{
+test('reference editor displays missing IDs and delegates attachment to the shared picker',async()=>{
   const a=experiment(),b=clone(a);b.scene.camera.Height=75;
   const d=studio.history([1,2],[entry(1,a),entry(2,b)]);
   const draft=studio.editFrame(d,'history-2','referenceImageIds',['missing','photo_A']);
   const {doc,host}=mockDom(),calls=[];
   const actions={frame:(...args)=>calls.push(args),edit(){},select(){},prepare(){}};
   editor.render(doc,host,draft,studio.inspect(draft),actions,false,{selectedKey:'history-2',
-    listReferenceImages:async()=>[{id:'photo_A',title:'Photo A',thumbnail:{dataUrl:'data:image/png;base64,YQ=='}},{id:'photo_B',title:'Photo B',thumbnail:{dataUrl:'data:image/png;base64,Yg=='}}]});
+    listReferenceImages:async()=>[{id:'photo_A',title:'Photo A',thumbnail:{dataUrl:'data:image/png;base64,YQ=='}},
+      {id:'photo_B',title:'Photo B',thumbnail:{dataUrl:'data:image/png;base64,Yg=='}}],
+    getReferenceImage:async id=>({id,record:{id}})});
   await Promise.resolve();await Promise.resolve();
   const section=collect(host,n=>n.className==='modern-studio-reference-links')[0];
   assert.ok(collect(section,n=>n.textContent==='Missing local photograph: missing').length);
   assert.ok(collect(section,n=>n.textContent==='Photo A').length);
-  const picker=collect(section,n=>n.className==='modern-studio-reference-gallery')[0];
-  const choice=collect(picker,n=>n['aria-label']==='Select photograph Photo B')[0];
-  assert.ok(choice);assert.ok(!collect(picker,n=>n['aria-label']==='Select photograph Photo A').length);
-  assert.ok(collect(choice,n=>n.tagName==='img').some(n=>n.src==='data:image/png;base64,Yg=='));
   assert.ok(collect(section,n=>n.tagName==='img').some(n=>n.src==='data:image/png;base64,YQ=='));
-  choice.listeners.click();assert.equal(choice['aria-pressed'],'true');
-  const attach=collect(section,n=>n.textContent==='Attach')[0];assert.equal(attach.disabled,false);attach.listeners.click();
-  assert.deepEqual(calls.pop(),['history-2','referenceImageIds',['missing','photo_A','photo_B']]);
-  const unlink=collect(section,n=>n['aria-label']==='Unlink reference photograph 1')[0];unlink.listeners.click();
+  assert.equal(collect(section,n=>n.className==='modern-studio-reference-gallery').length,0,
+    'no second embedded gallery is retained');
+  const browse=collect(section,n=>n['aria-label']==='Browse and attach local reference photographs')[0];
+  assert.ok(browse);assert.equal(browse.disabled,false);
+  const unlink=collect(section,n=>n['aria-label']==='Unlink reference photograph 1')[0];
+  unlink.listeners.click();
   assert.deepEqual(calls.pop(),['history-2','referenceImageIds',['photo_A']]);
-  const move=collect(section,n=>n['aria-label']==='Move reference photograph 2 earlier')[0];move.listeners.click();
+  const move=collect(section,n=>n['aria-label']==='Move reference photograph 2 earlier')[0];
+  move.listeners.click();
   assert.deepEqual(calls.pop(),['history-2','referenceImageIds',['photo_A','missing']]);
   section.isConnected=false;unlink.listeners.click();assert.equal(calls.length,0);
   assert.deepEqual(draft.frames[1].referenceImageIds,['missing','photo_A']);
