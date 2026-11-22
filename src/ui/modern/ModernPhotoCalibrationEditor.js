@@ -1645,7 +1645,9 @@
         physicalSessionId=d.physicalSessionId;
         if(record){photoDetails(record,activeSource);fitPhoto();}
         else{photoInfo.replaceChildren();referenceTools.open=true;}
-        view=d.view;
+        // Imported checkpoints may have no saved photo viewport. Keep the
+        // freshly computed fit instead of replacing it with null.
+        if(d.view)view=d.view;
         workflow.restoreDraft({editing:d.editing,pending:d.pending,pendingModel:d.pendingModel,
           activePair:d.activePair,explicitAdd:d.explicitAdd});
         workflow.restoreHistory(d.undoStack,d.redoStack);
