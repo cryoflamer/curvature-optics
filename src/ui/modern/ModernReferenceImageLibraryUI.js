@@ -103,7 +103,7 @@
       // Disable the fieldsets and editable controls while a transaction runs.
       editor.inert=value;save.disabled=value;remove.disabled=true;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
-      try{await action();status.textContent=message||'Reference Image Library ready.';}
+      try{var feedback=await action();status.textContent=message||feedback||'Reference Image Library ready.';}
       catch(error){status.textContent='Reference Image Library: '+(error&&error.message||error);}
       finally{setBusy(false);}}
     function fill(row){selected=row;dirty=false;editor.hidden=!row;preview.replaceChildren();
@@ -185,9 +185,9 @@
         card.setAttribute('aria-label','Inspect '+entry.title+' ('+
           (entry.source==='demo'?'Built-in demo':'Local original')+')');
         card.setAttribute('aria-pressed',String(entry.key===key));
-        var img=el('img',undefined,card);
-        img.src=(entry.thumbnail||entry.record?.original)?.dataUrl||'';
-        img.alt='';
+        var raster=entry.thumbnail||entry.record?.original;
+        if(raster){var img=el('img',undefined,card);img.src=raster.dataUrl;img.alt='';}
+        else{var noThumbnail=el('span','No thumbnail',card);noThumbnail.className='modern-image-library-placeholder';}
         el('strong',entry.title,card);
         el('small',entry.source==='demo'?'Built-in demo · read-only':
           'Local original · '+entry.width+' × '+entry.height,card);
@@ -230,7 +230,7 @@
         var result=await library.restoreBackup(db,payload,env.crypto,
           function(record){return importer.verifyOriginal(record,env);});
         await reload(null);
-        status.textContent='Restored '+result.created+' original images and '+result.annotationsAdded+' classification records.';
+        return 'Restored '+result.created+' original images and '+result.annotationsAdded+' classification records.';
       });
     });
     file.addEventListener('change',function(){var chosen=file.files[0];file.value='';if(!chosen||!allowDiscard())return;

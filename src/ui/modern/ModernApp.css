@@ -1458,6 +1458,7 @@ button{cursor:pointer}
   box-shadow:inset 0 0 0 1px #2371bc}
 .modern-reference-body .modern-image-library-card:focus-visible{outline:2px solid #2371bc;outline-offset:2px}
 .modern-image-library-card img{width:100%;height:90px;object-fit:contain;background:#e4eaf0}
+.modern-image-library-placeholder{display:grid;place-items:center;height:90px;background:#e4eaf0;color:#567;font-size:11px}
 .modern-image-library-card small{font-size:11px;color:#456680}
 .modern-image-library-demo{border:1px solid #c6d8e9;border-radius:7px;background:#fff;padding:10px}
 .modern-image-library-demo[hidden]{display:none!important}
