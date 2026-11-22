@@ -203,7 +203,13 @@ restores the visible tab without replaying project operations or replacing a
 working draft. Refresh restores the tab from the URL; existing guarded autosave
 restores the project, selected frame and playback position. An explicit shared
 experiment URL or physical Scene/Compare/Demos mode takes precedence over a
-Studio-only route. No additional persistence store or schema was introduced.
+Studio-only route. No additional persistence store or schema was introduced. Within the
+retained Editor view, focused input identity/caret and existing filmstrip
+scroll survive view switches; keyboard arrow navigation deliberately keeps
+focus on the tab. A replaced/detached input is never refocused. Leaving
+Preview cancels only a queued *visible-preview paint*, not an independent
+video/PNG export task. Returning to Preview schedules a single paused paint
+when the canvas geometry or saved playhead requires it.
 
 ## Animation Studio internal views (#27, Stage 1)
 

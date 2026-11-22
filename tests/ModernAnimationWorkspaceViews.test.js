@@ -64,3 +64,25 @@ test('View history pushes only changed tabs and preserves external state',()=>{
   assert.deepEqual(calls[1].state,{external:true});
   assert.equal(views.route(root.location.href),'preview');
 });
+
+test('restoring a mounted input returns editor caret focus, but arrows retain tab focus',()=>{
+  const {map,doc}=fixture();let controller;
+  controller=views.bind(doc,(name,focus)=>controller.show(name,focus));
+  const panel=map.get('ModernAnimationEditorView');
+  const field={isConnected:true,disabled:false,restores:0,
+    focus(){this.restores++;}};
+  panel.contains=target=>target===field;
+  controller.show('editor',false);
+  panel.fire('focusin',{target:field});
+  controller.show('preview',false);
+  controller.show('editor',false);
+  assert.equal(field.restores,1,'clicking back to Editor restores the live field');
+  controller.show('preview',false);
+  controller.show('editor',true);
+  assert.equal(field.restores,1,'keyboard tablist navigation keeps focus on tab');
+  assert.equal(map.get('ModernAnimationViewEditor').focused,true);
+  field.isConnected=false;
+  controller.show('preview',false);
+  controller.show('editor',false);
+  assert.equal(field.restores,1,'a rerendered/detached field is never refocused');
+});

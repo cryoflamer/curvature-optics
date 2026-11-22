@@ -318,3 +318,18 @@ test('resize compares against the actual last painted width, including live pain
   h.ctx.studioPreviewLifecycle.markPainted({A:640,B:640});h.resized();h.flush();
   assert.deepEqual(h.paints,[0,0],'no redundant paint after matching paired render');
 });
+
+test('resizing a visible paused Preview schedules exactly one paint',()=>{
+  const h=harness();
+  assert.equal(h.ctx.studioPreviewLifecycle.checkSize(),true);
+  assert.equal(h.queued(),1);
+  assert.equal(h.ctx.studioPreviewLifecycle.checkSize(),false);
+  assert.equal(h.queued(),1,'the second check does not replace the first RAF');
+  h.flush();assert.deepEqual(h.paints,[0]);
+  h.setWidth(800);
+  assert.equal(h.ctx.studioPreviewLifecycle.checkSize(),true);
+  h.flush();assert.deepEqual(h.paints,[0,0]);
+  assert.equal(h.ctx.studioPreviewLifecycle.checkSize(),false);
+  assert.match(app,/var resized=studioPreviewLifecycle&&studioPreviewLifecycle.checkSize\(\)/);
+  assert.match(app,/if\(!resized&&\(studioRestorePreviewPending/);
+});

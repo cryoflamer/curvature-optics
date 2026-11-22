@@ -834,10 +834,15 @@
   function setStudioView(view,focus,routeAction){
     if(!['library','editor','preview'].includes(view))return false;
     var previous=studioView;
-    if(previous==='preview'&&view!=='preview'&&studioPlayback&&studioPlaybackControls){
-      studioPlaybackControls.halt();
-      syncStudioPlaybackControls();
-      saveStudioDraft(false);
+    if(previous==='preview'&&view!=='preview'){
+      // Never paint into a hidden viewport. This is not an export cancellation:
+      // background video/frame export owns a distinct task and controller.
+      if(studioPreviewLifecycle)studioPreviewLifecycle.cancel();
+      if(studioPlayback&&studioPlaybackControls){
+        studioPlaybackControls.halt();
+        syncStudioPlaybackControls();
+        saveStudioDraft(false);
+      }
     }
     studioView=view;
     if(studioRouteReady&&!persistence.explicitUrl&&studioViewsApi&&studioViewsApi.navigate&&
@@ -845,8 +850,10 @@
       studioViewsApi.navigate(root,view,routeAction==='replace');
     if(studioViewController)studioViewController.show(view,!!focus);
     if(view==='preview'&&previous!==view&&studioPlayback&&animationWorkspaceOpen){
-      if(studioPreviewLifecycle)studioPreviewLifecycle.checkSize();
-      if(studioRestorePreviewPending||studioPlaybackRenderedAt!==studioPlayback.status().positionMs)
+      var resized=studioPreviewLifecycle&&studioPreviewLifecycle.checkSize();
+      // checkSize() already schedules a paint on a layout change.
+      if(!resized&&(studioRestorePreviewPending||
+         studioPlaybackRenderedAt!==studioPlayback.status().positionMs))
         scheduleStudioInitialPaint('view');
     }
     return true;

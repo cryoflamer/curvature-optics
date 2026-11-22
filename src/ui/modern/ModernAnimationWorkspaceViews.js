@@ -8,13 +8,21 @@
   var names=['library','editor','preview'];
   function bind(doc,onActivate){
     if(!doc||typeof doc.getElementById!=='function')return null;
-    var tabs=Object.create(null),panels=Object.create(null);
+    var tabs=Object.create(null),panels=Object.create(null),lastFocused=Object.create(null);
     for(var i=0;i<names.length;i++){
       var name=names[i],title=name.charAt(0).toUpperCase()+name.slice(1);
       tabs[name]=doc.getElementById('ModernAnimationView'+title);
       panels[name]=doc.getElementById('ModernAnimation'+title+'View');
       if(!tabs[name]||!panels[name])return null;
     }
+    // The mounted Editor retains its inputs across navigation. Cache focus on
+    // focusin, before clicking a tab transfers focus away from an input.
+    names.forEach(function(name){
+      panels[name].addEventListener('focusin',function(event){
+        if(event&&event.target&&event.target!==panels[name])
+          lastFocused[name]=event.target;
+      });
+    });
     function show(view,focus){
       if(!Object.prototype.hasOwnProperty.call(tabs,view))return false;
       names.forEach(function(name){
@@ -23,7 +31,13 @@
         tabs[name].setAttribute('aria-selected',String(active));
         tabs[name].tabIndex=active?0:-1;
       });
-      if(focus&&typeof tabs[view].focus==='function')tabs[view].focus({preventScroll:true});
+      var previous=lastFocused[view];
+      if(focus&&typeof tabs[view].focus==='function')
+        tabs[view].focus({preventScroll:true});
+      else if(previous&&previous.isConnected!==false&&!previous.disabled&&
+        typeof panels[view].contains==='function'&&panels[view].contains(previous)&&
+        typeof previous.focus==='function')
+        previous.focus({preventScroll:true});
       return true;
     }
     function activate(view,focus){

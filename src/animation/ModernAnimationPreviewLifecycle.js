@@ -69,6 +69,7 @@
         }
       });
       if(changed)schedule('resized');
+      return changed;
     }
     function observe(){
       if(typeof options.resizeObserver==='function'){
