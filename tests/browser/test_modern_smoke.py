@@ -4219,21 +4219,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertGreater(position['right'], position['left'],
                            'narrow layout stacks Inspector after the timeline')
-        if position['bodyWidth'] > position['viewportWidth'] + 3:
-            overflowing = self.page.evaluate("""() => [...document.querySelectorAll('body *')]
-                .filter(e => { const r=e.getBoundingClientRect(); const s=getComputedStyle(e);
-                    if(r.width<=0 || r.right<=innerWidth+3 || s.display==='none' || s.visibility==='hidden')return false;
-                    for(let p=e.parentElement;p;p=p.parentElement){
-                        const ps=getComputedStyle(p);
-                        if(p.scrollWidth>p.clientWidth+3 && /(auto|scroll)/.test(ps.overflowX))return false;
-                    }
-                    return true;
-                })
-                .map(e => ({tag:e.tagName,id:e.id,cls:String(e.className).slice(0,90),
-                    right:Math.round(e.getBoundingClientRect().right),
-                    width:Math.round(e.getBoundingClientRect().width)}))
-                .sort((a,b) => b.right-a.right).slice(0,35)""")
-            self.fail('narrow page overflow: '+str(position)+' offenders='+str(overflowing))
+        self.assertLessEqual(position['bodyWidth'], position['viewportWidth'] + 3,
+                             'narrow mode tabs and Studio must not create page-wide scrolling')
+        self.assertLessEqual(self.page.locator('#ModernDemosTab').evaluate(
+            'el => el.getBoundingClientRect().right'), 393,
+            'Demos tab must stay inside the 390 px viewport')
 
         studio.get_by_role('button', name='Open saved experiments to select animation keyframes').click()
         picker = self.page.locator('.modern-studio-picker-head')
