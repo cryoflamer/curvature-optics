@@ -4289,6 +4289,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             for _ in range(2):
                 other.reload(wait_until='load')
                 expect(other.locator('#ModernAnimationWorkspace')).to_be_visible()
+                expect(other.locator('#ModernAnimationEditorView')).to_be_visible()
+                self.assertEqual(other.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                                 'Stage 5 protected change B',
+                                 'the divergent tab must restore its own active recovery fork')
                 other.wait_for_function("""async () => {
                     const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
                     return c && c.workspaces.some(w => w.checkpoint.draft.name==='Stage 5 protected change A')

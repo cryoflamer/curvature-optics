@@ -588,6 +588,7 @@ test('queued old checkpoint cannot roll back committed concurrent edits or drop 
   assert.equal(autosave.getWorkspace(durable,'project_saved').draft.name,'Tab A edit');
   assert.equal(autosave.getWorkspace(durable,forkId).draft.name,'Tab B edit');
   assert.equal(durable.workspaces.length,conflict.collection.workspaces.length);
+  assert.equal(durable.activeId,forkId,'stale writer cannot select the old project over the recovered fork');
   assert.deepEqual(late.protectedDeletes,[]);
   // Deliberate deletion uses a tombstone and must continue to work.
   const removed=autosave.withoutWorkspace(durable,forkId,'project_saved',350);

@@ -346,7 +346,10 @@
       }
       latest.set(entry.id,entry.checkpoint);deletions.delete(entry.id);
     });
-    var active=next.activeId;
+    // An older queued writer must also not revert the selected workspace
+    // after a newer acknowledged transaction switched to a recovered fork.
+    var active=prior&&next.savedAt<prior.savedAt&&latest.has(prior.activeId)?
+      prior.activeId:next.activeId;
     var conflict=conflicts.find(function(item){return item.id===active;});
     // Even a tab that has not edited since its last backup can have an open
     // editor on a now-deleted/changed project. Do not silently switch its
