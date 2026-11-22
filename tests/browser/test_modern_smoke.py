@@ -147,6 +147,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Match the visible text and wait for the asynchronous library render.
         expect(self.page.locator('#ModernAnimationLibrary').get_by_text('New project', exact=True)).to_be_visible(timeout=15000)
 
+    def open_image_library(self):
+        self.page.locator('#ModernImageLibraryTab').click()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        return panel
+
     def assert_shipped_demo_catalog(self):
         result = self.page.evaluate("""() => {
             const demos = window.CurvatureModernDemoCatalog.load();
@@ -875,9 +883,8 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_calibration_project_photo_selection_retains_verified_library_original(self):
         import base64
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
         panel.locator('input[accept^="image/png"]').set_input_files({
@@ -3228,12 +3235,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Loaded photos collapse the Reference Tools disclosure on purpose.
         workspace.locator('#ModernCalibrationReferenceTools summary').click()
         workspace.locator('#ModernCalibrationOpenImageLibrary').click()
-        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        expect(panel).to_have_attribute('open','')
         expect(panel.get_by_role('button',name='Return to Calibration')).to_be_visible()
         expect(panel.get_by_role('status')).to_contain_text('ready')
-        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'animation')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
         panel.get_by_role('button',name='Return to Calibration').click()
         expect(workspace).to_be_visible()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'calibration')
@@ -3244,11 +3250,34 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after,before)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_library_is_top_level_workspace_with_persisted_navigation(self):
+        self.open_modern()
+        self.assertEqual(self.page.locator('#ModernImageLibraryTab').count(),1)
+        self.assertEqual(self.page.locator('#ModernReferenceImageLibrary').count(),1)
+        self.assertEqual(self.page.locator('#ModernAnimationLibraryView #ModernReferenceImageLibrary').count(),0)
+        panel=self.open_image_library()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_hidden()
+        expect(self.page.locator('#ModernWorkspace')).to_be_hidden()
+        expect(panel.get_by_role('button',name='Return to Calibration')).to_be_hidden()
+        expect(panel.get_by_role('button',name='Return to Storyboard')).to_be_hidden()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage).workspace.mode"""),'images')
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        expect(panel.get_by_role('status')).to_contain_text('ready')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.page.locator('#ModernSceneTab').click()
+        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
+        self.page.locator('#ModernImageLibraryTab').click()
+        expect(self.page.locator('#ModernImageLibraryWorkspace')).to_be_visible()
+        expect(panel.get_by_role('button',name='Return to Calibration')).to_be_hidden()
+        expect(panel.get_by_role('button',name='Return to Storyboard')).to_be_hidden()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_image_library_direct_url_import_reuses_verified_original(self):
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         self.page.evaluate("""() => {
             const originalFetch=window.fetch.bind(window);
@@ -3284,9 +3313,8 @@ class ModernBrowserSmoke(unittest.TestCase):
 
     def test_image_library_clipboard_button_imports_without_text_field_side_effects(self):
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         self.context.grant_permissions(['clipboard-read','clipboard-write'])
         self.page.evaluate("""async () => {
@@ -3313,9 +3341,8 @@ class ModernBrowserSmoke(unittest.TestCase):
 
     def test_image_library_keyboard_paste_scoped_to_gallery(self):
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         self.context.grant_permissions(['clipboard-read','clipboard-write'])
         self.page.evaluate("""async () => {
@@ -3325,9 +3352,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
         }""")
         # Pasting on a non-editable Gallery element imports an image.
-        summary=panel.locator('summary').first
-        summary.focus()
-        summary.press('Control+v')
+        refresh=panel.get_by_role('button',name='Refresh')
+        refresh.focus()
+        refresh.press('Control+v')
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
         rows=self.page.evaluate("""async () =>
             await CurvatureModernReferenceImageLibrary.list(indexedDB)""")
@@ -3346,9 +3373,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         import base64
         payload = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel = self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         panel.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(panel.get_by_role('status')).to_contain_text('Photograph imported')
@@ -3357,8 +3383,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         panel.get_by_text('Save details', exact=True).click()
         expect(panel.get_by_role('status')).to_contain_text('metadata saved')
         self.page.reload(wait_until='load')
-        self.open_animation()
-        panel.locator('summary').first.click()
+        self.open_image_library()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         panel.get_by_role('button',name='Inspect Causeway test (Local original)').click()
         expect(panel.get_by_label('Author', exact=True)).to_have_value('Observer')
@@ -3373,9 +3398,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         import json
         payload=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC')
         self.open_modern()
-        self.open_animation()
+        self.open_image_library()
         panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         panel.locator('input[accept^="image/png"]').set_input_files(
             {'name':'original-photo.png','mimeType':'image/png','buffer':payload})
@@ -3438,8 +3462,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernReferenceImageLibrary.get(indexedDB,id)).kind""",
             before['row']['id']),'diagram')
         self.page.reload(wait_until='load')
-        self.open_animation()
-        panel.locator('summary').first.click()
+        self.open_image_library()
         expect(panel.get_by_role('status')).to_contain_text('ready')
         panel.locator('.modern-image-library-card[data-image-id="'+before['row']['id']+'"]').click()
         expect(panel.get_by_label('Image kind')).to_have_value('diagram')
@@ -3499,12 +3522,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.open_animation()
         self.create_camera_project('CI Reference Links')
-        self.page.locator('#ModernAnimationViewLibrary').click()
-        observations = self.page.locator('#ModernReferenceImageLibrary')
-        observations.locator('summary').first.click()
-        expect(observations.get_by_role('status')).to_contain_text('ready')
+        observations = self.open_image_library()
         observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernAnimationTab').click()
         self.page.locator('#ModernAnimationViewEditor').click()
         editor = self.page.locator('#ModernAnimationStudio')
         links = editor.locator('.modern-studio-reference-links')
@@ -3603,12 +3624,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.open_animation()
         self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text('Create copy', exact=True).click()
-        self.page.locator('#ModernAnimationViewLibrary').click()
-        observations = self.page.locator('#ModernReferenceImageLibrary')
-        observations.locator('summary').first.click()
-        expect(observations.get_by_role('status')).to_contain_text('ready')
+        observations = self.open_image_library()
         observations.locator('input[accept^="image/png"]').set_input_files({'name': 'observation.png', 'mimeType': 'image/png', 'buffer': payload})
         expect(observations.get_by_role('status')).to_contain_text('Photograph imported')
+        self.page.locator('#ModernAnimationTab').click()
         self.page.locator('#ModernAnimationViewEditor').click()
         editor = self.page.locator('#ModernAnimationStudio')
         expect(editor.locator('.modern-studio-frame-panel')).to_be_visible()
@@ -7203,9 +7222,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             window.CurvatureModernDemoCatalog={...catalog,
                 load:()=>[...load(),shipped]};
         }""")
-        panel=self.page.locator('#ModernReferenceImageLibrary')
-        panel.locator('summary').first.click()
-        expect(panel.get_by_role('status')).to_contain_text('ready')
+        panel=self.open_image_library()
         local_before=self.page.evaluate("""async () =>
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).length""")
         self.assertEqual(local_before,1)
