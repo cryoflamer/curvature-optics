@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - name: Install Playwright for test discovery
+        run: python -m pip install playwright==1.57.0
       - name: Validate exactly one selected browser case
         run: |
           python - <<'PY'
@@ -50,10 +52,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-1.57.0-ubuntu-24.04
-      - name: Install Playwright and browser dependencies
-        run: |
-          python -m pip install playwright==1.57.0
-          python -m playwright install --with-deps chromium
+      - name: Install Chromium and browser dependencies
+        run: python -m playwright install --with-deps chromium
       - name: Run only the selected Chromium test
         run: python tools/run-browser-smoke.py --match "$TEST_NAME"
       - name: Upload browser diagnostics on failure
