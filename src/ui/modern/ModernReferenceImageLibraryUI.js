@@ -298,7 +298,6 @@
     });
     var deletionStatus=el('p','Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.',editor);
     deletionStatus.className='modern-image-usage-warning';
-    deletionStatus.setAttribute('role','status');
     deletionStatus.setAttribute('aria-live','polite');
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
     function setBusy(value){busy=value;file.disabled=value;refresh.disabled=value;chooser.disabled=value;

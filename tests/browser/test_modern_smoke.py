@@ -4224,6 +4224,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         gallery.locator('input[accept^="image/png"]').set_input_files({
             'name':'lifecycle-photo.png','mimeType':'image/png','buffer':image})
         expect(gallery.get_by_role('status')).to_contain_text('Photograph imported')
+        self.assertEqual(gallery.get_by_role('status').count(),1,
+            'Deletion safety explanation must not duplicate the existing Library status role')
         gallery.get_by_role('button',name='Inspect lifecycle-photo.png (Local original)').click()
         reviewer=gallery.get_by_role('button',name='Check deletion safety')
         deletion=gallery.locator('.modern-reference-editor .modern-image-usage-warning').first
