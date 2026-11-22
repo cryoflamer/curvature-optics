@@ -603,9 +603,11 @@ candidate through the separate Studio history below. No temporary history
 is saved to Library, History or the page's normal experiment session.
 Its tab-scoped F5 checkpoint is refreshed synchronously on validated
 edits, Undo/Redo and pagehide, cleared on Apply/Cancel and never written to
-Studio or History. Cross-tab ownership is checked against the existing
-tab-session identity, while the existing IndexedDB transaction still guards
-Apply after recovery.
+Studio or History. Cross-tab ownership is checked against both the existing
+tab-session identity and the same browsing context's persistent window identity,
+because `window.open` can clone sessionStorage into a new tab. A copied
+checkpoint must not auto-open there. The existing IndexedDB transaction still
+guards Apply after recovery.
 
 **Apply.** `Apply & Return` checks the session's project/keyframe identity
 and generation, the persisted Library revision (if linked), and the Studio

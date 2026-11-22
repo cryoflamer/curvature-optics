@@ -4317,6 +4317,79 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(self.page.evaluate("""() =>
             sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
 
+    def test_animation_keyframe_f5_physical_compare_b_and_cancel_cleanup(self):
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        self.open_animation()
+        self.create_physical_keyframe_project('B','Earth curvature','CI F5 Physical B')
+        before=self.page.evaluate("""() => ({
+            A: JSON.stringify(CurvatureModernApp.getCompareConfig().A),
+            B: JSON.stringify(CurvatureModernApp.getCompareConfig().B)
+        })""")
+        slider=self.page.locator('#ModernModelCurvature')
+        slider.evaluate("""el => {
+            el.value='235';
+            el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));
+            el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
+        }""")
+        self.page.wait_for_function("""value =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)!==value""",
+            arg=before['B'])
+        edited=self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)""")
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().A)"""),before['A'])
+        self.page.reload(wait_until='load')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible(timeout=30000)
+        expect(banner).to_contain_text('Recovered unsaved keyframe edits')
+        self.assertEqual(self.page.evaluate("""() =>
+            JSON.stringify(CurvatureModernApp.getCompareConfig().B)"""),edited)
+        self.page.locator('#ModernModelTabA').click()
+        expect(slider).to_be_disabled()
+        self.page.locator('#ModernModelTabB').click()
+        expect(slider).to_be_enabled()
+        banner.get_by_role('button',name='Cancel & Return').click()
+        self.assertIsNone(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"""))
+        self.page.reload(wait_until='load')
+        expect(self.page.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+
+    def test_animation_keyframe_f5_checkpoint_is_not_inherited_by_popup(self):
+        self.open_modern()
+        self.open_animation()
+        self.page.locator('#ModernAnimationLibrary [data-demo-id="soundly"]').get_by_text(
+            'Create copy', exact=True).click()
+        studio=self.page.locator('#ModernAnimationStudio')
+        expect(studio.locator('.modern-studio-filmstrip-item')).to_have_count(9)
+        studio.locator('.modern-studio-filmstrip-item').nth(3).get_by_role(
+            'button',name='Edit 04').click()
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        expect(banner).to_be_visible()
+        token=self.page.evaluate("""() => ({
+            session: JSON.parse(sessionStorage.getItem(
+                'curvature-modern-keyframe-edit-recovery-v1')).tabId,
+            window: window.name
+        })""")
+        with self.page.expect_popup() as info:
+            self.page.evaluate("window.open(location.href,'_blank')")
+        popup=info.value
+        try:
+            popup.wait_for_load_state('load')
+            popup.wait_for_function("""() =>
+                document.getElementById('ModernSceneTab').disabled===false""")
+            self.assertNotEqual(popup.evaluate('window.name'),token['window'])
+            expect(popup.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            self.assertNotEqual(token['session'],'',
+                'original tab session marker must be stable and nonempty')
+            # A cloned recovery slot must not be consumed in the child tab.
+            popup.wait_for_timeout(1200)
+            expect(popup.locator('#ModernKeyframeEditBanner')).to_have_count(0)
+            expect(banner).to_be_visible()
+        finally:
+            popup.close()
+        banner.get_by_role('button',name='Cancel & Return').click()
+
     def test_animation_keyframe_f5_recovery_does_not_overwrite_other_tab(self):
         self.open_modern()
         self.open_animation()

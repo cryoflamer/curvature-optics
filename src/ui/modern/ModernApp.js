@@ -649,6 +649,23 @@
     studioDraftAutosave.workspaceSessionId((function(){
       try{return root.sessionStorage;}catch(error){return null;}
     }()),root.crypto,root):null;
+  // sessionStorage can be copied when window.open creates a new tab.
+  // window.name belongs to the browsing context, survives F5 and is not
+  // inherited by a fresh _blank popup. Never restore an opener's edit there.
+  var keyframeRecoveryWindowId=(function(){
+    try{
+      var previous=root.name||'';
+      if(/^curvature_optics_keyframe_[A-Za-z0-9_-]{8,110}$/.test(previous))
+        return previous;
+      if(previous)return null; // Do not overwrite a caller-assigned target name.
+      var token=root.crypto&&typeof root.crypto.randomUUID==='function'?
+        root.crypto.randomUUID().replace(/-/g,''):
+        Math.random().toString(36).slice(2)+Date.now().toString(36);
+      var id='curvature_optics_keyframe_'+token;
+      root.name=id;
+      return root.name===id?id:null;
+    }catch(error){return null;}
+  }());
   var studioIndexedBaseline=null;
   try{
     var savedKeyframeRecovery=root.sessionStorage&&
@@ -4104,9 +4121,11 @@
     if(!keyframeEditSession||keyframeEditEntering||keyframeEditRestoring)return;
     try{
       var storage=root.sessionStorage;
-      if(!storage)throw Error('sessionStorage unavailable');
+      if(!storage||!keyframeRecoveryWindowId)
+        throw Error('tab-local recovery storage unavailable');
       var library=studioLibraryActive||studioLibraryPending;
       var saved={version:1,tabId:studioWorkspaceSessionId,
+        windowId:keyframeRecoveryWindowId,
         draftAtEntry:keyframeEditDraftAtEntry,
         libraryId:library?library.id:null,
         libraryRevision:library?(library.updatedAt||library.revision):null,
@@ -4135,6 +4154,7 @@
     }
     try{
       if(!saved||saved.version!==1||saved.tabId!==studioWorkspaceSessionId||
+         !keyframeRecoveryWindowId||saved.windowId!==keyframeRecoveryWindowId||
          !saved.session||saved.session.projectId!==studioWorkspaceId||
          !studioDraft||!studioDraft.contract||
          saved.draftAtEntry!==JSON.stringify(studioDraft)||
