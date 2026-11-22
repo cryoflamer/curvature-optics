@@ -3930,7 +3930,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
         self.page.wait_for_function('CurvatureModernApp.getStudioPlayback()?.positionMs > 0')
         position = self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
-        self.assertGreater(position, 0)
+        expected = self.page.evaluate('''() => {
+            const checkpoint=CurvatureModernApp.getAnimationStudioDraft();
+            const frame=checkpoint.draft.frames[3];
+            return CurvatureModernAnimationStudio.keyframeArrival(
+                checkpoint.draft,CurvatureModernApp.getAnimationStudioProject(),frame.key);
+        }''')
+        self.assertEqual(position, expected, 'Preview must seek to the exact fourth-keyframe arrival')
         self.page.locator('#ModernAnimationViewEditor').click()
         expect(studio.locator('.modern-studio-keyframe').nth(3)).to_have_attribute('aria-pressed', 'true')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'), position)
