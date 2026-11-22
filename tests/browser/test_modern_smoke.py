@@ -4264,6 +4264,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                     c.workspaces.some(w => w.id!==id && w.id.startsWith('draft_') &&
                     w.checkpoint.draft.name==='Stage 5 protected change B');
             }""", arg=workspace_id, timeout=30000)
+            # Give any previously queued 450 ms autosave an opportunity to
+            # finish. The durable state must remain stable after A/B fork.
+            other.wait_for_timeout(700)
             names = other.evaluate("""async () => {
                 const c=await CurvatureModernAnimationDraftAutosave.readCollection(indexedDB);
                 return c.workspaces.map(w => [w.id,w.checkpoint.draft.name,w.checkpoint.savedAt]);
