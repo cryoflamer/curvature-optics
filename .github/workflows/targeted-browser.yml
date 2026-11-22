@@ -1,6 +1,10 @@
 name: Curvature targeted Chromium
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'tests/browser/test_modern_smoke.py'
   workflow_dispatch:
     inputs:
       test_name:
@@ -14,6 +18,7 @@ permissions:
 
 jobs:
   targeted-browser:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     name: Targeted Chromium smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -61,6 +66,63 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: targeted-chromium-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: browser-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  new-browser-tests:
+    if: ${{ github.event_name == 'push' }}
+    name: Newly added Chromium smoke tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - name: Discover newly added test methods
+        id: discover
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          diff = subprocess.check_output(
+              ['git', 'diff', '--unified=0', 'HEAD^', 'HEAD', '--',
+               'tests/browser/test_modern_smoke.py'], text=True)
+          names = sorted(set(re.findall(
+              r'^\+    def (test_[A-Za-z0-9_]+)\(self\):', diff, re.MULTILINE)))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('names=' + ' '.join(names) + '\n')
+          print('New browser tests:', names)
+          PY
+      - uses: actions/setup-python@v6
+        if: ${{ steps.discover.outputs.names != '' }}
+        with:
+          python-version: '3.13'
+      - name: Cache Playwright Chromium downloads
+        if: ${{ steps.discover.outputs.names != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.57.0-ubuntu-24.04
+      - name: Install Playwright and Chromium
+        if: ${{ steps.discover.outputs.names != '' }}
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Run newly added Chromium tests
+        if: ${{ steps.discover.outputs.names != '' }}
+        env:
+          TEST_NAMES: ${{ steps.discover.outputs.names }}
+        run: |
+          for name in $TEST_NAMES; do
+            python tools/run-browser-smoke.py --match "$name"
+          done
+      - name: Upload browser diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: auto-chromium-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: browser-artifacts/
           if-no-files-found: ignore
           retention-days: 7
