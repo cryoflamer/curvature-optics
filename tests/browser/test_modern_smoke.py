@@ -6697,7 +6697,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertGreater(strip.evaluate('(el) => el.scrollWidth'),
                            strip.evaluate('(el) => el.clientWidth'),
                            'the filmstrip must overflow in this scroll regression')
-        cards.nth(4).click()
+        # Thumbnail click navigates to Preview. Select via Properties to
+        # keep the filmstrip mounted and scrollable inside Editor.
+        studio.locator('.modern-studio-filmstrip-item').nth(4).get_by_role(
+            'button', name='Properties for').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        expect(cards.nth(4)).to_have_attribute('aria-pressed', 'true')
         original = self.page.evaluate(
             'CurvatureModernApp.getAnimationStudioDraft().draft.frames.map(f => f.key)')
         strip.evaluate('(el) => { el.scrollLeft = 260; }')
