@@ -888,6 +888,101 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+
+    def test_calibration_project_indexeddb_abort_retains_unsaved_retry(self):
+        # Exercise a genuine IndexedDB write transaction with an injected
+        # QuotaExceededError at the compact summary put. The project record
+        # must roll back atomically, and the editor must retain a retryable
+        # snapshot without silently acknowledging a partial commit.
+        workspace=self.open_physical_calibration()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.once('dialog',lambda dialog:dialog.accept('Quota recovery'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        status="""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus()"""
+        project_id=self.page.evaluate(status)['projectId']
+        self.assertIsNotNone(project_id)
+        before=self.page.evaluate("""async id => {
+            const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+            return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
+        }""",project_id)
+        self.assertEqual(before['stage'],'correspondences')
+
+        # Patch only this isolated Chromium context, restore in finally.
+        self.page.evaluate("""() => {
+            const original=IDBObjectStore.prototype.put;
+            window.__calibrationQuotaPut=original;
+            window.__calibrationQuotaHits=0;
+            IDBObjectStore.prototype.put=function(...args){
+                if(this.name==='project-summaries' && !window.__calibrationQuotaHits++){
+                    throw new DOMException('Injected quota exhaustion','QuotaExceededError');
+                }
+                return original.apply(this,args);
+            };
+        }""")
+        try:
+            workspace.locator('[data-calibration-stage="calibration"]').click()
+            self.page.wait_for_function("""() => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.unsaved && s.pending===0 && !!s.error;
+            }""",timeout=30000)
+            failed=self.page.evaluate(status)
+            self.assertEqual(failed['projectId'],project_id)
+            self.assertIn('Injected quota exhaustion',failed['error'])
+            self.assertEqual(failed['revision'],before['revision'])
+            self.assertEqual(workspace.get_attribute('data-calibration-stage'),'calibration')
+            durable=self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
+            }""",project_id)
+            self.assertEqual(durable,before,'failed transaction must not partially commit')
+
+            workspace.locator('#ModernCalibrationProjectsToggle').click()
+            retry=panel.locator('#ModernCalibrationProjectsSave')
+            expect(retry).to_be_visible(timeout=30000)
+            expect(retry).to_be_enabled()
+            expect(retry).to_have_text('Retry save')
+            expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+                'Save failed:',timeout=30000)
+
+            # Restore the actual browser store and retry the captured state.
+            self.page.evaluate("""() => {
+                IDBObjectStore.prototype.put=window.__calibrationQuotaPut;
+            }""")
+            retry.click()
+            self.page.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && !s.unsaved && s.pending===0 &&
+                    !s.error && s.revision>1;
+            }""",arg=project_id,timeout=30000)
+            expect(panel.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+                'saved in this browser',timeout=30000)
+            committed=self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
+            }""",project_id)
+            self.assertEqual(committed['revision'],before['revision']+1)
+            self.assertEqual(committed['stage'],'calibration')
+            self.page.reload(wait_until='load',timeout=30000)
+            after=self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
+            }""",project_id)
+            self.assertEqual(after,committed)
+            self.assertEqual(self.page.evaluate("""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document).projectBinding()"""),None,
+                'reload must not silently activate a project')
+        finally:
+            self.page.evaluate("""() => {
+                if(window.__calibrationQuotaPut)
+                    IDBObjectStore.prototype.put=window.__calibrationQuotaPut;
+                delete window.__calibrationQuotaPut;
+            }""")
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
     def test_calibration_project_apply_links_reused_result_in_two_independent_projects(self):
         import json
         workspace=self.open_physical_calibration()
