@@ -3600,7 +3600,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible()
         # The saved project can already have the matching keyframe before
         # navigation; wait for the asynchronous guarded view switch itself.
-        self.page.wait_for_timeout(600)
+        # Navigation is asynchronous and may persist a working session before switching.
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getAnimationStudioView()==='editor' ||
+            document.querySelector('.modern-image-usage-status')?.textContent?.startsWith('Cannot open use:')""",
+            timeout=10000)
         snapshot=self.page.evaluate("""() => ({
             workspace:CurvatureModernApp.getWorkspaceMode(),
             view:CurvatureModernApp.getAnimationStudioView(),
