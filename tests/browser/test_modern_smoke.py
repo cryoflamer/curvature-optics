@@ -615,6 +615,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(rows).to_have_count(1,timeout=30000)
         expect(workspace.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
             'Existing draft adopted',timeout=30000)
+        # Adoption creates an independent saved project, without opening it.
+        # Its explicit success message must survive the final list rerender.
+        self.assertIsNone(self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus()?.projectId ?? null"""))
         row=rows.first
         self.assertIn('correspondences',row.inner_text().lower())
         self.assertIn('No reference photo',row.inner_text())
