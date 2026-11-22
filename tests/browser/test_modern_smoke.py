@@ -780,6 +780,114 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result,{'count':1,'matched':True,'shaLength':64,'source':'local'})
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+
+    def test_calibration_projects_two_tabs_conflict_fork_and_stale_delete(self):
+        # Two real Chromium tabs share one origin/IndexedDB, but each has a
+        # separately bound editor generation and an independent CAS revision.
+        # The stale save is deliberately ordered after the first durable ack:
+        # correctness must not depend on which transaction wins a timing race.
+        workspace=self.open_physical_calibration()
+        toggle=workspace.locator('#ModernCalibrationProjectsToggle')
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        toggle.click()
+        self.page.once('dialog',lambda dialog:dialog.accept('Shared calibration'))
+        panel.locator('#ModernCalibrationProjectsNew').click()
+        expect(panel).to_be_hidden(timeout=30000)
+        parent=self.page.evaluate("""() =>
+            CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().projectId""")
+        self.assertIsNotNone(parent)
+        initial=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",parent)
+
+        other=self.context.new_page()
+        other_errors=[]
+        other.on('pageerror',lambda exc:other_errors.append(str(exc)))
+        try:
+            response=other.goto(self.base_url,wait_until='load',timeout=30000)
+            self.assertEqual(response.status,200)
+            other_workspace=other.locator('#ModernPhotoCalibration')
+            if not other_workspace.is_visible():
+                expect(other.locator('#ModernPhotoCalibrationOpen')).to_be_enabled(timeout=30000)
+                other.locator('#ModernPhotoCalibrationOpen').click()
+            expect(other_workspace).to_be_visible(timeout=30000)
+            other_workspace.locator('#ModernCalibrationProjectsToggle').click()
+            other_panel=other_workspace.locator('#ModernCalibrationProjectsPanel')
+            target=other_panel.locator('[data-calibration-project-id="'+parent+'"]')
+            expect(target).to_be_visible(timeout=30000)
+            target.locator('[data-calibration-project-open]').click()
+            expect(other_panel).to_be_hidden(timeout=30000)
+
+            status="""() =>
+                CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus()"""
+            self.assertEqual(other.evaluate(status)['projectId'],parent)
+            self.assertEqual(other.evaluate(status)['revision'],initial)
+            self.assertEqual(self.page.evaluate(status)['projectId'],parent)
+
+            # Tab A writes a complete calibration-stage checkpoint.
+            workspace.locator('[data-calibration-stage="calibration"]').click()
+            self.page.wait_for_function("""({id,revision}) => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId===id && s.revision>revision && s.pending===0 && !s.unsaved;
+            }""",arg={'id':parent,'revision':initial},timeout=30000)
+            committed=self.page.evaluate("""async id => {
+                const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
+                return {revision:p.revision,stage:p.checkpoint.payload.draft.stage};
+            }""",parent)
+            self.assertGreater(committed['revision'],initial)
+            self.assertEqual(committed['stage'],'calibration')
+            self.assertEqual(other.evaluate(status)['revision'],initial,
+                             'the other tab must still own its stale expected revision')
+
+            # Tab B saves a different complete state against that stale
+            # revision. It must be rebound to a new fork, not overwrite A.
+            other_workspace.locator('[data-calibration-stage="result"]').click()
+            other.wait_for_function("""id => {
+                const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return s?.projectId && s.projectId!==id && s.pending===0 && !s.unsaved;
+            }""",arg=parent,timeout=30000)
+            fork=other.evaluate(status)['projectId']
+            self.assertNotEqual(fork,parent)
+            self.assertEqual(self.page.evaluate(status)['projectId'],parent)
+            saved=self.page.evaluate("""async ({parent,fork}) => {
+                const store=CurvatureModernCalibrationProjectStore;
+                const a=await store.get(indexedDB,parent),b=await store.get(indexedDB,fork);
+                const summaries=await store.list(indexedDB);
+                return {a:{revision:a.revision,stage:a.checkpoint.payload.draft.stage},
+                    b:{forkOf:b.forkOf,stage:b.checkpoint.payload.draft.stage,
+                       revision:b.revision,photo:b.photo},
+                    ids:summaries.filter(s=>s.id===parent||s.id===fork).map(s=>s.id)};
+            }""",{'parent':parent,'fork':fork})
+            self.assertEqual(saved['a'],committed)
+            self.assertEqual(saved['b']['forkOf'],parent)
+            self.assertEqual(saved['b']['stage'],'result')
+            self.assertIsNone(saved['b']['photo'])
+            self.assertGreaterEqual(saved['b']['revision'],1)
+            self.assertCountEqual(saved['ids'],[parent,fork])
+
+            # A stale tab cannot delete the winner using an old list revision.
+            rejected=other.evaluate("""async ({id,revision}) => {
+                try {
+                    await CurvatureModernCalibrationProjectStore.remove(indexedDB,id,revision);
+                    return 'unexpectedly deleted';
+                } catch(error) { return String(error.message); }
+            }""",{'id':parent,'revision':initial})
+            self.assertIn('changed in another tab; delete rejected',rejected)
+
+            # Both durable candidates survive a genuine second-tab reload.
+            other.reload(wait_until='load',timeout=30000)
+            restored=other.evaluate("""async ({parent,fork}) => {
+                const store=CurvatureModernCalibrationProjectStore;
+                const a=await store.get(indexedDB,parent),b=await store.get(indexedDB,fork);
+                return {a:a?.checkpoint.payload.draft.stage,
+                    b:b?.checkpoint.payload.draft.stage,forkOf:b?.forkOf};
+            }""",{'parent':parent,'fork':fork})
+            self.assertEqual(restored,{'a':'calibration','b':'result','forkOf':parent})
+            self.assertFalse(other_errors,other_errors)
+            self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                             self.console)
+        finally:
+            other.close()
+
     def test_calibration_project_apply_links_reused_result_in_two_independent_projects(self):
         import json
         workspace=self.open_physical_calibration()
