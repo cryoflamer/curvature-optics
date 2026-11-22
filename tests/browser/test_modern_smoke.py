@@ -7820,6 +7820,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             new URL(location.href).searchParams.get('studioView')"""),'editor')
         before_count=self.page.evaluate("""async () =>
             (await CurvatureModernCalibrationProjectStore.list(indexedDB)).length""")
+        self.assertEqual(self.page.evaluate("""() =>
+            sessionStorage.getItem('curvature-calibration-clean-reload-project-v1')"""),
+            project_id,'a clean acknowledged project must have a same-tab resume marker')
         self.page.reload(wait_until='load',timeout=30000)
         try:
             self.page.wait_for_function("""id => {
