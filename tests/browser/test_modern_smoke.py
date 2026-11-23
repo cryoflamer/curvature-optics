@@ -9015,5 +9015,66 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.close()
 
 
+
+    def test_universal_ui_manager_binds_new_explorer_panel_without_custom_storage(self):
+        """Opt-in adapter binds a new details panel, persists it, and silently restores after F5."""
+        self.open_modern()
+        for filename in ('ModernStateRegistry','ModernUiSessionStore','ModernUiSessionManager'):
+            self.page.add_script_tag(url='/src/storage/'+filename+'.js')
+        initial=self.page.evaluate("""async () => {
+            const registry=CurvatureModernStateRegistry.create();
+            const store=CurvatureModernUiSessionStore.create(window);
+            const manager=CurvatureModernUiSessionManager.create({
+                registry,store,workspace:'object-explorer'});
+            manager.register({key:'object-explorer.details.expanded',
+                scope:'per-tab-and-workspace',version:1,defaultValue:false,
+                validate:v=>typeof v==='boolean'});
+            await manager.restore();
+            const element=document.createElement('details');
+            element.id='TestNewExplorerDetails';
+            element.innerHTML='<summary>New Object Explorer panel</summary><p>test</p>';
+            document.body.appendChild(element);
+            manager.bindDetails('object-explorer.details.expanded',element);
+            element.open=true;
+            element.dispatchEvent(new Event('toggle'));
+            await manager.flush();
+            const context={tabId:store.tabId(),workspace:'object-explorer'};
+            const record=await store.read('per-tab-and-workspace',context);
+            return {open:element.open,revision:record.revision,
+                selected:record.envelope.values['object-explorer.details.expanded'].value};
+        }""")
+        self.assertTrue(initial['open'])
+        self.assertTrue(initial['selected'])
+        self.assertEqual(initial['revision'],1)
+        self.page.reload(wait_until='load')
+        for filename in ('ModernStateRegistry','ModernUiSessionStore','ModernUiSessionManager'):
+            self.page.add_script_tag(url='/src/storage/'+filename+'.js')
+        final=self.page.evaluate("""async () => {
+            const registry=CurvatureModernStateRegistry.create();
+            const store=CurvatureModernUiSessionStore.create(window);
+            const manager=CurvatureModernUiSessionManager.create({
+                registry,store,workspace:'object-explorer'});
+            manager.register({key:'object-explorer.details.expanded',
+                scope:'per-tab-and-workspace',version:1,defaultValue:false,
+                validate:v=>typeof v==='boolean'});
+            const report=await manager.restore();
+            const element=document.createElement('details');
+            element.id='TestRestoredExplorerDetails';
+            element.innerHTML='<summary>New Object Explorer panel</summary>';
+            document.body.appendChild(element);
+            manager.bindDetails('object-explorer.details.expanded',element);
+            await new Promise(resolve=>setTimeout(resolve,60));
+            await manager.flush();
+            const stored=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'object-explorer'});
+            return {open:element.open,revision:stored.revision,
+                ready:report.ready,errors:manager.lastErrors().length};
+        }""")
+        self.assertTrue(final['open'])
+        self.assertEqual(final['revision'],1,'DOM hydration caused an extra write')
+        self.assertTrue(final['ready'])
+        self.assertEqual(final['errors'],0)
+
+
 if __name__ == '__main__':
     unittest.main()

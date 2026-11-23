@@ -521,6 +521,7 @@
       "src/jsgx3d.js",
       "src/storage/ModernPortableBackup.js",
       "src/storage/ModernStateRegistry.js",
+      "src/storage/ModernUiSessionManager.js",
       "src/storage/ModernUiSessionStore.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
@@ -528,7 +529,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 239,
+  "sourceJsCount": 240,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2924,7 +2925,16 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernStateRegistry.test.js",
+        "tests/ModernUiSessionManager.test.js",
         "tests/ModernUiSessionStore.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/storage/ModernUiSessionManager.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernUiSessionManager.test.js"
       ],
       "commonJsToolCallers": []
     },

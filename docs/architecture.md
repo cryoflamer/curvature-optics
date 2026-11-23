@@ -177,13 +177,23 @@ ui.register({
 });
 ```
 
-A page-independent controller will connect this registry to the adapter and
-bind `details`, choices and other controls; module owners will not perform
-individual IndexedDB writes. The first targeted Chromium test exercises the
-new Object Explorer key, explicit save/restore on F5, two independent tabs,
-global preference storage and silent restoration. This **does not** claim
-the UI is wired in production, that existing Scene/Compare preferences have
-migrated, or that #47's Object Explorer implementation exists.
+The opt-in `src/storage/ModernUiSessionManager.js` now links the registry and
+storage adapter. A new page registers state keys once, calls `restore()`,
+and uses `bindDetails(key, element)` or `bindChoices(key, items)` for ordinary
+disclosures and selectable views. User changes automatically queue
+revision-guarded IndexedDB writes; `flush()` awaits acknowledged completion,
+`lastErrors()` exposes failures, and a stale external revision is rejected.
+Bindings are attached only **after** state hydration; restoration and
+unchanged values never write. Missing optional DOM nodes are allowed.
+No per-page `localStorage`, `pagehide` handler or special serializer is needed.
+
+The targeted Node/Chromium tests exercise an entirely new Object Explorer
+tree key and `details` binding, explicit save and F5 restoration, separate
+tab/workspace state, shared preferences, collision detection and silent DOM
+hydration. These are **opt-in tests**, not a production Modern migration:
+existing Scene/Compare preference and section controllers are not replaced,
+Object Explorer #47 itself has not been implemented, and duplicated-tab
+identity leases remain future integration work.
 
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI

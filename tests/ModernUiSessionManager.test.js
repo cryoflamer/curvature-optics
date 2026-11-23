@@ -1,0 +1,142 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const registry=require('../src/storage/ModernStateRegistry.js');
+const managerApi=require('../src/storage/ModernUiSessionManager.js');
+
+function store(tab,records=new Map()){
+  function id(scope,context){
+    return scope==='global'?'global':
+      scope==='per-tab'?'tab:'+context.tabId:
+        'workspace:'+context.tabId+':'+context.workspace;
+  }
+  return {
+    tabId:()=>tab,
+    records,
+    async read(scope,context){
+      return records.get(id(scope,context))||{revision:0,envelope:null};
+    },
+    async write(scope,context,envelope,revision){
+      const name=id(scope,context),before=records.get(name);
+      const current=before?before.revision:0;
+      if(current!==revision)throw Error('UI Session Store: revision conflict');
+      const result={revision:current+1,envelope:structuredClone(envelope)};
+      records.set(name,result);
+      return {revision:result.revision};
+    }
+  };
+}
+function specs(manager){
+  manager.register({
+    key:'object-explorer.tree.open',scope:'per-tab-and-workspace',version:1,
+    defaultValue:false,validate:v=>typeof v==='boolean'
+  });
+  manager.register({
+    key:'object-explorer.active-panel',scope:'per-tab-and-workspace',version:1,
+    defaultValue:'tree',validate:v=>['tree','details'].includes(v)
+  });
+  manager.register({
+    key:'application.theme',scope:'global',version:1,defaultValue:'light',
+    validate:v=>['light','dark'].includes(v)
+  });
+}
+function create(storeInstance,workspace='object-explorer'){
+  const manager=managerApi.create({registry:registry.create(),store:storeInstance,workspace});
+  specs(manager);
+  return manager;
+}
+function element(initial=false){
+  const callbacks=new Map(),attributes=new Map();
+  return {
+    open:initial,
+    addEventListener(name,handler){
+      if(!callbacks.has(name))callbacks.set(name,new Set());
+      callbacks.get(name).add(handler);
+    },
+    removeEventListener(name,handler){callbacks.get(name)?.delete(handler);},
+    setAttribute(name,value){attributes.set(name,value);},
+    getAttribute(name){return attributes.get(name);},
+    emit(name){for(const cb of callbacks.get(name)||[])cb();},
+    listeners(name){return callbacks.get(name)?.size||0}
+  };
+}
+test('new Object Explorer details panel persists without custom storage or lifecycle logic',async()=>{
+  const data=new Map(),first=create(store('one-tab',data));
+  assert.equal((await first.restore()).ready,true);
+  const details=element();
+  const off=first.bindDetails('object-explorer.tree.open',details);
+  assert.equal(details.open,false);
+  details.open=true;details.emit('toggle');
+  await first.flush();
+  assert.equal(data.get('workspace:one-tab:object-explorer').revision,1);
+  off();assert.equal(details.listeners('toggle'),0);
+  const resumed=create(store('one-tab',data));
+  let restoresWritten=0;
+  const original=data.get('workspace:one-tab:object-explorer').revision;
+  await resumed.restore();
+  const restored=element(false);
+  resumed.bindDetails('object-explorer.tree.open',restored);
+  assert.equal(restored.open,true);
+  restored.emit('toggle');await resumed.flush();
+  assert.equal(data.get('workspace:one-tab:object-explorer').revision,original);
+  assert.equal(restoresWritten,0);
+});
+test('one registration and generic choices binding support a new view without manual saves',async()=>{
+  const data=new Map(),manager=create(store('one-tab',data));
+  await manager.restore();
+  const tree=element(),details=element();
+  manager.bindChoices('object-explorer.active-panel',[
+    {element:tree,value:'tree'},{element:details,value:'details'}
+  ]);
+  assert.equal(tree.getAttribute('aria-pressed'),'true');
+  assert.equal(details.getAttribute('aria-pressed'),'false');
+  details.emit('click');await manager.flush();
+  assert.equal(manager.get('object-explorer.active-panel'),'details');
+  assert.equal(tree.getAttribute('aria-pressed'),'false');
+  assert.equal(details.getAttribute('aria-pressed'),'true');
+  assert.equal(data.get('workspace:one-tab:object-explorer').revision,1);
+});
+test('tab/workspace scopes remain independent while globals are shared',async()=>{
+  const data=new Map();
+  const tab1=create(store('tab1',data)),tab2=create(store('tab2',data));
+  await tab1.restore();await tab2.restore();
+  await tab1.set('object-explorer.tree.open',true);
+  assert.equal(tab2.get('object-explorer.tree.open'),false);
+  await tab1.set('application.theme','dark');
+  const refreshed=create(store('tab2',data));
+  await refreshed.restore();
+  assert.equal(refreshed.get('application.theme'),'dark');
+  assert.equal(refreshed.get('object-explorer.tree.open'),false);
+  const otherSpace=create(store('tab1',data),'scene');
+  await otherSpace.restore();
+  assert.equal(otherSpace.get('object-explorer.tree.open'),false);
+});
+test('stale revision conflicts are reported and never overwrite another record',async()=>{
+  const data=new Map(),instance=create(store('tab1',data));
+  await instance.restore();
+  data.set('workspace:tab1:object-explorer',
+    {revision:1,envelope:registry.create().snapshot('global')});
+  await assert.rejects(instance.set('object-explorer.tree.open',true),
+    /revision conflict/);
+  assert.equal(data.get('workspace:tab1:object-explorer').revision,1);
+  assert.match(instance.lastErrors()[0].message,/revision conflict/);
+  await assert.rejects(instance.flush(),/revision conflict/);
+});
+test('missing UI nodes are ignored and invalid state never reaches the store',async()=>{
+  const data=new Map(),instance=create(store('tab1',data));
+  await instance.restore();
+  assert.equal(typeof instance.bindDetails('object-explorer.tree.open',null),'function');
+  assert.throws(()=>instance.get('missing.field'),/unregistered state/);
+  await assert.rejects(async()=>instance.set('object-explorer.active-panel','invalid'),
+    /invalid value/);
+  assert.equal(data.size,0);
+});
+test('restore must precede edits and register must precede restore',async()=>{
+  const instance=create(store('tab1'));
+  await assert.rejects(async()=>instance.set('object-explorer.tree.open',true),
+    /restore state before user changes/);
+  await instance.restore();
+  assert.throws(()=>instance.register({key:'future.new',scope:'global',
+    version:1,defaultValue:true,validate:()=>true}),/register before restore/);
+  await assert.rejects(instance.restore(),/restore can run only once/);
+});
