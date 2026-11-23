@@ -130,6 +130,67 @@ The current `ModernSessionAutosave` adapter registers `working.session` through 
 
 If Web Locks are missing, ordinary user saves still use the prior IndexedDB path (and synchronous fallback); this **cannot** be treated as evidence for a coordinated backup. If the lock manager is present but rejects a lock, the IndexedDB save must fail rather than silently bypass its coordination request; the existing application already reports a failed IDB checkpoint while preserving its synchronous recovery copy. The backup process itself still makes no migration-ready claim. Multi-tab Chromium tests now cover a real working-session write held behind an exclusive backup reader, followed by durable readback and F5. These tests do not cover unregistered Animation, Calibration, History, Library or Web Storage writers.
 
+## Extensible Modern UI-state and session primitives
+
+Issue [#31](https://github.com/cryoflamer/curvature-optics/issues/31) provides a
+**single future onboarding contract** for Scene, Compare, Animation, Calibration,
+the new [Object Explorer #47](https://github.com/cryoflamer/curvature-optics/issues/47),
+and further Modern pages. Register a new owner and its UI keys; do **not** add
+new handwritten `localStorage` keys, URL autosave behavior or per-panel unload
+handlers. This is separate from domain documents, originals and draft payloads.
+
+**Opt-in foundation (not wired into Modern yet):**
+
+- `src/storage/ModernStateRegistry.js` defines
+  `register({key,scope,version,defaultValue,validate,migrate?})`,
+  `get/set/reset/subscribe`, `snapshot(scope,context)`, and
+  `hydrate(envelope,context)`. Keys are namespaced and uniquely owned.
+  Unsupported newer/unknown/corrupt values remain as inspectable raw
+  `evidence()`; invalid data does not silently replace a valid choice.
+  Programmatic hydration is silent (no subscription events or save calls).
+- Scopes are `per-tab`, `per-tab-and-workspace`, and deliberate `global`.
+  One tab's Object Explorer tree must not overwrite another tab's layout.
+  Shared preferences have a separate owner from workspace session state.
+- `src/storage/ModernUiSessionStore.js` defines an **explicit-use** IndexedDB
+  adapter with a versioned `curvature-modern-ui-state` database: `sessions`
+  and `preferences` stores. The only new sessionStorage value is
+  `curvature-modern-ui-tab-id-v1`, an opaque tab token. Writes require
+  `expectedRevision` and report success **only on transaction completion**;
+  stale revision conflicts fail instead of clobbering another checkpoint.
+  `read()` returns the revision and envelope for registry hydration.
+  A duplicated tab that copies this token must eventually fork its
+  identity before production activation; the current adapter is not a
+  finished duplicate-tab lease system.
+
+Example of a completely new Object Explorer field (the registration alone
+contains no storage or unload code):
+
+```js
+const ui = CurvatureModernStateRegistry.create();
+ui.register({
+  key: 'object-explorer.tree.expanded',
+  scope: 'per-tab-and-workspace',
+  version: 1,
+  defaultValue: [],
+  validate: value => Array.isArray(value) &&
+    value.every(id => typeof id === 'string')
+});
+```
+
+A page-independent controller will connect this registry to the adapter and
+bind `details`, choices and other controls; module owners will not perform
+individual IndexedDB writes. The first targeted Chromium test exercises the
+new Object Explorer key, explicit save/restore on F5, two independent tabs,
+global preference storage and silent restoration. This **does not** claim
+the UI is wired in production, that existing Scene/Compare preferences have
+migrated, or that #47's Object Explorer implementation exists.
+
+**Restore ordering at later integration:** explicit share/import or URL intent
+first, document identity and acknowledged revision second, tab/workspace UI
+state third, DOM bindings last. Legacy preference keys and raw recovery
+payloads stay readable until verified migration. The existing Modern DOM
+section controller must be migrated rather than duplicated.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small

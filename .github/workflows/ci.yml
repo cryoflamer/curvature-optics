@@ -45,6 +45,8 @@ jobs:
             tests/ModernHistoryPortability.test.js \
             tests/ModernSessionAutosave.test.js \
             tests/ModernPortableBackup.test.js \
+            tests/ModernStateRegistry.test.js \
+            tests/ModernUiSessionStore.test.js \
             tests/ModernBackupWriteBarrier.test.js \
             tests/ModernAnimationProjectPersistence.test.js \
             tests/ModernAnimationDraftAutosave.test.js \

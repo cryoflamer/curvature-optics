@@ -8935,5 +8935,85 @@ class ModernBrowserSmoke(unittest.TestCase):
             source_context.close()
 
 
+
+    def test_opt_in_state_registry_object_explorer_scope_and_f5(self):
+        """A future page can register a state without bespoke storage or Modern migration."""
+        self.open_modern()
+        self.assertIsNone(self.page.evaluate("window.CurvatureModernStateRegistry || null"))
+        self.page.add_script_tag(url='/src/storage/ModernStateRegistry.js')
+        self.page.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+        prepared=self.page.evaluate("""async () => {
+            const reg=CurvatureModernStateRegistry.create();
+            const store=CurvatureModernUiSessionStore.create(window);
+            const before=await indexedDB.databases();
+            if(before.some(db=>db.name===CurvatureModernUiSessionStore.DATABASE))
+                throw Error('Opt-in session DB was created by Modern startup');
+            reg.register({key:'object-explorer.tree.expanded',
+                scope:'per-tab-and-workspace',version:1,defaultValue:[],
+                validate:v=>Array.isArray(v)&&v.every(x=>typeof x==='string')});
+            reg.register({key:'application.theme',scope:'global',version:1,
+                defaultValue:'light',validate:v=>['dark','light'].includes(v)});
+            const context={tabId:store.tabId(),workspace:'object-explorer'};
+            reg.set('object-explorer.tree.expanded',['tower-a','tower-b'],context);
+            const saved=await store.write('per-tab-and-workspace',context,
+                reg.snapshot('per-tab-and-workspace',context),0);
+            const global=await store.write('global',{},reg.snapshot('global'),0);
+            const read=await store.read('per-tab-and-workspace',context);
+            let rejected=false;
+            try{await store.write('per-tab-and-workspace',context,
+                reg.snapshot('per-tab-and-workspace',context),0);}
+            catch(error){rejected=/revision conflict/.test(error.message);}
+            return {tabId:context.tabId,revision:saved.revision,
+                globalRevision:global.revision,
+                matching:read.envelope.values['object-explorer.tree.expanded']
+                    .value.join(',')==='tower-a,tower-b',rejected};
+        }""")
+        self.assertTrue(prepared['matching'])
+        self.assertTrue(prepared['rejected'])
+        self.assertEqual(prepared['revision'],1)
+        self.page.reload(wait_until='load')
+        self.assertIsNone(self.page.evaluate("window.CurvatureModernStateRegistry || null"))
+        self.page.add_script_tag(url='/src/storage/ModernStateRegistry.js')
+        self.page.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+        recovered=self.page.evaluate("""async () => {
+            const ui=CurvatureModernStateRegistry.create();
+            ui.register({key:'object-explorer.tree.expanded',
+                scope:'per-tab-and-workspace',version:1,defaultValue:[],
+                validate:v=>Array.isArray(v)&&v.every(x=>typeof x==='string')});
+            const store=CurvatureModernUiSessionStore.create(window);
+            const context={tabId:store.tabId(),workspace:'object-explorer'};
+            const row=await store.read('per-tab-and-workspace',context);
+            let writes=0;
+            ui.subscribe('object-explorer.tree.expanded',()=>writes++);
+            const report=ui.hydrate(row.envelope,context);
+            return {tabId:context.tabId,revision:row.revision,
+                objects:ui.get('object-explorer.tree.expanded',context),
+                writes,applied:report.applied};
+        }""")
+        self.assertEqual(recovered['tabId'],prepared['tabId'])
+        self.assertEqual(recovered['revision'],1)
+        self.assertEqual(recovered['objects'],['tower-a','tower-b'])
+        self.assertEqual(recovered['writes'],0)
+        self.assertEqual(recovered['applied'],['object-explorer.tree.expanded'])
+        other=self.context.new_page()
+        try:
+            other.goto(self.base_url,wait_until='load')
+            other.add_script_tag(url='/src/storage/ModernStateRegistry.js')
+            other.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+            second=other.evaluate("""async () => {
+                const store=CurvatureModernUiSessionStore.create(window);
+                const row=await store.read('per-tab-and-workspace',
+                    {tabId:store.tabId(),workspace:'object-explorer'});
+                const shared=await store.read('global',{});
+                return {tabId:store.tabId(),revision:row.revision,
+                    globalRevision:shared.revision};
+            }""")
+            self.assertNotEqual(second['tabId'],prepared['tabId'])
+            self.assertEqual(second['revision'],0)
+            self.assertEqual(second['globalRevision'],1)
+        finally:
+            other.close()
+
+
 if __name__ == '__main__':
     unittest.main()
