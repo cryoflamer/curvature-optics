@@ -105,7 +105,9 @@ test('view changes leave background export and the active draft untouched',()=>{
     studioPlaybackControls:{halt(){halts++;}},
     studioPreviewLifecycle:{cancel(){cancels++;},checkSize(){sizes++;return true;}},
     syncStudioPlaybackControls(){},saveStudioDraft(){backups++;return true;},
-    studioViewController:{show(){}},scheduleStudioInitialPaint(){paints++;}
+    studioViewController:{show(){}},scheduleStudioInitialPaint(){paints++;},
+    workspaceViewEditGeneration:{animation:0,calibration:0},
+    workspaceUiRegistryPreview:{status:'disabled',bridge:null}
   };
   vm.runInNewContext(source.slice(start,end)+'\nthis.changeView=setStudioView;',ctx);
   assert.equal(ctx.changeView('editor',false),true);
@@ -118,4 +120,17 @@ test('view changes leave background export and the active draft untouched',()=>{
   assert.strictEqual(ctx.studioPrepared,project);
   assert.strictEqual(ctx.studioEditHistory,history);
   assert.equal(ctx.studioSelectedKey,selectedKey);
+  assert.equal(ctx.workspaceViewEditGeneration.animation,2);
+  const registryWrites=[];
+  ctx.workspaceUiRegistryPreview={status:'ready',bridge:{setView(workspace,view){
+    registryWrites.push([workspace,view]);return Promise.resolve();
+  }}};
+  assert.equal(ctx.changeView('editor',false,null,true),true);
+  assert.equal(ctx.workspaceViewEditGeneration.animation,2,
+    'silent registry hydration must not be mistaken for a user navigation');
+  assert.deepEqual(registryWrites,[], 'hydration never creates a durable view update');
+  assert.equal(ctx.changeView('preview',false,'push'),true);
+  assert.deepEqual(registryWrites,[['animation','preview']],
+    'an intentional view selection uses the existing registry, not a new store');
+  assert.equal(ctx.workspaceViewEditGeneration.animation,3);
 });

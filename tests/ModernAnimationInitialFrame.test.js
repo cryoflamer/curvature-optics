@@ -131,7 +131,10 @@ test('Preview-tab preparation, restoration, Stop, Seek and workspace entry are c
   assert.match(app,/controls.stop\(\)/);
   assert.match(playbackControls.create.toString(),/player.stop\(\)/);
   assert.match(app,/studioPlayback\.seek\(saved\.positionMs,profileNow\(\)\)/);
-  assert.match(app,/animationWorkspaceOpen=true;syncWorkspaceVisibility\(\);\s*if\(studioPlayback\)scheduleStudioInitialPaint\('opened'\)/);
+  assert.match(app,/animationWorkspaceOpen=true;syncWorkspaceVisibility\(\);[\s\S]{0,300}if\(studioPlayback\)scheduleStudioInitialPaint\('opened'\)/,
+    'Studio entry must still paint an already prepared player');
+  assert.match(app,/if\(studioView==='preview'&&!studioPlayback\)\s*setStudioView\('preview',false,null,true\);\s*if\(studioPlayback\)scheduleStudioInitialPaint\('opened'\)/,
+    'a privately restored Preview is prepared lazily before its first paint');
   assert.match(app,/controls.seek\(seek.value\)/);
   assert.match(playbackControls.create.toString(),/player.seek\(player.status\(\).durationMs\*Number\(raw\)\/1000,options.now\(\)\)/);
   assert.match(app,/render:function\(force\)/);
