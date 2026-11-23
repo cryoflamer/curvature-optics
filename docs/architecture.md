@@ -264,6 +264,22 @@ stored envelope. Targeted tests cover legacy read-first defaults, separate
 tab/workspace ownership, F5 without save side effects, explicit URL priority,
 reset, and future-schema refusal.
 
+The opt-in registry also declares `workspace.view` for Animation
+(`library`, `editor`, `preview`) and Calibration (`editor`, `projects`),
+each with independent `per-tab-and-workspace` ownership. Their existing
+`setStudioView` and `showProjectList` controllers remain authoritative:
+only an intentional selection is written to the registry, and silent
+hydration does not record a spurious user edit or create a new revision.
+A valid explicit `studioView` URL route outranks the private Animation
+selection; stale asynchronous registry restoration is abandoned if a view,
+workspace, tab or panel was edited meanwhile. When Calibration is active,
+only the visible Projects disclosure is restored, not the selected project,
+project list identity, editor draft or any underlying photograph. A Preview
+selected behind an inactive Animation workspace is initialized lazily on
+entry. Normal Modern and the older recovery stores continue working
+unchanged. These are **preview-only UI choices**, not completion of the
+unified document/session migration.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery

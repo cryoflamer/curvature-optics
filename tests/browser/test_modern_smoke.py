@@ -9426,5 +9426,124 @@ class ModernBrowserSmoke(unittest.TestCase):
             return row.envelope?.values?.['workspace.settingsTab']?.value;
         }"""),'Display','explicit tab must not replace private Compare selection')
 
+    def test_workspace_registry_preview_animation_view_restores_without_route(self):
+        """Studio view remains per-tab UI state after F5 without a Studio URL;
+        an explicit incoming Studio URL still has higher priority.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'animation'})).revision;
+        }"""),0,'initial view restore must not create an IDB row')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernAnimationViewEditor').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'animation'});
+            return row.envelope?.values?.['workspace.view']?.value==='editor';
+        }""",timeout=30000)
+        before=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'animation'})).revision;
+        }""")
+        # Remove the legacy URL checkpoint to verify the new private registry.
+        self.page.evaluate("""() => {
+            const url=new URL(location.href);
+            url.searchParams.delete('studioView');
+            history.replaceState(history.state,'',url.href);
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().animationView'),'editor')
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible()
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'animation'})).revision;
+        }"""),before,'Animation hydration must not write')
+        # Explicit route outranks the private saved Editor view on reload.
+        self.page.goto(self.base_url+'?ui-state-registry=preview&studioView=library',
+            wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        expect(self.page.locator('#ModernAnimationLibraryView')).to_be_visible()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().animationView'),'library')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'animation'});
+            return [row.revision,row.envelope?.values?.['workspace.view']?.value];
+        }"""),[before,'editor'],'explicit route cannot rewrite the private view')
+
+    def test_workspace_registry_preview_calibration_view_survives_f5(self):
+        """Calibration Projects disclosure restores without opening or
+        selecting a project, and with zero writes during hydration.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        # The Calibration editor requires a physical Globe surface.
+        self.page.evaluate("""() => {
+            const m=CurvatureModernApp.getModel();m.showModel=1;m.Update();
+        }""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        panel=workspace.locator('#ModernCalibrationProjectsPanel')
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel).to_be_visible()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'calibration'});
+            return row.envelope?.values?.['workspace.view']?.value==='projects';
+        }""",timeout=30000)
+        before=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'calibration'})).revision;
+        }""")
+        self.page.evaluate("""() => {
+            const api=CurvatureModernApplicationPreferences;
+            const old=api.read(localStorage);
+            api.write(localStorage,{...old,
+                workspace:{...old.workspace,mode:'calibration',calibrationView:'editor'}});
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace).to_be_visible()
+        expect(workspace.locator('#ModernCalibrationProjectsPanel')).to_be_visible()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().calibrationView'),'projects')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'calibration'})).revision;
+        }"""),before,'Calibration hydration must not write')
+        self.assertEqual(self.page.locator(
+            '#ModernCalibrationProjectsPanel [data-project-active="true"]').count(),0,
+            'presentation state must never open a saved project')
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+
 if __name__ == '__main__':
     unittest.main()

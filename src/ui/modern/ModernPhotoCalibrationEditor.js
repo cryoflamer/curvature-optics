@@ -1228,7 +1228,7 @@
           projectsMessage('Cannot load projects: '+error.message+'. Current work is unchanged.',true);
       }finally{if(token===projectListToken)projectsControls();}
     }
-    function showProjectList(open){
+    function showProjectList(open,hydrating){
       if(projectListBusy){
         projectsDisclosure.open=!projectsPanel.hidden;
         return;
@@ -1237,11 +1237,17 @@
       projectsDisclosure.open=open;
       projectsPanel.hidden=!open;
       if(!open)projectInspector?.hide();
-      env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
+      if(!hydrating)env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
       projectsControls();
       if(!changed)return;
       if(open)void refreshProjectList();
       else ++projectListToken;
+    }
+    function selectPresentationView(view){
+      // Hydrate presentation only; never activate or select a saved project.
+      if(!['editor','projects'].includes(view)||projectListBusy)return false;
+      showProjectList(view==='projects',true);
+      return true;
     }
     async function openFromProjects(id){
       if(projectListBusy)return;
@@ -2764,7 +2770,7 @@
         persist();
       });
     syncFitControls();syncPairToolbar();
-    mounted={enter,restore:restoreDraft,inspectProjectStartup,
+    mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,

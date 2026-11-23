@@ -701,6 +701,7 @@
   // and section controllers; merely loading modules creates no new database.
   var workspaceUiRegistryPreview={status:'disabled',bridge:null,error:null};
   var workspaceSectionEditGeneration=0,workspaceTabEditGeneration=0;
+  var workspaceViewEditGeneration={animation:0,calibration:0};
   var workspaceUiRegistryPreviewRequested=typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -841,8 +842,14 @@
   function rememberCalibrationView(view){
     if(!['editor','projects'].includes(view))throw RangeError('Invalid Calibration view');
     if(workspaceState.calibrationView===view)return;
+    workspaceViewEditGeneration.calibration++;
     workspaceState.calibrationView=view;
     saveApplicationPreferences();
+    var trial=workspaceUiRegistryPreview;
+    if(trial.status==='ready'&&trial.bridge)
+      trial.bridge.setView('calibration',view).catch(function(error){
+        preferencesStatus('UI Registry preview Calibration view save failed: '+error.message,true);
+      });
   }
   // Navigation from a particular Picker card is UI-only and never restored
   // from preferences or included in a physical experiment snapshot.
@@ -884,9 +891,11 @@
     syncHistoryNavigation();
   }
   // Switch presentation only: preserve one draft, one edit history and one player.
-  function setStudioView(view,focus,routeAction){
+  function setStudioView(view,focus,routeAction,hydrating){
     if(!['library','editor','preview'].includes(view))return false;
     var previous=studioView;
+    // User/navigation intent during asynchronous registry hydration must win.
+    if(previous!==view&&!hydrating)workspaceViewEditGeneration.animation++;
     if(previous==='preview'&&view!=='preview'){
       // Never paint into a hidden viewport. This is not an export cancellation:
       // background video/frame export owns a distinct task and controller.
@@ -930,6 +939,13 @@
          studioPlaybackRenderedAt!==studioPlayback.status().positionMs))
         scheduleStudioInitialPaint('view');
     }
+    if(previous!==view&&!hydrating){
+      var trial=workspaceUiRegistryPreview;
+      if(trial.status==='ready'&&trial.bridge)
+        trial.bridge.setView('animation',view).catch(function(error){
+          preferencesStatus('UI Registry preview Animation view save failed: '+error.message,true);
+        });
+    }
     return true;
   }
   function bindStudioViews(){
@@ -972,7 +988,9 @@
     var store=root.CurvatureModernUiSessionStore;
     var manager=root.CurvatureModernUiSessionManager;
     var startVersion=workspaceSectionEditGeneration,
-      startNavigation=workspaceNavigationVersion,startTab=workspaceTabEditGeneration;
+      startNavigation=workspaceNavigationVersion,startTab=workspaceTabEditGeneration,
+      startAnimationView=workspaceViewEditGeneration.animation,
+      startCalibrationView=workspaceViewEditGeneration.calibration;
     var bridge;
     try{
       if(!api||!registry||!store||!manager)
@@ -985,7 +1003,9 @@
         suffixes:Object.keys(workspaceInitialSections),
         legacyValue:legacyWorkspaceSectionValue,
         legacyTab:function(mode){return workspaceState[mode+'Tab'];},
-        legacyMode:function(){return workspaceState.mode;}
+        legacyMode:function(){return workspaceState.mode;},
+        legacyView:function(workspace){return workspace==='animation'?
+          studioView:workspaceState.calibrationView;}
       });
     }catch(error){
       workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
@@ -1007,7 +1027,9 @@
       // clobber an in-flight user choice with an earlier IDB observation.
       if(startVersion!==workspaceSectionEditGeneration||
          startNavigation!==workspaceNavigationVersion||
-         startTab!==workspaceTabEditGeneration){
+         startTab!==workspaceTabEditGeneration||
+         startAnimationView!==workspaceViewEditGeneration.animation||
+         startCalibrationView!==workspaceViewEditGeneration.calibration){
         workspaceUiRegistryPreview={status:'skipped',bridge:null,
           error:'Workspace UI changed during preview restore'};
         return;
@@ -1034,6 +1056,28 @@
         if(!animationWorkspaceOpen&&!photoCalibrationWorkspaceOpen&&
            !imageLibraryWorkspaceOpen&&!state.demosActive)
           activateSettings(workspaceState[state.mode+'Tab'],false,false);
+      }
+      // These are presentation-only selections. An explicit Studio URL,
+      // shared experiment or an in-flight keyframe edit outranks private UI state.
+      // Neither operation chooses a draft, project or physical document.
+      if(!persistence.explicitUrl&&!keyframeEditSession){
+        var explicitStudioView=studioViewsApi&&studioViewsApi.route&&
+          studioViewsApi.route(root.location&&root.location.href);
+        if(!explicitStudioView){
+          var animationView=bridge.getView('animation');
+          if(animationView!==studioView)setStudioView(animationView,false,null,true);
+        }
+        var calibrationView=bridge.getView('calibration');
+        if(calibrationView!==workspaceState.calibrationView){
+          if(!photoCalibrationWorkspaceOpen)workspaceState.calibrationView=calibrationView;
+          else {
+            var editor=root.CurvatureModernPhotoCalibrationEditor&&
+              root.CurvatureModernPhotoCalibrationEditor.mount(document);
+            if(editor&&editor.selectPresentationView&&
+               editor.selectPresentationView(calibrationView))
+              workspaceState.calibrationView=calibrationView;
+          }
+        }
       }
       applyWorkspaceSections();
     }).catch(function(error){
@@ -8187,6 +8231,10 @@
       state.demosActive=false;
       var demosPanel=newUiEl('ModernDemosPanel');if(demosPanel)demosPanel.hidden=true;
       animationWorkspaceOpen=true;syncWorkspaceVisibility();
+      // A private restored Preview may have been selected while Studio was
+      // hidden. Lazily prepare its player only after the workspace is visible.
+      if(studioView==='preview'&&!studioPlayback)
+        setStudioView('preview',false,null,true);
       if(studioPlayback)scheduleStudioInitialPaint('opened');
       if(experimentHistory)refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
       return;
@@ -8986,12 +9034,15 @@
         sections:trial.bridge?trial.bridge.sections:[],
         selection:trial.bridge?{mode:trial.bridge.getMode(),
           sceneTab:trial.bridge.getTab('scene'),
-          compareTab:trial.bridge.getTab('compare')}:null,
+          compareTab:trial.bridge.getTab('compare'),
+          animationView:trial.bridge.getView('animation'),
+          calibrationView:trial.bridge.getView('calibration')}:null,
         errors:trial.bridge?trial.bridge.lastErrors():[]};
     },
     getWorkspaceState:function(){return {mode:currentWorkspaceMode(),
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
-      compareModel:state.compareSelected,calibrationView:workspaceState.calibrationView,
+      compareModel:state.compareSelected,animationView:studioView,
+      calibrationView:workspaceState.calibrationView,
       sections:Object.assign({},workspaceState.sections)};},
     // Atmospheric presentation remains independently inspectable through DevTools.
     getAtmosphericPresentation:function(){return atmosphericPresentation;},
