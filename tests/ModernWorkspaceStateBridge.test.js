@@ -221,3 +221,41 @@ test('future workspace mode blocks writes without removing raw saved evidence',a
   assert.equal(rows.get(key).revision,4);
   assert.deepEqual(rows.get(key).envelope,frame);
 });
+
+
+test('Animation and Calibration view choices use separate read-first per-tab workspace scopes',async()=>{
+  const rows=new Map(),first=fullBridge({rows});
+  assert.deepEqual((await first.bridge.restore()).warnings,[]);
+  assert.equal(first.bridge.getView('animation'),'library');
+  assert.equal(first.bridge.getView('calibration'),'editor');
+  assert.equal(rows.size,0,'presentation hydration cannot create durable records');
+  await first.bridge.setView('animation','editor');
+  await first.bridge.setView('calibration','projects');
+  await first.bridge.flush();
+  assert.equal(rows.size,2);
+  assert.equal(rows.get('per-tab-and-workspace:first:animation').envelope.values['workspace.view'].value,'editor');
+  assert.equal(rows.get('per-tab-and-workspace:first:calibration').envelope.values['workspace.view'].value,'projects');
+  const second=fullBridge({rows});await second.bridge.restore();
+  assert.equal(second.bridge.getView('animation'),'editor');
+  assert.equal(second.bridge.getView('calibration'),'projects');
+  assert.equal(rows.get('per-tab-and-workspace:first:animation').revision,1,'F5 hydrate must not write');
+  const other=fullBridge({rows,tab:'other'});await other.bridge.restore();
+  assert.equal(other.bridge.getView('animation'),'library');
+  assert.equal(other.bridge.getView('calibration'),'editor');
+  assert.throws(()=>first.bridge.setView('animation','projects'),/invalid workspace view/);
+  assert.throws(()=>first.bridge.setView('calibration','preview'),/invalid workspace view/);
+  assert.throws(()=>first.bridge.getView('scene'),/invalid view workspace/);
+});
+
+test('unknown future Animation view is preserved read-only without affecting Calibration',async()=>{
+  const frame={format:registryApi.FORMAT,version:registryApi.VERSION,
+    scope:'per-tab-and-workspace',values:{'workspace.view':{version:99,value:'timeline'}}};
+  const key='per-tab-and-workspace:first:animation';
+  const rows=new Map([[key,{revision:6,envelope:structuredClone(frame)}]]);
+  const {bridge}=fullBridge({rows});
+  assert.deepEqual((await bridge.restore()).warnings,['animation:workspace.view']);
+  assert.throws(()=>bridge.setView('animation','preview'),/unsupported keys/);
+  assert.equal(rows.get(key).revision,6);
+  assert.deepEqual(rows.get(key).envelope,frame);
+  assert.equal(bridge.getView('calibration'),'editor');
+});

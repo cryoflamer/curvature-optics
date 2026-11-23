@@ -9,14 +9,16 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const KEY_PREFIX='workspace.section.';
-  const TAB_KEY='workspace.settingsTab',ACTIVE_KEY='workspace.active';
+  const TAB_KEY='workspace.settingsTab',ACTIVE_KEY='workspace.active',VIEW_KEY='workspace.view';
   const TABS=Object.freeze(['Camera','Surface','Atmosphere','Objects','Display']);
   const WORKSPACES=Object.freeze(['scene','compare','animation','calibration','images','demos']);
   const MODES=Object.freeze(['scene','compare']);
+  const VIEWS=Object.freeze({animation:Object.freeze(['library','editor','preview']),
+    calibration:Object.freeze(['editor','projects'])});
   const SUFFIX=/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/;
   function check(ok,what){if(!ok)throw Error('Workspace State Bridge: '+what);}
   function create({registryApi,sessionStoreApi,managerApi,env,
-    suffixes,legacyValue,legacyTab,legacyMode}={}){
+    suffixes,legacyValue,legacyTab,legacyMode,legacyView}={}){
     check(registryApi&&typeof registryApi.create==='function'&&
       sessionStoreApi&&typeof sessionStoreApi.create==='function'&&
       managerApi&&typeof managerApi.create==='function'&&
@@ -48,6 +50,15 @@
       }
       managers.set(mode,manager);
     }
+    // Presentation-only subviews: do not store draft/project identifiers here.
+    for(const workspace of Object.keys(VIEWS)){
+      const manager=managerApi.create({registry:registryApi.create(),store,workspace});
+      const fallback=legacyView?legacyView(workspace):VIEWS[workspace][0];
+      check(VIEWS[workspace].includes(fallback),'invalid legacy '+workspace+' view');
+      manager.register({key:VIEW_KEY,scope:'per-tab-and-workspace',version:1,
+        defaultValue:fallback,validate:value=>VIEWS[workspace].includes(value)});
+      managers.set(workspace,manager);
+    }
     let ready=false;
     function selected(mode,suffix){
       check(MODES.includes(mode)&&supported.has(suffix),'unregistered workspace section');
@@ -57,10 +68,11 @@
       check(!ready,'already restored');
       // Never write during a read-first import. Unsupported/corrupt newer
       // records fail without rewriting the original legacy preferences.
-      const results=await Promise.all(MODES.map(mode=>managers.get(mode).restore()));
+      const names=[...MODES,...Object.keys(VIEWS)];
+      const results=await Promise.all(names.map(mode=>managers.get(mode).restore()));
       ready=true;
       return Object.freeze({ready:true,
-        warnings:results.flatMap((r,i)=>r.unrecognizedKeys.map(key=>MODES[i]+':'+key))});
+        warnings:results.flatMap((r,i)=>r.unrecognizedKeys.map(key=>names[i]+':'+key))});
     }
     function get(mode,suffix){
       check(ready,'restore first');
@@ -79,6 +91,15 @@
     function setTab(mode,value){
       check(ready&&TABS.includes(value),'invalid settings tab');
       return tabManager(mode).set(TAB_KEY,value);
+    }
+    function getView(workspace){
+      check(ready&&Object.prototype.hasOwnProperty.call(VIEWS,workspace),'invalid view workspace');
+      return managers.get(workspace).get(VIEW_KEY);
+    }
+    function setView(workspace,value){
+      check(ready&&Object.prototype.hasOwnProperty.call(VIEWS,workspace)&&
+        VIEWS[workspace].includes(value),'invalid workspace view');
+      return managers.get(workspace).set(VIEW_KEY,value);
     }
     function getMode(){check(ready,'restore first');return managers.get('scene').get(ACTIVE_KEY);}
     function setMode(value){
@@ -105,12 +126,14 @@
       // Scopes are independently acknowledged, not falsely atomic.
       await Promise.all(MODES.map(mode=>managers.get(mode).setMany(patches.get(mode))));
       await managers.get('scene').set(ACTIVE_KEY,null);
+      await Promise.all(Object.keys(VIEWS).map(workspace=>
+        managers.get(workspace).set(VIEW_KEY,VIEWS[workspace][0])));
     }
     async function flush(){await Promise.all([...managers.values()].map(m=>m.flush()));}
-    function lastErrors(){return MODES.flatMap(mode=>managers.get(mode).lastErrors().map(
+    function lastErrors(){return [...MODES,...Object.keys(VIEWS)].flatMap(mode=>managers.get(mode).lastErrors().map(
       entry=>({mode,scope:entry.scope,message:entry.message})));
     }
-    return Object.freeze({restore,get,set,getTab,setTab,getMode,setMode,reset,flush,lastErrors,
+    return Object.freeze({restore,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,lastErrors,
       supports:suffix=>supported.has(suffix),isReady:()=>ready,
       tabId:()=>store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});
   }
