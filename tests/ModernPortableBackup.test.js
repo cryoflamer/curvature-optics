@@ -239,3 +239,39 @@ test('qualifyEvidence detects missing saved Storyboard references without modify
   await assert.rejects(()=>backup.qualifyEvidence(bad,evidenceEnv()),
     /Storyboard original missing/);
 });
+
+
+test('portable JSON file transport roundtrips verified archival bytes without migration approval',async()=>{
+  const source=evidenceFixture();
+  const archived=await backup.pack(source.input,webcrypto);
+  const output=await backup.fileBlob(archived,webcrypto);
+  assert.equal(output.blob.type,'application/json');
+  assert.ok(output.filename.startsWith('curvature-optics-unqualified-backup-'));
+  assert.equal(output.eligibleForMigration,false);
+  assert.equal(output.bytes,output.blob.size);
+  const imported=await backup.readFile(output.blob,webcrypto);
+  assert.deepEqual(imported,archived);
+  const review=await backup.qualifyEvidence(imported,evidenceEnv());
+  assert.equal(review.originalsVerified,1);
+  assert.equal(review.projectsChecked,1);
+});
+
+test('file import rejects truncated, corrupted and oversized archives before restore',async()=>{
+  const archived=await backup.pack(evidenceFixture().input,webcrypto);
+  await assert.rejects(()=>backup.readFile(new Blob(['{']),webcrypto),
+    /invalid archive file JSON/);
+  await assert.rejects(()=>backup.readFile(new Blob([
+    JSON.stringify({...archived,payload:archived.payload+' '})]),webcrypto),
+  /archive checksum mismatch/);
+  await assert.rejects(()=>backup.readFile({
+    size:512*1024*1024+1,async text(){throw Error('oversized file was read');}
+  },webcrypto),/oversized portable backup file/);
+  await assert.rejects(()=>backup.fileBlob({...archived,sha256:'0'.repeat(64)},webcrypto),
+    /archive checksum mismatch/);
+  const unsafe=JSON.parse(archived.payload);unsafe.capturedAt='2026/11/23 01:00 UTC';
+  const payload=JSON.stringify(unsafe);
+  const hash=Buffer.from(await webcrypto.subtle.digest('SHA-256',
+    new TextEncoder().encode(payload))).toString('hex');
+  await assert.rejects(()=>backup.fileBlob({...archived,payload,sha256:hash},webcrypto),
+    /capture timestamp invalid/);
+});

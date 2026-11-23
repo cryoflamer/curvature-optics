@@ -8623,5 +8623,69 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(verified['projectRevision'], 1)
 
 
+
+    def test_portable_backup_file_transport_reimport_and_isolation(self):
+        """A real browser File can be re-imported and restored only to isolated databases."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+        outcome=self.page.evaluate("""async () => {
+            const api=CurvatureModernPortableBackup;
+            const importer=CurvatureModernReferenceImageImport;
+            const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgFlP8DwABtAFCmNjeNAAAAABJRU5ErkJggg==';
+            const bytes=Uint8Array.from(atob(png),c=>c.charCodeAt(0));
+            const original=await importer.ingest(
+                new File([bytes],'Archive source.png',{type:'image/png'}),
+                'file_transport_original',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,original);
+            const archive=await api.capture(window);
+            const transport=await api.fileBlob(archive,crypto);
+            const exported=new File([transport.blob],transport.filename,{type:transport.blob.type});
+            const reimported=await api.readFile(exported,crypto);
+            const checked=await api.inspect(reimported,crypto);
+            const restored=await api.restoreIsolated(reimported,window,'file_roundtrip_safe_001');
+            const imageDb=restored.mappings.find(item=>
+                item.name==='curvature-modern-reference-images')?.target;
+            const retrieved=await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(imageDb);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction('observations','readonly');
+                    const get=tx.objectStore('observations').get(original.id);
+                    let item;
+                    get.onsuccess=()=>{item=get.result;};
+                    tx.oncomplete=()=>{db.close();resolve(item);};
+                    tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            const originalAfter=await CurvatureModernReferenceImageLibrary.get(
+                indexedDB,original.id);
+            const broken=new File([JSON.stringify({...archive,sha256:'0'.repeat(64)})],
+                'corrupt.json',{type:'application/json'});
+            let rejected=false;
+            try{await api.readFile(broken,crypto);}
+            catch(error){rejected=/checksum mismatch/.test(error.message);}
+            return {
+                fileValid:transport.bytes===exported.size&&exported.size>0,
+                fileName:transport.filename,
+                sameDigest:archive.sha256===reimported.sha256,
+                samePayload:archive.payload===reimported.payload,
+                archiveStillUnqualified:!checked.eligibleForMigration,
+                restored:restored.verified,
+                sourceUnchanged:originalAfter.record.original.dataUrl===original.original.dataUrl,
+                bytesMatch:retrieved.record.original.dataUrl===original.original.dataUrl,
+                corruptionRejected:rejected
+            };
+        }""")
+        self.assertTrue(outcome['fileValid'])
+        self.assertIn('unqualified-backup-',outcome['fileName'])
+        self.assertTrue(outcome['sameDigest'])
+        self.assertTrue(outcome['samePayload'])
+        self.assertTrue(outcome['archiveStillUnqualified'])
+        self.assertTrue(outcome['restored'])
+        self.assertTrue(outcome['sourceUnchanged'])
+        self.assertTrue(outcome['bytesMatch'])
+        self.assertTrue(outcome['corruptionRejected'])
+
+
 if __name__ == '__main__':
     unittest.main()

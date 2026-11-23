@@ -571,5 +571,32 @@
     return {token:id,mappings,verified:true,eligibleForMigration:false,
       note:'No live database was replaced. Session writer coordination and photo provenance remain unverified.'};
   }
-  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence});
+  const MAX_PORTABLE_FILE_BYTES=512*1024*1024;
+  // Explicit opt-in file transport. A Blob is created in memory, not silently
+  // downloaded, and never treated as a fully accepted migration safety copy.
+  async function fileBlob(archive,crypto){
+    const review=await inspect(archive,crypto);
+    ensure(typeof Blob!=='undefined','portable file Blob unavailable');
+    const bytes=new Blob([JSON.stringify(archive)],{type:'application/json'});
+    ensure(bytes.size>0&&bytes.size<=MAX_PORTABLE_FILE_BYTES,
+      'portable archive too large for the current JSON file transport');
+    const day=review.capturedAt;
+    ensure(typeof day==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(day)&&
+      Number.isFinite(Date.parse(day))&&new Date(day).toISOString()===day,
+      'archive capture timestamp invalid');
+    return Object.freeze({blob:bytes,
+      filename:'curvature-optics-unqualified-backup-'+day.slice(0,10)+'.json',
+      bytes:bytes.size,eligibleForMigration:false});
+  }
+  async function readFile(file,crypto){
+    ensure(file&&typeof file.text==='function'&&Number.isSafeInteger(file.size)&&
+      file.size>0&&file.size<=MAX_PORTABLE_FILE_BYTES,
+      'unsupported or oversized portable backup file');
+    let archive;
+    try{archive=JSON.parse(await file.text());}
+    catch(error){throw Error('Portable backup: invalid archive file JSON');}
+    await inspect(archive,crypto);
+    return archive;
+  }
+  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence,fileBlob,readFile});
 }));
