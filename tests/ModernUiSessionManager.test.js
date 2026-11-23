@@ -194,3 +194,19 @@ test('unknown/newer stored UI keys remain intact and prevent whole-envelope repl
   assert.deepEqual(data.get('workspace:tab1:object-explorer').envelope,old);
   assert.equal(data.get('workspace:tab1:object-explorer').revision,8);
 });
+
+test('UI manager must claim tab identity before reading any scoped registry state',async()=>{
+  const data=new Map(),backend=store('one-tab',data);
+  let release,reads=0,claims=0;
+  const deferred=new Promise(resolve=>{release=resolve;});
+  const read=backend.read;
+  backend.claimTab=async()=>{claims++;await deferred;};
+  backend.read=async(...args)=>{reads++;return read(...args);};
+  const manager=create(backend);
+  const pending=manager.restore();
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(claims,1);
+  assert.equal(reads,0,'copied-tab state cannot be consumed before ownership check');
+  release();await pending;
+  assert.equal(reads,2,'global and per-workspace records read after identity claim');
+});

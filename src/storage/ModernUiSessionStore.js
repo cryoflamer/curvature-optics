@@ -18,6 +18,9 @@
       env.crypto&&typeof env.crypto.randomUUID==='function',
       'IndexedDB, sessionStorage and UUID generator required');
     const {indexedDB,sessionStorage,crypto}=env;
+    // Web Locks owns the opaque tab ID for this document lifetime. A duplicated
+    // tab inherits sessionStorage, so its token alone is not proof of identity.
+    let claimPromise=null,owner=null,forkedFrom=null;
     function tabId(){
       const existing=sessionStorage.getItem(TAB_KEY);
       if(existing!==null){
@@ -28,6 +31,59 @@
       check(ID.test(id),'invalid generated tab token');
       sessionStorage.setItem(TAB_KEY,id);
       return id;
+    }
+    function attemptLock(id){
+      return new Promise((resolve,reject)=>{
+        let settled=false;
+        const finish=value=>{if(settled)return;settled=true;resolve(value);};
+        try{
+          const task=env.navigator.locks.request('curvature-modern-ui-tab:'+id,
+            {mode:'exclusive',ifAvailable:true},lock=>{
+              if(!lock){finish(null);return;}
+              // Keep the lock until the document leaves. Do not await this
+              // promise from claimTab(), which must return while it is held.
+              return new Promise(release=>finish(release));
+            });
+          Promise.resolve(task).catch(error=>{
+            if(!settled){settled=true;reject(error);}
+            else if(owner&&owner.id===id)owner.active=false;
+          });
+        }catch(error){if(!settled){settled=true;reject(error);}}
+      });
+    }
+    function claimTab(){
+      if(claimPromise)return claimPromise;
+      claimPromise=(async()=>{
+        // Fail closed rather than accepting a cloned ID when the browser
+        // cannot coordinate live tab ownership. Normal Modern never calls this.
+        check(env.navigator&&env.navigator.locks&&
+          typeof env.navigator.locks.request==='function',
+          'exclusive tab ownership unavailable (Web Locks required)');
+        const original=tabId();
+        let candidate=original;
+        for(let attempt=0;attempt<4;attempt++){
+          const release=await attemptLock(candidate);
+          if(release){
+            owner={id:candidate,active:true,release};
+            if(typeof env.addEventListener==='function')
+              env.addEventListener('pagehide',()=>{
+                if(owner&&owner.id===candidate&&owner.active){
+                  owner.active=false;owner.release();
+                }
+              },{once:true});
+            return Object.freeze({tabId:candidate,forkedFrom});
+          }
+          if(!forkedFrom)forkedFrom=original;
+          candidate=crypto.randomUUID();
+          check(ID.test(candidate)&&candidate!==original,
+            'invalid forked tab token');
+          // Only overwrite our own copied opaque token. Legacy backups,
+          // another tab's IndexedDB rows and domain-specific IDs are untouched.
+          sessionStorage.setItem(TAB_KEY,candidate);
+        }
+        throw Error('UI Session Store: unable to claim a unique tab identity');
+      })().catch(error=>{claimPromise=null;throw error;});
+      return claimPromise;
     }
     function address(scope,context){
       check(['per-tab','per-tab-and-workspace','global'].includes(scope),
@@ -89,17 +145,28 @@
     async function read(scope,context){
       const target=address(scope,context);
       return transact(target.store,'readonly',(store,reply)=>{
-        const req=store.get(target.id);
-        req.onsuccess=()=>{
-          const value=req.result;
+        function accept(value,id,inherited){
           if(!value){reply.result({revision:0,envelope:null});return;}
-          if(value.version!==1||value.id!==target.id||
+          if(value.version!==1||value.id!==id||
             !Number.isSafeInteger(value.revision)||value.revision<1||
             !value.envelope||value.envelope.format!==FORMAT||
             value.envelope.version!==1||value.envelope.scope!==scope){
             reply.reject(Error('UI Session Store: unsupported/corrupt stored record'));return;
           }
-          reply.result({revision:value.revision,envelope:value.envelope});
+          // A copied tab starts at revision zero in its OWN namespace.
+          // Its initial UI is read from the parent but never backfilled.
+          reply.result({revision:inherited?0:value.revision,envelope:value.envelope});
+        }
+        const req=store.get(target.id);
+        req.onsuccess=()=>{
+          if(req.result){accept(req.result,target.id,false);return;}
+          if(scope==='global'||!forkedFrom||!owner||!owner.active||
+             context?.tabId!==owner.id){
+            accept(null,target.id,false);return;
+          }
+          const inherited=address(scope,{...context,tabId:forkedFrom});
+          const source=store.get(inherited.id);
+          source.onsuccess=()=>accept(source.result,inherited.id,true);
         };
       });
     }
@@ -111,6 +178,9 @@
       check(Number.isSafeInteger(expectedRevision)&&expectedRevision>=0,
         'expected revision required');
       const target=address(scope,context);
+      if(scope!=='global'&&claimPromise)
+        check(owner&&owner.active&&context&&context.tabId===owner.id,
+          'tab ownership lost; reload before writing UI state');
       return transact(target.store,'readwrite',(store,reply)=>{
         const req=store.get(target.id);
         req.onsuccess=()=>{
@@ -128,7 +198,7 @@
         };
       });
     }
-    return Object.freeze({tabId,read,write});
+    return Object.freeze({tabId,claimTab,read,write});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));

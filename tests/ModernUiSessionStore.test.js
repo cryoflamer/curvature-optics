@@ -54,3 +54,59 @@ test('store cannot be used without supported explicit browser dependencies',()=>
   assert.throws(()=>store.create({}),/IndexedDB, sessionStorage and UUID generator required/);
   assert.equal(store.DATABASE,'curvature-modern-ui-state');
 });
+
+function lockFixture(){
+  const held=new Set();
+  return {held,locks:{
+    request(name,options,callback){
+      assert.equal(options.mode,'exclusive');
+      assert.equal(options.ifAvailable,true);
+      if(held.has(name))return Promise.resolve(callback(null));
+      held.add(name);
+      return Promise.resolve(callback({name})).finally(()=>held.delete(name));
+    }
+  }};
+}
+function ownedEnv(locking,session=storage(),uuid='00000000-0000-4000-8000-000000000001'){
+  const listeners=new Map();
+  return {indexedDB:{open(){throw Error('UI IDB should not open while claiming identity');}},
+    sessionStorage:session,crypto:{randomUUID(){return uuid;}},
+    navigator:{locks:locking.locks},
+    addEventListener(name,fn){listeners.set(name,fn);},
+    leave(){listeners.get('pagehide')?.();}};
+}
+test('copied tab token forks only the new tab while original lease is live',async()=>{
+  const locks=lockFixture(),parentEnv=ownedEnv(locks),parent=store.create(parentEnv);
+  const first=await parent.claimTab();
+  assert.equal(first.forkedFrom,null);
+  const copied=storage({[store.TAB_KEY]:first.tabId,
+    'legacy-animation-recovery':'keep-untouched'});
+  const childEnv=ownedEnv(locks,copied,'00000000-0000-4000-8000-000000000002');
+  const child=store.create(childEnv);
+  const second=await child.claimTab();
+  assert.equal(second.forkedFrom,first.tabId);
+  assert.notEqual(second.tabId,first.tabId);
+  assert.equal(parent.tabId(),first.tabId);
+  assert.equal(child.tabId(),second.tabId);
+  assert.equal(copied.getItem('legacy-animation-recovery'),'keep-untouched');
+  assert.equal(locks.held.size,2,'both independent tokens remain leased');
+  parentEnv.leave();childEnv.leave();
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(locks.held.size,0);
+});
+test('tab ownership is required and a released lease cannot write stale UI state',async()=>{
+  const missing=env();
+  await assert.rejects(store.create(missing.result).claimTab(),
+    /exclusive tab ownership unavailable/);
+  assert.equal(missing.opened,0);
+  const locks=lockFixture(),ownerEnv=ownedEnv(locks);
+  const adapter=store.create(ownerEnv),identity=await adapter.claimTab();
+  const ui=registry.create();
+  ui.register({key:'workspace.view',scope:'per-tab-and-workspace',
+    version:1,defaultValue:'editor',validate:v=>v==='editor'});
+  const ctx={tabId:identity.tabId,workspace:'calibration'};
+  ownerEnv.leave();
+  await assert.rejects(adapter.write('per-tab-and-workspace',ctx,
+    ui.snapshot('per-tab-and-workspace',ctx),0),
+    /tab ownership lost/);
+});

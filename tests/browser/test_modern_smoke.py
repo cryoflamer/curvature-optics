@@ -9545,5 +9545,72 @@ class ModernBrowserSmoke(unittest.TestCase):
                          self.console)
 
 
+    def test_workspace_registry_preview_copied_tab_id_forks_without_overwriting_parent(self):
+        """Simulate duplicated sessionStorage while both browser tabs are alive.
+        The copied tab inherits UI presentation, then writes only its new ID.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'scene'});
+            return row.envelope?.values?.['workspace.settingsTab']?.value==='Objects';
+        }""",timeout=30000)
+        parent=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const id=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:id,workspace:'scene'});
+            return {id,revision:row.revision};
+        }""")
+        duplicate=self.context.new_page()
+        duplicate.add_init_script("sessionStorage.setItem("+
+            json.dumps('curvature-modern-ui-tab-id-v1')+","+
+            json.dumps(parent['id'])+");")
+        duplicate.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        duplicate.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        child=duplicate.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const id=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:id,workspace:'scene'});
+            return {id,revision:row.revision,tab:CurvatureModernApp.getWorkspaceState().sceneTab};
+        }""")
+        self.assertNotEqual(parent['id'],child['id'],'copied tabs need distinct IDs')
+        self.assertEqual(child['revision'],0,'parent UI is a read-only inherited fallback')
+        self.assertEqual(child['tab'],'Objects')
+        duplicate.locator('#ModernSettingsDisplay').click()
+        duplicate.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'scene'});
+            return row.envelope?.values?.['workspace.settingsTab']?.value==='Display';
+        }""",timeout=30000)
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'scene'});
+            return [row.revision,row.envelope?.values?.['workspace.settingsTab']?.value];
+        }"""),[parent['revision'],'Objects'],'child must never overwrite parent state')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            [CurvatureModernUiSessionStore.create(window).tabId(),
+             CurvatureModernApp.getWorkspaceState().sceneTab]"""),
+            [parent['id'],'Objects'],'reload keeps original live tab identity')
+        self.assertEqual(duplicate.evaluate("""() =>
+            CurvatureModernApp.getWorkspaceState().sceneTab"""),'Display')
+        duplicate.close()
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
 if __name__ == '__main__':
     unittest.main()

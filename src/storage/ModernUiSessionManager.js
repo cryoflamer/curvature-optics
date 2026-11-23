@@ -40,6 +40,9 @@
       restoring=true;
       const warnings=[];
       try{
+        // One claim per underlying store, shared across all workspace managers.
+        // The session ID must be unique BEFORE reading any per-tab records.
+        if(typeof store.claimTab==='function')await store.claimTab();
         for(const scope of SCOPES){
           if(![...specs.values()].some(x=>x.scope===scope))continue;
           const ctx=context(scope);

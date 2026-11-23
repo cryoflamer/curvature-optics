@@ -280,6 +280,20 @@ entry. Normal Modern and the older recovery stores continue working
 unchanged. These are **preview-only UI choices**, not completion of the
 unified document/session migration.
 
+For the opt-in registry, a browser Web Locks lease now verifies the
+`sessionStorage` tab ID **before** reading any scoped IndexedDB record.
+Duplicated tabs often copy that storage; a simultaneously live original keeps
+its lease, so the duplicate generates a new opaque ID. The duplicate may use
+its parent's compatible committed UI envelope as a read-only initial fallback,
+with revision zero for its own namespace; its first explicit change writes
+only to the new ID. No parent record is moved, removed or overwritten, and
+ordinary reload reuses the existing ID after the earlier document releases
+the lease. If Web Locks are unavailable or the lock request fails, the preview
+refuses session restoration/writes and falls back to the existing legacy UI,
+rather than treating an unverified cloned token as unique. This is *not*
+a general solution for copied legacy draft IDs, crash recovery, or future
+multi-tab session documents: those remain separate #31 acceptance gates.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery
