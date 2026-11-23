@@ -9076,5 +9076,77 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(final['errors'],0)
 
 
+
+    def test_workspace_registry_preview_uses_existing_section_controller_and_survives_f5(self):
+        """Read-first Scene/Compare panel migration is opt-in and does not create
+        a second details listener/controller or alter default Modern startup.
+        """
+        self.open_modern()
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceUiRegistryPreview().status"),'disabled')
+        self.assertFalse(self.page.evaluate("""async () =>
+            (await indexedDB.databases()).some(x=>x.name==='curvature-modern-ui-state')"""))
+        self.page.evaluate("""() => {
+            CurvatureModernApplicationPreferences.write(localStorage,{
+              workspace:{mode:'scene',sections:{
+                'scene.camera.navigation':true,
+                'compare.camera.navigation':false
+              }}
+            });
+        }""")
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        nav=self.page.locator('details[data-workspace-section="camera.navigation"]')
+        self.assertEqual(nav.count(),1)
+        self.assertTrue(nav.evaluate('(node)=>node.open'))
+        # No new record is created by the initial read-first migration.
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return (await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'scene'})).revision;
+        }"""),0)
+        nav.locator('summary').click()
+        expect(nav).not_to_have_attribute('open',re.compile('.*'))
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'scene'});
+            return row.revision===1 &&
+                row.envelope?.values?.['workspace.section.camera.navigation']?.value===false;
+        }""",timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+          CurvatureModernApplicationPreferences.read(localStorage)
+            .workspace.sections['scene.camera.navigation']"""),False)
+        self.page.locator('#ModernCompareTab').click()
+        expect(nav).not_to_have_attribute('open',re.compile('.*'))
+        nav.locator('summary').click()
+        expect(nav).to_have_attribute('open',re.compile('.*'))
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'compare'});
+            return row.revision===1 &&
+                row.envelope?.values?.['workspace.section.camera.navigation']?.value===true;
+        }""",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        nav=self.page.locator('details[data-workspace-section="camera.navigation"]')
+        self.assertTrue(nav.evaluate('(node)=>node.open'))
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'compare'});
+            return row.revision;
+        }"""),1,'programmatic restoration must not create extra writes')
+        self.page.locator('#ModernSceneTab').click()
+        self.assertFalse(nav.evaluate('(node)=>node.open'))
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceUiRegistryPreview().status"),'ready')
+
+
 if __name__ == '__main__':
     unittest.main()

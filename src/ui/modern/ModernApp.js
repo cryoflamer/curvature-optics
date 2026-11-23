@@ -697,6 +697,13 @@
   var legacyDisplayPanels=Object.assign({},displayPanels);
   var workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,calibrationView:'editor',sections:{}};
   var workspaceSections=[];
+  // Explicit, disposable preview only. Default Modern keeps its old session
+  // and section controllers; merely loading modules creates no new database.
+  var workspaceUiRegistryPreview={status:'disabled',bridge:null,error:null};
+  var workspaceSectionEditGeneration=0;
+  var workspaceUiRegistryPreviewRequested=typeof URLSearchParams==='function'&&
+    new URLSearchParams(root.location&&root.location.search||'')
+      .get('ui-state-registry')==='preview';
   var workspaceInitialSections={
     'camera.pose':true,'camera.navigation':false,'camera.animation':true,
     'camera.savedViews':false,'camera.frameName':false,
@@ -928,7 +935,7 @@
     if(studioViewController)studioViewController.show(studioView,false);
   }
   function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
-  function workspaceSectionValue(scope,suffix){
+  function legacyWorkspaceSectionValue(scope,suffix){
     var key=scope+'.'+suffix;
     if(Object.prototype.hasOwnProperty.call(workspaceState.sections,key))return workspaceState.sections[key];
     // Migrate the original four Display folds without changing their old storage key.
@@ -946,6 +953,58 @@
       return false;
     }
     return workspaceInitialSections[suffix]===true;
+  }
+  function workspaceSectionValue(scope,suffix){
+    var current=workspaceUiRegistryPreview;
+    if(current.status==='ready'&&current.bridge&&current.bridge.supports(suffix))
+      return current.bridge.get(scope,suffix);
+    return legacyWorkspaceSectionValue(scope,suffix);
+  }
+  function startWorkspaceUiRegistryPreview(){
+    if(!workspaceUiRegistryPreviewRequested)return;
+    var api=root.CurvatureModernWorkspaceStateBridge;
+    var registry=root.CurvatureModernStateRegistry;
+    var store=root.CurvatureModernUiSessionStore;
+    var manager=root.CurvatureModernUiSessionManager;
+    var startVersion=workspaceSectionEditGeneration;
+    var bridge;
+    try{
+      if(!api||!registry||!store||!manager)
+        throw Error('UI State Registry preview dependencies not loaded');
+      bridge=api.create({
+        registryApi:registry,sessionStoreApi:store,managerApi:manager,env:root,
+        suffixes:['camera.navigation'],
+        legacyValue:legacyWorkspaceSectionValue
+      });
+    }catch(error){
+      workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
+      preferencesStatus('UI Registry preview unavailable: '+error.message,true);
+      return;
+    }
+    workspaceUiRegistryPreview={status:'loading',bridge:null,error:null};
+    bridge.restore().then(function(){
+      // A panel edited during async restore is authoritative; do not
+      // clobber an in-flight user choice with an earlier IDB observation.
+      if(startVersion!==workspaceSectionEditGeneration){
+        workspaceUiRegistryPreview={status:'skipped',bridge:null,
+          error:'Workspace panel changed during preview restore'};
+        return;
+      }
+      workspaceUiRegistryPreview={status:'ready',bridge:bridge,error:null};
+      applyWorkspaceSections();
+    }).catch(function(error){
+      workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
+      preferencesStatus('UI Registry preview restore failed: '+error.message,true);
+    });
+  }
+  function resetWorkspaceUiRegistryPreview(){
+    var trial=workspaceUiRegistryPreview;
+    if(trial.status!=='ready'||!trial.bridge)return;
+    trial.bridge.reset(function(mode,suffix){
+      return workspaceInitialSections[suffix]===true;
+    }).catch(function(error){
+      preferencesStatus('UI Registry preview reset failed: '+error.message,true);
+    });
   }
   function applyWorkspaceSections(){
     var scope=workspaceScope();
@@ -995,16 +1054,24 @@
     }
     workspaceSections.forEach(function(entry){
       entry.node.addEventListener('toggle',function(){
-        var key=workspaceScope()+'.'+entry.suffix;
-        // Programmatic restoration of a mode-specific fold must not be saved
-        // back as an explicit user preference (toggle events are asynchronous).
-        if(entry.node.open===workspaceSectionValue(workspaceScope(),entry.suffix))return;
+        var scope=workspaceScope(),key=scope+'.'+entry.suffix;
+        // This remains the ONE existing native-details controller. The
+        // registry preview only changes where a declared key is persisted.
+        if(entry.node.open===workspaceSectionValue(scope,entry.suffix))return;
+        workspaceSectionEditGeneration++;
         workspaceState.sections[key]=entry.node.open;
         if(entry.suffix.indexOf('display.')===0){
           var shortKey=entry.suffix.slice('display.'.length);
           displayPanels[shortKey]=entry.node.open;
         }
+        // Keep old preferences as a non-destructive rollback source.
         saveApplicationPreferences();
+        var trial=workspaceUiRegistryPreview;
+        if(trial.status==='ready'&&trial.bridge&&trial.bridge.supports(entry.suffix)){
+          trial.bridge.set(scope,entry.suffix,entry.node.open).catch(function(error){
+            preferencesStatus('UI Registry preview save failed: '+error.message,true);
+          });
+        }
       });
     });
     applyWorkspaceSections();
@@ -1031,6 +1098,7 @@
     state.compareSelected='A';
     if(state.compareConfig)syncCompareEditor();
     // Do not render or alter the experiment when resetting the workspace.
+    resetWorkspaceUiRegistryPreview();
     applyWorkspaceSections();
     if(typeof document.querySelector==='function')activateSettings('Camera',false,false);
     saveApplicationPreferences();
@@ -1083,6 +1151,7 @@
         compareTab:defaults.workspace.compareTab,compareModel:defaults.workspace.compareModel,
         calibrationView:defaults.workspace.calibrationView,
         sections:Object.assign({},defaults.workspace.sections)};
+      resetWorkspaceUiRegistryPreview();
       applyWorkspaceSections();
       // A full preference reset also restores visible tab/model selection.
       state.compareSelected='A';
@@ -8690,6 +8759,9 @@
       updateSnapshotSaveAction();
       resetHistoryBaseline();
       refreshCalibrationApplicability();
+      // Explicit opt-in after physical document and URL intent restoration.
+      // The normal Modern page never initializes new registry storage.
+      startWorkspaceUiRegistryPreview();
     }
     bindWorkingSessionLifecycle();
     if(root.addEventListener){
@@ -8854,6 +8926,12 @@
         Math.max(1,studioDraftSavedAt||Date.now())):null;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
       studioProjects.validate(studioPrepared):null;},
+    getWorkspaceUiRegistryPreview:function(){
+      var trial=workspaceUiRegistryPreview;
+      return {status:trial.status,error:trial.error,
+        sections:trial.bridge?trial.bridge.sections:[],
+        errors:trial.bridge?trial.bridge.lastErrors():[]};
+    },
     getWorkspaceState:function(){return {mode:currentWorkspaceMode(),
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,
       compareModel:state.compareSelected,calibrationView:workspaceState.calibrationView,

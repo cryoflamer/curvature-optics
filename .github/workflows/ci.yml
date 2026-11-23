@@ -48,6 +48,7 @@ jobs:
             tests/ModernStateRegistry.test.js \
             tests/ModernUiSessionStore.test.js \
             tests/ModernUiSessionManager.test.js \
+            tests/ModernWorkspaceStateBridge.test.js \
             tests/ModernBackupWriteBarrier.test.js \
             tests/ModernAnimationProjectPersistence.test.js \
             tests/ModernAnimationDraftAutosave.test.js \

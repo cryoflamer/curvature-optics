@@ -139,7 +139,7 @@ and further Modern pages. Register a new owner and its UI keys; do **not** add
 new handwritten `localStorage` keys, URL autosave behavior or per-panel unload
 handlers. This is separate from domain documents, originals and draft payloads.
 
-**Opt-in foundation (not wired into Modern yet):**
+**Opt-in foundation (loaded as dormant modules by Modern; state is used only in explicit preview mode):**
 
 - `src/storage/ModernStateRegistry.js` defines
   `register({key,scope,version,defaultValue,validate,migrate?})`,
@@ -190,10 +190,45 @@ No per-page `localStorage`, `pagehide` handler or special serializer is needed.
 The targeted Node/Chromium tests exercise an entirely new Object Explorer
 tree key and `details` binding, explicit save and F5 restoration, separate
 tab/workspace state, shared preferences, collision detection and silent DOM
-hydration. These are **opt-in tests**, not a production Modern migration:
-existing Scene/Compare preference and section controllers are not replaced,
-Object Explorer #47 itself has not been implemented, and duplicated-tab
+hydration. These do not implement Object Explorer #47 itself; duplicated-tab
 identity leases remain future integration work.
+
+### First read-first preview of the existing Scene/Compare section controller
+
+The **existing** Modern `details[data-workspace-section]` controller now has an
+explicit preview path for exactly one presentation-only key:
+`workspace.section.camera.navigation` (the Camera → Navigation disclosure).
+Visit `CurvatureModern.html?ui-state-registry=preview` **in a disposable private
+profile** to enable the preview; normal Modern and explicit share/import links
+keep the legacy path. The new modules are loaded but instantiate no new
+session storage unless the query switch is present. The query parameter is a
+development-only enable switch — it does **not** encode the UI state or
+automatically persist a share URL.
+
+`ModernWorkspaceStateBridge` composes the generic Registry, Session Store and
+Manager; the same registered key has `per-tab-and-workspace` scope for both
+`scene` and `compare`. Its registered default reads the already validated
+`ModernApplicationPreferences` section preference **without writing it to
+IndexedDB**. If a compatible newer IndexedDB value already exists for this
+tab, that value wins for the preview key. All other existing panels remain on
+the old controller unchanged. The native `toggle` listener is reused:
+a preview change updates the ordinary legacy preference for rollback and
+queues the equivalent versioned IndexedDB record. On first restore, neither
+old preferences nor new IndexedDB records are rewritten. Programmatic
+restoration is silent, and an intervening panel edit prevents a delayed
+async preview restore from overwriting the current choice.
+
+The preview is deliberately **not** a general production migration or
+automatic promotion of all layout choices: unsupported/corrupt records cause
+a reported preview error and the legacy UI remains usable. The preview
+records an explicit status through
+`CurvatureModernApp.getWorkspaceUiRegistryPreview()`. The existing layout
+reset also resets the previewed section; no second DOM listener/controller
+is mounted. The targeted Node and Chromium tests verify legacy defaults,
+independent Scene and Compare values, first-run read-only behavior, explicit
+changes, F5 and the normal-mode no-new-database contract. Before turning this
+on by default, verify duplicated-tab identity handling, startup timing,
+conflict/failure recovery and imported legacy data in a disposable profile.
 
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI

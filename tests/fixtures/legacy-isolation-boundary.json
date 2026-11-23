@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 144,
-      "uniqueScripts": 142,
+      "scriptTags": 148,
+      "uniqueScripts": 146,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -239,6 +239,10 @@
         "src/ui/modern/ModernAnimationProjectWizardUI.js",
         "src/ui/modern/ModernAnimationWorkspaceViews.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
+        "src/storage/ModernStateRegistry.js",
+        "src/storage/ModernUiSessionStore.js",
+        "src/storage/ModernUiSessionManager.js",
+        "src/storage/ModernWorkspaceStateBridge.js",
         "src/storage/ModernBackupWriteBarrier.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
@@ -440,6 +444,10 @@
       "src/renderers/CurvatureCanvasDirectPreview.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
       "src/storage/ModernBackupWriteBarrier.js",
+      "src/storage/ModernStateRegistry.js",
+      "src/storage/ModernUiSessionManager.js",
+      "src/storage/ModernUiSessionStore.js",
+      "src/storage/ModernWorkspaceStateBridge.js",
       "src/ui/modern/CalibrationPointerGestures.js",
       "src/ui/modern/ModernAnimationPreviewGraph.js",
       "src/ui/modern/ModernAnimationProjectWizardUI.js",
@@ -520,16 +528,13 @@
       "src/jsg.js",
       "src/jsgx3d.js",
       "src/storage/ModernPortableBackup.js",
-      "src/storage/ModernStateRegistry.js",
-      "src/storage/ModernUiSessionManager.js",
-      "src/storage/ModernUiSessionStore.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
       "src/x.js",
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 240,
+  "sourceJsCount": 241,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2921,28 +2926,46 @@
       "commonJsToolCallers": []
     },
     "src/storage/ModernStateRegistry.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernStateRegistry.test.js",
         "tests/ModernUiSessionManager.test.js",
-        "tests/ModernUiSessionStore.test.js"
+        "tests/ModernUiSessionStore.test.js",
+        "tests/ModernWorkspaceStateBridge.test.js"
       ],
       "commonJsToolCallers": []
     },
     "src/storage/ModernUiSessionManager.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernUiSessionManager.test.js"
+        "tests/ModernUiSessionManager.test.js",
+        "tests/ModernWorkspaceStateBridge.test.js"
       ],
       "commonJsToolCallers": []
     },
     "src/storage/ModernUiSessionStore.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernUiSessionStore.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/storage/ModernWorkspaceStateBridge.js": {
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernWorkspaceStateBridge.test.js"
       ],
       "commonJsToolCallers": []
     },
