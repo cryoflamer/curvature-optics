@@ -259,3 +259,21 @@ test('unknown future Animation view is preserved read-only without affecting Cal
   assert.deepEqual(rows.get(key).envelope,frame);
   assert.equal(bridge.getView('calibration'),'editor');
 });
+
+test('bridge exposes explicit retry for failed Animation view without a second writer',async()=>{
+  const {bridge,store:backend,rows}=fullBridge();
+  await bridge.restore();
+  const write=backend.write;let blocked=true;
+  backend.write=async(...args)=>{
+    if(blocked){blocked=false;throw Error('simulated unavailable storage');}
+    return write(...args);
+  };
+  await assert.rejects(bridge.setView('animation','editor'),/unavailable storage/);
+  assert.equal(bridge.getView('animation'),'editor');
+  assert.equal(rows.size,0);
+  assert.equal(bridge.lastErrors().length,1);
+  assert.deepEqual(await bridge.retryFailed(),[{mode:'animation',retried:1}]);
+  assert.equal(rows.get('per-tab-and-workspace:first:animation').revision,1);
+  assert.deepEqual(bridge.lastErrors(),[]);
+  assert.deepEqual(await bridge.retryFailed(),[]);
+});

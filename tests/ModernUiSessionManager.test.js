@@ -210,3 +210,60 @@ test('UI manager must claim tab identity before reading any scoped registry stat
   release();await pending;
   assert.equal(reads,2,'global and per-workspace records read after identity claim');
 });
+
+test('a transient IDB failure can be retried without another UI edit',async()=>{
+  const rows=new Map(),backend=store('tab1',rows),write=backend.write;
+  let failures=1;
+  backend.write=async(...args)=>{
+    if(failures-- > 0)throw Error('simulated temporary quota fault');
+    return write(...args);
+  };
+  const manager=create(backend);await manager.restore();
+  await assert.rejects(manager.set('object-explorer.tree.open',true),
+    /temporary quota fault/);
+  assert.equal(manager.get('object-explorer.tree.open'),true);
+  assert.equal(rows.size,0,'failure is not a durability acknowledgement');
+  assert.equal(manager.lastErrors().length,1);
+  assert.equal(await manager.retryFailed(),1);
+  await manager.flush();
+  assert.equal(rows.get('workspace:tab1:object-explorer').revision,1);
+  assert.equal(rows.get('workspace:tab1:object-explorer').envelope
+    .values['object-explorer.tree.open'].value,true);
+  assert.deepEqual(manager.lastErrors(),[]);
+  assert.equal(await manager.retryFailed(),0,'clean state is not rewritten');
+});
+test('a lost write acknowledgement is reconciled by reread without a double write',async()=>{
+  const rows=new Map(),backend=store('tab1',rows),write=backend.write;
+  let loseAck=true,writes=0;
+  backend.write=async(...args)=>{
+    writes++;
+    const saved=await write(...args);
+    if(loseAck){loseAck=false;throw Error('simulated acknowledgement loss');}
+    return saved;
+  };
+  const manager=create(backend);await manager.restore();
+  await assert.rejects(manager.set('object-explorer.active-panel','details'),
+    /acknowledgement loss/);
+  assert.equal(rows.get('workspace:tab1:object-explorer').revision,1);
+  assert.equal(await manager.retryFailed(),1);
+  assert.equal(writes,1,'a verified commit must not be duplicated');
+  await manager.flush();
+  assert.deepEqual(manager.lastErrors(),[]);
+  assert.equal(await manager.set('object-explorer.tree.open',true),true);
+  assert.equal(rows.get('workspace:tab1:object-explorer').revision,2);
+});
+test('a foreign revision cannot be overwritten by failed-write retry',async()=>{
+  const rows=new Map(),backend=store('tab1',rows);
+  backend.write=async()=>{throw Error('simulated temporary failure');};
+  const manager=create(backend);await manager.restore();
+  await assert.rejects(manager.set('object-explorer.tree.open',true),
+    /temporary failure/);
+  const foreign={revision:1,envelope:{format:registry.FORMAT,
+    version:registry.VERSION,scope:'per-tab-and-workspace',
+    values:{'object-explorer.tree.open':{version:1,value:false},
+      'object-explorer.active-panel':{version:1,value:'details'}}}};
+  rows.set('workspace:tab1:object-explorer',structuredClone(foreign));
+  await assert.rejects(manager.retryFailed(),/revision conflict/);
+  assert.deepEqual(rows.get('workspace:tab1:object-explorer'),foreign);
+  assert.match(manager.lastErrors()[0].message,/revision conflict/);
+});

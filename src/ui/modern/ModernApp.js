@@ -9028,6 +9028,12 @@
         Math.max(1,studioDraftSavedAt||Date.now())):null;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?
       studioProjects.validate(studioPrepared):null;},
+    retryWorkspaceUiRegistryPreview:function(){
+      var trial=workspaceUiRegistryPreview;
+      if(trial.status!=='ready'||!trial.bridge)
+        return Promise.reject(Error('UI Registry preview is not writable'));
+      return trial.bridge.retryFailed();
+    },
     getWorkspaceUiRegistryPreview:function(){
       var trial=workspaceUiRegistryPreview;
       return {status:trial.status,error:trial.error,

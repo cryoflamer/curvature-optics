@@ -18,7 +18,7 @@
       typeof store.write==='function'&&typeof store.tabId==='function',
       'registry and session-store adapters required');
     const specs=new Map(),revisions=new Map(),queues=new Map(),errors=new Map(),
-      incompatible=new Map();
+      incompatible=new Map(),failedWrites=new Map(),locations=new Map();
     let ready=false,restoring=false;
     function register(spec){
       check(!ready&&!restoring,'register before restore');
@@ -78,6 +78,7 @@
     }
     function schedule(scope,ctx){
       const id=group(scope),previous=queues.get(id)||Promise.resolve();
+      locations.set(id,{scope,ctx});
       const pending=previous.catch(()=>{}).then(async()=>{
         // Snapshot at commit time: rapid changes in one scope never
         // replay an old copy over later UI choices.
@@ -87,9 +88,12 @@
           const saved=await store.write(scope,ctx,frame,revision);
           check(saved&&Number.isSafeInteger(saved.revision)&&
             saved.revision===revision+1,'missing acknowledged revision');
-          revisions.set(id,saved.revision);errors.delete(id);
+          revisions.set(id,saved.revision);errors.delete(id);failedWrites.delete(id);
           return true;
-        }catch(error){errors.set(id,error);throw error;}
+        }catch(error){
+          failedWrites.set(id,{revision,frame});
+          errors.set(id,error);throw error;
+        }
       });
       queues.set(id,pending);
       return pending;
@@ -138,6 +142,40 @@
     function lastErrors(){return [...errors.entries()].map(([scope,error])=>({
       scope,message:String(error&&error.message||error)
     }));}
+    // Explicit recovery only. A stale writer can never silently rebase over
+    // a newer saved envelope in another tab. Reads are durable IDB checks.
+    async function retryFailed(){
+      check(ready&&!restoring,'restore state before retry');
+      await Promise.allSettled([...queues.values()]);
+      let resolved=0;
+      for(const id of [...errors.keys()]){
+        const target=locations.get(id),failed=failedWrites.get(id);
+        check(target&&failed,'failed write evidence required');
+        const expected=revisions.get(id)||0;
+        let remote;
+        try{remote=await store.read(target.scope,target.ctx);}
+        catch(error){errors.set(id,error);throw error;}
+        const same=(left,right)=>JSON.stringify(left)===JSON.stringify(right);
+        if(remote.revision===expected+1&&failed.revision===expected&&
+           same(remote.envelope,failed.frame)){
+          // IDB committed, but the acknowledgement failed. Re-read confirms
+          // exact bytes and revision; do not write a second copy.
+          revisions.set(id,remote.revision);
+          errors.delete(id);failedWrites.delete(id);
+          queues.set(id,Promise.resolve(true));
+          if(same(remote.envelope,registry.snapshot(target.scope,target.ctx))){
+            resolved++;continue;
+          }
+          // An additional in-memory edit still needs its own CAS write.
+        }else if(remote.revision!==expected){
+          const error=Error('UI Session Manager: revision conflict; newer saved state preserved');
+          errors.set(id,error);throw error;
+        }
+        await schedule(target.scope,target.ctx);
+        resolved++;
+      }
+      return resolved;
+    }
     // Bind only after restoration, so applying a restored open state is
     // not mistaken for a user edit. The browser's delayed native toggle
     // event is also harmless because equal values create no write.
@@ -190,7 +228,7 @@
       return ()=>{off();for(const fn of cleanup)fn();};
     }
     return Object.freeze({register,restore,get,set,setMany,reset,subscribe,flush,
-      lastErrors,bindDetails,bindChoices,isReady:()=>ready});
+      lastErrors,retryFailed,bindDetails,bindChoices,isReady:()=>ready});
   }
   return Object.freeze({create});
 }));

@@ -294,6 +294,18 @@ rather than treating an unverified cloned token as unique. This is *not*
 a general solution for copied legacy draft IDs, crash recovery, or future
 multi-tab session documents: those remain separate #31 acceptance gates.
 
+The opt-in UI Session Manager also provides an **explicit** `retryFailed()`
+path (via the preview bridge and
+`CurvatureModernApp.retryWorkspaceUiRegistryPreview()` for diagnostics).
+Before retrying it rereads each failed scope's durable revision. A transient
+failure may persist the latest in-memory UI selection with CAS; an IDB write
+that committed but lost its acknowledgement is recognized by matching the
+saved envelope and revision **without** an extra write. If another writer
+advanced that revision with different bytes, retry refuses to overwrite it
+and leaves the user's in-memory choice and error available for reconciliation.
+This is not automatic background retry or a substitute for future visible
+export/retry/resolve controls and document-level recovery.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery
