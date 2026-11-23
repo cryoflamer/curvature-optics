@@ -75,3 +75,70 @@ test('blocked IndexedDB falls back gracefully without inventing a checkpoint',as
   await assert.rejects(autosave.write(blocked,{},100),/blocked/);
   await assert.rejects(autosave.clear(blocked),/blocked/);
 });
+
+
+test('working-session write and clear use a shared Web Lock until IDB transaction completion',async()=>{
+  const requests=[],lockManager={request(name,options,action){
+    requests.push({name,mode:options.mode});
+    return action({name,mode:options.mode});
+  }};
+  const db=memoryIndexedDB(),coordinated=autosave.makeAdapter(lockManager);
+  assert.equal(coordinated.coordination,'participating-writer');
+  await coordinated.write(db,{version:1,dummy:'coordinated'},900);
+  assert.equal((await coordinated.read(db)).savedAt,900);
+  await coordinated.clear(db);
+  assert.equal(await coordinated.read(db),null);
+  assert.deepEqual(requests.map(x=>x.mode),['shared','shared']);
+  assert.equal(requests[0].name,requests[1].name);
+  assert.equal(autosave.makeAdapter(null).coordination,'uncoordinated');
+  assert.throws(()=>autosave.makeAdapter({}),/Web Locks manager is invalid/);
+});
+
+test('working-session lock is held until the explicit IDB completion acknowledgement',async()=>{
+  const requests=[],gates=[];
+  const lockManager={request(name,options,action){
+    requests.push(options.mode);
+    return action({name,mode:options.mode});
+  }};
+  // The transaction intentionally does not complete when store.put returns.
+  const db={open(){
+    const req={result:null};
+    queueMicrotask(()=>{
+      const connection={
+        objectStoreNames:{contains(){return true;}},
+        close(){},
+        transaction(){
+          const tx={};
+          tx.objectStore=()=>({put(){gates.push(tx);}});
+          return tx;
+        }
+      };
+      req.result=connection;
+      req.onsuccess();
+    });
+    return req;
+  }};
+  const adapter=autosave.makeAdapter(lockManager);
+  let settled=false;
+  const pending=adapter.write(db,{version:1,dummy:'waiting'},1200).then(()=>{settled=true;});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(requests.length,1);
+  assert.equal(gates.length,1);
+  assert.equal(settled,false,'request success is not a durable completion');
+  gates[0].oncomplete();
+  await pending;
+  assert.equal(settled,true);
+});
+
+test('failed working-session transactions release shared locks and report failure',async()=>{
+  const requests=[];
+  const lockManager={request(name,options,action){
+    requests.push(options.mode);
+    return action({name,mode:options.mode});
+  }};
+  const blocked={open(){throw Error('IndexedDB blocked');}};
+  const adapter=autosave.makeAdapter(lockManager);
+  await assert.rejects(adapter.write(blocked,{version:1},123),/IndexedDB blocked/);
+  await assert.rejects(adapter.clear(blocked),/IndexedDB blocked/);
+  assert.deepEqual(requests,['shared','shared']);
+});

@@ -8741,5 +8741,83 @@ class ModernBrowserSmoke(unittest.TestCase):
         second.close()
 
 
+
+    def test_working_session_writer_waits_for_cross_tab_backup_lock_and_survives_reload(self):
+        """The production Scene/Compare IDB writer participates in the
+        exclusive backup lock without changing the working experiment schema.
+        """
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernSessionAutosave.coordination"),'participating-writer')
+        second=self.context.new_page()
+        response=second.goto(self.base_url,wait_until='load',timeout=30000)
+        self.assertEqual(response.status,200)
+        self.assertEqual(second.evaluate(
+            "CurvatureModernSessionAutosave.coordination"),'participating-writer')
+        # Hold an exclusive reader in one tab. The real autosave write in the
+        # other must wait for it, including its transaction acknowledgement.
+        self.page.evaluate("""() => {
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__snapshotEntered=false;
+            window.__heldSnapshot=new Promise(resolve=>window.__releaseSnapshot=resolve);
+            window.__snapshotTask=gate.snapshot(async()=>{
+                window.__snapshotEntered=true;
+                await window.__heldSnapshot;
+                return 'exclusive-reader-finished';
+            });
+        }""")
+        self.page.wait_for_function('window.__snapshotEntered===true')
+        second.evaluate("""async () => {
+            const source=CurvatureModernSessionAutosave;
+            const prior=await source.read(indexedDB);
+            if(!prior||!prior.experiment)throw Error('Missing saved working experiment');
+            window.__writeSettled=false;
+            window.__writeError=null;
+            window.__newSavedAt=prior.savedAt+10000;
+            window.__blockedWorkingWrite=source.write(
+                indexedDB,prior.experiment,window.__newSavedAt).then(
+                ()=>{window.__writeSettled=true;},
+                error=>{window.__writeError=error.message;window.__writeSettled=true;}
+            );
+        }""")
+        # This is not merely an empty queue: verify Web Locks reports the
+        # actual production writer as pending behind the exclusive reader.
+        second.wait_for_function("""async () => {
+            const state=await navigator.locks.query();
+            return state.pending.some(lock=>
+                lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&
+                lock.mode==='shared');
+        }""")
+        self.assertFalse(second.evaluate('window.__writeSettled'))
+        self.assertTrue(self.page.evaluate('window.__snapshotEntered'))
+        checkpoint=self.page.evaluate("""async () => {
+            window.__releaseSnapshot();
+            return await window.__snapshotTask;
+        }""")
+        self.assertEqual(checkpoint['value'],'exclusive-reader-finished')
+        saved=second.evaluate("""async () => {
+            await window.__blockedWorkingWrite;
+            const row=await CurvatureModernSessionAutosave.read(indexedDB);
+            return {settled:window.__writeSettled,error:window.__writeError,
+                expected:window.__newSavedAt,savedAt:row.savedAt,
+                mode:row.experiment.display.mode};
+        }""")
+        self.assertTrue(saved['settled'])
+        self.assertIsNone(saved['error'])
+        self.assertEqual(saved['savedAt'],saved['expected'])
+        self.assertEqual(saved['mode'],'compare')
+        second.reload(wait_until='load')
+        recovered=second.evaluate("""async () => {
+            const row=await CurvatureModernSessionAutosave.read(indexedDB);
+            return {savedAt:row.savedAt,mode:row.experiment.display.mode};
+        }""")
+        self.assertEqual(recovered['savedAt'],saved['expected'])
+        self.assertEqual(recovered['mode'],'compare')
+        second.close()
+
+
 if __name__ == '__main__':
     unittest.main()

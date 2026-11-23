@@ -438,6 +438,7 @@
       "src/renderers/CurvatureAtmosphericVisibility.js",
       "src/renderers/CurvatureCanvasDirectPreview.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
+      "src/storage/ModernBackupWriteBarrier.js",
       "src/ui/modern/CalibrationPointerGestures.js",
       "src/ui/modern/ModernAnimationPreviewGraph.js",
       "src/ui/modern/ModernAnimationProjectWizardUI.js",
@@ -517,7 +518,6 @@
       "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
-      "src/storage/ModernBackupWriteBarrier.js",
       "src/storage/ModernPortableBackup.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
@@ -2897,8 +2897,12 @@
       "commonJsToolCallers": []
     },
     "src/storage/ModernBackupWriteBarrier.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
+      "commonJsSourceCallers": [
+        "src/ui/modern/ModernSessionAutosave.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernBackupWriteBarrier.test.js"
       ],
