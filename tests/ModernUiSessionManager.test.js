@@ -315,7 +315,7 @@ test('reload accepts a previously committed matching pending intent without doub
   let acknowledges=0,writes=0;
   const underlying=store('tab1',records);
   const manager=create({...underlying,
-    readPending:()=>pending,
+    readPending:scope=>scope==='per-tab-and-workspace'?pending:null,
     acknowledge(){acknowledges++;},
     async write(...args){writes++;return underlying.write(...args);}
   });
@@ -334,7 +334,8 @@ test('early reload preserves conflicting journal and foreign durable revision',a
   data.set('workspace:tab1:object-explorer',{revision:1,envelope:foreign});
   let acknowledgements=0;
   const storage=store('tab1',data),manager=create({...storage,
-    readPending:()=>({expectedRevision:0,envelope:ours}),
+    readPending:scope=>scope==='per-tab-and-workspace'?
+      {expectedRevision:0,envelope:ours}:null,
     acknowledge(){acknowledgements++;}});
   await assert.rejects(manager.restore(),/pending UI revision conflict/);
   assert.equal(acknowledgements,0);
