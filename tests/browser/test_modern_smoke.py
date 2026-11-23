@@ -9612,5 +9612,154 @@ class ModernBrowserSmoke(unittest.TestCase):
         duplicate.close()
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_workspace_registry_preview_early_f5_replays_pending_ui_intent(self):
+        """A synchronous UI gesture must survive F5 even if its IndexedDB
+        write could not start. Replay uses its saved CAS base and clears WAL.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        staged=self.page.evaluate("""() => {
+            const original=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated pending write offline until reload');
+                    return original(name,...args);
+                }});
+            document.getElementById('ModernSettingsObjects').click();
+            const id=CurvatureModernUiSessionStore.create(window).tabId();
+            const key='curvature-modern-ui-pending-v1:workspace:'+id+':scene';
+            return {id,key,pending:JSON.parse(sessionStorage.getItem(key))};
+        }""")
+        self.assertEqual(staged['pending']['expectedRevision'],0)
+        self.assertEqual(staged['pending']['envelope']['values']
+                         ['workspace.settingsTab']['value'],'Objects')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().sceneTab'),'Objects')
+        expect(self.page.locator('#ModernSettingsObjects')).to_have_attribute(
+            'aria-selected','true')
+        after=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId,workspace:'scene'});
+            return {id:tabId,revision:row.revision,
+                value:row.envelope?.values?.['workspace.settingsTab']?.value,
+                pending:sessionStorage.getItem(
+                    'curvature-modern-ui-pending-v1:workspace:'+tabId+':scene')};
+        }""")
+        self.assertEqual(after,{'id':staged['id'],'revision':1,
+                                'value':'Objects','pending':None})
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_workspace_registry_preview_failed_idb_write_retries_without_new_click(self):
+        """A transient DB-open failure retains UI intent, then an explicit
+        retry saves it once and removes the synchronous pending record.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.evaluate("""() => {
+            window.__uiOpen=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated transient registry outage');
+                    return window.__uiOpen(name,...args);
+                }});
+            document.getElementById('ModernSettingsObjects').click();
+        }""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+                .some(row=>row.message.includes('transient registry outage'))""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().sceneTab'),'Objects')
+        result=self.page.evaluate("""async () => {
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:window.__uiOpen});
+            const recovered=await CurvatureModernApp.retryWorkspaceUiRegistryPreview();
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId,workspace:'scene'});
+            return {recovered,revision:row.revision,
+                value:row.envelope?.values?.['workspace.settingsTab']?.value,
+                errors:CurvatureModernApp.getWorkspaceUiRegistryPreview().errors,
+                pending:sessionStorage.getItem(
+                    'curvature-modern-ui-pending-v1:workspace:'+tabId+':scene')};
+        }""")
+        self.assertEqual(result,{'recovered':[{'mode':'scene','retried':1}],
+                                 'revision':1,'value':'Objects','errors':[],
+                                 'pending':None})
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().sceneTab'),'Objects')
+
+    def test_workspace_registry_preview_retry_refuses_foreign_revision(self):
+        """A newer writer wins; an explicitly retried stale UI selection
+        may not overwrite that durable record or erase local pending intent.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.evaluate("""() => {
+            window.__uiOpen=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated failed registry write');
+                    return window.__uiOpen(name,...args);
+                }});
+            document.getElementById('ModernSettingsObjects').click();
+        }""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+                .some(row=>row.message.includes('failed registry write'))""",
+            timeout=30000)
+        result=self.page.evaluate("""async () => {
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:window.__uiOpen});
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId(),ctx={tabId,workspace:'scene'};
+            const foreign={format:'curvature-modern-ui-state',version:1,
+                scope:'per-tab-and-workspace',values:{
+                    'workspace.settingsTab':{version:1,value:'Display'}}};
+            await store.write('per-tab-and-workspace',ctx,foreign,0);
+            let conflict=null;
+            try{await CurvatureModernApp.retryWorkspaceUiRegistryPreview();}
+            catch(error){conflict=error.message;}
+            const row=await store.read('per-tab-and-workspace',ctx);
+            return {conflict,revision:row.revision,
+                foreign:JSON.stringify(row.envelope)===JSON.stringify(foreign),
+                local:CurvatureModernApp.getWorkspaceState().sceneTab,
+                errors:CurvatureModernApp.getWorkspaceUiRegistryPreview().errors,
+                pending:JSON.parse(sessionStorage.getItem(
+                    'curvature-modern-ui-pending-v1:workspace:'+tabId+':scene'))};
+        }""")
+        self.assertIn('revision conflict',result['conflict'])
+        self.assertEqual(result['revision'],1)
+        self.assertTrue(result['foreign'])
+        self.assertEqual(result['local'],'Objects')
+        self.assertTrue(any('revision conflict' in row['message']
+                            for row in result['errors']))
+        self.assertEqual(result['pending']['envelope']['values']
+                         ['workspace.settingsTab']['value'],'Objects')
+
 if __name__ == '__main__':
     unittest.main()

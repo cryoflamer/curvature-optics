@@ -267,3 +267,92 @@ test('a foreign revision cannot be overwritten by failed-write retry',async()=>{
   assert.deepEqual(rows.get('workspace:tab1:object-explorer'),foreign);
   assert.match(manager.lastErrors()[0].message,/revision conflict/);
 });
+
+test('early reload restores staged UI intent with original CAS revision',async()=>{
+  const data=new Map(),memory=store('tab1',data);
+  const journal=new Map();
+  const adapter={
+    ...memory,
+    stage(scope,ctx,envelope,revision){
+      journal.set(ctx.workspace,{scope,ctx,envelope:structuredClone(envelope),
+        expectedRevision:revision});
+    },
+    readPending(scope,ctx){return journal.get(ctx.workspace)||null;},
+    acknowledge(scope,ctx,envelope,revision){
+      const row=journal.get(ctx.workspace);
+      if(row&&row.expectedRevision+1===revision&&
+         JSON.stringify(row.envelope)===JSON.stringify(envelope))
+        journal.delete(ctx.workspace);
+    }
+  };
+  let release;
+  adapter.write=async(...args)=>await new Promise(resolve=>{release=()=>resolve(memory.write(...args));});
+  const first=create(adapter);await first.restore();
+  // The UI gesture synchronously stages before its async IDB write begins.
+  const pending=first.set('object-explorer.active-panel','details');
+  assert.equal(journal.get('object-explorer').envelope.values
+    ['object-explorer.active-panel'].value,'details');
+  assert.equal(data.size,0);
+  // Emulate F5: the old transaction never commits. New document gets a
+  // working adapter with the same tab-scoped pending journal.
+  const restarted={...memory,stage:adapter.stage,readPending:adapter.readPending,
+    acknowledge:adapter.acknowledge};
+  const next=create(restarted);await next.restore();
+  assert.equal(next.get('object-explorer.active-panel'),'details');
+  assert.equal(data.get('workspace:tab1:object-explorer').revision,1);
+  assert.equal(journal.size,0);
+  assert.equal(typeof release,'function',
+    'the abandoned asynchronous write was started but never acknowledged');
+  void pending.catch(()=>{});
+});
+test('reload accepts a previously committed matching pending intent without doubling revision',async()=>{
+  const records=new Map(),frame={
+    format:registry.FORMAT,version:registry.VERSION,scope:'per-tab-and-workspace',
+    values:{'object-explorer.active-panel':{version:1,value:'details'}}};
+  records.set('workspace:tab1:object-explorer',{
+    revision:1,envelope:structuredClone(frame)});
+  const pending={expectedRevision:0,envelope:structuredClone(frame)};
+  let acknowledges=0,writes=0;
+  const underlying=store('tab1',records);
+  const manager=create({...underlying,
+    readPending:()=>pending,
+    acknowledge(){acknowledges++;},
+    async write(...args){writes++;return underlying.write(...args);}
+  });
+  await manager.restore();
+  assert.equal(manager.get('object-explorer.active-panel'),'details');
+  assert.equal(acknowledges,1);
+  assert.equal(writes,0);
+  assert.equal(records.get('workspace:tab1:object-explorer').revision,1);
+});
+test('early reload preserves conflicting journal and foreign durable revision',async()=>{
+  const data=new Map(),foreign={format:registry.FORMAT,
+    version:registry.VERSION,scope:'per-tab-and-workspace',
+    values:{'object-explorer.active-panel':{version:1,value:'tree'}}};
+  const ours=structuredClone(foreign);
+  ours.values['object-explorer.active-panel'].value='details';
+  data.set('workspace:tab1:object-explorer',{revision:1,envelope:foreign});
+  let acknowledgements=0;
+  const storage=store('tab1',data),manager=create({...storage,
+    readPending:()=>({expectedRevision:0,envelope:ours}),
+    acknowledge(){acknowledgements++;}});
+  await assert.rejects(manager.restore(),/pending UI revision conflict/);
+  assert.equal(acknowledgements,0);
+  assert.deepEqual(data.get('workspace:tab1:object-explorer'),
+    {revision:1,envelope:foreign});
+});
+
+test('unavailable synchronous staging fails explicitly rather than claiming F5 safety',async()=>{
+  const data=new Map(),underlying=store('tab1',data),manager=create({
+    ...underlying,
+    stage(){throw Error('simulated sessionStorage quota denied');}
+  });
+  await manager.restore();
+  await assert.rejects(manager.set('object-explorer.tree.open',true),
+    /sessionStorage quota denied/);
+  assert.equal(data.size,0,'no IDB write after failed crash-recovery staging');
+  assert.equal(manager.get('object-explorer.tree.open'),true,
+    'user-selected UI remains in memory for manual recovery');
+  assert.match(manager.lastErrors()[0].message,/sessionStorage quota denied/);
+  await assert.rejects(manager.retryFailed(),/pending UI staging failed/);
+});

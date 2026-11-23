@@ -8,6 +8,7 @@ function storage(initial={}){
   return {
     getItem(key){return data.has(key)?data.get(key):null;},
     setItem(key,value){data.set(key,String(value));},
+    removeItem(key){data.delete(key);},
     keys(){return [...data.keys()];}
   };
 }
@@ -109,4 +110,56 @@ test('tab ownership is required and a released lease cannot write stale UI state
   await assert.rejects(adapter.write('per-tab-and-workspace',ctx,
     ui.snapshot('per-tab-and-workspace',ctx),0),
     /tab ownership lost/);
+});
+
+test('pending UI intent is staged synchronously and acknowledged only for its scope',async()=>{
+  const locks=lockFixture(),session=storage({'legacy-recovery':'must survive'});
+  const ctxEnv=ownedEnv(locks,session),adapter=store.create(ctxEnv);
+  const claimed=await adapter.claimTab(),ctx={tabId:claimed.tabId,workspace:'scene'};
+  const entry={format:registry.FORMAT,version:registry.VERSION,
+    scope:'per-tab-and-workspace',values:{
+      'workspace.settingsTab':{version:1,value:'Objects'}}};
+  assert.equal(adapter.stage('per-tab-and-workspace',ctx,entry,0),true);
+  assert.deepEqual(adapter.readPending('per-tab-and-workspace',ctx),
+    {format:'curvature-modern-ui-state',version:1,
+      target:'workspace:'+ctx.tabId+':scene',scope:'per-tab-and-workspace',
+      expectedRevision:0,envelope:entry});
+  assert.equal(adapter.readPending('per-tab-and-workspace',
+    {...ctx,workspace:'compare'}),null);
+  assert.equal(adapter.acknowledge('per-tab-and-workspace',ctx,entry,1),true);
+  assert.equal(adapter.readPending('per-tab-and-workspace',ctx),null);
+  assert.equal(session.getItem('legacy-recovery'),'must survive');
+  ctxEnv.leave();
+});
+test('pending intent remains across an earlier in-flight acknowledgement',async()=>{
+  const locks=lockFixture(),ctxEnv=ownedEnv(locks),adapter=store.create(ctxEnv);
+  const claimed=await adapter.claimTab(),ctx={tabId:claimed.tabId,workspace:'scene'};
+  const before={format:registry.FORMAT,version:registry.VERSION,
+    scope:'per-tab-and-workspace',values:{
+      'workspace.settingsTab':{version:1,value:'Objects'}}};
+  const after=structuredClone(before);
+  after.values['workspace.settingsTab'].value='Display';
+  adapter.stage('per-tab-and-workspace',ctx,before,0);
+  adapter.stage('per-tab-and-workspace',ctx,after,0);
+  adapter.acknowledge('per-tab-and-workspace',ctx,before,1);
+  const staged=adapter.readPending('per-tab-and-workspace',ctx);
+  assert.equal(staged.expectedRevision,1);
+  assert.equal(staged.envelope.values['workspace.settingsTab'].value,'Display');
+  adapter.acknowledge('per-tab-and-workspace',ctx,after,2);
+  assert.equal(adapter.readPending('per-tab-and-workspace',ctx),null);
+  ctxEnv.leave();
+});
+test('unsupported pending UI bytes fail closed without deleting the original evidence',async()=>{
+  const locks=lockFixture(),session=storage(),ctxEnv=ownedEnv(locks,session);
+  const adapter=store.create(ctxEnv),claimed=await adapter.claimTab();
+  const ctx={tabId:claimed.tabId,workspace:'scene'};
+  const key='curvature-modern-ui-pending-v1:workspace:'+claimed.tabId+':scene';
+  session.setItem(key,'not valid JSON');
+  assert.throws(()=>adapter.readPending('per-tab-and-workspace',ctx),
+    /corrupt pending UI write/);
+  assert.throws(()=>adapter.stage('per-tab-and-workspace',ctx,{
+    format:registry.FORMAT,version:1,scope:'per-tab-and-workspace',
+    values:{}},0),/corrupt pending UI write/);
+  assert.equal(session.getItem(key),'not valid JSON');
+  ctxEnv.leave();
 });

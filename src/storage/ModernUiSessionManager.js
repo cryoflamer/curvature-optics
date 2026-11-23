@@ -46,20 +46,47 @@
         for(const scope of SCOPES){
           if(![...specs.values()].some(x=>x.scope===scope))continue;
           const ctx=context(scope);
-          const row=await store.read(scope,ctx);
+          let row=await store.read(scope,ctx);
           check(row&&Number.isSafeInteger(row.revision)&&row.revision>=0,
             'invalid stored revision for '+scope);
-          revisions.set(group(scope),row.revision);
           if(row.envelope){
             const report=registry.hydrate(row.envelope,ctx);
             if(report.rejected.length){
-              // A future key/version must remain untouched. The registry keeps
-              // the raw evidence, but a whole-envelope write would otherwise
-              // discard it. Read-only until an explicit compatible migration.
+              // Never replay a pending older snapshot over a future schema.
               incompatible.set(group(scope),report.rejected.slice());
               for(const key of report.rejected)warnings.push(key);
+              revisions.set(group(scope),row.revision);
+              continue;
             }
           }
+          const pending=typeof store.readPending==='function'?
+            store.readPending(scope,ctx):null;
+          if(pending){
+            const report=registry.hydrate(pending.envelope,ctx);
+            if(report.rejected.length){
+              incompatible.set(group(scope),report.rejected.slice());
+              for(const key of report.rejected)warnings.push(key);
+              revisions.set(group(scope),row.revision);
+              continue;
+            }
+            const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+            if(row.revision===pending.expectedRevision){
+              // No acknowledged write reached IndexedDB before F5. Commit
+              // the exact synchronous intent using the original CAS revision.
+              const saved=await store.write(scope,ctx,pending.envelope,row.revision);
+              check(saved&&saved.revision===row.revision+1,
+                'missing recovery acknowledgement');
+              row={revision:saved.revision,envelope:pending.envelope};
+            }else if(row.revision!==pending.expectedRevision+1||
+                     !same(row.envelope,pending.envelope)){
+              // A different revision exists. Leave the pending bytes intact
+              // instead of rebasing an older writer or replacing the project.
+              throw Error('UI Session Manager: pending UI revision conflict; original intent preserved');
+            }
+            if(typeof store.acknowledge==='function')
+              store.acknowledge(scope,ctx,pending.envelope,row.revision);
+          }
+          revisions.set(group(scope),row.revision);
         }
         ready=true;
         return Object.freeze({ready:true,unrecognizedKeys:warnings});
@@ -88,7 +115,10 @@
           const saved=await store.write(scope,ctx,frame,revision);
           check(saved&&Number.isSafeInteger(saved.revision)&&
             saved.revision===revision+1,'missing acknowledged revision');
-          revisions.set(id,saved.revision);errors.delete(id);failedWrites.delete(id);
+          if(typeof store.acknowledge==='function')
+            store.acknowledge(scope,ctx,frame,saved.revision);
+          revisions.set(id,saved.revision);
+          errors.delete(id);failedWrites.delete(id);
           return true;
         }catch(error){
           failedWrites.set(id,{revision,frame});
@@ -98,12 +128,29 @@
       queues.set(id,pending);
       return pending;
     }
+    function commitChanged(scope,ctx){
+      const id=group(scope),revision=revisions.get(id)||0;
+      if(typeof store.stage==='function'){
+        const frame=registry.snapshot(scope,ctx);
+        try{store.stage(scope,ctx,frame,revision);}
+        catch(error){
+          // A disabled/full sessionStorage cannot promise survival through F5.
+          // Report the failure, retain prior evidence and refuse a write that
+          // would silently appear durable without a recoverable intent.
+          locations.set(id,{scope,ctx});
+          failedWrites.set(id,{revision,frame,stagingFailed:true});
+          errors.set(id,error);
+          return Promise.reject(error);
+        }
+      }
+      return schedule(scope,ctx);
+    }
     function set(key,value){
       check(ready&&!restoring,'restore state before user changes');
       const spec=specFor(key),ctx=context(spec.scope);
       ensureWritable(spec.scope);
       const changed=registry.set(key,value,ctx);
-      return changed?schedule(spec.scope,ctx):Promise.resolve(false);
+      return changed?commitChanged(spec.scope,ctx):Promise.resolve(false);
     }
     // Preflight the entire patch before changing any registered state. A
     // multi-key layout reset makes ONE acknowledged transaction per scope.
@@ -135,7 +182,7 @@
       let changed=false;
       for(const [key,value] of validated)
         changed=registry.set(key,value,ctx)||changed;
-      return changed?schedule(scope,ctx):Promise.resolve(false);
+      return changed?commitChanged(scope,ctx):Promise.resolve(false);
     }
     function reset(key){return set(key,specFor(key).defaultValue);}
     async function flush(){await Promise.all([...queues.values()]);}
@@ -151,6 +198,8 @@
       for(const id of [...errors.keys()]){
         const target=locations.get(id),failed=failedWrites.get(id);
         check(target&&failed,'failed write evidence required');
+        check(!failed.stagingFailed,
+          'pending UI staging failed; original evidence preserved');
         const expected=revisions.get(id)||0;
         let remote;
         try{remote=await store.read(target.scope,target.ctx);}
@@ -160,6 +209,8 @@
            same(remote.envelope,failed.frame)){
           // IDB committed, but the acknowledgement failed. Re-read confirms
           // exact bytes and revision; do not write a second copy.
+          if(typeof store.acknowledge==='function')
+            store.acknowledge(target.scope,target.ctx,failed.frame,remote.revision);
           revisions.set(id,remote.revision);
           errors.delete(id);failedWrites.delete(id);
           queues.set(id,Promise.resolve(true));

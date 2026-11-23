@@ -306,6 +306,22 @@ and leaves the user's in-memory choice and error available for reconciliation.
 This is not automatic background retry or a substitute for future visible
 export/retry/resolve controls and document-level recovery.
 
+**Immediate reload before a UI write is acknowledged:** the opt-in
+`ModernUiSessionStore` maintains a small, synchronous, tab-scoped
+`sessionStorage` write-ahead intent *only for registered UI envelopes*.
+Every intentional UI change stages the latest validated snapshot before the
+asynchronous IndexedDB transaction starts. Successful acknowledgement removes
+the intent (or advances its expected revision when another UI edit is pending).
+On F5, after claiming tab identity, the manager first reads the durable IDB
+record and validates the pending envelope; it writes an uncommitted intent
+only when the stored revision still matches the original CAS expectation, or
+accepts identical already committed bytes without a second write. A different
+revision, newer schema or corrupt staging record **fails closed**, preserving
+both original records for explicit resolution. The journal is not a second
+source of truth, is not shared between tabs, never stores physical experiments
+or projects, and cannot guarantee recovery if the browser clears
+`sessionStorage` itself. The normal Modern route does not create the journal.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery

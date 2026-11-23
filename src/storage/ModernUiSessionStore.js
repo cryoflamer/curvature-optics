@@ -9,6 +9,7 @@
   'use strict';
   const DATABASE='curvature-modern-ui-state',VERSION=1;
   const TAB_KEY='curvature-modern-ui-tab-id-v1';
+  const PENDING_PREFIX='curvature-modern-ui-pending-v1:';
   const FORMAT='curvature-modern-ui-state';
   const ID=/^[A-Za-z0-9_-]{1,128}$/;
   function check(ok,reason){if(!ok)throw Error('UI Session Store: '+reason);}
@@ -96,6 +97,71 @@
       check(typeof workspace==='string'&&ID.test(workspace),
         'workspace identity required');
       return {store:'sessions',id:'workspace:'+id+':'+workspace};
+    }
+    // A tiny synchronous write-ahead intent is scoped to this browser tab.
+    // IndexedDB remains authoritative; no experiment, draft or project is
+    // serialized here. A copied tab has a new ID and cannot replay its parent.
+    function pendingKey(scope,context){
+      if(scope==='global')return null;
+      return PENDING_PREFIX+address(scope,context).id;
+    }
+    function validatePending(scope,context,entry){
+      const id=address(scope,context).id;
+      check(entry&&entry.format===FORMAT&&entry.version===1&&
+        entry.target===id&&entry.scope===scope&&
+        Number.isSafeInteger(entry.expectedRevision)&&entry.expectedRevision>=0&&
+        entry.envelope&&entry.envelope.format===FORMAT&&
+        entry.envelope.version===1&&entry.envelope.scope===scope&&
+        entry.envelope.values&&typeof entry.envelope.values==='object'&&
+        !Array.isArray(entry.envelope.values),
+        'unsupported or corrupt pending UI write; original bytes retained');
+      return entry;
+    }
+    function readPending(scope,context){
+      const key=pendingKey(scope,context);
+      if(!key)return null;
+      const raw=sessionStorage.getItem(key);
+      if(raw===null)return null;
+      let parsed;
+      try{parsed=JSON.parse(raw);}
+      catch(error){throw Error('UI Session Store: corrupt pending UI write; original bytes retained');}
+      return validatePending(scope,context,parsed);
+    }
+    function stage(scope,context,envelope,expectedRevision){
+      const key=pendingKey(scope,context);
+      if(!key)return false;
+      check(owner&&owner.active&&context.tabId===owner.id,
+        'tab ownership required for pending UI write');
+      check(typeof sessionStorage.removeItem==='function',
+        'sessionStorage removeItem required for pending UI write');
+      // Refuse to overwrite corrupt evidence even when the new UI value is valid.
+      readPending(scope,context);
+      const entry=validatePending(scope,context,{
+        format:FORMAT,version:1,target:address(scope,context).id,scope,
+        expectedRevision,envelope
+      });
+      sessionStorage.setItem(key,JSON.stringify(entry));
+      return true;
+    }
+    function acknowledge(scope,context,envelope,revision){
+      const key=pendingKey(scope,context);
+      if(!key)return false;
+      const pending=readPending(scope,context);
+      if(!pending)return false;
+      check(Number.isSafeInteger(revision)&&revision>=1,
+        'invalid pending acknowledgement');
+      if(revision<=pending.expectedRevision)return false;
+      check(revision===pending.expectedRevision+1,
+        'pending UI revision jump; original bytes retained');
+      if(JSON.stringify(pending.envelope)===JSON.stringify(envelope)){
+        sessionStorage.removeItem(key);
+      }else{
+        // A later UI edit was staged while an earlier write completed.
+        // Keep the later intent, but advance its acknowledged base revision.
+        pending.expectedRevision=revision;
+        sessionStorage.setItem(key,JSON.stringify(pending));
+      }
+      return true;
     }
     function connect(){
       return new Promise((resolve,reject)=>{
@@ -198,7 +264,7 @@
         };
       });
     }
-    return Object.freeze({tabId,claimTab,read,write});
+    return Object.freeze({tabId,claimTab,read,write,stage,readPending,acknowledge});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));
