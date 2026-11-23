@@ -10,7 +10,7 @@
   'use strict';
   const FORMAT='curvature-modern-ui-state',VERSION=1;
   const SCOPES=Object.freeze(['per-tab','per-tab-and-workspace','global']);
-  const KEY=/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/;
+  const KEY=/^[a-z][a-zA-Z0-9-]*(?:\.[a-z][a-zA-Z0-9-]*)+$/;
   const ID=/^[A-Za-z0-9_-]{1,128}$/;
   function check(ok,message){if(!ok)throw Error('State Registry: '+message);}
   function clone(value){

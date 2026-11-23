@@ -114,3 +114,21 @@ test('null can represent a deliberate missing selection without losing its type'
   assert.deepEqual(second.hydrate(state,{tabId:'b'}).applied,['object-explorer.selected-object']);
   assert.equal(second.get('object-explorer.selected-object',{tabId:'b'}),null);
 });
+
+
+test('registered UI state accepts existing Modern camelCase section suffixes without renaming',()=>{
+  const reg=registry.create();
+  for(const suffix of ['camera.savedViews','camera.frameName',
+    'objects.group1.variations']){
+    const key='workspace.section.'+suffix;
+    reg.register({key,scope:'per-tab-and-workspace',version:1,
+      defaultValue:false,validate:v=>typeof v==='boolean'});
+    reg.set(key,true,{tabId:'t1',workspace:'scene'});
+    assert.equal(reg.get(key,{tabId:'t1',workspace:'scene'}),true);
+  }
+  assert.equal(Object.keys(reg.snapshot('per-tab-and-workspace',
+    {tabId:'t1',workspace:'scene'}).values).length,3);
+  assert.throws(()=>reg.register({key:'Workspace.Section.Bad',scope:'global',
+    version:1,defaultValue:true,validate:v=>typeof v==='boolean'}),
+  /invalid state key/);
+});

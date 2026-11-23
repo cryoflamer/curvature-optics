@@ -202,7 +202,10 @@ and Display. Each suffix is registered once as a namespaced key,
 `workspace.section.<suffix>`, and scoped independently to Scene/Compare.
 A new supported native disclosure joins the same mechanism by being declared
 in the section defaults and marked with `data-workspace-section`; no new
-storage or event-handler implementation is added.
+storage or event-handler implementation is added. The registry accepts
+already-shipped camelCase section identifiers (`camera.savedViews`,
+`camera.frameName`) as well as lowercase names, retaining their original
+suffixes without rewriting existing saved preference keys.
 Visit `CurvatureModern.html?ui-state-registry=preview` **in a disposable private
 profile** to enable the preview; normal Modern and explicit share/import links
 keep the legacy path. The new modules are loaded but instantiate no new

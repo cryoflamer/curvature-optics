@@ -10,7 +10,7 @@
   'use strict';
   const KEY_PREFIX='workspace.section.';
   const MODES=Object.freeze(['scene','compare']);
-  const SUFFIX=/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
+  const SUFFIX=/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/;
   function check(ok,what){if(!ok)throw Error('Workspace State Bridge: '+what);}
   function create({registryApi,sessionStoreApi,managerApi,env,
     suffixes,legacyValue}={}){
