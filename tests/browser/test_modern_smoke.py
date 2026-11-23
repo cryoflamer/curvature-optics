@@ -9148,5 +9148,158 @@ class ModernBrowserSmoke(unittest.TestCase):
             "CurvatureModernApp.getWorkspaceUiRegistryPreview().status"),'ready')
 
 
+
+    def test_workspace_registry_preview_all_disclosures_round_trip(self):
+        """All declared native folds use the same opt-in controller and keep
+        Scene/Compare values independent through mode changes and F5.
+        """
+        self.open_modern()
+        self.page.evaluate("""() => {
+            CurvatureModernApplicationPreferences.write(localStorage,{
+                workspace:{mode:'scene',sections:{
+                    'scene.camera.pose':false,
+                    'compare.camera.pose':true,
+                    'scene.surface.geometry':false,
+                    'compare.surface.geometry':true,
+                    'scene.atmosphere.profile':false,
+                    'compare.atmosphere.profile':true,
+                    'scene.objects.group1':false,
+                    'compare.objects.group1':true,
+                    'scene.display.advanced':false,
+                    'compare.display.advanced':true
+                }}
+            });
+        }""")
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        declared=self.page.evaluate("""() =>
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().sections""")
+        self.assertEqual(len(declared),18)
+        self.assertEqual(len(set(declared)),18)
+        for suffix in ('camera.pose','surface.geometry','atmosphere.profile',
+                       'objects.group1','display.advanced'):
+            self.assertIn(suffix,declared)
+        # Declaring 18+18 legacy defaults must not write any initial row.
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const id=store.tabId();
+            const a=await store.read('per-tab-and-workspace',
+              {tabId:id,workspace:'scene'});
+            const b=await store.read('per-tab-and-workspace',
+              {tabId:id,workspace:'compare'});
+            return a.revision+b.revision;
+        }"""),0)
+        scene_surface=self.page.locator('#ModernSceneSurfaceGeometrySection')
+        compare_surface=self.page.locator('#ModernCompareSurfaceGeometrySection')
+        self.assertFalse(scene_surface.evaluate('(node)=>node.open'))
+        self.assertFalse(compare_surface.evaluate('(node)=>node.open'))
+        self.page.locator('#ModernSettingsSurface').click()
+        scene_surface.locator('summary').click()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'scene'});
+            return row.revision>=1 &&
+              row.envelope?.values?.['workspace.section.surface.geometry']?.value===true;
+        }""",timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.locator('#ModernSettingsSurface').click()
+        self.assertTrue(compare_surface.evaluate('(node)=>node.open'))
+        compare_surface.locator('summary').click()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'compare'});
+            return row.revision>=1 &&
+              row.envelope?.values?.['workspace.section.surface.geometry']?.value===false;
+        }""",timeout=30000)
+        self.assertFalse(compare_surface.evaluate('(node)=>node.open'))
+        self.page.wait_for_timeout(100)  # Flush native toggle events from mode changes
+        checkpoint=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const scene=await store.read('per-tab-and-workspace',
+              {tabId,workspace:'scene'});
+            const compare=await store.read('per-tab-and-workspace',
+              {tabId,workspace:'compare'});
+            return {scene:scene.revision,compare:compare.revision,
+              sceneValues:Object.keys(scene.envelope.values).length,
+              compareValues:Object.keys(compare.envelope.values).length};
+        }""")
+        self.assertEqual(checkpoint['sceneValues'],18)
+        self.assertEqual(checkpoint['compareValues'],18)
+        self.assertEqual(checkpoint['scene'],1)
+        self.assertEqual(checkpoint['compare'],1)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertFalse(compare_surface.evaluate('(node)=>node.open'))
+        self.page.locator('#ModernSceneTab').click()
+        self.page.locator('#ModernSettingsSurface').click()
+        self.assertTrue(scene_surface.evaluate('(node)=>node.open'))
+        self.page.wait_for_timeout(100)
+        revisions=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const scene=await store.read('per-tab-and-workspace',
+              {tabId,workspace:'scene'});
+            const compare=await store.read('per-tab-and-workspace',
+              {tabId,workspace:'compare'});
+            return {scene:scene.revision,compare:compare.revision};
+        }""")
+        self.assertEqual(revisions,{'scene':1,'compare':1},
+            'programmatic mode/F5 restoration must not create a save')
+        self.assertTrue(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage)
+            .workspace.sections['scene.surface.geometry']"""))
+        self.assertFalse(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage)
+            .workspace.sections['compare.surface.geometry']"""))
+
+    def test_workspace_registry_preview_refuses_future_version_without_overwriting(self):
+        """An incompatible newer envelope remains byte-for-byte intact while
+        legacy fold control is still usable.
+        """
+        self.open_modern()
+        before=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const frame={format:'curvature-modern-ui-state',version:1,
+                scope:'per-tab-and-workspace',
+                values:{'workspace.section.camera.navigation':{
+                    version:99,value:true}}};
+            await store.write('per-tab-and-workspace',
+                {tabId,workspace:'scene'},frame,0);
+            return JSON.stringify(frame);
+        }""")
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+          CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='incompatible'""",
+          timeout=30000)
+        self.assertIn('workspace.section.camera.navigation',self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceUiRegistryPreview().error"))
+        nav=self.page.locator('details[data-workspace-section="camera.navigation"]')
+        old_value=nav.evaluate('(node)=>node.open')
+        nav.locator('summary').click()
+        self.assertNotEqual(nav.evaluate('(node)=>node.open'),old_value)
+        self.page.wait_for_function("""old => {
+            const sections=CurvatureModernApplicationPreferences.read(
+                localStorage).workspace.sections;
+            return sections['scene.camera.navigation']===!old;
+        }""",arg=old_value)
+        after=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+              {tabId:store.tabId(),workspace:'scene'});
+            return {revision:row.revision,
+              envelope:JSON.stringify(row.envelope)};
+        }""")
+        self.assertEqual(after['revision'],1)
+        self.assertEqual(after['envelope'],before)
+
+
 if __name__ == '__main__':
     unittest.main()

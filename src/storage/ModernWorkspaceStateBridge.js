@@ -59,15 +59,20 @@
     async function reset(values){
       check(ready,'restore first');
       check(typeof values==='function','default reader required');
-      const results=[];
+      // Preflight every scope before touching either one. A reset should
+      // acknowledge one versioned snapshot per workspace, not N writes for
+      // each of the N registered disclosure sections.
+      const patches=new Map();
       for(const mode of MODES){
+        const patch=Object.create(null);
         for(const suffix of suffixes){
           const value=values(mode,suffix);
           check(typeof value==='boolean','invalid reset default');
-          results.push(set(mode,suffix,value));
+          patch[KEY_PREFIX+suffix]=value;
         }
+        patches.set(mode,patch);
       }
-      await Promise.all(results);
+      await Promise.all(MODES.map(mode=>managers.get(mode).setMany(patches.get(mode))));
     }
     async function flush(){await Promise.all([...managers.values()].map(m=>m.flush()));}
     function lastErrors(){return MODES.flatMap(mode=>managers.get(mode).lastErrors().map(

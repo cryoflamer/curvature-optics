@@ -973,7 +973,10 @@
         throw Error('UI State Registry preview dependencies not loaded');
       bridge=api.create({
         registryApi:registry,sessionStoreApi:store,managerApi:manager,env:root,
-        suffixes:['camera.navigation'],
+        // Declare each legacy disclosure once. The same reusable bridge
+        // handles Scene and Compare independently; dynamic Object folds
+        // use the same existing toggle controller.
+        suffixes:Object.keys(workspaceInitialSections),
         legacyValue:legacyWorkspaceSectionValue
       });
     }catch(error){
@@ -982,7 +985,16 @@
       return;
     }
     workspaceUiRegistryPreview={status:'loading',bridge:null,error:null};
-    bridge.restore().then(function(){
+    bridge.restore().then(function(result){
+      // Whole-scope IndexedDB snapshots may contain keys from a newer
+      // version. Never replace those unknown bytes with an older snapshot:
+      // leave this tab on legacy section preferences until compatible.
+      if(result.warnings.length){
+        var warning='Unsupported UI Registry values: '+result.warnings.join(', ');
+        workspaceUiRegistryPreview={status:'incompatible',bridge:null,error:warning};
+        preferencesStatus(warning,true);
+        return;
+      }
       // A panel edited during async restore is authoritative; do not
       // clobber an in-flight user choice with an earlier IDB observation.
       if(startVersion!==workspaceSectionEditGeneration){

@@ -86,3 +86,81 @@ test('new and corrupt data fail closed without deleting legacy settings',async()
   assert.throws(()=>bridge.set('scene','camera.navigation','false'),/invalid section state/);
   assert.deepEqual(legacy,{'scene.camera.navigation':true,'compare.camera.navigation':false});
 });
+
+
+const FOLD_SECTIONS=[
+  'camera.pose','camera.navigation','camera.animation','camera.savedViews',
+  'camera.frameName','surface.geometry','atmosphere.profile',
+  'atmosphere.explanation','atmosphere.visibility','atmosphere.shimmer',
+  'objects.group1','objects.group2','objects.group1.variations',
+  'objects.group2.variations','display.advanced','display.diagnostics',
+  'display.gpu','display.profiler'
+];
+function fullBridge({rows=new Map(),tab='first',legacy}={}){
+  const defaults=Object.fromEntries(
+    ['scene','compare'].flatMap(mode=>
+      FOLD_SECTIONS.map((suffix,i)=>[mode+'.'+suffix,mode==='scene'?i%2===0:i%2===1])));
+  const source=legacy||defaults,store=memoryStore(tab,rows);
+  const bridge=bridgeApi.create({registryApi,managerApi,env:{},
+    sessionStoreApi:{create(){return store;}},
+    suffixes:FOLD_SECTIONS,legacyValue:(mode,suffix)=>source[mode+'.'+suffix]});
+  return {bridge,store,source,rows};
+}
+
+test('all 18 declared folds preserve independent Scene/Compare legacy defaults on first restore',async()=>{
+  const {bridge,source,rows}=fullBridge();
+  const state=await bridge.restore();
+  assert.deepEqual(state.warnings,[]);
+  assert.equal(bridge.sections.length,18);
+  for(const suffix of FOLD_SECTIONS){
+    assert.equal(bridge.supports(suffix),true);
+    assert.equal(bridge.get('scene',suffix),source['scene.'+suffix]);
+    assert.equal(bridge.get('compare',suffix),source['compare.'+suffix]);
+  }
+  assert.equal(rows.size,0,'the 36 fallback values must not be backfilled on read');
+  assert.equal(bridge.supports('object-explorer.tree.expanded'),false);
+});
+
+test('grouped section reset uses at most one acknowledged record per mode',async()=>{
+  const {bridge,rows}=fullBridge();
+  await bridge.restore();
+  await bridge.set('scene','surface.geometry',true);
+  await bridge.set('compare','atmosphere.profile',true);
+  await bridge.flush();
+  const before=Object.fromEntries([...rows.entries()].map(([key,value])=>[key,value.revision]));
+  assert.equal(rows.size,2);
+  await bridge.reset(()=>false);
+  await bridge.flush();
+  for(const mode of ['scene','compare']){
+    for(const suffix of FOLD_SECTIONS)assert.equal(bridge.get(mode,suffix),false);
+    const key='per-tab-and-workspace:first:'+mode;
+    assert.equal(rows.get(key).revision,before[key]+1,
+      'a layout reset must not write 18 snapshots per mode');
+  }
+  const revisions=[...rows.values()].map(x=>x.revision);
+  await bridge.reset(()=>false);
+  assert.deepEqual([...rows.values()].map(x=>x.revision),revisions);
+});
+
+test('unknown/newer persisted fold version is left untouched and cannot be overwritten',async()=>{
+  const stored={format:registryApi.FORMAT,version:registryApi.VERSION,
+    scope:'per-tab-and-workspace',
+    values:{'workspace.section.camera.navigation':{version:99,value:true}}};
+  const key='per-tab-and-workspace:first:scene';
+  const rows=new Map([[key,{revision:5,envelope:structuredClone(stored)}]]);
+  const {bridge}=fullBridge({rows});
+  const report=await bridge.restore();
+  assert.deepEqual(report.warnings,['scene:workspace.section.camera.navigation']);
+  assert.throws(()=>bridge.set('scene','camera.pose',false),/unsupported keys/);
+  assert.equal(rows.get(key).revision,5);
+  assert.deepEqual(rows.get(key).envelope,stored);
+});
+
+test('preflight rejects invalid full-layout reset without changing the other mode',async()=>{
+  const {bridge,rows}=fullBridge();
+  await bridge.restore();
+  await assert.rejects(bridge.reset((mode,suffix)=>
+    mode==='compare'&&suffix==='atmosphere.profile'?'not boolean':false
+  ),/invalid reset default/);
+  assert.equal(rows.size,0);
+});

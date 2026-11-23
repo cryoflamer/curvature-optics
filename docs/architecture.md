@@ -195,9 +195,14 @@ identity leases remain future integration work.
 
 ### First read-first preview of the existing Scene/Compare section controller
 
-The **existing** Modern `details[data-workspace-section]` controller now has an
-explicit preview path for exactly one presentation-only key:
-`workspace.section.camera.navigation` (the Camera → Navigation disclosure).
+The **existing** Modern `details[data-workspace-section]` controller has an
+explicit preview path for all **18 validated disclosure section suffixes**
+(declared in `workspaceInitialSections`): Camera, Surface, Atmosphere, Objects
+and Display. Each suffix is registered once as a namespaced key,
+`workspace.section.<suffix>`, and scoped independently to Scene/Compare.
+A new supported native disclosure joins the same mechanism by being declared
+in the section defaults and marked with `data-workspace-section`; no new
+storage or event-handler implementation is added.
 Visit `CurvatureModern.html?ui-state-registry=preview` **in a disposable private
 profile** to enable the preview; normal Modern and explicit share/import links
 keep the legacy path. The new modules are loaded but instantiate no new
@@ -209,26 +214,32 @@ automatically persist a share URL.
 Manager; the same registered key has `per-tab-and-workspace` scope for both
 `scene` and `compare`. Its registered default reads the already validated
 `ModernApplicationPreferences` section preference **without writing it to
-IndexedDB**. If a compatible newer IndexedDB value already exists for this
-tab, that value wins for the preview key. All other existing panels remain on
-the old controller unchanged. The native `toggle` listener is reused:
-a preview change updates the ordinary legacy preference for rollback and
-queues the equivalent versioned IndexedDB record. On first restore, neither
-old preferences nor new IndexedDB records are rewritten. Programmatic
-restoration is silent, and an intervening panel edit prevents a delayed
-async preview restore from overwriting the current choice.
+IndexedDB**. If a compatible committed IndexedDB value already exists for this
+tab, that value wins for the corresponding preview key. Values absent from
+an older registry snapshot fall back to their validated legacy defaults.
+The native `toggle` listener is reused, even for separately rendered
+Scene/Compare Surface and Atmosphere details: a preview change retains the
+ordinary legacy preference for rollback and queues a versioned IndexedDB
+snapshot. On first restore, neither old preferences nor new IndexedDB records
+are rewritten. Programmatic restoration is silent, and an intervening panel
+edit prevents a delayed async preview restore from overwriting the choice.
 
 The preview is deliberately **not** a general production migration or
 automatic promotion of all layout choices: unsupported/corrupt records cause
-a reported preview error and the legacy UI remains usable. The preview
-records an explicit status through
-`CurvatureModernApp.getWorkspaceUiRegistryPreview()`. The existing layout
-reset also resets the previewed section; no second DOM listener/controller
-is mounted. The targeted Node and Chromium tests verify legacy defaults,
-independent Scene and Compare values, first-run read-only behavior, explicit
-changes, F5 and the normal-mode no-new-database contract. Before turning this
-on by default, verify duplicated-tab identity handling, startup timing,
-conflict/failure recovery and imported legacy data in a disposable profile.
+a reported `incompatible` preview status and the original Legacy-controlled
+folds remain usable. An unsupported newer/unknown key **blocks whole-envelope
+writes** in the generic Session Manager, so the saved raw evidence cannot be
+discarded by an older client. The preview records its status through
+`CurvatureModernApp.getWorkspaceUiRegistryPreview()`. A full layout reset
+now uses the generic `setMany()` batch operation: **one acknowledged
+transaction per changed workspace**, not one per panel. The old legacy
+preferences remain readable, and no second DOM listener/controller is mounted.
+Targeted Node/Chromium tests verify all 18 declarations, read-only legacy
+fallback, independent Scene/Compare values, multi-section activation, F5,
+no spurious version bumps, incompatible version preservation, reset batching
+and the normal-mode no-new-database contract. Before turning this on by default,
+verify copied-tab identity handling, startup timing, conflict/failure recovery
+and imported legacy data in a disposable profile.
 
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI

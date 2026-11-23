@@ -17,7 +17,8 @@
       store&&typeof store.read==='function'&&
       typeof store.write==='function'&&typeof store.tabId==='function',
       'registry and session-store adapters required');
-    const specs=new Map(),revisions=new Map(),queues=new Map(),errors=new Map();
+    const specs=new Map(),revisions=new Map(),queues=new Map(),errors=new Map(),
+      incompatible=new Map();
     let ready=false,restoring=false;
     function register(spec){
       check(!ready&&!restoring,'register before restore');
@@ -48,7 +49,13 @@
           revisions.set(group(scope),row.revision);
           if(row.envelope){
             const report=registry.hydrate(row.envelope,ctx);
-            for(const key of report.rejected)warnings.push(key);
+            if(report.rejected.length){
+              // A future key/version must remain untouched. The registry keeps
+              // the raw evidence, but a whole-envelope write would otherwise
+              // discard it. Read-only until an explicit compatible migration.
+              incompatible.set(group(scope),report.rejected.slice());
+              for(const key of report.rejected)warnings.push(key);
+            }
           }
         }
         ready=true;
@@ -61,20 +68,20 @@
     }
     function get(key){const spec=specFor(key);return registry.get(key,context(spec.scope));}
     function subscribe(key,handler){specFor(key);return registry.subscribe(key,handler);}
-    function set(key,value){
-      check(ready&&!restoring,'restore state before user changes');
-      const spec=specFor(key),ctx=context(spec.scope);
-      const changed=registry.set(key,value,ctx);
-      if(!changed)return Promise.resolve(false);
-      const id=group(spec.scope);
-      const previous=queues.get(id)||Promise.resolve();
+    function ensureWritable(scope){
+      const rejected=incompatible.get(group(scope));
+      check(!rejected,
+        'stored state contains unsupported keys: '+(rejected||[]).join(', '));
+    }
+    function schedule(scope,ctx){
+      const id=group(scope),previous=queues.get(id)||Promise.resolve();
       const pending=previous.catch(()=>{}).then(async()=>{
         // Snapshot at commit time: rapid changes in one scope never
-        // replay a stale copy over a later UI choice.
-        const frame=registry.snapshot(spec.scope,ctx);
+        // replay an old copy over later UI choices.
+        const frame=registry.snapshot(scope,ctx);
         const revision=revisions.get(id)||0;
         try{
-          const saved=await store.write(spec.scope,ctx,frame,revision);
+          const saved=await store.write(scope,ctx,frame,revision);
           check(saved&&Number.isSafeInteger(saved.revision)&&
             saved.revision===revision+1,'missing acknowledged revision');
           revisions.set(id,saved.revision);errors.delete(id);
@@ -83,6 +90,45 @@
       });
       queues.set(id,pending);
       return pending;
+    }
+    function set(key,value){
+      check(ready&&!restoring,'restore state before user changes');
+      const spec=specFor(key),ctx=context(spec.scope);
+      ensureWritable(spec.scope);
+      const changed=registry.set(key,value,ctx);
+      return changed?schedule(spec.scope,ctx):Promise.resolve(false);
+    }
+    // Preflight the entire patch before changing any registered state. A
+    // multi-key layout reset makes ONE acknowledged transaction per scope.
+    // Other pages can reuse this without inventing their own bulk writer.
+    function setMany(patch){
+      check(ready&&!restoring,'restore state before user changes');
+      check(patch&&typeof patch==='object'&&!Array.isArray(patch),
+        'state patch must be an object');
+      const entries=Object.entries(patch);
+      check(entries.length>0,'state patch must not be empty');
+      let scope=null;
+      const validated=entries.map(([key,value])=>{
+        const spec=specFor(key);
+        if(scope===null)scope=spec.scope;
+        check(spec.scope===scope,'state patch must use one scope');
+        let clean;
+        try{
+          const encoded=JSON.stringify(value);
+          check(typeof encoded==='string','state must be JSON-compatible');
+          clean=JSON.parse(encoded);
+          check(spec.validate(clean)===true,'invalid value for '+key);
+        }catch(error){
+          throw Error('UI Session Manager: invalid value for '+key+': '+error.message);
+        }
+        return [key,clean];
+      });
+      ensureWritable(scope);
+      const ctx=context(scope);
+      let changed=false;
+      for(const [key,value] of validated)
+        changed=registry.set(key,value,ctx)||changed;
+      return changed?schedule(scope,ctx):Promise.resolve(false);
     }
     function reset(key){return set(key,specFor(key).defaultValue);}
     async function flush(){await Promise.all([...queues.values()]);}
@@ -140,7 +186,7 @@
       }
       return ()=>{off();for(const fn of cleanup)fn();};
     }
-    return Object.freeze({register,restore,get,set,reset,subscribe,flush,
+    return Object.freeze({register,restore,get,set,setMany,reset,subscribe,flush,
       lastErrors,bindDetails,bindChoices,isReady:()=>ready});
   }
   return Object.freeze({create});

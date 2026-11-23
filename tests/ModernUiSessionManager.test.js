@@ -140,3 +140,57 @@ test('restore must precede edits and register must precede restore',async()=>{
     version:1,defaultValue:true,validate:()=>true}),/register before restore/);
   await assert.rejects(instance.restore(),/restore can run only once/);
 });
+
+
+test('bulk state updates write a single revision and preflight all values',async()=>{
+  const data=new Map(),manager=create(store('tab1',data));
+  await manager.restore();
+  assert.equal(await manager.setMany({
+    'object-explorer.tree.open':true,
+    'object-explorer.active-panel':'details'
+  }),true);
+  const key='workspace:tab1:object-explorer';
+  assert.equal(data.get(key).revision,1,'one IDB transaction per scope');
+  assert.equal(manager.get('object-explorer.tree.open'),true);
+  assert.equal(manager.get('object-explorer.active-panel'),'details');
+  assert.equal(await manager.setMany({
+    'object-explorer.tree.open':true,
+    'object-explorer.active-panel':'details'
+  }),false,'unchanged values never trigger a write');
+  assert.equal(data.get(key).revision,1);
+  assert.throws(()=>manager.setMany({
+    'object-explorer.tree.open':false,
+    'object-explorer.active-panel':'invalid'
+  }),/invalid value/);
+  assert.equal(manager.get('object-explorer.tree.open'),true,
+    'failed preflight must not partially change memory');
+  assert.equal(data.get(key).revision,1);
+  assert.throws(()=>manager.setMany({
+    'object-explorer.tree.open':false,
+    'application.theme':'dark'
+  }),/one scope/);
+  assert.equal(manager.get('object-explorer.tree.open'),true);
+});
+
+test('unknown/newer stored UI keys remain intact and prevent whole-envelope replacement',async()=>{
+  const old={format:registry.FORMAT,version:registry.VERSION,
+    scope:'per-tab-and-workspace',
+    values:{
+      'object-explorer.tree.open':{version:2,value:true},
+      'future.object-explorer.panel':{version:1,value:'future-version'}
+    }};
+  const data=new Map([['workspace:tab1:object-explorer',{
+    revision:8,envelope:structuredClone(old)
+  }]]);
+  const manager=create(store('tab1',data));
+  const report=await manager.restore();
+  assert.deepEqual(report.unrecognizedKeys,
+    ['object-explorer.tree.open','future.object-explorer.panel']);
+  assert.throws(()=>manager.set('object-explorer.active-panel','details'),
+    /unsupported keys/);
+  assert.throws(()=>manager.setMany({
+    'object-explorer.active-panel':'details'
+  }),/unsupported keys/);
+  assert.deepEqual(data.get('workspace:tab1:object-explorer').envelope,old);
+  assert.equal(data.get('workspace:tab1:object-explorer').revision,8);
+});
