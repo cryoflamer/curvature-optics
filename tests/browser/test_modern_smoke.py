@@ -8393,5 +8393,82 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernReferenceImageLibrary.list(indexedDB)).map(row=>row.id)"""),
             ['shared_test_id'])
 
+
+    def test_portable_backup_readonly_browser_capture_and_integrity(self):
+        """A real Chromium IndexedDB capture must preserve keys, bytes and origin data."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+        result = self.page.evaluate("""async () => {
+            const fixtureName='curvature-modern-portable-backup-fixture';
+            const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/igAAAABJRU5ErkJggg==';
+            await new Promise((resolve,reject)=>{
+                const request=indexedDB.open(fixtureName,1);
+                request.onupgradeneeded=()=>{
+                    request.result.createObjectStore('observations',{keyPath:'id'});
+                };
+                request.onerror=()=>reject(request.error);
+                request.onsuccess=()=>{
+                    const db=request.result,tx=db.transaction('observations','readwrite');
+                    tx.objectStore('observations').add({
+                        id:'photo_a',revision:3,record:{original:{dataUrl:photo,width:1,height:1}},
+                        savedAt:new Date('2026-11-23T00:00:00.000Z')
+                    });
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            localStorage.setItem('curvature-backup-test-local','verbatim-local');
+            sessionStorage.setItem('curvature-backup-test-tab','verbatim-tab');
+            const api=window.CurvatureModernPortableBackup;
+            const archive=await api.capture(window);
+            const review=await api.inspect(archive,crypto);
+            const fixture=review.manifest.databases.find(d=>d.name===fixtureName);
+            const stored=JSON.parse(archive.payload).content.databases
+                .find(d=>d.name===fixtureName).stores[0].records[0];
+            const revived=api.decode(stored.value);
+            const checksumValid=/^[0-9a-f]{64}$/.test(archive.sha256);
+            let corruptionRejected=false;
+            try{await api.inspect({...archive,payload:archive.payload+' '},crypto);}
+            catch(error){corruptionRejected=/checksum mismatch/.test(error.message);}
+            const after=await new Promise((resolve,reject)=>{
+                const request=indexedDB.open(fixtureName);
+                request.onerror=()=>reject(request.error);
+                request.onsuccess=()=>{
+                    const db=request.result,tx=db.transaction('observations','readonly');
+                    const get=tx.objectStore('observations').get('photo_a');
+                    get.onsuccess=()=>resolve({value:get.result,version:db.version});
+                    get.onerror=()=>reject(get.error);
+                    tx.oncomplete=()=>db.close();
+                };
+            });
+            return {
+                count:fixture?.stores?.[0]?.count??null,
+                version:fixture?.version??null,
+                photo:revived.record.original.dataUrl,
+                restoredRevision:revived.revision,
+                date:revived.savedAt.toISOString(),
+                persistedPhoto:after.value.record.original.dataUrl,
+                persistedRevision:after.value.revision,
+                persistedVersion:after.version,
+                local:localStorage.getItem('curvature-backup-test-local'),
+                tab:sessionStorage.getItem('curvature-backup-test-tab'),
+                archiveEligible:review.eligibleForMigration,
+                checksumValid,corruptionRejected
+            };
+        }""")
+        self.assertEqual(result['count'], 1)
+        self.assertEqual(result['version'], 1)
+        self.assertEqual(result['persistedVersion'], 1)
+        self.assertEqual(result['restoredRevision'], 3)
+        self.assertEqual(result['persistedRevision'], 3)
+        self.assertEqual(result['date'], '2026-11-23T00:00:00.000Z')
+        self.assertEqual(result['photo'], result['persistedPhoto'])
+        self.assertEqual(result['local'], 'verbatim-local')
+        self.assertEqual(result['tab'], 'verbatim-tab')
+        self.assertTrue(result['checksumValid'])
+        self.assertTrue(result['corruptionRejected'])
+        self.assertFalse(result['archiveEligible'])
+
+
 if __name__ == '__main__':
     unittest.main()
