@@ -334,6 +334,151 @@
     // Two equal observations do not constitute an atomic cut across databases.
     return pack(unpackData(before),env.crypto);
   }
+  // Source-specific qualification is distinct from archive checksum validation.
+  // An archive can be byte-perfect yet miss the original photo needed by a
+  // Calibration Project, or carry a stale project summary. Fail the safety
+  // review without touching either the original or isolated databases.
+  async function qualifyEvidence(archive,env){
+    ensure(env&&env.crypto&&typeof env.verifyOriginal==='function',
+      'an original-image decoder is required for evidence qualification');
+    await inspect(archive,env.crypto);
+    const body=JSON.parse(archive.payload);
+    const databases=new Map(body.content.databases.map(db=>[db.name,db]));
+    function rows(database,store){
+      const db=databases.get(database);
+      if(!db||db.status!=='present')return [];
+      const entry=db.stores.find(s=>s.name===store);
+      return entry?entry.records.map(row=>({key:decode(row.key),value:decode(row.value)})):[];
+    }
+    function exists(database,store){
+      const db=databases.get(database);
+      return db&&db.status==='present'&&db.stores.some(s=>s.name===store);
+    }
+    function identity(value,label){
+      ensure(object(value)&&value.version===1&&
+        typeof value.sha256==='string'&&/^[0-9a-f]{64}$/.test(value.sha256)&&
+        Number.isSafeInteger(value.width)&&value.width>0&&value.width<=32768&&
+        Number.isSafeInteger(value.height)&&value.height>0&&value.height<=32768,
+        'invalid photograph identity: '+label);
+      return value.sha256+':'+value.width+'x'+value.height;
+    }
+    const images=rows('curvature-modern-reference-images','observations');
+    const ids=new Set(),origins=new Map(),rawById=new Map();
+    for(const row of images){
+      const value=row.value,record=value&&value.record;
+      ensure(object(value)&&typeof value.id==='string'&&
+        row.key===value.id&&Number.isSafeInteger(value.revision)&&value.revision>=1&&
+        object(record)&&record.id===value.id&&object(record.original),
+        'invalid reference image row');
+      ensure(!ids.has(value.id),'duplicate reference image ID');
+      ids.add(value.id);
+      const raster=record.original,url=raster.dataUrl;
+      ensure(typeof url==='string'&&/^data:image\/(?:png|jpeg|webp);base64,/.test(url)&&
+        Number.isSafeInteger(raster.width)&&Number.isSafeInteger(raster.height)&&
+        raster.width>0&&raster.height>0,'invalid original image raster');
+      const binary=unbase64(url.slice(url.indexOf(',')+1));
+      ensure(binary.length>0&&binary.length<=20*1024*1024,
+        'original image byte limit exceeded');
+      // Browser decoder checks MIME, raster header and actual decoded natural
+      // dimensions. It must be read-only; no thumbnail regeneration here.
+      await env.verifyOriginal(record);
+      const hash=Array.from(new Uint8Array(await env.crypto.subtle.digest('SHA-256',binary)),
+        b=>b.toString(16).padStart(2,'0')).join('');
+      const key=identity({version:1,sha256:hash,width:raster.width,height:raster.height},value.id);
+      const previous=origins.get(key);
+      if(previous)ensure(previous.dataUrl===url,
+        'inconsistent original bytes for one image identity');
+      else origins.set(key,{dataUrl:url});
+      rawById.set(value.id,{identity:key,revision:value.revision});
+    }
+    const annotations=rows('curvature-modern-reference-images','annotations');
+    for(const row of annotations)
+      ensure(object(row.value)&&typeof row.value.id==='string'&&
+        row.key===row.value.id&&ids.has(row.value.id),
+        'orphan reference image annotation');
+    const projects=rows('curvature-photo-calibration','projects');
+    const summaries=rows('curvature-photo-calibration','project-summaries');
+    const summaryMap=new Map();
+    for(const row of summaries){
+      const v=row.value;
+      ensure(object(v)&&typeof v.id==='string'&&row.key===v.id&&
+        !summaryMap.has(v.id),'invalid calibration project summary');
+      summaryMap.set(v.id,v);
+    }
+    const archiveRows=rows('curvature-modern-calibration-results','results');
+    const resultMap=new Map();
+    for(const row of archiveRows){
+      const v=row.value;
+      ensure(object(v)&&typeof v.id==='string'&&row.key===v.id&&
+        object(v.record)&&object(v.record.payload)&&
+        !resultMap.has(v.id),'invalid archived calibration result');
+      resultMap.set(v.id,v);
+      ensure(origins.has(identity(v.record.payload.photo,v.id)),
+        'archived Calibration result original missing: '+v.id);
+    }
+    const projectIds=new Set();
+    for(const row of projects){
+      const v=row.value;
+      ensure(object(v)&&typeof v.id==='string'&&row.key===v.id&&
+        !projectIds.has(v.id)&&Number.isSafeInteger(v.revision)&&v.revision>=1,
+        'invalid Calibration Project record');
+      projectIds.add(v.id);
+      const summary=summaryMap.get(v.id);
+      ensure(summary&&summary.id===v.id&&summary.revision===v.revision&&
+        summary.version===v.version&&summary.title===v.title&&
+        summary.updatedAt===v.updatedAt&&summary.createdAt===v.createdAt,
+        'Calibration Project summary/record mismatch: '+v.id);
+      if(v.photo!==null){
+        ensure(object(v.photo)&&origins.has(identity(v.photo.identity,v.id)),
+          'Calibration Project original missing: '+v.id);
+        ensure(summary.photo&&identity(summary.photo,v.id)===
+          identity(v.photo.identity,v.id),
+          'Calibration Project photo summary mismatch: '+v.id);
+      }else ensure(summary.photo===null,
+        'Calibration Project claims an unexpected summary photo: '+v.id);
+      if(v.checkpoint&&v.photo&&v.checkpoint.payload&&
+        v.checkpoint.payload.recordMetadata)
+        ensure(v.checkpoint.payload.recordMetadata.id===v.photo.aliasId,
+          'Calibration Project checkpoint attribution mismatch: '+v.id);
+      ensure(Array.isArray(v.resultIds),
+        'invalid Calibration Project result links: '+v.id);
+      for(const id of v.resultIds){
+        ensure(typeof id==='string'&&resultMap.has(id),
+          'Calibration Project archived result missing: '+v.id+' / '+id);
+      }
+    }
+    ensure(projects.length===summaryMap.size,
+      'orphan Calibration Project summary');
+    const animationRows=rows('curvature-modern-animation-library','projects');
+    let animationLinks=0;
+    for(const row of animationRows){
+      const value=row.value,frames=value&&value.project&&value.project.keyframes;
+      ensure(value&&row.key===value.id,'invalid Animation Library row');
+      if(!Array.isArray(frames))continue;
+      for(const frame of frames){
+        if(!frame||frame.referenceImageIds===undefined)continue;
+        ensure(Array.isArray(frame.referenceImageIds),
+          'invalid Storyboard reference list');
+        for(const imageId of frame.referenceImageIds){
+          ensure(typeof imageId==='string'&&rawById.has(imageId),
+            'Storyboard original missing: '+value.id+' / '+imageId);
+          animationLinks++;
+        }
+      }
+    }
+    // A store absent in an older schema is fine only if no record in the
+    // corresponding owner requires it. Do not silently bless unexpected
+    // project summaries while the projects store is missing.
+    ensure(!summaries.length||exists('curvature-photo-calibration','projects'),
+      'Calibration Project store missing');
+    return Object.freeze({qualified:'covered-sources-only',originalsVerified:images.length,
+      projectsChecked:projects.length,archivesChecked:archiveRows.length,
+      annotationsChecked:annotations.length,storyboardLinksChecked:animationLinks,
+      decoderVerified:true,eligibleForMigration:false,
+      remaining:['live writer coordination and acknowledged revisions',
+        'Animation drafts and legacy recovery payloads',
+        'full referential/schema qualification and user-held archive round-trip']});
+  }
   /* Restore only to newly created, namespaced databases.
    * There is deliberately no live replacement or existing-database merge API.
    * A verified archive is a prerequisite; it is not yet a migration-ready backup.
@@ -426,5 +571,5 @@
     return {token:id,mappings,verified:true,eligibleForMigration:false,
       note:'No live database was replaced. Session writer coordination and photo provenance remain unverified.'};
   }
-  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated});
+  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence});
 }));

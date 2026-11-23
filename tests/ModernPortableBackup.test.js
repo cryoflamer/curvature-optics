@@ -133,3 +133,109 @@ test('large encoded original bytes remain exact, with no implicit truncation',as
     .find(x=>x.name==='curvature-photo-calibration').stores[0].records[0];
   assert.equal(backup.decode(rec.value).image.dataUrl,photo);
 });
+
+function evidenceFixture(){
+  const {createHash}=require('node:crypto');
+  const projects=require('../src/ui/modern/ModernCalibrationProject.js');
+  const input=inventory();
+  const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgFlP8DwABtAFCmNjeNAAAAABJRU5ErkJggg==';
+  const sha256=createHash('sha256').update(Buffer.from(png,'base64')).digest('hex');
+  const id='calibration-project-v1-'+'a'.repeat(32);
+  const photo={identity:{version:1,sha256,width:1,height:1},
+    aliasId:'original_calibration_alias',source:{kind:'local',key:null}};
+  const project=projects.fresh({id,now:123,photo});
+  const database=input.databases.find(x=>x.name==='curvature-modern-reference-images');
+  database.status='present';database.version=1;
+  database.stores=[{name:'observations',keyPath:'id',autoIncrement:false,indexes:[],
+    records:[{key:'library_original_id',value:{id:'library_original_id',revision:1,
+      record:{id:'library_original_id',version:1,title:'Original photo',
+        original:{dataUrl:'data:image/png;base64,'+png,width:1,height:1}}}}]}];
+  const cal=input.databases.find(x=>x.name==='curvature-photo-calibration');
+  cal.status='present';cal.version=2;
+  cal.stores=[
+    {name:'projects',keyPath:'id',autoIncrement:false,indexes:[],
+      records:[{key:id,value:project}]},
+    {name:'project-summaries',keyPath:'id',autoIncrement:false,indexes:[],
+      records:[{key:id,value:projects.summary(project)}]}
+  ];
+  return {input,id,photo,png,original:database.stores[0].records[0].value,
+    project,cal};
+}
+function evidenceEnv(verifyOriginal=async()=>{}){
+  return {crypto:webcrypto,verifyOriginal};
+}
+
+test('evidence qualification verifies original digest and calibration identity independent of local alias',async()=>{
+  const f=evidenceFixture();let verified=0;
+  const archive=await backup.pack(f.input,webcrypto);
+  const result=await backup.qualifyEvidence(archive,evidenceEnv(async record=>{
+    assert.equal(record.id,'library_original_id');verified++;
+  }));
+  assert.equal(verified,1);
+  assert.equal(result.originalsVerified,1);
+  assert.equal(result.projectsChecked,1);
+  assert.equal(result.decoderVerified,true);
+  assert.equal(result.eligibleForMigration,false);
+  assert.equal(result.archivesChecked,0);
+});
+
+test('qualifyEvidence rejects missing originals, hash mismatches and absent decoder',async()=>{
+  const f=evidenceFixture();
+  f.input.databases.find(d=>d.name==='curvature-modern-reference-images')
+    .stores[0].records.length=0;
+  const firstArchive=await backup.pack(f.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(firstArchive,evidenceEnv()),
+    /Calibration Project original missing/);
+  const second=evidenceFixture();
+  const changed=Buffer.from(second.png,'base64');changed[changed.length-1]^=1;
+  const corrupted=changed.toString('base64');
+  second.original.record.original.dataUrl='data:image/png;base64,'+corrupted;
+  const secondArchive=await backup.pack(second.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(secondArchive,evidenceEnv()),
+    /Calibration Project original missing/);
+  const third=evidenceFixture();
+  const thirdArchive=await backup.pack(third.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(thirdArchive,{crypto:webcrypto}),
+    /decoder is required/);
+  await assert.rejects(()=>backup.qualifyEvidence(thirdArchive,
+    evidenceEnv(async()=>{throw Error('Browser could not decode photo');})),
+    /Browser could not decode photo/);
+});
+
+test('qualifyEvidence rejects inconsistent project summaries, annotations and missing archived results',async()=>{
+  const a=evidenceFixture();
+  a.cal.stores.find(s=>s.name==='project-summaries').records[0].value.revision=9;
+  const archiveA=await backup.pack(a.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(archiveA,evidenceEnv()),
+    /summary\/record mismatch/);
+  const b=evidenceFixture();
+  b.input.databases.find(d=>d.name==='curvature-modern-reference-images').stores.push({
+    name:'annotations',keyPath:'id',autoIncrement:false,indexes:[],
+    records:[{key:'missing_photo',value:{id:'missing_photo',revision:1}}]
+  });
+  const archiveB=await backup.pack(b.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(archiveB,evidenceEnv()),
+    /orphan reference image annotation/);
+  const c=evidenceFixture();
+  c.project.resultIds.push('calibration-result-v1-'+'b'.repeat(64));
+  c.cal.stores.find(s=>s.name==='project-summaries').records[0].value.resultCount=1;
+  const archiveC=await backup.pack(c.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(archiveC,evidenceEnv()),
+    /archived result missing/);
+});
+
+test('qualifyEvidence detects missing saved Storyboard references without modifying its archive',async()=>{
+  const f=evidenceFixture();
+  const db=f.input.databases.find(d=>d.name==='curvature-modern-animation-library');
+  db.status='present';db.version=1;
+  db.stores=[{name:'projects',keyPath:'id',autoIncrement:false,indexes:[],
+    records:[{key:'my_animation',value:{id:'my_animation',project:{keyframes:[
+      {referenceImageIds:['library_original_id']} ]}}}]}];
+  const good=await backup.pack(f.input,webcrypto);
+  const passed=await backup.qualifyEvidence(good,evidenceEnv());
+  assert.equal(passed.storyboardLinksChecked,1);
+  db.stores[0].records[0].value.project.keyframes[0].referenceImageIds=['deleted_original'];
+  const bad=await backup.pack(f.input,webcrypto);
+  await assert.rejects(()=>backup.qualifyEvidence(bad,evidenceEnv()),
+    /Storyboard original missing/);
+});

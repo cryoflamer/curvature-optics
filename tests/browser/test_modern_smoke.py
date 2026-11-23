@@ -8572,5 +8572,56 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(result['rejectedTargetExists'])
 
 
+
+    def test_portable_backup_qualifies_real_image_and_project_references(self):
+        """Photo bytes, decoded dimensions and project identity match across owners."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+        verified = self.page.evaluate("""async () => {
+            const base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgFlP8DwABtAFCmNjeNAAAAABJRU5ErkJggg==';
+            const data=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+            const importer=CurvatureModernReferenceImageImport;
+            const record=await importer.ingest(
+                new File([data],'Evidence original.png',{type:'image/png'}),
+                'evidence_library_original',window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            const identity=await importer.identify(record,window);
+            const api=CurvatureModernCalibrationProject;
+            const project=api.fresh({
+                id:api.createId(crypto),now:Date.now(),
+                photo:{identity,aliasId:'different_calibration_alias',
+                    source:{kind:'local',key:null}}
+            });
+            await CurvatureModernCalibrationProjectStore.create(indexedDB,project);
+            const archive=await CurvatureModernPortableBackup.capture(window);
+            const report=await CurvatureModernPortableBackup.qualifyEvidence(archive,{
+                crypto,verifyOriginal:source=>importer.verifyOriginal(source,window)
+            });
+            const after=await CurvatureModernCalibrationProjectStore.get(indexedDB,project.id);
+            const source=await CurvatureModernReferenceImageLibrary.get(indexedDB,record.id);
+            return {
+                originalsVerified:report.originalsVerified,
+                projectsChecked:report.projectsChecked,
+                decoderVerified:report.decoderVerified,
+                qualified:report.qualified,
+                migrationReady:report.eligibleForMigration,
+                originalSha:identity.sha256,
+                projectSha:after.photo.identity.sha256,
+                sameAlias:after.photo.aliasId===source.record.id,
+                sourceRevision:source.revision,
+                projectRevision:after.revision
+            };
+        }""")
+        self.assertGreaterEqual(verified['originalsVerified'], 1)
+        self.assertEqual(verified['projectsChecked'], 1)
+        self.assertEqual(verified['qualified'], 'covered-sources-only')
+        self.assertTrue(verified['decoderVerified'])
+        self.assertFalse(verified['migrationReady'])
+        self.assertEqual(verified['originalSha'], verified['projectSha'])
+        self.assertFalse(verified['sameAlias'])
+        self.assertEqual(verified['sourceRevision'], 1)
+        self.assertEqual(verified['projectRevision'], 1)
+
+
 if __name__ == '__main__':
     unittest.main()
