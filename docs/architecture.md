@@ -193,7 +193,7 @@ tab/workspace state, shared preferences, collision detection and silent DOM
 hydration. These do not implement Object Explorer #47 itself; duplicated-tab
 identity leases remain future integration work.
 
-### First read-first preview of the existing Scene/Compare section controller
+### Read-first preview of Scene/Compare sections and workspace navigation
 
 The **existing** Modern `details[data-workspace-section]` controller has an
 explicit preview path for all **18 validated disclosure section suffixes**
@@ -243,6 +243,26 @@ no spurious version bumps, incompatible version preservation, reset batching
 and the normal-mode no-new-database contract. Before turning this on by default,
 verify copied-tab identity handling, startup timing, conflict/failure recovery
 and imported legacy data in a disposable profile.
+
+The same opt-in preview now also registers `workspace.settingsTab` in each
+Scene/Compare workspace and `workspace.active` with `per-tab` scope.
+These keys use the generic manager and existing Settings-tab and workspace
+navigation handlers; no competing DOM controllers or storage writers are
+added. Legacy `workspace.sceneTab`, `compareTab`, and `mode` values are
+validated read-first fallbacks, and the original localStorage preferences
+remain present as rollback evidence. Committed private IndexedDB selections
+win on F5 unless there is explicit URL/import intent: `mode`/`tab` query
+hints, shared experiments, existing Studio subview routes and deliberate
+history-entry workspace selections retain precedence. Registry restoration
+is delayed until Calibration startup recovery settles and is abandoned if
+user navigation or a panel/tab edit intervenes. No document ID is restored
+by these layout keys. The per-tab mode and two per-workspace snapshots are
+separate acknowledged transactions, not a falsely atomic cross-scope
+commit. Reset restores Camera tabs and the mode fallback along with the
+folds. Incompatible future keys disable preview without discarding the
+stored envelope. Targeted tests cover legacy read-first defaults, separate
+tab/workspace ownership, F5 without save side effects, explicit URL priority,
+reset, and future-schema refusal.
 
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI

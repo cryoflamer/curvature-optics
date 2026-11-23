@@ -9235,8 +9235,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                     Object.prototype.hasOwnProperty.call(compare.envelope.values,key);
                 })};
         }""")
-        self.assertEqual(checkpoint['sceneValues'],18)
-        self.assertEqual(checkpoint['compareValues'],18)
+        self.assertEqual(checkpoint['sceneValues'],19)
+        self.assertEqual(checkpoint['compareValues'],19)
         self.assertTrue(checkpoint['legacyCamelCasePreserved'],
             'existing camelCase section names must survive without renaming')
         self.assertEqual(checkpoint['scene'],1)
@@ -9312,6 +9312,108 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['revision'],1)
         self.assertEqual(after['envelope'],before)
 
+
+
+    def test_workspace_registry_preview_settings_and_mode_survive_f5(self):
+        """Selected Settings tabs and workspace restore via the existing UI
+        handlers, without writing during initial hydration or reload.
+        """
+        self.open_modern()
+        self.page.evaluate("""() => {
+            CurvatureModernApplicationPreferences.write(localStorage,{
+                workspace:{mode:'scene',sceneTab:'Surface',compareTab:'Atmosphere'}
+            });
+        }""")
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceState().sceneTab"),'Surface')
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceState().compareTab"),'Atmosphere')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            return (await store.read('per-tab',{tabId})).revision;
+        }"""),0,'first restore must not backfill workspace')
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.locator('#ModernCompareTab').click()
+        self.page.locator('#ModernSettingsDisplay').click()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const mode=await store.read('per-tab',{tabId});
+            const scene=await store.read('per-tab-and-workspace',{tabId,workspace:'scene'});
+            const compare=await store.read('per-tab-and-workspace',{tabId,workspace:'compare'});
+            return mode.envelope?.values?.['workspace.active']?.value==='compare' &&
+                scene.envelope?.values?.['workspace.settingsTab']?.value==='Objects' &&
+                compare.envelope?.values?.['workspace.settingsTab']?.value==='Display';
+        }""",timeout=30000)
+        before=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const scopes=[['per-tab',{tabId}],
+                ['per-tab-and-workspace',{tabId,workspace:'scene'}],
+                ['per-tab-and-workspace',{tabId,workspace:'compare'}]];
+            return await Promise.all(scopes.map(async ([scope,ctx])=>
+                (await store.read(scope,ctx)).revision));
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceMode()"),'compare')
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceState().sceneTab"),'Objects')
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceState().compareTab"),'Display')
+        self.assertEqual(self.page.locator('#ModernSettingsDisplay')
+            .get_attribute('aria-selected'),'true')
+        after=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const scopes=[['per-tab',{tabId}],
+                ['per-tab-and-workspace',{tabId,workspace:'scene'}],
+                ['per-tab-and-workspace',{tabId,workspace:'compare'}]];
+            return await Promise.all(scopes.map(async ([scope,ctx])=>
+                (await store.read(scope,ctx)).revision));
+        }""")
+        self.assertEqual(before,after,'F5 hydration must not write new snapshots')
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApplicationPreferences.read(localStorage)
+                .workspace.compareTab"""),'Display')
+
+    def test_workspace_registry_preview_explicit_url_overrides_private_mode(self):
+        """Explicit URL mode/tab must not be replaced by private IndexedDB."""
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.locator('#ModernSettingsDisplay').click()
+        self.page.wait_for_function("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const row=await store.read('per-tab',{tabId});
+            return row.envelope?.values?.['workspace.active']?.value==='compare';
+        }""",timeout=30000)
+        self.page.goto(self.base_url+'?ui-state-registry=preview&mode=scene&tab=Camera',
+            wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceMode()"),'scene')
+        self.assertEqual(self.page.locator('#ModernSettingsCamera')
+            .get_attribute('aria-selected'),'true')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab',{tabId:store.tabId()});
+            return row.envelope?.values?.['workspace.active']?.value;
+        }"""),'compare','explicit URL must not overwrite private IDB')
 
 if __name__ == '__main__':
     unittest.main()

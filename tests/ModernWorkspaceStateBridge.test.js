@@ -164,3 +164,60 @@ test('preflight rejects invalid full-layout reset without changing the other mod
   ),/invalid reset default/);
   assert.equal(rows.size,0);
 });
+
+test('settings tabs and active workspace use separate validated scopes',async()=>{
+  const rows=new Map(),first=fullBridge({rows});
+  await first.bridge.restore();
+  assert.equal(first.bridge.getTab('scene'),'Camera');
+  assert.equal(first.bridge.getTab('compare'),'Camera');
+  assert.equal(first.bridge.getMode(),null);
+  assert.equal(rows.size,0,'read-first must not backfill');
+  await first.bridge.setTab('scene','Objects');
+  await first.bridge.setTab('compare','Atmosphere');
+  await first.bridge.setMode('compare');
+  await first.bridge.flush();
+  assert.equal(rows.size,3);
+  assert.equal(rows.get('per-tab:first:').envelope.values['workspace.active'].value,'compare');
+  assert.equal(rows.get('per-tab-and-workspace:first:scene').envelope.values['workspace.settingsTab'].value,'Objects');
+  assert.equal(rows.get('per-tab-and-workspace:first:compare').envelope.values['workspace.settingsTab'].value,'Atmosphere');
+  const next=fullBridge({rows});
+  await next.bridge.restore();
+  assert.equal(next.bridge.getMode(),'compare');
+  assert.equal(next.bridge.getTab('scene'),'Objects');
+  assert.equal(next.bridge.getTab('compare'),'Atmosphere');
+  assert.equal(rows.get('per-tab:first:').revision,1,'hydration must not write');
+  const other=fullBridge({rows,tab:'other'});
+  await other.bridge.restore();
+  assert.equal(other.bridge.getMode(),null);
+  assert.equal(other.bridge.getTab('scene'),'Camera');
+  await other.bridge.setTab('scene','Display');
+  assert.equal(next.bridge.getTab('scene'),'Objects','tabs must be independent');
+  assert.throws(()=>first.bridge.setTab('scene','invalid'),/invalid settings tab/);
+  assert.throws(()=>first.bridge.setMode('missing'),/invalid workspace/);
+});
+test('reset clears opt-in workspace and tabs with bounded scoped writes',async()=>{
+  const {bridge,rows}=fullBridge();
+  await bridge.restore();
+  await bridge.setTab('scene','Surface');
+  await bridge.setTab('compare','Display');
+  await bridge.setMode('animation');
+  await bridge.flush();
+  await bridge.reset(()=>false);await bridge.flush();
+  assert.equal(bridge.getMode(),null);
+  assert.equal(bridge.getTab('scene'),'Camera');
+  assert.equal(bridge.getTab('compare'),'Camera');
+  assert.equal(rows.get('per-tab:first:').revision,2);
+  assert.equal(rows.get('per-tab-and-workspace:first:scene').revision,2);
+  assert.equal(rows.get('per-tab-and-workspace:first:compare').revision,2);
+});
+test('future workspace mode blocks writes without removing raw saved evidence',async()=>{
+  const frame={format:registryApi.FORMAT,version:registryApi.VERSION,
+    scope:'per-tab',values:{'workspace.active':{version:99,value:'calibration'}}};
+  const key='per-tab:first:';
+  const rows=new Map([[key,{revision:4,envelope:structuredClone(frame)}]]);
+  const {bridge}=fullBridge({rows});
+  assert.deepEqual((await bridge.restore()).warnings,['scene:workspace.active']);
+  assert.throws(()=>bridge.setMode('scene'),/unsupported keys/);
+  assert.equal(rows.get(key).revision,4);
+  assert.deepEqual(rows.get(key).envelope,frame);
+});
