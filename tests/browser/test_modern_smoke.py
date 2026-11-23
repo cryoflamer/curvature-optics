@@ -9178,7 +9178,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             CurvatureModernApp.getWorkspaceUiRegistryPreview().sections""")
         self.assertEqual(len(declared),18)
         self.assertEqual(len(set(declared)),18)
-        for suffix in ('camera.pose','surface.geometry','atmosphere.profile',
+        for suffix in ('camera.pose','camera.savedViews','camera.frameName',
+                       'surface.geometry','atmosphere.profile',
                        'objects.group1','display.advanced'):
             self.assertIn(suffix,declared)
         # Declaring 18+18 legacy defaults must not write any initial row.
@@ -9226,10 +9227,18 @@ class ModernBrowserSmoke(unittest.TestCase):
               {tabId,workspace:'compare'});
             return {scene:scene.revision,compare:compare.revision,
               sceneValues:Object.keys(scene.envelope.values).length,
-              compareValues:Object.keys(compare.envelope.values).length};
+              compareValues:Object.keys(compare.envelope.values).length,
+              legacyCamelCasePreserved:['camera.savedViews','camera.frameName']
+                .every(suffix=>{
+                  const key='workspace.section.'+suffix;
+                  return Object.prototype.hasOwnProperty.call(scene.envelope.values,key)&&
+                    Object.prototype.hasOwnProperty.call(compare.envelope.values,key);
+                })};
         }""")
         self.assertEqual(checkpoint['sceneValues'],18)
         self.assertEqual(checkpoint['compareValues'],18)
+        self.assertTrue(checkpoint['legacyCamelCasePreserved'],
+            'existing camelCase section names must survive without renaming')
         self.assertEqual(checkpoint['scene'],1)
         self.assertEqual(checkpoint['compare'],1)
         self.page.reload(wait_until='load')
@@ -9281,6 +9290,9 @@ class ModernBrowserSmoke(unittest.TestCase):
           timeout=30000)
         self.assertIn('workspace.section.camera.navigation',self.page.evaluate(
             "CurvatureModernApp.getWorkspaceUiRegistryPreview().error"))
+        self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceUiRegistryPreview().sections"),[],
+            'incompatible preview must not expose any active registry binding')
         nav=self.page.locator('details[data-workspace-section="camera.navigation"]')
         old_value=nav.evaluate('(node)=>node.open')
         nav.locator('summary').click()
