@@ -8785,12 +8785,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         # This is not merely an empty queue: verify Web Locks reports the
         # actual production writer as pending behind the exclusive reader.
-        second.wait_for_function("""async () => {
-            const state=await navigator.locks.query();
-            return state.pending.some(lock=>
-                lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&
-                lock.mode==='shared');
+        pending=second.evaluate("""async () => {
+            for(let attempt=0;attempt<100;attempt++){
+                const state=await navigator.locks.query();
+                if(state.pending.some(lock=>
+                    lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&
+                    lock.mode==='shared'))return true;
+                await new Promise(resolve=>setTimeout(resolve,25));
+            }
+            return false;
         }""")
+        self.assertTrue(pending,'Production writer never queued its shared Web Lock')
         self.assertFalse(second.evaluate('window.__writeSettled'))
         self.assertTrue(self.page.evaluate('window.__snapshotEntered'))
         checkpoint=self.page.evaluate("""async () => {

@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 143,
-      "uniqueScripts": 141,
+      "scriptTags": 144,
+      "uniqueScripts": 142,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -239,6 +239,7 @@
         "src/ui/modern/ModernAnimationProjectWizardUI.js",
         "src/ui/modern/ModernAnimationWorkspaceViews.js",
         "src/ui/modern/ModernAnimationStudioUI.js",
+        "src/storage/ModernBackupWriteBarrier.js",
         "src/ui/modern/ModernSessionAutosave.js",
         "src/ui/modern/ModernDemos.js",
         "src/calibration/CameraMaterialAnchor.js",
