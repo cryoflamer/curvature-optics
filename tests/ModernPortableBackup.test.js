@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {webcrypto}=require('node:crypto');
-const backup=require('../src/ui/modern/ModernPortableBackup.js');
+const backup=require('../src/storage/ModernPortableBackup.js');
 
 function inventory(){
   return {databases:backup.KNOWN_DATABASES.map(name=>({

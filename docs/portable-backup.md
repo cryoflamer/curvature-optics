@@ -1,7 +1,7 @@
 # Portable Modern storage backup — migration safety boundary
 
 The portable storage codec lives in
-[ModernPortableBackup.js](../src/ui/modern/ModernPortableBackup.js);
+[ModernPortableBackup.js](../src/storage/ModernPortableBackup.js);
 its focused contracts live in
 [ModernPortableBackup.test.js](../tests/ModernPortableBackup.test.js).
 This is the **initial, read-only foundation** for [Issue #31](https://github.com/cryoflamer/curvature-optics/issues/31), also intended for later opt-in external transport in #45.

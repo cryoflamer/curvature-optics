@@ -517,9 +517,9 @@
       "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
+      "src/storage/ModernPortableBackup.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
-      "src/ui/modern/ModernPortableBackup.js",
       "src/x.js",
       "src/xtc.js"
     ]
@@ -2895,6 +2895,14 @@
       ],
       "commonJsToolCallers": []
     },
+    "src/storage/ModernPortableBackup.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernPortableBackup.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
     "src/tabs.js": {
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
@@ -3741,14 +3749,6 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernPhotoOverlayRenderer.test.js"
-      ],
-      "commonJsToolCallers": []
-    },
-    "src/ui/modern/ModernPortableBackup.js": {
-      "directHtmlLoads": [],
-      "commonJsSourceCallers": [],
-      "commonJsTestCallers": [
-        "tests/ModernPortableBackup.test.js"
       ],
       "commonJsToolCallers": []
     },
