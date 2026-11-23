@@ -110,6 +110,8 @@ The records include embedded original photo data URLs where held by the Referenc
 
 **Two identical read passes are not an atomic snapshot across databases**: a writer can change and restore data between observations. At this stage the archive explicitly declares `writerCoordination:false` and `eligibleForMigration:false`. The codec is not wired to a download button, does not yet freeze/cooperate with active document writers, and deliberately exposes no live restore or destructive replace operation. A green Node test does not establish a usable real-user-data backup.
 
+`restoreIsolated()` first validates the full archive, checks that its reserved `__curvature_backup_verify__<token>__…` database targets do not exist, creates **new isolated databases only**, and reads them back against every captured primary key, record, index and schema version. It never targets a live source name and does not expose an overwrite/merge operation. A repeated token fails closed. These isolated proof databases are left in the origin for deliberate later cleanup; their reserved names are excluded from normal `curvature-` source inventory. A failure can leave an incomplete **isolated** set, but must never change any existing source store. Verification of byte-for-byte structured records is narrower than validation of photo decoding, provenance and cross-database ownership. Browser contract coverage is in [test_modern_smoke.py](../tests/browser/test_modern_smoke.py).
+
 Before #31's safety gate can be accepted:
 
 1. Coordinate/quiesce all active Modern writers and record acknowledged revisions, or fail export as incomplete. Read/verify again across databases; distinguish clean commits from pending, failed or legacy recovery.

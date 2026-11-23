@@ -8470,5 +8470,107 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(result['archiveEligible'])
 
 
+
+    def test_portable_backup_isolated_restore_preserves_originals_and_references(self):
+        """An archive restores to private new databases only; original bytes/links survive."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+        result = self.page.evaluate("""async () => {
+            const api=window.CurvatureModernPortableBackup;
+            const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/igAAAABJRU5ErkJggg==';
+            const bytes=Uint8Array.from(atob(png),c=>c.charCodeAt(0));
+            const photo=new Blob([bytes],{type:'image/png'});
+            const originalPhotoName='curvature-backup-e2e-originals';
+            const originalProjectName='curvature-backup-e2e-projects';
+            async function create(name,storeName,row,indexName){
+                await new Promise((resolve,reject)=>{
+                    const request=indexedDB.open(name,1);
+                    request.onupgradeneeded=()=>{
+                        const store=request.result.createObjectStore(storeName,{keyPath:'id'});
+                        if(indexName)store.createIndex(indexName,indexName,{unique:false});
+                        store.put(row);
+                    };
+                    request.onerror=()=>reject(request.error);
+                    request.onsuccess=()=>{request.result.close();resolve();};
+                });
+            }
+            async function read(name,storeName,id){
+                return new Promise((resolve,reject)=>{
+                    const request=indexedDB.open(name);
+                    request.onerror=()=>reject(request.error);
+                    request.onsuccess=()=>{
+                        const db=request.result,version=db.version;
+                        const tx=db.transaction(storeName,'readonly');
+                        const get=tx.objectStore(storeName).get(id);
+                        let value;
+                        get.onsuccess=()=>{value=get.result;};
+                        tx.oncomplete=()=>{db.close();resolve({value,version});};
+                        tx.onerror=()=>{db.close();reject(tx.error);};
+                    };
+                });
+            }
+            const photoId='photo_original_01',projectId='calibration_project_01';
+            await create(originalPhotoName,'observations',
+                {id:photoId,revision:2,original:photo,title:'Original 1 × 1'},'title');
+            await create(originalProjectName,'projects',
+                {id:projectId,revision:7,photoId,observations:4},null);
+            const archive=await api.capture(window);
+            const before=await api.inspect(archive,crypto);
+            const token='browser_case_alpha_001';
+            const roundtrip=await api.restoreIsolated(archive,window,token);
+            const mapping=new Map(roundtrip.mappings.map(r=>[r.name,r.target]));
+            const restoredPhoto=await read(mapping.get(originalPhotoName),'observations',photoId);
+            const restoredProject=await read(mapping.get(originalProjectName),'projects',projectId);
+            const stillOriginal=await read(originalPhotoName,'observations',photoId);
+            const stillProject=await read(originalProjectName,'projects',projectId);
+            async function hash(blob){
+                return [...new Uint8Array(await crypto.subtle.digest(
+                    'SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');
+            }
+            let collisionRejected=false;
+            try{await api.restoreIsolated(archive,window,token);}
+            catch(error){collisionRejected=/collision/.test(error.message);}
+            let corruptionRejected=false;
+            try{await api.restoreIsolated({...archive,sha256:'0'.repeat(64)},window,
+                'browser_case_beta_002');}
+            catch(error){corruptionRejected=/checksum mismatch/.test(error.message);}
+            const catalog=await indexedDB.databases();
+            return {
+                verified:roundtrip.verified,
+                migrationReady:roundtrip.eligibleForMigration,
+                manifestVerified:before.manifest.databases.some(x=>x.name===originalPhotoName),
+                originalPhotoVersion:stillOriginal.version,
+                isolatedPhotoVersion:restoredPhoto.version,
+                originalProjectVersion:stillProject.version,
+                isolatedProjectVersion:restoredProject.version,
+                photoRevision:restoredPhoto.value.revision,
+                projectRevision:restoredProject.value.revision,
+                referenceCorrect:restoredProject.value.photoId===restoredPhoto.value.id &&
+                    stillProject.value.photoId===photoId,
+                originalDigest:await hash(stillOriginal.value.original),
+                isolatedDigest:await hash(restoredPhoto.value.original),
+                originalLength:stillOriginal.value.original.size,
+                isolatedLength:restoredPhoto.value.original.size,
+                collisionRejected,corruptionRejected,
+                rejectedTargetExists:catalog.some(x=>x.name?.includes('browser_case_beta_002'))
+            };
+        }""")
+        self.assertTrue(result['verified'])
+        self.assertFalse(result['migrationReady'])
+        self.assertTrue(result['manifestVerified'])
+        self.assertEqual(result['originalPhotoVersion'], 1)
+        self.assertEqual(result['isolatedPhotoVersion'], 1)
+        self.assertEqual(result['originalProjectVersion'], 1)
+        self.assertEqual(result['isolatedProjectVersion'], 1)
+        self.assertEqual(result['photoRevision'], 2)
+        self.assertEqual(result['projectRevision'], 7)
+        self.assertTrue(result['referenceCorrect'])
+        self.assertEqual(result['originalLength'], result['isolatedLength'])
+        self.assertEqual(result['originalDigest'], result['isolatedDigest'])
+        self.assertTrue(result['collisionRejected'])
+        self.assertTrue(result['corruptionRejected'])
+        self.assertFalse(result['rejectedTargetExists'])
+
+
 if __name__ == '__main__':
     unittest.main()

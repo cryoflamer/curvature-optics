@@ -334,5 +334,97 @@
     // Two equal observations do not constitute an atomic cut across databases.
     return pack(unpackData(before),env.crypto);
   }
-  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture});
+  /* Restore only to newly created, namespaced databases.
+   * There is deliberately no live replacement or existing-database merge API.
+   * A verified archive is a prerequisite; it is not yet a migration-ready backup.
+   */
+  function isolatedName(token,name){
+    ensure(typeof token==='string'&&/^[A-Za-z0-9_-]{8,80}$/.test(token),
+      'invalid isolated-restore token');
+    ensure(typeof name==='string'&&/^curvature[-_]/.test(name),
+      'invalid isolated source name');
+    return '__curvature_backup_verify__'+token+'__'+name;
+  }
+  function createIsolatedDatabase(indexedDB,source,target){
+    const prepared=source.stores.map(store=>({
+      ...store,records:store.records.map(row=>({key:decode(row.key),value:decode(row.value)}))
+    }));
+    return new Promise((resolve,reject)=>{
+      let req,db,finished=false,created=false;
+      const fail=error=>{
+        if(finished)return;finished=true;
+        try{if(req&&req.transaction)req.transaction.abort();}catch(ignore){}
+        try{if(db)db.close();}catch(ignore){}
+        reject(error||Error('Portable backup: isolated restore failed'));
+      };
+      try{req=indexedDB.open(target,source.version);}catch(error){fail(error);return;}
+      req.onblocked=()=>fail(Error('Portable backup: isolated restore blocked'));
+      req.onerror=()=>fail(req.error);
+      req.onupgradeneeded=event=>{
+        if(event.oldVersion!==0){fail(Error('Portable backup: isolated target collision'));return;}
+        created=true;db=req.result;
+        try{
+          for(const spec of prepared){
+            const options={autoIncrement:spec.autoIncrement};
+            if(spec.keyPath!==null)options.keyPath=spec.keyPath;
+            const store=db.createObjectStore(spec.name,options);
+            for(const index of spec.indexes)
+              store.createIndex(index.name,index.keyPath,
+                {unique:index.unique,multiEntry:index.multiEntry});
+            for(const row of spec.records){
+              if(spec.keyPath===null)store.put(row.value,row.key);
+              else store.put(row.value);
+            }
+          }
+        }catch(error){fail(error);}
+      };
+      req.onsuccess=()=>{
+        db=req.result;
+        if(!created){fail(Error('Portable backup: isolated target already exists'));return;}
+        if(finished){db.close();return;}
+        finished=true;db.close();resolve();
+      };
+    });
+  }
+  async function verifyIsolatedDatabase(indexedDB,source,target){
+    const read=await readDatabase(indexedDB,{name:target,version:source.version});
+    const stores=[];
+    for(const store of read.stores){
+      const records=[];
+      for(const row of store.records)
+        records.push({key:await encode(row.key),value:await encode(row.value)});
+      stores.push({name:store.name,keyPath:store.keyPath,
+        autoIncrement:store.autoIncrement,indexes:store.indexes,records});
+    }
+    stores.sort((a,b)=>a.name.localeCompare(b.name));
+    const expected={name:source.name,status:source.status,version:source.version,stores:source.stores};
+    const actual={name:source.name,status:'present',version:read.version,stores};
+    ensure(JSON.stringify(actual)===JSON.stringify(expected),
+      'isolated restore readback differs from archive: '+source.name);
+  }
+  async function restoreIsolated(archive,env,token){
+    ensure(env&&env.crypto&&env.indexedDB&&
+      typeof env.indexedDB.databases==='function','isolated restore dependencies missing');
+    await inspect(archive,env.crypto);
+    const body=JSON.parse(archive.payload);
+    const sources=body.content.databases.filter(row=>row.status==='present');
+    const id=token===undefined?
+      (env.crypto.randomUUID&&env.crypto.randomUUID().replace(/-/g,'')):token;
+    ensure(typeof id==='string'&&/^[A-Za-z0-9_-]{8,80}$/.test(id),
+      'isolated restore needs a unique token');
+    const mappings=sources.map(source=>({name:source.name,target:isolatedName(id,source.name),
+      version:source.version,records:source.stores.reduce((n,s)=>n+s.records.length,0)}));
+    const inventory=await env.indexedDB.databases();
+    ensure(Array.isArray(inventory),'isolated restore inventory unavailable');
+    const occupied=new Set(inventory.map(x=>x&&x.name));
+    ensure(mappings.every(item=>!occupied.has(item.target)),
+      'isolated restore target collision; no restore was started');
+    for(let i=0;i<sources.length;i++){
+      await createIsolatedDatabase(env.indexedDB,sources[i],mappings[i].target);
+      await verifyIsolatedDatabase(env.indexedDB,sources[i],mappings[i].target);
+    }
+    return {token:id,mappings,verified:true,eligibleForMigration:false,
+      note:'No live database was replaced. Session writer coordination and photo provenance remain unverified.'};
+  }
+  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated});
 }));
