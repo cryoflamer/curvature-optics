@@ -275,3 +275,59 @@ test('file import rejects truncated, corrupted and oversized archives before res
   await assert.rejects(()=>backup.fileBlob({...archived,payload,sha256:hash},webcrypto),
     /capture timestamp invalid/);
 });
+
+
+test('empty-profile import refuses existing Curvature data without opening or modifying a database',async()=>{
+  const archive=await backup.pack(withProject(),webcrypto);
+  let opened=0;
+  const values={'curvature-modern-test-local':'existing'};
+  const env={
+    crypto:webcrypto,
+    indexedDB:{
+      async databases(){return [{name:'curvature-modern-working-session',version:1}]},
+      open(){opened++;throw Error('should never open existing DB')}
+    },
+    localStorage:storage(values),sessionStorage:storage({})
+  };
+  const preview=await backup.previewEmptyRestore(archive,env);
+  assert.equal(preview.empty,false);
+  assert.equal(preview.databases,1);
+  assert.equal(preview.records,1);
+  assert.deepEqual(preview.conflicts.databases,['curvature-modern-working-session']);
+  assert.deepEqual(preview.conflicts.localKeys,['curvature-modern-test-local']);
+  await assert.rejects(()=>backup.restoreEmpty(archive,env),/target is not empty/);
+  assert.equal(opened,0);
+  assert.equal(values['curvature-modern-test-local'],'existing');
+});
+
+test('empty-profile preview has no writes and rejects an invalid archive before any target read',async()=>{
+  const archive=await backup.pack(withProject(),webcrypto);
+  let scans=0;
+  const env={
+    crypto:webcrypto,
+    indexedDB:{async databases(){scans++;return []},
+      open(){throw Error('unexpected write during preview')}},
+    localStorage:storage({}),sessionStorage:storage({})
+  };
+  const preview=await backup.previewEmptyRestore(archive,env);
+  assert.equal(preview.empty,true);
+  assert.equal(preview.records,1);
+  assert.equal(preview.stores,1);
+  assert.equal(scans,1);
+  await assert.rejects(()=>backup.restoreEmpty({...archive,sha256:'0'.repeat(64)},env),
+    /checksum mismatch/);
+  assert.equal(scans,1,'corrupt archives are rejected before preflight/mutation');
+});
+
+test('empty-profile guard rejects proof databases and surviving tab recovery keys',async()=>{
+  const archive=await backup.pack(withProject(),webcrypto);
+  const env={crypto:webcrypto,indexedDB:{
+    async databases(){return [{name:'__curvature_backup_verify__old__curvature-modern-working-session',version:1}]},
+    open(){throw Error('restore should not open target')}
+  },localStorage:storage({}),
+    sessionStorage:storage({'curvature-modern-animation-workspaces-v2-tab-id':'old-tab'})};
+  const preview=await backup.previewEmptyRestore(archive,env);
+  assert.equal(preview.empty,false);
+  await assert.rejects(()=>backup.restoreEmpty(archive,env),/target is not empty/);
+  assert.equal(preview.conflicts.sessionKeys.length,1);
+});

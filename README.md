@@ -5,6 +5,19 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
+**Before refactoring session persistence — simple local backup:** Open
+[Storage backup check](tools/storage-backup.html) from the **same localhost
+origin/port** as Modern, ideally in the same browser tab after an acknowledged
+save. Choose **Export JSON**, and keep the downloaded file outside the browser.
+To check that it is recoverable, open that same utility URL in a *new private
+window or clean browser profile*, choose **Import**, and confirm that the
+database is empty. Import will reject existing Curvature data rather than
+overwrite it. After the imported records pass readback comparison, open Modern
+**in that same private tab** and reload (F5) to check the saved work. The private
+window is a throwaway test; your ordinary browser data is never cleared.
+Do not rely on a Git tag alone for browser data: keep both the verified JSON
+file and a code baseline tag. See [storage safety and limitations](docs/architecture.md#one-user-rollback-drill).
+
 **Legacy versus native Modern:** The original nine fast illustrated storyboards remain in the isolated Demos runtime (80 states / 71 transitions). Partial native physical Scene/Compare adaptations are not equivalent to their complete Legacy animations. See [native scenario compatibility](docs/native-scenario-compatibility.md) and the [built-in Studio demo catalog](docs/demo-catalog.md). The first Soundly project is a read-only built-in, with explicit editable copies. Presentation, Storyboard, saved projects, reference photographs, PNG/video exports and atmosphere variants share the documented [Animation contracts](docs/modern-animation-contract.md) and [reference image ownership](docs/reference-images.md). This is **not yet photo-calibrated scientific Soundly content**; source verification and final authoring are tracked by [#37](https://github.com/cryoflamer/curvature-optics/issues/37). New work and acceptance gates belong in [GitHub Issues](https://github.com/cryoflamer/curvature-optics/issues), not a second roadmap. Check [GitHub Project #1](https://github.com/users/cryoflamer/projects/1) and [Milestones](https://github.com/cryoflamer/curvature-optics/milestones) for live status.
 
 **Switching Modern scenes:** **Start from preset** loads a supported native partial scene or one

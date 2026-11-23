@@ -571,6 +571,76 @@
     return {token:id,mappings,verified:true,eligibleForMigration:false,
       note:'No live database was replaced. Session writer coordination and photo provenance remain unverified.'};
   }
+  // One-user rollback drill: restore the exact database names only when this
+  // origin has NO Curvature IndexedDB databases and NO Curvature Web Storage.
+  // Deliberately no overwrite, cleanup, delete or source replacement option.
+  function cleanTarget(env){
+    ensure(env&&env.indexedDB&&typeof env.indexedDB.databases==='function'&&
+      env.localStorage&&env.sessionStorage,'empty-profile inspection unavailable');
+    return Promise.resolve(env.indexedDB.databases()).then(databases=>{
+      ensure(Array.isArray(databases),'invalid target database catalog');
+      const existing=databases.filter(row=>row&&typeof row.name==='string'&&
+        /^curvature[-_]/.test(row.name)).map(row=>row.name);
+      // Backups created by earlier isolated verification are NOT an empty
+      // origin either; do not conceal these proof databases.
+      const proof=databases.filter(row=>row&&typeof row.name==='string'&&
+        row.name.startsWith('__curvature_backup_verify__')).map(row=>row.name);
+      const local=storageRows(env.localStorage),session=storageRows(env.sessionStorage);
+      return {empty:existing.length===0&&proof.length===0&&
+        local.rows.length===0&&session.rows.length===0,
+        databases:existing.concat(proof).sort(),
+        localKeys:local.rows.map(row=>row.key),
+        sessionKeys:session.rows.map(row=>row.key)};
+    });
+  }
+  async function previewEmptyRestore(archive,env){
+    const inspected=await inspect(archive,env.crypto);
+    const clean=await cleanTarget(env);
+    const present=inspected.manifest.databases.filter(row=>row.status==='present');
+    const counts=present.reduce((result,db)=>{
+      result.stores+=db.stores.length;
+      result.records+=db.stores.reduce((n,store)=>n+store.count,0);
+      return result;
+    },{stores:0,records:0});
+    return Object.freeze({
+      empty:clean.empty,conflicts:clean,databases:present.length,
+      stores:counts.stores,records:counts.records,
+      localKeys:inspected.manifest.localStorageCount,
+      sessionKeys:inspected.manifest.sessionStorageCount,
+      excludedWebStorageKeys:inspected.manifest.excludedWebStorageKeys,
+      capturedAt:inspected.capturedAt,
+      eligibleForMigration:false
+    });
+  }
+  async function restoreEmpty(archive,env){
+    // Validate all hashes and schema tags before touching the target.
+    const preview=await previewEmptyRestore(archive,env);
+    ensure(preview.empty,
+      'target is not empty; use a new browser profile (nothing was overwritten)');
+    const content=JSON.parse(archive.payload).content;
+    const sources=content.databases.filter(db=>db.status==='present');
+    // One final read of the catalog before the FIRST write.
+    ensure((await cleanTarget(env)).empty,
+      'target became non-empty before restore; nothing was overwritten');
+    // Failures leave only newly created data in this deliberately empty
+    // profile. The user can discard that test profile and retry elsewhere.
+    // Never delete a live source or attempt rollback by destructive cleanup.
+    for(const source of sources){
+      await createIsolatedDatabase(env.indexedDB,source,source.name);
+      await verifyIsolatedDatabase(env.indexedDB,source,source.name);
+    }
+    for(const row of content.webStorage.local)env.localStorage.setItem(row.key,row.value);
+    for(const row of content.webStorage.session)env.sessionStorage.setItem(row.key,row.value);
+    const after=await normalize(await scan(env));
+    ensure(JSON.stringify(after.databases)===JSON.stringify(content.databases)&&
+      JSON.stringify(after.webStorage.local)===JSON.stringify(content.webStorage.local)&&
+      JSON.stringify(after.webStorage.session)===JSON.stringify(content.webStorage.session),
+      'restored storage differs from the source archive; discard the test profile');
+    return Object.freeze({verified:true,databases:preview.databases,
+      stores:preview.stores,records:preview.records,localKeys:preview.localKeys,
+      sessionKeys:preview.sessionKeys,eligibleForMigration:false,
+      message:'Restore verified by full reread. Reload the Modern app in this new profile.'});
+  }
   const MAX_PORTABLE_FILE_BYTES=512*1024*1024;
   // Explicit opt-in file transport. A Blob is created in memory, not silently
   // downloaded, and never treated as a fully accepted migration safety copy.
@@ -598,5 +668,5 @@
     await inspect(archive,crypto);
     return archive;
   }
-  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence,fileBlob,readFile});
+  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence,previewEmptyRestore,restoreEmpty,fileBlob,readFile});
 }));

@@ -8824,5 +8824,116 @@ class ModernBrowserSmoke(unittest.TestCase):
         second.close()
 
 
+
+    def test_storage_backup_file_restores_into_empty_profile_and_survives_f5(self):
+        """Download actual Modern browser data, reject an occupied target,
+        import into another clean origin profile, compare bytes and reload.
+        """
+        from urllib.parse import urljoin
+
+        tool_url = urljoin(self.base_url, 'tools/storage-backup.html')
+        source_context = self.browser.new_context(accept_downloads=True)
+        target_context = self.browser.new_context()
+        try:
+            source_page = source_context.new_page()
+            source_page.goto(self.base_url, wait_until='load')
+            source_page.locator('#ModernCompareTab').click()
+            expect(source_page.locator('#ModernPersistenceStatus')).to_have_text(
+                'Working session saved', timeout=30000)
+            original = source_page.evaluate("""async () => {
+                const base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgFlP8DwABtAFCmNjeNAAAAABJRU5ErkJggg==';
+                const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+                const record=await CurvatureModernReferenceImageImport.ingest(
+                    new File([bytes],'Backup original.png',{type:'image/png'}),
+                    'backup-check',window);
+                await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+                localStorage.setItem('curvature-backup-user-check','keep-local');
+                sessionStorage.setItem('curvature-backup-tab-check','keep-tab');
+                const session=await CurvatureModernSessionAutosave.read(indexedDB);
+                if(!session||session.experiment.display.mode!=='compare')
+                    throw Error('Missing real Compare checkpoint');
+                return {id:record.id,original:record.original.dataUrl,
+                    sessionMode:session.experiment.display.mode,
+                    savedAt:session.savedAt};
+            }""")
+            response = source_page.goto(tool_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            expect(source_page.locator('#backup-export')).to_be_enabled()
+            with source_page.expect_download(timeout=30000) as info:
+                source_page.locator('#backup-export').click()
+            download=info.value
+            self.assertTrue(download.suggested_filename.endswith('.json'))
+            payload=Path(download.path()).read_bytes()
+            self.assertGreater(len(payload), 500)
+            archive=json.loads(payload)
+            self.assertEqual(archive['format'],'curvature-modern-portable-backup')
+            expect(source_page.locator('#backup-export-status')).to_contain_text(
+                'Завантаження розпочато')
+
+            # The populated source profile must be refused as an import target.
+            source_page.locator('#backup-file').set_input_files({
+                'name':download.suggested_filename,
+                'mimeType':'application/json',
+                'buffer':payload
+            })
+            expect(source_page.locator('#backup-import-status')).to_contain_text(
+                'Імпорт заблоковано')
+            expect(source_page.locator('#backup-import')).to_be_disabled()
+
+            target_page = target_context.new_page()
+            response = target_page.goto(tool_url, wait_until='load')
+            self.assertEqual(response.status, 200)
+            self.assertTrue(target_page.evaluate("""async () =>
+                (await indexedDB.databases()).length === 0 &&
+                localStorage.length === 0 && sessionStorage.length === 0"""))
+            target_page.locator('#backup-file').set_input_files({
+                'name':download.suggested_filename,
+                'mimeType':'application/json',
+                'buffer':payload
+            })
+            expect(target_page.locator('#backup-preview')).to_contain_text(
+                'Цільове сховище: ПОРОЖНЄ')
+            expect(target_page.locator('#backup-import')).to_be_enabled()
+            target_page.locator('#backup-import').click()
+            expect(target_page.locator('#backup-import-status')).to_contain_text(
+                'УСПІХ', timeout=30000)
+            expect(target_page.locator('#backup-import')).to_be_disabled()
+            # The restored data is now at the SAME database names the app uses.
+            # Loading Modern in the same tab also retains sessionStorage.
+            target_page.locator('.modern-legacy-link').click()
+            expect(target_page.locator('#ModernSceneTab')).to_be_visible()
+            result=target_page.evaluate("""async id => {
+                const row=await CurvatureModernSessionAutosave.read(indexedDB);
+                const img=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+                await CurvatureModernReferenceImageImport.verifyOriginal(img.record,window);
+                return {mode:row.experiment.display.mode,savedAt:row.savedAt,
+                    id:img.id,original:img.record.original.dataUrl,
+                    local:localStorage.getItem('curvature-backup-user-check'),
+                    tab:sessionStorage.getItem('curvature-backup-tab-check')};
+            }""",original['id'])
+            self.assertEqual(result['id'],original['id'])
+            self.assertEqual(result['original'],original['original'])
+            self.assertEqual(result['mode'],original['sessionMode'])
+            self.assertEqual(result['savedAt'],original['savedAt'])
+            self.assertEqual(result['local'],'keep-local')
+            self.assertEqual(result['tab'],'keep-tab')
+            target_page.reload(wait_until='load')
+            after=target_page.evaluate("""async id => {
+                const img=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+                const session=await CurvatureModernSessionAutosave.read(indexedDB);
+                return {id:img.id,original:img.record.original.dataUrl,
+                    mode:session.experiment.display.mode,
+                    local:localStorage.getItem('curvature-backup-user-check'),
+                    tab:sessionStorage.getItem('curvature-backup-tab-check')};
+            }""",original['id'])
+            self.assertEqual(after['original'],original['original'])
+            self.assertEqual(after['mode'],'compare')
+            self.assertEqual(after['local'],'keep-local')
+            self.assertEqual(after['tab'],'keep-tab')
+        finally:
+            target_context.close()
+            source_context.close()
+
+
 if __name__ == '__main__':
     unittest.main()

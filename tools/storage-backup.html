@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curvature Optics — перевірка резервного дампа</title>
+  <link rel="stylesheet" href="../src/ui/modern/ModernApp.css">
+  <style>
+    .backup-page{max-width:880px;margin:30px auto;padding:0 20px 44px}
+    .backup-page h1{margin:0 0 7px;font-size:24px;color:#162b46}
+    .backup-page h2{margin:0 0 8px;font-size:17px;color:#245c98}
+    .backup-page p{margin:8px 0 12px}
+    .backup-card{background:var(--paper);border:1px solid var(--border);border-radius:11px;
+      box-shadow:0 3px 22px #162e5410;padding:20px;margin:18px 0}
+    .backup-card .modern-primary-button{width:auto;margin:12px 0}
+    .backup-card button:disabled{opacity:.55;cursor:not-allowed}
+    .backup-card input[type=file]{display:block;width:100%;min-width:0;max-width:100%;
+      padding:10px;border-radius:7px;border:1px solid #cad7e6;background:#fafdff;color:#263c5a}
+    .backup-card input[type=file]::file-selector-button{font:inherit;background:#f4f8ff;
+      color:#24619d;border:1px solid #ccddf1;border-radius:7px;padding:8px 12px;
+      margin-right:12px;cursor:pointer}
+    .backup-card :is(button,input):focus-visible{outline:2px solid #2c83d3;outline-offset:2px}
+    .backup-muted{color:#637b98;font-size:13px}
+    .backup-note{border-left:3px solid #c2d5ed;padding:10px 14px;background:#f4f8ff;
+      border-radius:5px;color:#31445f}
+    .backup-report{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5
+      ui-monospace,SFMono-Regular,Consolas,monospace;color:#31445f}
+    .backup-status{margin:13px 0 0;border-radius:6px;padding:10px 12px;white-space:pre-wrap}
+    .backup-status[data-kind="error"]{background:#fff0ef;color:#8d2733}
+    .backup-status[data-kind="success"]{background:#edf8f0;color:#245b37}
+    .backup-status[data-kind="info"]{background:#eff5fc;color:#365e87}
+    .backup-status:empty{display:none}
+    @media(max-width:600px){.backup-page{padding:0 12px 28px;margin:20px auto}
+      .backup-card{padding:15px}}
+  </style>
+</head>
+<body>
+  <header class="modern-header">
+    <div class="modern-brand"><div class="modern-brand-mark" aria-hidden="true">◉</div>
+      <div><strong>Curvature Optics</strong><small>LOCAL DATA BACKUP CHECK</small></div>
+    </div>
+    <div aria-hidden="true"></div>
+    <a class="modern-legacy-link" href="../CurvatureModern.html">Відкрити Modern</a>
+  </header>
+  <main class="backup-page">
+    <h1>Дамп та відновлення</h1>
+    <p class="backup-muted">Проста контрольна копія перед рефакторингом. Файл залишається на твоєму комп’ютері.</p>
+    <div class="backup-note"><strong>Для експорту:</strong> закінчи редагування, дочекайся збереження та відкрий цю сторінку в тій самій вкладці й на тому самому localhost/порті.
+      <strong>Для перевірки імпорту:</strong> відкрий це саме посилання в <em>новому приватному вікні або чистому профілі</em> та імпортуй туди файл. Робочу базу не очищай.</div>
+    <section class="backup-card" aria-labelledby="export-heading">
+      <h2 id="export-heading">1. Export — отримати дамп</h2>
+      <p>Читає наявні Curvature IndexedDB, localStorage та sessionStorage й завантажує перевірений JSON. Дані не змінює.</p>
+      <button type="button" id="backup-export" class="modern-primary-button">Експортувати JSON</button>
+      <p id="backup-export-status" class="backup-status" role="status" aria-live="polite"></p>
+    </section>
+    <section class="backup-card" aria-labelledby="import-heading">
+      <h2 id="import-heading">2. Import — перевірити в порожньому профілі</h2>
+      <p>Обери раніше завантажений JSON. Спочатку перевіримо SHA-256 та чи порожнє цільове сховище.</p>
+      <label for="backup-file">Файл дампа</label>
+      <input id="backup-file" type="file" accept=".json,application/json">
+      <p class="backup-report" id="backup-preview" aria-live="polite"></p>
+      <button type="button" id="backup-import" class="modern-primary-button" disabled>Імпортувати в порожнє сховище</button>
+      <p id="backup-import-status" class="backup-status" role="status" aria-live="polite"></p>
+      <p class="backup-muted">Імпорт відмовиться працювати, якщо вже є Curvature-бази або дані. Він не перезаписує і не видаляє записи. Після успіху відкрий Modern у цій вкладці та натисни F5.</p>
+    </section>
+  </main>
+  <script src="../src/storage/ModernPortableBackup.js"></script>
+  <script src="storage-backup.js"></script>
+</body>
+</html>

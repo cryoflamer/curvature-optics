@@ -130,7 +130,52 @@ The current `ModernSessionAutosave` adapter registers `working.session` through 
 
 If Web Locks are missing, ordinary user saves still use the prior IndexedDB path (and synchronous fallback); this **cannot** be treated as evidence for a coordinated backup. If the lock manager is present but rejects a lock, the IndexedDB save must fail rather than silently bypass its coordination request; the existing application already reports a failed IDB checkpoint while preserving its synchronous recovery copy. The backup process itself still makes no migration-ready claim. Multi-tab Chromium tests now cover a real working-session write held behind an exclusive backup reader, followed by durable readback and F5. These tests do not cover unregistered Animation, Calibration, History, Library or Web Storage writers.
 
-Before #31's safety gate can be accepted:
+## One-user rollback drill
+
+The pre-refactor safety check is intentionally minimal: use the small
+[backup utility](../tools/storage-backup.html) to **Export JSON** from the
+current browser origin, save the file outside browser storage, then use the
+**same URL and port** in a new private browser window/profile to import into
+a **completely empty Curvature origin**. The tool is a standalone maintenance
+page: it does not initialize the Modern app or create an IndexedDB database
+when opened. Its purpose is to make the empty-target precondition real.
+
+The import first validates the versioned archive, per-store hashes and the
+full SHA-256 checksum. It previews store/record/key counts and
+**refuses any pre-existing Curvature IndexedDB database or Web Storage key**.
+If the target is empty it restores the original IndexedDB database names,
+versions, store schemas, indexes, primary keys and values, then the raw
+Curvature localStorage/sessionStorage keys. It immediately reads everything
+again and requires an exact tagged-value comparison, including photograph bytes.
+On success, open `CurvatureModern.html` **in the same new tab** and reload (F5).
+Keep the original profile untouched and retain the downloaded JSON plus a Git
+tag pointing to the code baseline.
+
+This is a deliberately single-user workflow. Before export, wait until Modern
+reports the last edit as saved; navigate to the backup page in the *same tab*.
+Do not edit in another tab during the backup. The existing two-pass capture
+does not claim cross-database atomicity, and the archive retains its
+`eligibleForMigration:false` marker because it was created without an
+application-wide writer freeze. This marker is **not** a reason to block
+the agreed manual one-user rollback drill once the user has verified a real
+download and clean-profile import. A synthetic automated Chromium round trip
+validates the tool's mechanics; only a user-held real-data round trip confirms
+the user's own backup.
+
+Failure during import can leave partially created databases **in the new
+test profile only**; discard that test profile and use another clean one
+rather than retrying into an occupied origin. The tool never deletes or
+overwrites existing data. `file:` pages, unsupported database inventory,
+corrupt JSON, hash mismatch, occupied targets and oversized archives fail
+explicitly. Browser-private storage may be removed upon window closure, so
+the downloaded file is the durable backup; the test profile is disposable.
+
+The original more extensive coordinated/multi-tab durability design below
+is **deferred** until after the State Registry refactor and is no longer a
+precondition for the user's manual rollback checkpoint.
+
+### Deferred production-grade backup hardening (not required for this drill)
+Earlier proposed production-grade acceptance checks:
 
 1. Coordinate/quiesce all active Modern writers and record acknowledged revisions, or fail export as incomplete. Read/verify again across databases; distinguish clean commits from pending, failed or legacy recovery.
 2. Validate the original photograph bytes, SHA-256 identities, project links and archive provenance. Fail a snapshot with missing/unsupported required sources.
