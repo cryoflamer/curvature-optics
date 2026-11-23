@@ -9922,5 +9922,163 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(after,[before['id'],1,'Display',None])
 
+
+    def test_workspace_registry_preview_bfcache_lifecycle_reclaims_same_tab_lease(self):
+        """Simulated persisted pagehide/pageshow must retain identity and
+        validate all saved UI revisions before allowing another user edit.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.wait_for_function("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const row=await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'});
+            return row.revision===1&&
+                row.envelope?.values?.['workspace.settingsTab']?.value==='Objects';
+        }""",timeout=30000)
+        initial=self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()""")
+        self.page.evaluate("""async () => {
+            dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+            await new Promise(resolve=>setTimeout(resolve,0));
+            dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));
+        }""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertTrue(self.page.locator('#ModernUiRegistryRecovery').is_hidden())
+        self.page.locator('#ModernSettingsDisplay').click()
+        self.page.wait_for_function("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const row=await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'});
+            return row.revision===2&&
+                row.envelope?.values?.['workspace.settingsTab']?.value==='Display';
+        }""",timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()"""),initial)
+        # Multiple lifecycle transitions must release and claim repeatedly.
+        self.page.evaluate("""async () => {
+            dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+            await new Promise(resolve=>setTimeout(resolve,0));
+            dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));
+        }""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()"""),initial)
+        self.assertEqual(self.page.evaluate("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const row=await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'});
+            return row.revision;
+        }"""),2,'BFCache hydration must not create an extra revision')
+
+    def test_workspace_registry_preview_bfcache_lease_collision_fails_closed(self):
+        """A second live tab claiming the released identity blocks BFCache
+        writes; the original token and both saved UI snapshots remain intact.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.wait_for_function("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            return (await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'})).revision===1;
+        }""",timeout=30000)
+        initial=self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()""")
+        self.page.evaluate("""() =>
+            dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}))""")
+        duplicate=self.context.new_page()
+        duplicate.add_init_script('sessionStorage.setItem('+
+            json.dumps('curvature-modern-ui-tab-id-v1')+','+
+            json.dumps(initial)+');')
+        duplicate.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        duplicate.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.assertEqual(duplicate.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()"""),initial)
+        self.page.evaluate("""() =>
+            dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='error'""",
+            timeout=30000)
+        banner=self.page.locator('#ModernUiRegistryRecovery')
+        expect(banner).to_be_visible()
+        expect(banner.get_by_role('alert')).to_contain_text('claimed while this page was cached')
+        expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()"""),initial,
+            'a cached document must not silently fork its in-memory state')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const row=await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'});
+            return [row.revision,
+              row.envelope?.values?.['workspace.settingsTab']?.value];
+        }"""),[1,'Objects'])
+        # Any stale deferred write must remain blocked after lost ownership.
+        self.assertTrue(self.page.evaluate("""() =>
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='error'"""))
+        duplicate.close()
+
+
+
+    def test_workspace_registry_preview_real_history_back_keeps_usable_state(self):
+        """Exercise a real browser navigation; report whether Chromium actually
+        used BFCache (synthetic tests cover its event contract regardless).
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.wait_for_function("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            return (await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'})).revision===1;
+        }""",timeout=30000)
+        original=self.page.evaluate("""() =>
+            CurvatureModernUiSessionStore.create(window).tabId()""")
+        self.page.evaluate("""() => {
+            sessionStorage.setItem('curvature-ui-bfcache-observed','false');
+            addEventListener('pageshow',event=>{
+                if(event.persisted)
+                    sessionStorage.setItem('curvature-ui-bfcache-observed','true');
+            });
+        }""")
+        self.page.goto(self.base_url.rsplit('/',1)[0]+'/README.md',
+                       wait_until='domcontentloaded')
+        self.page.go_back(wait_until='domcontentloaded')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        restored=self.page.evaluate("""() => ({
+            id:CurvatureModernUiSessionStore.create(window).tabId(),
+            cached:sessionStorage.getItem('curvature-ui-bfcache-observed')==='true'
+        })""")
+        print('Real Chromium BFCache used:',restored['cached'],flush=True)
+        self.assertEqual(restored['id'],original)
+        self.assertEqual(self.page.evaluate("""() =>
+            CurvatureModernApp.getWorkspaceState().sceneTab"""),'Objects')
+        self.page.locator('#ModernSettingsDisplay').click()
+        self.page.wait_for_function("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const row=await s.read('per-tab-and-workspace',
+                {tabId:s.tabId(),workspace:'scene'});
+            return row.envelope?.values?.['workspace.settingsTab']?.value==='Display';
+        }""",timeout=30000)
+
 if __name__ == '__main__':
     unittest.main()

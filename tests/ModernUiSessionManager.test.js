@@ -357,3 +357,27 @@ test('unavailable synchronous staging fails explicitly rather than claiming F5 s
   assert.match(manager.lastErrors()[0].message,/sessionStorage quota denied/);
   await assert.rejects(manager.retryFailed(),/pending UI staging failed/);
 });
+
+test('resumed manager validates durable revisions before accepting changes',async()=>{
+  const rows=new Map(),backend=store('tab1',rows),manager=create(backend);
+  await manager.restore();
+  await manager.set('object-explorer.active-panel','details');
+  assert.equal(await manager.verifyResumed(),true);
+  const key='workspace:tab1:object-explorer',remote=rows.get(key);
+  rows.set(key,{revision:remote.revision+1,envelope:remote.envelope});
+  await assert.rejects(manager.verifyResumed(),/BFCache revision conflict/);
+  assert.equal(manager.get('object-explorer.active-panel'),'details');
+});
+test('resumed manager refuses an unacknowledged journal even with matching durable revision',async()=>{
+  const rows=new Map(),base=store('tab1',rows);
+  let pending=false;
+  const manager=create({...base,readPending:scope=>
+    scope==='per-tab-and-workspace'&&pending?{
+      expectedRevision:0,envelope:{format:registry.FORMAT,
+        version:registry.VERSION,scope:'per-tab-and-workspace',values:{}}
+    }:null});
+  await manager.restore();
+  pending=true;
+  await assert.rejects(manager.verifyResumed(),/unacknowledged UI write/);
+  assert.equal(rows.size,0,'no implicit replay during BFCache re-entry');
+});

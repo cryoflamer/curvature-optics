@@ -1087,6 +1087,40 @@
       });
     });
   }
+  function bindUiRegistryPageLifecycle(){
+    if(!workspaceUiRegistryPreviewRequested||!root.addEventListener)return;
+    root.addEventListener('pagehide',function(){
+      var trial=workspaceUiRegistryPreview;
+      if(trial.status==='ready'&&trial.bridge){
+        workspaceUiRegistryPreview={status:'suspended',bridge:trial.bridge,error:null};
+      }
+    });
+    root.addEventListener('pageshow',function(event){
+      if(!event.persisted)return;
+      var trial=workspaceUiRegistryPreview;
+      if(!trial.bridge)return;
+      // BFCache keeps the whole document heap, including its old UI revision
+      // map. Do NOT call restore() or silently fork a newly occupied ID.
+      var token=[workspaceNavigationVersion,workspaceTabEditGeneration,
+        workspaceSectionEditGeneration,workspaceViewEditGeneration.animation,
+        workspaceViewEditGeneration.calibration];
+      workspaceUiRegistryPreview={status:'resuming',bridge:trial.bridge,error:null};
+      trial.bridge.resumeAfterPageShow(function(){
+        var current=[workspaceNavigationVersion,workspaceTabEditGeneration,
+          workspaceSectionEditGeneration,workspaceViewEditGeneration.animation,
+          workspaceViewEditGeneration.calibration];
+        if(token.some(function(value,index){return value!==current[index];}))
+          throw Error('UI changed during BFCache validation; reload to recover');
+      }).then(function(){
+        workspaceUiRegistryPreview={status:'ready',bridge:trial.bridge,error:null};
+        refreshUiRegistryRecoveryNotice();
+      }).catch(function(error){
+        workspaceUiRegistryPreview={status:'error',bridge:trial.bridge,
+          error:'BFCache UI session cannot safely resume: '+error.message};
+        refreshUiRegistryRecoveryNotice();
+      });
+    });
+  }
   function startWorkspaceUiRegistryPreview(){
     if(!workspaceUiRegistryPreviewRequested)return;
     var api=root.CurvatureModernWorkspaceStateBridge;
@@ -8791,6 +8825,7 @@
     bindPreviewDetail();
     bindApplicationPreferences();
     bindUiRegistryRecoveryControls();
+    bindUiRegistryPageLifecycle();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))

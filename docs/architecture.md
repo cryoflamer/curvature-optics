@@ -337,6 +337,22 @@ No recovery bar or new store appears on the normal Modern route. User acceptance
 must confirm downloaded file bytes, keyboard accessibility and visual alignment
 in Opera before promoting the preview.
 
+**BFCache and tab lease lifecycle:** `pagehide` must relinquish the
+exclusive Web Lock **every time**, including when the document is eligible
+for the browser back/forward cache. On `pageshow.persisted`, the opt-in
+bridge reacquires **the exact same** opaque tab identity; it does not run
+the duplicated-tab fork path while keeping the old page's in-memory state.
+The resumed lock remains non-writable while each registered UI scope
+re-reads durable IndexedDB revisions and its staged journal. Only matching
+acknowledged revisions with no pending/failed write authorize writes again.
+A lock collision, foreign revision, corrupt pending journal, or any
+unacknowledged in-flight edit fails closed; the recovery banner offers a
+UI-only diagnostic export and instructs a reload rather than overwriting
+another tab. This contract is limited to the opt-in UI state and does
+not resolve saved projects, draft identity, crashes, or actual Opera BFCache
+eligibility; test browser restoration separately from synthetic lifecycle
+event tests. `pageshow.persisted=false` uses normal new-document restore.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery

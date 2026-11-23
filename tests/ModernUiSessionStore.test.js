@@ -163,3 +163,48 @@ test('unsupported pending UI bytes fail closed without deleting the original evi
   assert.equal(session.getItem(key),'not valid JSON');
   ctxEnv.leave();
 });
+
+test('suspended BFCache lease is reacquired with the same ID and is read-only until validated',async()=>{
+  const locks=lockFixture(),session=storage({'legacy-draft':'untouched'});
+  const env=ownedEnv(locks,session),adapter=store.create(env);
+  const initial=await adapter.claimTab();
+  const ctx={tabId:initial.tabId,workspace:'scene'},ui=registry.create();
+  ui.register({key:'workspace.view',scope:'per-tab-and-workspace',
+    version:1,defaultValue:'editor',validate:v=>v==='editor'});
+  const snapshot=ui.snapshot('per-tab-and-workspace',ctx);
+  env.leave();
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(locks.held.size,0);
+  await assert.rejects(adapter.write('per-tab-and-workspace',ctx,snapshot,0),
+    /tab ownership lost/);
+  const returned=await adapter.reclaimTab();
+  assert.equal(returned.tabId,initial.tabId,'BFCache is the same document identity');
+  assert.equal(returned.forkedFrom,null);
+  await assert.rejects(adapter.write('per-tab-and-workspace',ctx,snapshot,0),
+    /tab ownership lost/);
+  assert.throws(()=>adapter.stage('per-tab-and-workspace',ctx,snapshot,0),
+    /tab ownership required/);
+  assert.equal(adapter.finishResume(),initial.tabId);
+  assert.equal(adapter.stage('per-tab-and-workspace',ctx,snapshot,0),true);
+  env.leave();
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(locks.held.size,0,'second pagehide releases the new lease as well');
+  assert.equal(session.getItem('legacy-draft'),'untouched');
+});
+test('BFCache collision fails closed without ever forking or changing the original token',async()=>{
+  const locks=lockFixture(),originalSession=storage();
+  const originEnv=ownedEnv(locks,originalSession);
+  const original=store.create(originEnv),id=(await original.claimTab()).tabId;
+  originEnv.leave();await Promise.resolve();await Promise.resolve();
+  const otherEnv=ownedEnv(locks,storage({[store.TAB_KEY]:id}));
+  const other=store.create(otherEnv);
+  assert.equal((await other.claimTab()).tabId,id);
+  await assert.rejects(original.reclaimTab(),/claimed while this page was cached/);
+  assert.equal(original.tabId(),id,'original BFCache ID is not silently rotated');
+  assert.equal(originalSession.getItem(store.TAB_KEY),id);
+  otherEnv.leave();await Promise.resolve();await Promise.resolve();
+  assert.equal((await original.reclaimTab()).tabId,id);
+  original.finishResume();
+  originEnv.leave();await Promise.resolve();await Promise.resolve();
+  assert.equal(locks.held.size,0);
+});

@@ -277,3 +277,20 @@ test('bridge exposes explicit retry for failed Animation view without a second w
   assert.deepEqual(bridge.lastErrors(),[]);
   assert.deepEqual(await bridge.retryFailed(),[]);
 });
+
+test('bridge resumes only after all workspace scopes validate their saved revisions',async()=>{
+  const {bridge,store:backend,rows}=fullBridge();
+  let claimed=false,completed=false;
+  backend.reclaimTab=async()=>{claimed=true;return {tabId:backend.tabId()};};
+  backend.finishResume=()=>{completed=true;};
+  await bridge.restore();
+  await bridge.setTab('scene','Objects');
+  assert.equal(await bridge.resumeAfterPageShow(),true);
+  assert.equal(claimed,true);assert.equal(completed,true);
+  completed=false;
+  const key='per-tab-and-workspace:first:scene';
+  const prior=rows.get(key);
+  rows.set(key,{revision:prior.revision+1,envelope:prior.envelope});
+  await assert.rejects(bridge.resumeAfterPageShow(),/BFCache revision conflict/);
+  assert.equal(completed,false,'a stale workspace must never re-enable the lease');
+});

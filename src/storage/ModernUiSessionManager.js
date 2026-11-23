@@ -227,6 +227,32 @@
       }
       return resolved;
     }
+    // BFCache restores the live JS heap, not the database revision map.
+    // Verify every registered scope before re-enabling writes. A pending
+    // journal or failed write requires explicit recovery/reload, not a
+    // silent rebase over a record written while this page was suspended.
+    async function verifyResumed(){
+      check(ready&&!restoring,'restore state before resume');
+      for(const scope of SCOPES){
+        if(![...specs.values()].some(x=>x.scope===scope))continue;
+        const ctx=context(scope),id=group(scope);
+        check(!errors.has(id),'failed UI write; export recovery JSON and reload');
+        const pending=typeof store.readPending==='function'?
+          store.readPending(scope,ctx):null;
+        check(!pending,'unacknowledged UI write; export recovery JSON and reload');
+        const row=await store.read(scope,ctx);
+        check(row&&row.revision===(revisions.get(id)||0),
+          'BFCache revision conflict; newer UI state preserved');
+        if(row.envelope){
+          const current=registry.snapshot(scope,ctx);
+          for(const [key,value] of Object.entries(row.envelope.values)){
+            check(JSON.stringify(current.values[key])===JSON.stringify(value),
+              'BFCache UI state conflict; newer UI state preserved');
+          }
+        }
+      }
+      return true;
+    }
     // Bind only after restoration, so applying a restored open state is
     // not mistaken for a user edit. The browser's delayed native toggle
     // event is also harmless because equal values create no write.
@@ -279,7 +305,7 @@
       return ()=>{off();for(const fn of cleanup)fn();};
     }
     return Object.freeze({register,restore,get,set,setMany,reset,subscribe,flush,
-      lastErrors,retryFailed,bindDetails,bindChoices,isReady:()=>ready});
+      lastErrors,retryFailed,verifyResumed,bindDetails,bindChoices,isReady:()=>ready});
   }
   return Object.freeze({create});
 }));

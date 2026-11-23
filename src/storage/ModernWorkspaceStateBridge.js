@@ -130,6 +130,16 @@
         managers.get(workspace).set(VIEW_KEY,VIEWS[workspace][0])));
     }
     async function flush(){await Promise.all([...managers.values()].map(m=>m.flush()));}
+    async function resumeAfterPageShow(verifyNavigation){
+      check(ready,'restore first');
+      if(typeof store.reclaimTab!=='function')return false;
+      await store.reclaimTab();
+      for(const manager of managers.values())
+        await manager.verifyResumed();
+      if(typeof verifyNavigation==='function')verifyNavigation();
+      store.finishResume();
+      return true;
+    }
     async function retryFailed(){
       check(ready,'restore first');
       const outcomes=[];
@@ -143,7 +153,7 @@
     function lastErrors(){return [...MODES,...Object.keys(VIEWS)].flatMap(mode=>managers.get(mode).lastErrors().map(
       entry=>({mode,scope:entry.scope,message:entry.message})));
     }
-    return Object.freeze({restore,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
+    return Object.freeze({restore,resumeAfterPageShow,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
       supports:suffix=>supported.has(suffix),isReady:()=>ready,
       tabId:()=>store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});
   }

@@ -21,7 +21,8 @@
     const {indexedDB,sessionStorage,crypto}=env;
     // Web Locks owns the opaque tab ID for this document lifetime. A duplicated
     // tab inherits sessionStorage, so its token alone is not proof of identity.
-    let claimPromise=null,owner=null,forkedFrom=null;
+    let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
+    let lifecycleAttached=false;
     function tabId(){
       const existing=sessionStorage.getItem(TAB_KEY);
       if(existing!==null){
@@ -47,7 +48,9 @@
             });
           Promise.resolve(task).catch(error=>{
             if(!settled){settled=true;reject(error);}
-            else if(owner&&owner.id===id)owner.active=false;
+            else if(owner&&owner.id===id){
+              owner.active=false;owner.writable=false;
+            }
           });
         }catch(error){if(!settled){settled=true;reject(error);}}
       });
@@ -65,13 +68,21 @@
         for(let attempt=0;attempt<4;attempt++){
           const release=await attemptLock(candidate);
           if(release){
-            owner={id:candidate,active:true,release};
-            if(typeof env.addEventListener==='function')
+            owner={id:candidate,active:true,writable:true,release};
+            if(!lifecycleAttached&&typeof env.addEventListener==='function'){
+              lifecycleAttached=true;
+              // A cached document is NOT destroyed at pagehide. Release the
+              // lock on every departure, not just the first one.
               env.addEventListener('pagehide',()=>{
-                if(owner&&owner.id===candidate&&owner.active){
-                  owner.active=false;owner.release();
+                if(owner&&owner.active){
+                  const old=owner;
+                  old.active=false;old.writable=false;
+                  old.release();
                 }
-              },{once:true});
+                claimPromise=null;
+                resumePromise=null;
+              });
+            }
             return Object.freeze({tabId:candidate,forkedFrom});
           }
           if(!forkedFrom)forkedFrom=original;
@@ -85,6 +96,31 @@
         throw Error('UI Session Store: unable to claim a unique tab identity');
       })().catch(error=>{claimPromise=null;throw error;});
       return claimPromise;
+    }
+    // BFCache restores the SAME document heap: never invoke claimTab()'s
+    // duplicate-tab forking algorithm on this path. A conflicting claimant
+    // must cause an explicit error and preserve both stores unchanged.
+    function reclaimTab(){
+      if(resumePromise)return resumePromise;
+      check(owner&&!owner.active&&tabId()===owner.id,
+        'tab identity cannot be resumed; reload to recover');
+      const old=owner;
+      resumePromise=(async()=>{
+        const release=await attemptLock(old.id);
+        check(!!release,
+          'tab identity was claimed while this page was cached; reload to recover');
+        owner={id:old.id,active:true,writable:false,release};
+        claimPromise=Promise.resolve(
+          Object.freeze({tabId:owner.id,forkedFrom}));
+        return Object.freeze({tabId:owner.id,forkedFrom});
+      })().catch(error=>{resumePromise=null;throw error;});
+      return resumePromise;
+    }
+    function finishResume(){
+      check(owner&&owner.active&&!owner.writable,
+        'tab is not awaiting resume validation');
+      owner.writable=true;
+      return owner.id;
     }
     function address(scope,context){
       check(['per-tab','per-tab-and-workspace','global'].includes(scope),
@@ -130,7 +166,7 @@
     function stage(scope,context,envelope,expectedRevision){
       const key=pendingKey(scope,context);
       if(!key)return false;
-      check(owner&&owner.active&&context.tabId===owner.id,
+      check(owner&&owner.active&&owner.writable&&context.tabId===owner.id,
         'tab ownership required for pending UI write');
       check(typeof sessionStorage.removeItem==='function',
         'sessionStorage removeItem required for pending UI write');
@@ -146,6 +182,8 @@
     function acknowledge(scope,context,envelope,revision){
       const key=pendingKey(scope,context);
       if(!key)return false;
+      check(owner&&owner.active&&owner.writable&&context.tabId===owner.id,
+        'tab ownership lost before acknowledgement');
       const pending=readPending(scope,context);
       if(!pending)return false;
       check(Number.isSafeInteger(revision)&&revision>=1,
@@ -244,12 +282,19 @@
       check(Number.isSafeInteger(expectedRevision)&&expectedRevision>=0,
         'expected revision required');
       const target=address(scope,context);
-      if(scope!=='global'&&claimPromise)
-        check(owner&&owner.active&&context&&context.tabId===owner.id,
+      // Diagnostic adapters may be unclaimed, but a claimed lease can never
+      // write after suspension or while a BFCache restore is unvalidated.
+      const lease=owner;
+      if(scope!=='global'&&(claimPromise||lease))
+        check(lease&&lease.active&&lease.writable&&context&&context.tabId===lease.id,
           'tab ownership lost; reload before writing UI state');
       return transact(target.store,'readwrite',(store,reply)=>{
         const req=store.get(target.id);
         req.onsuccess=()=>{
+          if(scope!=='global'&&lease&&
+             (!lease.active||!lease.writable||owner!==lease)){
+            reply.reject(Error('UI Session Store: tab ownership lost during write'));return;
+          }
           const before=req.result,revision=before?before.revision:0;
           if(before&&(before.version!==1||!Number.isSafeInteger(before.revision)||
             before.revision<1)){
@@ -264,7 +309,8 @@
         };
       });
     }
-    return Object.freeze({tabId,claimTab,read,write,stage,readPending,acknowledge});
+    return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
+      read,write,stage,readPending,acknowledge});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));
