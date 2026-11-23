@@ -9239,8 +9239,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(checkpoint['compareValues'],19)
         self.assertTrue(checkpoint['legacyCamelCasePreserved'],
             'existing camelCase section names must survive without renaming')
-        self.assertEqual(checkpoint['scene'],1)
-        self.assertEqual(checkpoint['compare'],1)
+        # A Settings-tab selection and a disclosure change are two
+        # independent user actions. F5 must add no further workspace writes.
+        self.assertEqual(checkpoint['scene'],2)
+        self.assertEqual(checkpoint['compare'],2)
         self.page.reload(wait_until='load')
         self.page.wait_for_function("""() =>
             CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
@@ -9259,7 +9261,7 @@ class ModernBrowserSmoke(unittest.TestCase):
               {tabId,workspace:'compare'});
             return {scene:scene.revision,compare:compare.revision};
         }""")
-        self.assertEqual(revisions,{'scene':1,'compare':1},
+        self.assertEqual(revisions,{'scene':2,'compare':2},
             'programmatic mode/F5 restoration must not create a save')
         self.assertTrue(self.page.evaluate("""() =>
             CurvatureModernApplicationPreferences.read(localStorage)
