@@ -517,6 +517,7 @@
       "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
+      "src/storage/ModernBackupWriteBarrier.js",
       "src/storage/ModernPortableBackup.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
@@ -524,7 +525,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 236,
+  "sourceJsCount": 237,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2892,6 +2893,14 @@
       ],
       "commonJsTestCallers": [
         "tests/SceneFrameRenderer.test.js"
+      ],
+      "commonJsToolCallers": []
+    },
+    "src/storage/ModernBackupWriteBarrier.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernBackupWriteBarrier.test.js"
       ],
       "commonJsToolCallers": []
     },

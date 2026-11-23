@@ -8687,5 +8687,59 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(outcome['corruptionRejected'])
 
 
+
+    def test_backup_write_barrier_serializes_participating_tabs(self):
+        """Real Web Locks: one tab's acknowledged writer must finish before the
+        other tab enters its exclusive read-only snapshot.
+        """
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernBackupWriteBarrier.js')
+        supported=self.page.evaluate("""() => !!navigator.locks?.request""")
+        self.assertTrue(supported, 'Web Locks must be available in secure localhost context')
+        self.page.evaluate("""() => {
+            const api=CurvatureModernBackupWriteBarrier;
+            const gate=api.create(navigator.locks);
+            const writer=gate.registerWriter('working.session');
+            window.__backupWriterEntered=false;
+            window.__backupWriterFinished=false;
+            window.__backupWriterHold=new Promise(resolve=>window.__backupReleaseWriter=resolve);
+            window.__backupWriterTask=writer.commit(async()=>{
+                window.__backupWriterEntered=true;
+                await window.__backupWriterHold;
+                window.__backupWriterFinished=true;
+                return 'committed-after-await';
+            });
+        }""")
+        self.page.wait_for_function('window.__backupWriterEntered === true')
+
+        second=self.context.new_page()
+        response=second.goto(self.base_url,wait_until='load',timeout=30000)
+        self.assertEqual(response.status,200)
+        second.add_script_tag(url='/src/storage/ModernBackupWriteBarrier.js')
+        second.evaluate("""() => {
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__backupReadEntered=false;
+            window.__backupReadTask=gate.snapshot(async()=>{
+                window.__backupReadEntered=true;
+                return 'cooperative-snapshot';
+            });
+        }""")
+        self.assertFalse(second.evaluate('window.__backupReadEntered'))
+        self.assertFalse(self.page.evaluate('window.__backupWriterFinished'))
+
+        writer_result=self.page.evaluate("""async () => {
+            window.__backupReleaseWriter();
+            return window.__backupWriterTask;
+        }""")
+        snapshot=second.evaluate('async () => window.__backupReadTask')
+        self.assertEqual(writer_result,'committed-after-await')
+        self.assertEqual(snapshot['value'],'cooperative-snapshot')
+        self.assertTrue(second.evaluate('window.__backupReadEntered'))
+        self.assertEqual(snapshot['coordination'],'participating-writers-only')
+        self.assertFalse(snapshot['eligibleForMigration'])
+        self.assertEqual(snapshot['localRegisteredWriters'],[])
+        second.close()
+
+
 if __name__ == '__main__':
     unittest.main()
