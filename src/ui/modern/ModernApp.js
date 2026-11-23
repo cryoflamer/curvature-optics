@@ -767,6 +767,8 @@
     navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
   }
   function preferencesStatus(message,error){
+    if(error&&message.indexOf('UI Registry')===0)
+      refreshUiRegistryRecoveryNotice(message);
     var node=geometryUi('ModernPreferencesStatus');
     if(node){
       modernStatus(node,message,error?'error':/reset/i.test(message)?'success':'info');
@@ -981,6 +983,110 @@
       return current.bridge.get(scope,suffix);
     return legacyWorkspaceSectionValue(scope,suffix);
   }
+  var uiRegistryRecoveryBusy=false;
+  function refreshUiRegistryRecoveryNotice(message){
+    if(!workspaceUiRegistryPreviewRequested)return;
+    var panel=newUiEl('ModernUiRegistryRecovery');
+    if(!panel)return;
+    var trial=workspaceUiRegistryPreview;
+    var errors=trial.bridge&&trial.status==='ready'?trial.bridge.lastErrors():[];
+    var issue=trial.error||errors.map(function(item){
+      return item.mode+': '+item.message;
+    }).join('; ');
+    var visible=!!issue;
+    panel.hidden=!visible;
+    if(!visible)return;
+    var details=newUiEl('ModernUiRegistryRecoveryStatus');
+    if(details)modernStatus(details,message||('UI Registry preview could not save UI state. '+issue+
+      ' Download the recovery JSON before reloading or attempting another change.'),
+      'error');
+    var retry=newUiEl('ModernUiRegistryRetry');
+    // A collision cannot be safely retried; export and resolve it separately.
+    if(retry)retry.disabled=uiRegistryRecoveryBusy||trial.status!=='ready'||
+      !errors.length||errors.some(function(item){
+        return /conflict|unsupported|staging failed/i.test(item.message);
+      });
+    var download=newUiEl('ModernUiRegistryDownload');
+    if(download)download.disabled=uiRegistryRecoveryBusy;
+  }
+  async function collectUiRegistryRecoveryEvidence(){
+    if(!workspaceUiRegistryPreviewRequested)
+      throw Error('UI Registry recovery export requires preview mode');
+    var trial=workspaceUiRegistryPreview,errors=trial.bridge?
+      trial.bridge.lastErrors():[];
+    var evidence={format:'curvature-modern-ui-recovery-evidence',version:1,
+      capturedAt:new Date().toISOString(),
+      preview:{status:trial.status,error:trial.error,errors:errors},
+      tabId:null,pending:[],durable:[]};
+    // Preserve RAW pending bytes, including unreadable records. Never clear
+    // corrupt or foreign state merely because export cannot parse it.
+    var storage=root.sessionStorage,prefix='curvature-modern-ui-pending-v1:';
+    if(storage){
+      for(var i=0;i<storage.length;i++){
+        var key=storage.key(i);
+        if(key&&key.indexOf(prefix)===0)
+          evidence.pending.push({key:key,raw:storage.getItem(key)});
+      }
+    }
+    var id=storage&&storage.getItem('curvature-modern-ui-tab-id-v1');
+    if(id)evidence.tabId=id;
+    var storeApi=root.CurvatureModernUiSessionStore;
+    if(id&&storeApi&&typeof storeApi.create==='function'){
+      var store=storeApi.create(root);
+      var scopes=[{scope:'per-tab',context:{tabId:id}}];
+      ['scene','compare','animation','calibration'].forEach(function(workspace){
+        scopes.push({scope:'per-tab-and-workspace',context:{tabId:id,workspace:workspace}});
+      });
+      for(var target of scopes){
+        var record={scope:target.scope,workspace:target.context.workspace||null};
+        try{
+          var row=await store.read(target.scope,target.context);
+          record.revision=row.revision;record.envelope=row.envelope;
+        }catch(error){record.readError=String(error&&error.message||error);}
+        evidence.durable.push(record);
+      }
+    }
+    return evidence;
+  }
+  function downloadUiRegistryRecoveryEvidence(){
+    return collectUiRegistryRecoveryEvidence().then(function(evidence){
+      var blob=new Blob([JSON.stringify(evidence,null,2)+'\n'],
+        {type:'application/json'});
+      var uri=root.URL.createObjectURL(blob);
+      var link=document.createElement('a');
+      link.href=uri;link.download='curvature-ui-recovery.json';
+      document.body.appendChild(link);link.click();link.remove();
+      root.setTimeout(function(){root.URL.revokeObjectURL(uri);},1000);
+      return evidence;
+    });
+  }
+  function bindUiRegistryRecoveryControls(){
+    if(!workspaceUiRegistryPreviewRequested)return;
+    var retry=newUiEl('ModernUiRegistryRetry'),download=newUiEl('ModernUiRegistryDownload');
+    if(retry)retry.addEventListener('click',function(){
+      if(uiRegistryRecoveryBusy||retry.disabled)return;
+      var trial=workspaceUiRegistryPreview;
+      if(trial.status!=='ready'||!trial.bridge)return;
+      uiRegistryRecoveryBusy=true;refreshUiRegistryRecoveryNotice();
+      trial.bridge.retryFailed().then(function(){
+        uiRegistryRecoveryBusy=false;refreshUiRegistryRecoveryNotice();
+      }).catch(function(error){
+        uiRegistryRecoveryBusy=false;
+        refreshUiRegistryRecoveryNotice('UI Registry recovery failed: '+error.message+
+          '. Download UI recovery JSON; newer stored data will not be overwritten.');
+      });
+    });
+    if(download)download.addEventListener('click',function(){
+      if(uiRegistryRecoveryBusy)return;
+      uiRegistryRecoveryBusy=true;refreshUiRegistryRecoveryNotice();
+      downloadUiRegistryRecoveryEvidence().then(function(){
+        uiRegistryRecoveryBusy=false;refreshUiRegistryRecoveryNotice();
+      }).catch(function(error){
+        uiRegistryRecoveryBusy=false;
+        refreshUiRegistryRecoveryNotice('UI Registry recovery export failed: '+error.message);
+      });
+    });
+  }
   function startWorkspaceUiRegistryPreview(){
     if(!workspaceUiRegistryPreviewRequested)return;
     var api=root.CurvatureModernWorkspaceStateBridge;
@@ -1080,6 +1186,7 @@
         }
       }
       applyWorkspaceSections();
+      refreshUiRegistryRecoveryNotice();
     }).catch(function(error){
       workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
       preferencesStatus('UI Registry preview restore failed: '+error.message,true);
@@ -8683,6 +8790,7 @@
     bindOpticalQuality();
     bindPreviewDetail();
     bindApplicationPreferences();
+    bindUiRegistryRecoveryControls();
     bindPersistence();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))
@@ -9032,7 +9140,14 @@
       var trial=workspaceUiRegistryPreview;
       if(trial.status!=='ready'||!trial.bridge)
         return Promise.reject(Error('UI Registry preview is not writable'));
-      return trial.bridge.retryFailed();
+      return trial.bridge.retryFailed().then(function(result){
+        refreshUiRegistryRecoveryNotice();
+        return result;
+      },function(error){
+        refreshUiRegistryRecoveryNotice('UI Registry recovery failed: '+error.message+
+          '. Download UI recovery JSON before further changes.');
+        throw error;
+      });
     },
     getWorkspaceUiRegistryPreview:function(){
       var trial=workspaceUiRegistryPreview;

@@ -1941,3 +1941,16 @@ body.modern-keyframe-edit-active :is(.modern-tabs,.modern-share-actions,#ModernH
   .modern-image-picker-gallery{max-height:37vh}
   .modern-image-picker-footer button{flex:1}
 }
+
+/* Opt-in UI Registry recovery: globally visible regardless of current workspace. */
+.modern-ui-registry-recovery{margin:10px clamp(12px,2vw,30px);
+  padding:9px 12px;border:1px solid #d9b2b2;border-radius:8px;
+  background:#fff7f5;max-width:100%;overflow-wrap:anywhere}
+.modern-ui-registry-recovery[hidden]{display:none!important}
+.modern-ui-registry-recovery .modern-status-message:not(:empty){margin:0}
+.modern-ui-registry-recovery-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.modern-ui-registry-recovery-actions .modern-ghost-button{margin-top:7px}
+.modern-ui-registry-recovery-actions .modern-ghost-button:disabled{opacity:.55;cursor:not-allowed}
+.modern-ui-registry-recovery-actions .modern-ghost-button:focus-visible{
+  outline:2px solid #287ac5;outline-offset:2px}
+@media(max-width:550px){.modern-ui-registry-recovery-actions .modern-ghost-button{flex:1 1 auto}}

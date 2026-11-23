@@ -169,6 +169,13 @@
     </nav>
     <div class="modern-share-actions"><button type="button" class="modern-ghost-button" id="ModernCopyExperiment">Copy experiment URL</button><button type="button" class="modern-ghost-button" id="ModernResetExperiment">Reset experiment</button><button type="button" class="modern-ghost-button" id="ModernHistoryToggle" aria-expanded="false" aria-controls="ModernHistoryPanel">History</button><a class="modern-legacy-link" href="CurvatureApp.html?ui=legacy">Open Legacy diagnostics ↗</a></div>
   </header>
+  <section id="ModernUiRegistryRecovery" class="modern-ui-registry-recovery" aria-label="UI session recovery" hidden>
+    <p id="ModernUiRegistryRecoveryStatus" class="modern-status-message" role="alert" aria-live="assertive"></p>
+    <div class="modern-ui-registry-recovery-actions">
+      <button type="button" class="modern-ghost-button" id="ModernUiRegistryRetry">Retry UI save</button>
+      <button type="button" class="modern-ghost-button" id="ModernUiRegistryDownload">Download UI recovery JSON</button>
+    </div>
+  </section>
   <!-- GraphX3DX needs parser-time document.writeln and a positive initial width.
        Move these independent canvases into Animation when its tab opens. -->
   <div id="ModernAnimationGraphBootstrap" class="modern-animation-graph-bootstrap" aria-hidden="true">

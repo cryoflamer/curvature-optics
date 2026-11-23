@@ -9761,5 +9761,166 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result['pending']['envelope']['values']
                          ['workspace.settingsTab']['value'],'Objects')
 
+
+    def test_workspace_registry_preview_recovery_bar_retry_and_export(self):
+        """The only visible recovery actions live above every workspace;
+        a transient failure is downloaded before an explicit safe retry.
+        """
+        self.open_modern()
+        self.assertTrue(self.page.locator('#ModernUiRegistryRecovery').is_hidden(),
+                        'default Modern never exposes opt-in recovery UI')
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.evaluate("""() => {
+            window.__uiOpen=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated recovery panel outage');
+                    return window.__uiOpen(name,...args);
+                }});
+            document.getElementById('ModernSettingsObjects').click();
+        }""")
+        bar=self.page.locator('#ModernUiRegistryRecovery')
+        expect(bar).to_be_visible(timeout=30000)
+        expect(bar.get_by_role('alert')).to_contain_text(
+            'simulated recovery panel outage')
+        retry=self.page.locator('#ModernUiRegistryRetry')
+        expect(retry).to_be_enabled()
+        download=self.page.locator('#ModernUiRegistryDownload')
+        expect(download).to_be_enabled()
+        # A diagnostic export must work despite an unavailable IndexedDB.
+        with self.page.expect_download() as event:
+            download.click()
+        artifact=event.value
+        self.assertEqual(artifact.suggested_filename,'curvature-ui-recovery.json')
+        payload=json.loads(Path(artifact.path()).read_text(encoding='utf-8'))
+        self.assertEqual(payload['format'],'curvature-modern-ui-recovery-evidence')
+        self.assertEqual(payload['version'],1)
+        self.assertEqual(payload['preview']['status'],'ready')
+        self.assertTrue(any('simulated recovery panel outage' in x['message']
+                            for x in payload['preview']['errors']))
+        self.assertTrue(any('curvature-modern-ui-pending-v1:' in row['key']
+                            and '"Objects"' in row['raw']
+                            for row in payload['pending']))
+        self.assertTrue(any('readError' in row for row in payload['durable']))
+        self.assertNotIn('referenceImage',json.dumps(payload))
+        self.page.evaluate("""() => {
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:window.__uiOpen});
+        }""")
+        retry.click()
+        expect(bar).to_be_hidden(timeout=30000)
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const id=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:id,workspace:'scene'});
+            return [row.revision,row.envelope?.values?.['workspace.settingsTab']?.value,
+              sessionStorage.getItem('curvature-modern-ui-pending-v1:workspace:'+id+':scene')];
+        }"""),[1,'Objects',None])
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_workspace_registry_preview_conflict_bar_preserves_both_evidence_sets(self):
+        """Foreign committed state disables unsafe Retry but keeps an accessible
+        raw UI-only evidence download.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.evaluate("""() => {
+            window.__uiOpen=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated stale writer');
+                    return window.__uiOpen(name,...args);
+                }});
+            document.getElementById('ModernSettingsObjects').click();
+        }""")
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+                .some(row=>row.message.includes('simulated stale writer'))""",
+            timeout=30000)
+        self.page.evaluate("""async () => {
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:window.__uiOpen});
+            const store=CurvatureModernUiSessionStore.create(window);
+            await store.write('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'scene'},{
+                    format:'curvature-modern-ui-state',version:1,
+                    scope:'per-tab-and-workspace',
+                    values:{'workspace.settingsTab':{version:1,value:'Display'}}
+                },0);
+            try{await CurvatureModernApp.retryWorkspaceUiRegistryPreview();}
+            catch(e){window.__uiConflict=e.message;}
+        }""")
+        bar=self.page.locator('#ModernUiRegistryRecovery')
+        expect(bar).to_be_visible()
+        expect(bar.get_by_role('alert')).to_contain_text('revision conflict')
+        expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernUiRegistryDownload').click()
+        payload=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(payload['preview']['errors'][0]['mode'],'scene')
+        saved=next(row for row in payload['durable']
+                   if row['scope']=='per-tab-and-workspace'
+                   and row['workspace']=='scene')
+        self.assertEqual(saved['revision'],1)
+        self.assertEqual(saved['envelope']['values']['workspace.settingsTab']['value'],
+                         'Display')
+        self.assertTrue(any('"Objects"' in row['raw'] for row in payload['pending']))
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getWorkspaceState().sceneTab'),'Objects')
+
+    def test_workspace_registry_preview_rapid_changes_then_early_f5(self):
+        """Rapid successive intentional clicks stage only the latest UI view;
+        F5 can replay it once without a premature IDB acknowledgement.
+        """
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        before=self.page.evaluate("""() => {
+            window.__uiOpen=indexedDB.open.bind(indexedDB);
+            Object.defineProperty(indexedDB,'open',{configurable:true,
+                value:function(name,...args){
+                    if(name==='curvature-modern-ui-state')
+                        throw Error('simulated slow IDB before reload');
+                    return window.__uiOpen(name,...args);
+                }});
+            for(const tab of ['Objects','Surface','Atmosphere','Display'])
+                document.getElementById('ModernSettings'+tab).click();
+            const id=CurvatureModernUiSessionStore.create(window).tabId();
+            const pending=JSON.parse(sessionStorage.getItem(
+                'curvature-modern-ui-pending-v1:workspace:'+id+':scene'));
+            return {id,pending};
+        }""")
+        self.assertEqual(before['pending']['expectedRevision'],0)
+        self.assertEqual(before['pending']['envelope']['values']
+                         ['workspace.settingsTab']['value'],'Display')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        expect(self.page.locator('#ModernSettingsDisplay')).to_have_attribute(
+            'aria-selected','true')
+        after=self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const tabId=store.tabId();
+            const row=await store.read('per-tab-and-workspace',
+                {tabId,workspace:'scene'});
+            return [tabId,row.revision,
+              row.envelope?.values?.['workspace.settingsTab']?.value,
+              sessionStorage.getItem('curvature-modern-ui-pending-v1:workspace:'+tabId+':scene')];
+        }""")
+        self.assertEqual(after,[before['id'],1,'Display',None])
+
 if __name__ == '__main__':
     unittest.main()

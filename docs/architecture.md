@@ -322,6 +322,21 @@ source of truth, is not shared between tabs, never stores physical experiments
 or projects, and cannot guarantee recovery if the browser clears
 `sessionStorage` itself. The normal Modern route does not create the journal.
 
+Opt-in preview errors now have an accessible, globally visible recovery banner,
+independent of the current Scene, Compare, Animation or Calibration workspace.
+`Retry UI save` calls the existing generic CAS-guarded `retryFailed()` only
+for recoverable live write failures. Revision conflicts, unknown versions or
+failed synchronous staging keep Retry disabled rather than offering an unsafe
+overwrite. `Download UI recovery JSON` is a **diagnostic evidence export**:
+it contains the preview error/status, current opaque UI tab ID, raw pending UI
+journal entries (preserving corrupt bytes), and the readable UI-only IndexedDB
+envelopes/revisions for that tab; unreadable durable scopes carry read errors.
+It never includes experiment geometry, photograph bytes or Animation/Calibration
+project payloads; it is not an import command or an automatic merge.
+No recovery bar or new store appears on the normal Modern route. User acceptance
+must confirm downloaded file bytes, keyboard accessibility and visual alignment
+in Opera before promoting the preview.
+
 **Restore ordering at later integration:** explicit share/import or URL intent
 first, document identity and acknowledged revision second, tab/workspace UI
 state third, DOM bindings last. Legacy preference keys and raw recovery
