@@ -8939,9 +8939,13 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_opt_in_state_registry_object_explorer_scope_and_f5(self):
         """A future page can register a state without bespoke storage or Modern migration."""
         self.open_modern()
-        self.assertIsNone(self.page.evaluate("window.CurvatureModernStateRegistry || null"))
-        self.page.add_script_tag(url='/src/storage/ModernStateRegistry.js')
-        self.page.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+        # Modules are loaded by Modern, but the registry is not activated on
+        # the default URL. No new IndexedDB is created until explicitly used.
+        self.assertEqual(self.page.evaluate("""() => ({
+            modules:typeof CurvatureModernStateRegistry?.create==='function'&&
+                typeof CurvatureModernUiSessionStore?.create==='function',
+            status:CurvatureModernApp.getWorkspaceUiRegistryPreview().status
+        })"""),{'modules':True,'status':'disabled'})
         prepared=self.page.evaluate("""async () => {
             const reg=CurvatureModernStateRegistry.create();
             const store=CurvatureModernUiSessionStore.create(window);
@@ -8972,9 +8976,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(prepared['rejected'])
         self.assertEqual(prepared['revision'],1)
         self.page.reload(wait_until='load')
-        self.assertIsNone(self.page.evaluate("window.CurvatureModernStateRegistry || null"))
-        self.page.add_script_tag(url='/src/storage/ModernStateRegistry.js')
-        self.page.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+        # Modules are loaded by Modern, but the registry is not activated on
+        # the default URL. No new IndexedDB is created until explicitly used.
+        self.assertEqual(self.page.evaluate("""() => ({
+            modules:typeof CurvatureModernStateRegistry?.create==='function'&&
+                typeof CurvatureModernUiSessionStore?.create==='function',
+            status:CurvatureModernApp.getWorkspaceUiRegistryPreview().status
+        })"""),{'modules':True,'status':'disabled'})
         recovered=self.page.evaluate("""async () => {
             const ui=CurvatureModernStateRegistry.create();
             ui.register({key:'object-explorer.tree.expanded',
@@ -8998,8 +9006,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         other=self.context.new_page()
         try:
             other.goto(self.base_url,wait_until='load')
-            other.add_script_tag(url='/src/storage/ModernStateRegistry.js')
-            other.add_script_tag(url='/src/storage/ModernUiSessionStore.js')
+            self.assertEqual(other.evaluate("""() =>
+                CurvatureModernApp.getWorkspaceUiRegistryPreview().status"""),
+                'disabled')
             second=other.evaluate("""async () => {
                 const store=CurvatureModernUiSessionStore.create(window);
                 const row=await store.read('per-tab-and-workspace',
