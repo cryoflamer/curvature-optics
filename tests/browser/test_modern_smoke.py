@@ -9368,6 +9368,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(
             "CurvatureModernApp.getWorkspaceMode()"),'compare')
         self.assertEqual(self.page.evaluate(
+            "CurvatureModernApp.getWorkspaceUiRegistryPreview().selection.mode"),
+            'compare')
+        self.assertEqual(self.page.evaluate(
             "CurvatureModernApp.getWorkspaceState().sceneTab"),'Objects')
         self.assertEqual(self.page.evaluate(
             "CurvatureModernApp.getWorkspaceState().compareTab"),'Display')
@@ -9416,6 +9419,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             const row=await store.read('per-tab',{tabId:store.tabId()});
             return row.envelope?.values?.['workspace.active']?.value;
         }"""),'compare','explicit URL must not overwrite private IDB')
+        self.assertEqual(self.page.evaluate("""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            const row=await store.read('per-tab-and-workspace',
+                {tabId:store.tabId(),workspace:'compare'});
+            return row.envelope?.values?.['workspace.settingsTab']?.value;
+        }"""),'Display','explicit tab must not replace private Compare selection')
 
 if __name__ == '__main__':
     unittest.main()
