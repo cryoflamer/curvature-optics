@@ -1033,20 +1033,21 @@
     if(studioViewController)studioViewController.show(studioView,false);
   }
   function workspaceScope(){return state.demosActive?'scene':state.mode==='compare'?'compare':'scene';}
-  function legacyWorkspaceSectionValue(scope,suffix){
+  function legacyWorkspaceSectionValue(scope,suffix,layout,panels){
+    layout=layout||workspaceState;panels=panels||legacyDisplayPanels;
     var key=scope+'.'+suffix;
-    if(Object.prototype.hasOwnProperty.call(workspaceState.sections,key))return workspaceState.sections[key];
+    if(Object.prototype.hasOwnProperty.call(layout.sections,key))return layout.sections[key];
     // Migrate the original four Display folds without changing their old storage key.
     if(suffix.indexOf('display.')===0){
       // Read the old global Display choice only while no mode-specific Display
       // override exists. Otherwise a Scene toggle would leak into Compare
       // after the next reload through the old displayPanels mirror.
-      var hasScopedDisplay=Object.keys(workspaceState.sections).some(function(section){
+      var hasScopedDisplay=Object.keys(layout.sections).some(function(section){
         return section.indexOf('.display.')!==-1;
       });
       if(!hasScopedDisplay){
         var old=suffix.slice('display.'.length);
-        return Object.prototype.hasOwnProperty.call(legacyDisplayPanels,old)?legacyDisplayPanels[old]:false;
+        return Object.prototype.hasOwnProperty.call(panels,old)?panels[old]:false;
       }
       return false;
     }
@@ -1278,8 +1279,9 @@
       startNavigation=workspaceNavigationVersion,startTab=workspaceTabEditGeneration,
       startAnimationView=workspaceViewEditGeneration.animation,
       startCalibrationView=workspaceViewEditGeneration.calibration;
-    var bridge;
+    var bridge,legacyLayout;
     try{
+      if(shared)legacyLayout=applicationPreferences.read(preferencesStorage());
       if(!api||!registry||!store||!manager)
         throw Error('UI State Registry preview dependencies not loaded');
       bridge=api.create({
@@ -1289,8 +1291,10 @@
         // handles Scene and Compare independently; dynamic Object folds
         // use the same existing toggle controller.
         suffixes:Object.keys(workspaceInitialSections),
-        legacyValue:legacyWorkspaceSectionValue,
-        legacyTab:function(mode){return workspaceState[mode+'Tab'];},
+        legacyValue:shared?function(mode,suffix){
+          return legacyWorkspaceSectionValue(mode,suffix,legacyLayout.workspace,legacyLayout.displayPanels);
+        }:legacyWorkspaceSectionValue,
+        legacyTab:function(mode){return (shared?legacyLayout.workspace:workspaceState)[mode+'Tab'];},
         legacyMode:function(){return workspaceState.mode;},
         legacyView:function(workspace){return workspace==='animation'?
           studioView:workspaceState.calibrationView;}
@@ -1302,7 +1306,7 @@
       return;
     }
     workspaceUiRegistryPreview={status:'loading',bridge:null,error:null};
-    return bridge.restore().then(function(result){
+    return bridge.restore().then(async function(result){
       if(shared&&experimentPreview.status==='suspended')return;
       // Whole-scope IndexedDB snapshots may contain keys from a newer
       // version. Never replace those unknown bytes with an older snapshot:
@@ -1325,6 +1329,15 @@
           error:'Workspace UI changed during preview restore'};
         if(shared){refreshUiRegistryRecoveryNotice();previewControls();}
         return;
+      }
+      if(shared){
+        await bridge.initializeSharedLayout(function(){
+          var source=applicationPreferences.migrationSource(preferencesStorage());
+          if(JSON.stringify(source.workspace)!==JSON.stringify(legacyLayout.workspace)||
+             JSON.stringify(source.displayPanels)!==JSON.stringify(legacyLayout.displayPanels))
+            throw Error('Legacy layout changed during migration; reload before editing');
+        });
+        if(experimentPreview.status==='suspended')return;
       }
       workspaceUiRegistryPreview={status:'ready',bridge:bridge,error:null};
       // Explicit imported links, existing Studio routes and history entry

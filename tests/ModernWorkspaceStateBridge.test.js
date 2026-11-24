@@ -334,3 +334,32 @@ test('shared presentation has independent workspace rows and no tab or active wo
   assert.equal(reopened.getView('animation'),'library');
   assert.equal([...rows.values()].some(row=>'workspace.active' in row.envelope.values),false);
 });
+
+test('explicit shared layout backfill verifies source once per missing scope and preserves existing rows',async()=>{
+  const rows=new Map(),make=(value,tab='Camera')=>bridgeApi.create({
+    registryApi,managerApi,env:{},sharedPresentation:true,
+    sessionStoreApi:{create:()=>memoryStore('unused',rows)},
+    suffixes:['camera.navigation'],legacyValue:()=>value,legacyTab:()=>tab});
+  const a=make(true,'Objects');await a.restore();
+  assert.equal(rows.size,0,'plain restore remains read-only');
+  await assert.rejects(a.initializeSharedLayout(()=>{throw Error('legacy corrupt');}),/legacy corrupt/);
+  assert.equal(rows.size,0);
+  assert.deepEqual(await a.initializeSharedLayout(()=>{}),['scene','compare']);
+  assert.equal(rows.size,2);
+  const saved=structuredClone([...rows.entries()]);
+  const b=make(false,'Display');await b.restore();
+  assert.deepEqual(await b.initializeSharedLayout(()=>{throw Error('legacy must not be read');}),[]);
+  assert.equal(b.get('scene','camera.navigation'),true);
+  assert.equal(b.getTab('scene'),'Objects');
+  assert.deepEqual([...rows.entries()],saved);
+  rows.delete('workspace:compare');
+  const c=make(false,'Surface');await c.restore();
+  assert.deepEqual(await c.initializeSharedLayout(missing=>assert.deepEqual(missing,['compare'])),['compare']);
+  assert.deepEqual(rows.get('workspace:scene'),saved[0][1]);
+  assert.equal(c.getTab('compare'),'Surface');
+  const bad=structuredClone(rows.get('workspace:compare'));
+  delete bad.envelope.values['workspace.settingsTab'];
+  rows.set('workspace:compare',bad);
+  await assert.rejects(make(true).restore(),/unsupported or incomplete shared layout/);
+  assert.deepEqual(rows.get('workspace:compare'),bad);
+});

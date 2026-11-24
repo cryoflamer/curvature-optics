@@ -11412,8 +11412,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(initial['ui']['mode'],'scene')
         self.assertEqual(json.loads(initial['local'])['workspace']['mode'],'animation')
         self.assertFalse(json.loads(initial['local'])['workspace']['sections']['scene.surface.geometry'])
-        self.assertEqual(initial['scene']['revision'],0)
-        self.assertEqual(initial['compare']['revision'],0)
+        self.assertEqual(initial['scene']['revision'],1)
+        self.assertEqual(initial['compare']['revision'],1)
+        self.assertFalse(initial['scene']['envelope']['values']['workspace.section.surface.geometry']['value'])
+        self.assertTrue(initial['compare']['envelope']['values']['workspace.section.surface.geometry']['value'])
         self.assertIsNone(initial['tab'])
         other=self.context.new_page()
         try:
@@ -11427,7 +11429,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const store=CurvatureModernUiSessionStore.create(window),end=Date.now()+15000;
                 while(Date.now()<end){
                     const row=await store.read('workspace',{workspace});
-                    if(row.revision===2&&row.envelope?.values['workspace.section.surface.geometry']?.value===value&&
+                    if(row.revision===3&&row.envelope?.values['workspace.section.surface.geometry']?.value===value&&
                        row.envelope.values['workspace.settingsTab'].value==='Surface')return row;
                     await new Promise(resolve=>setTimeout(resolve,25));
                 }
@@ -11478,6 +11480,16 @@ class ModernBrowserSmoke(unittest.TestCase):
                     'F5 must read the same acknowledged state without writing: '+key)
             self.assertFalse(other.locator('#ModernCompareSurfaceGeometrySection').evaluate('(node)=>node.open'))
             expect(other.locator('#ModernSettingsSurface')).to_have_attribute('aria-selected','true')
+            # Old layout is now migration evidence, never a restore authority.
+            other.evaluate("""() => localStorage.setItem(
+                CurvatureModernApplicationPreferences.STORAGE_KEY,JSON.stringify({
+                    version:1,workspace:{sceneTab:'Display',compareTab:'Camera',
+                        sections:{'scene.surface.geometry':false,'compare.surface.geometry':true}}}))""")
+            other.reload(wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            changed_legacy=other.evaluate(read)
+            for key in before:
+                if key!='local':self.assertEqual(changed_legacy[key],before[key],key)
             other.locator('#ModernSceneTab').click()
             self.assertTrue(other.locator('#ModernSceneSurfaceGeometrySection').evaluate('(node)=>node.open'))
             self.assertEqual(other.evaluate(read)['scene'],before['scene'])

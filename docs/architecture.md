@@ -617,8 +617,12 @@ Registry after the physical document is verified. Scene/Compare settings tabs
 and disclosure values use fixed workspace-scoped IndexedDB snapshots with
 CAS, not tab IDs or sessionStorage. The document checkpoint remains the sole
 active workspace owner; no automatic import of divergent old tab snapshots
-occurs. Legacy preference layout values are read-first defaults and are not
-updated by registry interactions. Global application preferences now use a complete versioned global Registry
+occurs. Scene/Compare legacy layout values are verified and explicitly
+backfilled once into missing shared workspace rows before editing is enabled;
+existing complete rows are restored without rewriting or consulting the
+legacy source for migration. Incomplete or unsupported shared rows block
+activation. Auxiliary views remain on their staged migration path.
+Legacy bytes are not updated by registry interactions. Global application preferences now use a complete versioned global Registry
 snapshot: first backfill from validated legacy preferences is explicitly
 acknowledged, subsequent restores read IndexedDB without rewriting the
 legacy keys, and conflicting global writes surface the same recovery panel.

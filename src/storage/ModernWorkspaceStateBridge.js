@@ -29,9 +29,28 @@
     check(typeof sharedPresentation==='boolean','invalid presentation ownership');
     const scope=sharedPresentation?'workspace':'per-tab-and-workspace';
     const supported=new Set(suffixes),store=sessionStoreApi.create(env);
-    const managers=new Map();
+    const managers=new Map(),missing=new Set();
+    let ready=false,warnings=[];
+    function scopedStore(workspace,keys){
+      if(!sharedPresentation)return store;
+      return {
+        async read(scope,ctx){
+          const row=await store.read(scope,ctx);
+          if(row.revision>0){
+            check(row.envelope&&row.envelope.values&&
+              Object.keys(row.envelope.values).length===keys.length&&
+              keys.every(key=>Object.hasOwn(row.envelope.values,key)),
+              'unsupported or incomplete shared layout: '+workspace);
+          }
+          if(!ready&&row.revision===0)missing.add(workspace);
+          return row;
+        },
+        write(scope,ctx,envelope,revision){return store.write(scope,ctx,envelope,revision);}
+      };
+    }
     for(const mode of MODES){
-      const manager=managerApi.create({registry:registryApi.create(),store,workspace:mode});
+      const manager=managerApi.create({registry:registryApi.create(),
+        store:scopedStore(mode,[...suffixes.map(suffix=>KEY_PREFIX+suffix),TAB_KEY]),workspace:mode});
       for(const suffix of suffixes){
         const initial=legacyValue(mode,suffix);
         check(typeof initial==='boolean','invalid legacy section default: '+mode+'.'+suffix);
@@ -54,14 +73,14 @@
     }
     // Presentation-only subviews: do not store draft/project identifiers here.
     for(const workspace of Object.keys(VIEWS)){
-      const manager=managerApi.create({registry:registryApi.create(),store,workspace});
+      const manager=managerApi.create({registry:registryApi.create(),
+        store:scopedStore(workspace,[VIEW_KEY]),workspace});
       const fallback=legacyView?legacyView(workspace):VIEWS[workspace][0];
       check(VIEWS[workspace].includes(fallback),'invalid legacy '+workspace+' view');
       manager.register({key:VIEW_KEY,scope,version:1,
         defaultValue:fallback,validate:value=>VIEWS[workspace].includes(value)});
       managers.set(workspace,manager);
     }
-    let ready=false;
     function selected(mode,suffix){
       check(MODES.includes(mode)&&supported.has(suffix),'unregistered workspace section');
       return managers.get(mode);
@@ -72,9 +91,25 @@
       // records fail without rewriting the original legacy preferences.
       const names=[...MODES,...Object.keys(VIEWS)];
       const results=await Promise.all(names.map(mode=>managers.get(mode).restore()));
+      warnings=results.flatMap((r,i)=>r.unrecognizedKeys.map(key=>names[i]+':'+key));
       ready=true;
-      return Object.freeze({ready:true,
-        warnings:results.flatMap((r,i)=>r.unrecognizedKeys.map(key=>names[i]+':'+key))});
+      return Object.freeze({ready:true,warnings:warnings.slice()});
+    }
+    // Explicit migration after all scopes have been read and validated.
+    // Auxiliary views are still on their staged domain-migration path.
+    async function initializeSharedLayout(verifyLegacy){
+      check(sharedPresentation&&ready&&!warnings.length,'compatible shared restore required');
+      const targets=MODES.filter(mode=>missing.has(mode));
+      if(!targets.length)return [];
+      check(typeof verifyLegacy==='function','legacy layout verification required');
+      verifyLegacy(targets.slice());
+      const saved=[];
+      for(const mode of targets){
+        verifyLegacy(targets.slice());
+        if(await managers.get(mode).initializeScope(scope))saved.push(mode);
+        missing.delete(mode);
+      }
+      return saved;
     }
     function get(mode,suffix){
       check(ready,'restore first');
@@ -157,7 +192,7 @@
     function lastErrors(){return [...MODES,...Object.keys(VIEWS)].flatMap(mode=>managers.get(mode).lastErrors().map(
       entry=>({mode,scope:entry.scope,message:entry.message})));
     }
-    return Object.freeze({restore,resumeAfterPageShow,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
+    return Object.freeze({restore,initializeSharedLayout,resumeAfterPageShow,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
       supports:suffix=>supported.has(suffix),isReady:()=>ready,
       hasUnacknowledged:()=>[...managers.values()].some(m=>m.hasUnacknowledged()),
       tabId:()=>sharedPresentation?null:store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});

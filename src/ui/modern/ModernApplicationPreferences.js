@@ -196,9 +196,9 @@
       return value;
     }
     var raw=storage.getItem(STORAGE_KEY);
-    if(raw!==null)return globalValues(parse(raw));
+    if(raw!==null)return normalize(parse(raw));
     raw=storage.getItem(LEGACY_NAVIGATION_KEY);
-    return globalValues(raw===null?{}:{navigation:parse(raw)});
+    return normalize(raw===null?{}:{navigation:parse(raw)});
   }
   function createShared({registryApi,managerApi,store,storage}={}){
     if(!registryApi||!managerApi||!store)throw Error('Shared application preference dependencies required');
@@ -213,7 +213,7 @@
       // This first read only decides whether legacy input is needed. The
       // manager independently rereads the row and uses its own CAS baseline.
       var before=await store.read('global',{});
-      var initial=before.revision===0?migrationSource(storage):globalValues();
+      var initial=before.revision===0?globalValues(migrationSource(storage)):globalValues();
       var adapter={
         read:async function(scope,ctx){
           var row=await store.read(scope,ctx);
@@ -257,7 +257,7 @@
       lastErrors:function(){return manager?manager.lastErrors():[];},
       hasUnacknowledged:function(){return !!manager&&manager.hasUnacknowledged();}});
   }
-  return Object.freeze({GLOBAL_KEYS,globalValues,createShared,STORAGE_KEY:STORAGE_KEY,LEGACY_NAVIGATION_KEY:LEGACY_NAVIGATION_KEY,
+  return Object.freeze({GLOBAL_KEYS,globalValues,createShared,migrationSource,STORAGE_KEY:STORAGE_KEY,LEGACY_NAVIGATION_KEY:LEGACY_NAVIGATION_KEY,
     WORKSPACE_MODES:WORKSPACE_MODES,startupWorkspace:startupWorkspace,
     defaults:function(){return normalize();},normalize:normalize,read:read,write:write,reset:reset});
 }));
