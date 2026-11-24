@@ -253,7 +253,7 @@
       }
       // The entire row, including the last observed draft, is the CAS
       // baseline. Revision tokens are never reused, even on reverted edits.
-      async function mutate(expectedRevision,build){
+      async function mutate(expectedRevision,build,evidence=[]){
         ensure(!busy,'shared checkpoint operation pending');
         lease.check(true);
         ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
@@ -276,7 +276,23 @@
                   lease.check(true);
                   const current=req.result===undefined?{present:false}:{present:true,row:req.result};
                   ensure(canonical(current)===canonical(before),'shared checkpoint CAS conflict; evidence retained');
-                  if(before.present)store.put(row,key);else store.add(row,key);
+                  function verifySource(index){
+                    if(index===evidence.length){
+                      if(before.present)store.put(row,key);else store.add(row,key);
+                      return;
+                    }
+                    const item=evidence[index],source=store.get(item.key);
+                    source.onsuccess=()=>{
+                      try{
+                        lease.check(true);
+                        const value=source.result===undefined?{present:false}:{present:true,row:source.result};
+                        ensure(canonical(value)===canonical(item.value),
+                          'legacy checkpoint evidence changed during migration');
+                        verifySource(index+1);
+                      }catch(error){failure=error;store.transaction.abort();}
+                    };
+                  }
+                  verifySource(0);
                 }catch(error){failure=error;store.transaction.abort();}
               };
               return null;
@@ -308,7 +324,66 @@
           return {envelope,experiment:before.draft,draft:null};
         });
       }
-      return Object.freeze({read,initialize,stage,promote});
+      // The previous live controller uses this same operation lock for all
+      // cross-store writes. Old sessions must not be edited outside it while
+      // migrating. The working-store evidence is also compared atomically.
+      async function legacyPlan(sessions){
+        ensure(sessions&&typeof sessions.read==='function','legacy shared session reader required');
+        const saved=await sessions.read();lease.check();
+        ensure(saved&&Number.isSafeInteger(saved.revision)&&saved.revision>=1&&saved.envelope,
+          'legacy shared session binding required');
+        const frame=contract.normalize(saved.envelope),ref=frame.documents.experiment;
+        ensure(frame.sessionId===contract.SHARED_ID&&['scene','compare'].includes(frame.workspace)&&
+          ref&&ref.id===SHARED_COPY_ID&&!ref.recovery,'unsupported legacy shared session binding');
+        const legacy=openWorkingCopy(indexedDB,{lease,codec,crypto});
+        const data=await legacy.readMigrationEvidence(ref.revision);
+        ensure(data.bound.experiment.display.mode===frame.workspace,
+          'legacy session workspace differs from bound experiment');
+        ensure(canonical(await sessions.read())===canonical(saved),
+          'legacy session changed during inspection');
+        lease.check();
+        const checksum=await digest(canonical({saved,evidence:data.evidence}),crypto);
+        const choices=[data.bound];
+        if(data.head.revision!==data.bound.revision)choices.push(data.head);
+        return {frame,evidence:data.evidence,view:{
+          digest:checksum,sessionRevision:saved.revision,bound:data.bound,head:data.head,draft:data.draft,
+          choices:choices.map(value=>({revision:value.revision,
+            draftModes:!data.draft?['none']:
+              data.draft.baseRevision===value.revision||
+              canonical(data.draft.experiment)===canonical(value.experiment)?['keep','archive']:['archive']}))
+        }};
+      }
+      async function inspectLegacy({sessions,coordinate}={}){
+        ensure(typeof coordinate==='function','shared migration coordinator required');
+        return coordinate(async()=>{
+          lease.check();
+          return (await legacyPlan(sessions)).view;
+        });
+      }
+      async function migrateLegacy(selection,{sessions,coordinate,isCurrent}={}){
+        ensure(typeof coordinate==='function'&&typeof isCurrent==='function',
+          'shared migration coordinator and generation guard required');
+        return coordinate(async()=>{
+          const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale migration generation');};
+          guard();
+          const plan=await legacyPlan(sessions);guard();
+          const view=plan.view;
+          ensure(selection&&selection.digest===view.digest,'legacy migration evidence changed');
+          const choice=view.choices.find(item=>item.revision===selection.revision);
+          ensure(choice&&choice.draftModes.includes(selection.draft),
+            'explicit compatible legacy revision and draft choice required');
+          const value=choice.revision===view.bound.revision?view.bound:view.head;
+          const current=await read();guard();
+          ensure(current===null,'shared checkpoint already initialized; evidence retained');
+          return mutate(0,(_,revision)=>{
+            guard();
+            const experiment=normalizeExperiment(value.experiment);
+            return {envelope:envelopeFor(plan.frame,experiment,revision),experiment,
+              draft:selection.draft==='keep'?normalizeExperiment(view.draft.experiment):null};
+          },plan.evidence);
+        });
+      }
+      return Object.freeze({read,initialize,stage,promote,inspectLegacy,migrateLegacy});
     }
     // Immutable revision rows plus an atomic head pointer. The migration
     // row stays intact and represents revision one, including raw provenance.
@@ -641,6 +716,27 @@
           return output;
         },lease);
       }
+      // Verified snapshot of the old shared binding, HEAD and recovery base.
+      // Capture raw keys (including absence) for the destination transaction.
+      async function readMigrationEvidence(boundRevision){
+        const rows=await inventoryRows(),keys=new Set();
+        function get(key){keys.add(key);return rows.get(key);}
+        const pointer=get(headKey);
+        const bound=await decode(get(revisionKey(boundRevision)),boundRevision);
+        const head=pointer===undefined?await decode(get(baseKey)):
+          await decode(get(revisionKey(headRevision(pointer))),headRevision(pointer));
+        ensure(sequence(head.revision)>=sequence(bound.revision),
+          'legacy HEAD predates bound revision; evidence retained');
+        const recovery=get(recoveryKey);
+        let draft=null;
+        if(recovery!==undefined){
+          recoveryFields(recovery);
+          draft=await verifyRecovery({row:recovery,base:get(revisionKey(recovery.baseRevision))});
+        }
+        lease.check();
+        return {bound,head,draft,evidence:[...keys].sort().map(key=>({key,value:
+          rows.has(key)?{present:true,row:rows.get(key)}:{present:false}}))};
+      }
       async function migrationCandidates(storage){
         const local=localEvidence(storage,codec),rows=await inventoryRows();
         lease.check();
@@ -761,7 +857,7 @@
         }finally{busy=false;}
       }
       return Object.freeze({id,read,readRevision,write,
-        inspectMigration,prepareSelectedMigration,
+        inspectMigration,prepareSelectedMigration,readMigrationEvidence,
         readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,

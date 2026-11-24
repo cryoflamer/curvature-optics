@@ -371,7 +371,7 @@ function atomicFixture(){
   const codec={validate(v){assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;}};
   const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
   const open=()=>adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
-  return {db,adapter,contract,open,base:{display:{mode:'scene'},height:1}};
+  return {db,adapter,contract,open,lease,codec,crypto,base:{display:{mode:'scene'},height:1}};
 }
 test('atomic shared checkpoint keeps only one current row and promotes the exact draft',async()=>{
   const f=atomicFixture(),a=f.open();
@@ -436,4 +436,82 @@ test('atomic checkpoint fails closed on corrupt bytes and invalid binding',async
   f.db.rows.set('shared-checkpoint',null);
   await assert.rejects(a.read(),/invalid shared checkpoint/);
   assert.equal(f.db.rows.get('shared-checkpoint'),null);
+});
+
+async function legacyAtomicFixture(){
+  const f=atomicFixture(),{db,adapter,contract,lease,codec,crypto,base}=f;
+  const working=adapter.openWorkingCopy(db,{lease,codec,crypto}),storage={getItem:()=>null};
+  await adapter.write(db,base,100);
+  const inventory=await working.inspectMigration(storage);
+  const prepared=await working.prepareSelectedMigration(inventory.candidates[0].selection,
+    {storage,isCurrent:()=>true});
+  const initial=await working.read();
+  const other={id:'animation-project',revision:'4',recovery:null};
+  const envelope=contract.select(contract.select(contract.emptyShared(),'animation',other),'scene',prepared.document);
+  let row={revision:1,envelope};
+  const sessions={async read(){return structuredClone(row);}};
+  const opts={sessions,coordinate:action=>action(),isCurrent:()=>true};
+  return {...f,working,initial,opts,changeSession(){row={...row,revision:row.revision+1};}};
+}
+test('atomic migration preserves the acknowledged experiment, compatible draft and old records',async()=>{
+  const f=await legacyAtomicFixture(),a=f.open();
+  const edit={...f.base,display:{mode:'compare'},height:2};
+  await f.working.stageRecovery(edit,f.initial.revision,null);
+  const view=await a.inspectLegacy(f.opts);
+  assert.equal(view.bound.revision,view.head.revision);
+  assert.deepEqual(view.choices,[{revision:f.initial.revision,draftModes:['keep','archive']}]);
+  const before=[...f.db.rows.entries()];
+  const selection={digest:view.digest,revision:view.bound.revision,draft:'keep'};
+  const saved=await a.migrateLegacy(selection,f.opts);
+  assert.equal(saved.revision,1);
+  assert.deepEqual(saved.experiment,f.base);
+  assert.deepEqual(saved.draft,edit);
+  assert.equal(saved.envelope.workspace,'scene');
+  assert.equal(saved.envelope.documents.animation.id,'animation-project');
+  assert.deepEqual([...f.db.rows.entries()].filter(([key])=>key!=='shared-checkpoint'),before);
+  const promoted=await a.promote(saved.revision);
+  assert.deepEqual(promoted.experiment,edit);
+  assert.equal(promoted.envelope.workspace,'compare');
+  assert.equal(promoted.draft,null);
+  await assert.rejects(a.migrateLegacy(selection,f.opts),/already initialized/);
+});
+test('atomic migration explicitly resolves divergent HEAD and incompatible recovery',async()=>{
+  const f=await legacyAtomicFixture(),a=f.open();
+  const edit={...f.base,height:2},later={...f.base,height:3};
+  await f.working.stageRecovery(edit,f.initial.revision,null);
+  const receipt=await f.working.write(later,f.initial.revision);
+  const view=await a.inspectLegacy(f.opts);
+  assert.equal(view.head.revision,receipt.revision);
+  assert.deepEqual(view.choices,[{revision:f.initial.revision,draftModes:['keep','archive']},
+    {revision:receipt.revision,draftModes:['archive']}]);
+  const selection={digest:view.digest,revision:receipt.revision,draft:'keep'};
+  await assert.rejects(a.migrateLegacy(selection,f.opts),/compatible legacy revision and draft choice required/);
+  assert.equal(await a.read(),null);
+  f.changeSession();
+  await assert.rejects(a.migrateLegacy({...selection,draft:'archive'},f.opts),/evidence changed/);
+  const fresh=await a.inspectLegacy(f.opts);
+  const before=[...f.db.rows.entries()];
+  const saved=await a.migrateLegacy({...selection,digest:fresh.digest,draft:'archive'},f.opts);
+  assert.deepEqual(saved.experiment,later);
+  assert.equal(saved.draft,null);
+  assert.deepEqual([...f.db.rows.entries()].filter(([key])=>key!=='shared-checkpoint'),before);
+});
+test('atomic migration compares the old raw evidence inside the destination transaction',async()=>{
+  const f=await legacyAtomicFixture();
+  const view=await f.open().inspectLegacy(f.opts);
+  const selection={digest:view.digest,revision:view.bound.revision,draft:'none'};
+  let injected=false;
+  const crypto={subtle:{async digest(name,bytes){
+    const result=await f.crypto.subtle.digest(name,bytes);
+    if(!injected&&String.fromCharCode(...bytes).includes('"format":"curvature-modern-shared-checkpoint"')){
+      injected=true;
+      await f.working.write({...f.base,height:9},f.initial.revision);
+    }
+    return result;
+  }}};
+  const a=f.adapter.openSharedCheckpoint(f.db,{lease:f.lease,codec:f.codec,crypto,contract:f.contract});
+  await assert.rejects(a.migrateLegacy(selection,f.opts),/legacy checkpoint evidence changed during migration/);
+  assert.equal(injected,true);
+  assert.equal(f.db.rows.has('shared-checkpoint'),false);
+  assert.equal((await f.working.read()).experiment.height,9);
 });

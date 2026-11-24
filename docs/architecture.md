@@ -587,11 +587,22 @@ only after exact digest-verified readback. A lost acknowledgement requires
 a fresh read. Page suspension aborts outstanding transactions. No new
 immutable revision or HEAD row is produced.
 
-This primitive is not yet the live preview authority: initialization takes
-an explicitly supplied snapshot, not an automatic migration decision.
-The existing preview continues to use its old two-store protocol until
-verified migration and controller replacement. Old keys and backups are
-not modified; the new key is included by the existing raw backup inventory.
+For an already-bound old shared session, `inspectLegacy()` verifies its
+session binding, HEAD, draft and draft base and returns a digest-bound
+choice. `migrateLegacy()` rechecks the evidence under the same origin
+operation lock as the old live controller, compares the exact old domain
+rows in the destination transaction, and creates the atomic checkpoint
+only if absent. A divergent HEAD is never silently preferred. A draft can
+be kept if its base matches the selected revision (or its payload is
+identical); otherwise it must remain archived in the old store. Choosing
+archive does not delete anything. Old metadata is checked before and
+after reading domain evidence under the cooperative lock; old writers
+outside that lock must be stopped before migration.
+
+This primitive is not yet the live preview authority. The existing preview
+continues to use its old two-store protocol until controller replacement;
+unbound/ordinary checkpoint migration remains separate. Old keys and
+backups are not modified; the new key is included by raw backup inventory.
 
 ### Editable Scene/Compare revision adapter
 

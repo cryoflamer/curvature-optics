@@ -10692,6 +10692,62 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(restored['row'],result['row'])
         self.assertEqual(restored['value']['experiment'],result['e'])
 
+    def test_atomic_shared_checkpoint_migration_keeps_legacy_evidence(self):
+        """Migrate explicitly selected old bound/HEAD/draft; never rewrite source bytes."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime(),coordinate=D.sharedExperimentCoordinator(navigator.locks);
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const storage=localStorage,isCurrent=()=>true;
+            const inventory=await working.inspectMigration(storage);
+            const choice=inventory.candidates.find(x=>x.selection.key==='current').selection;
+            const prepared=await working.prepareSelectedMigration(choice,{storage,isCurrent});
+            const empty=await sessions.read();
+            const row=await sessions.write(D.select(D.emptyShared(),'compare',prepared.document),empty.revision);
+            const bound=await working.read(),edit=structuredClone(bound.experiment);
+            edit.scene.camera.Height+=1;
+            edit.compare.A.atmosphere='vacuum';edit.compare.B.atmosphere='inverse-spherical';
+            const draft=await working.stageRecovery(edit,bound.revision,null);
+            const later=structuredClone(edit);later.scene.camera.Height+=2;
+            const receipt=await working.write(later,bound.revision);
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const opts={sessions,coordinate,isCurrent};
+            const view=await checkpoint.inspectLegacy(opts);
+            let refused,stale;
+            try{await checkpoint.migrateLegacy({digest:view.digest,revision:receipt.revision,draft:'keep'},opts);}
+            catch(error){refused=error.message;}
+            try{await checkpoint.migrateLegacy({digest:'wrong',revision:bound.revision,draft:'keep'},opts);}
+            catch(error){stale=error.message;}
+            const absent=await checkpoint.read();
+            const saved=await checkpoint.migrateLegacy({digest:view.digest,revision:bound.revision,draft:'keep'},opts);
+            return {bound,edit,later,draft,row,view,refused,stale,absent,saved,
+                oldBound:await working.readRevision(bound.revision),
+                oldHead:await working.read(),oldDraft:await working.readRecovery(),oldRow:await sessions.read()};
+        }""")
+        self.assertIn('compatible legacy revision and draft choice required',result['refused'])
+        self.assertIn('evidence changed',result['stale'])
+        self.assertIsNone(result['absent'])
+        self.assertEqual(result['saved']['experiment'],result['bound']['experiment'])
+        self.assertEqual(result['saved']['draft'],result['edit'])
+        self.assertEqual(result['oldBound'],result['bound'])
+        self.assertEqual(result['oldHead']['experiment'],result['later'])
+        self.assertEqual(result['oldDraft'],result['draft'])
+        self.assertEqual(result['oldRow'],result['row'])
+        self.page.reload(wait_until='load')
+        restored=self.page.evaluate("""async () => {
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            return CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:D}).read();
+        }""")
+        self.assertEqual(restored,result['saved'])
+
+
     def test_atomic_shared_checkpoint_promotion_and_interruption(self):
         """Real IndexedDB: one row, stale CAS, aborted promotion, lost acknowledgement and F5."""
         self.open_modern()
