@@ -526,6 +526,32 @@ until the caller handles that unsaved input explicitly. This controller does not
 recovery for edits that never reached IndexedDB, a UI recovery chooser,
 or a new active-workspace owner. No URL or default persistence changes.
 
+### Scene/Compare document session preview
+
+The explicit `?document-session=preview` route uses the owned experiment
+controller for startup, edit checkpoints and F5. The ordinary route and
+explicit shared/Studio/mode/tab/model routes retain existing behavior; the
+document preview and UI registry preview are not combined. Only Scene and
+Compare are enabled: other workspaces, History navigation and reset are
+disabled pending migration. Startup locks the physical workspace until
+verified binding; absent or conflicting evidence fails closed without
+falling back to the legacy writer. A divergent head shows the acknowledged
+revision read-only and offers explicit confirmation of the exact durable
+head. Confirming it CASes the session then reloads. A diagnostic JSON export
+contains the two verified revisions and the in-memory experiment, not photo
+bytes or a complete portable backup. No destructive recovery.
+
+The normal debounced physical save path calls the controller instead of
+writing the legacy working checkpoint or publishing an automatic URL.
+The selected Scene/Compare mode is included in the session acknowledgement.
+A no-op edit verifies both stores without allocating a new revision.
+A failed write leaves the preview blocked, retaining live data and old
+durable records; the explicit share action remains available. Closing or
+reloading with unacknowledged edits requests the browser's unload warning;
+uncommitted edits are not crash-durable. Native BFCache return requires
+reload, not stale lease reuse. Existing local UI preferences and unrelated
+legacy startup modules remain; this is not yet final ID-only persistence.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small

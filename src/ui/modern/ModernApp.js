@@ -702,7 +702,11 @@
   var workspaceUiRegistryPreview={status:'disabled',bridge:null,error:null};
   var workspaceSectionEditGeneration=0,workspaceTabEditGeneration=0;
   var workspaceViewEditGeneration={animation:0,calibration:0};
-  var workspaceUiRegistryPreviewRequested=typeof URLSearchParams==='function'&&
+  var documentSessionPreviewRequested=typeof URLSearchParams==='function'&&
+    new URLSearchParams(root.location&&root.location.search||'')
+      .get('document-session')==='preview';
+  var experimentPreview={status:'disabled',controller:null,live:false,error:null};
+  var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
   var workspaceInitialSections={
@@ -833,6 +837,7 @@
   }
   function rememberWorkspaceMode(mode){
     workspaceNavigationVersion++;
+    if(experimentPreview.live)return; // Document session owns the selection in this preview.
     if(workspaceState.mode!==mode){workspaceState.mode=mode;saveApplicationPreferences();}
     setWorkspaceEntryChoice(mode);
     var trial=workspaceUiRegistryPreview;
@@ -1609,12 +1614,120 @@
         savedAt:Number.isSafeInteger(savedAt)&&savedAt>0?savedAt:null};
     }catch(error){return null;}
   }
+  function previewModeAllowed(mode){return mode==='scene'||mode==='compare';}
+  function previewControls(){
+    if(!experimentPreview.live)return;
+    var status=experimentPreview.status;
+    var usable=['clean','dirty','saving','committed'].includes(status);
+    var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable;
+    Object.keys(workspaceTabs).forEach(function(mode){
+      var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
+      if(tab)tab.disabled=!usable||!previewModeAllowed(mode);
+    });
+    ['ModernResetExperiment','ModernHistoryToggle'].forEach(function(id){
+      var button=newUiEl(id);if(button)button.disabled=true;
+    });
+    var panel=newUiEl('ModernDocumentSessionRecovery');
+    if(panel)panel.hidden=usable||status==='loading';
+    var message=newUiEl('ModernDocumentSessionRecoveryStatus');
+    if(message)modernStatus(message,experimentPreview.error||
+      (status==='recovering'?'A newer durable revision is available. Review and explicitly accept it, or retain the acknowledged revision.':
+        'Document session preview is unavailable. Remove document-session=preview to use the unchanged legacy working session.'),'error');
+    var accept=newUiEl('ModernDocumentSessionAcceptHead');
+    if(accept)accept.hidden=status!=='recovering';
+    var download=newUiEl('ModernDocumentSessionDownload');
+    if(download)download.hidden=!experimentPreview.controller;
+  }
+  function previewFailure(error){
+    experimentPreview.status='failed';
+    experimentPreview.error=String(error&&error.message||error);
+    persistenceStatus('Document session not saved: '+experimentPreview.error,true);
+    previewControls();
+  }
+  function savePreviewExperiment(current){
+    var c=experimentPreview.controller;
+    if(!c||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
+    if(c.state().busy)return;
+    persistence.dirty=false;
+    experimentPreview.status='saving';
+    persistenceStatus('Saving document session…');
+    c.save(experiments.validate(current)).then(function(){
+      if(experimentPreview.status==='suspended')return;
+      experimentPreview.status=c.state().status;
+      persistenceStatus(experimentPreview.status==='dirty'?
+        'Document session has unsaved changes':'Document session saved');
+      if(experimentPreview.status==='dirty'){
+        persistence.dirty=true;
+        if(persistence.timer===null)
+          persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment(false);},550);
+      }
+    }).catch(function(error){persistence.dirty=true;
+      if(experimentPreview.status!=='suspended')previewFailure(error);
+    });
+  }
+  async function openExperimentPreview(){
+    var api=root.CurvatureModernDocumentSession,store=root.CurvatureModernUiSessionStore;
+    if(!api||!store||!sessionAutosave||!root.indexedDB)throw Error('Document session dependencies unavailable');
+    var ui=store.create(root),claim=await ui.claimTab(),lease=ui.captureDocumentLease();
+    var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
+    function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
+    var controller=api.createExperimentController({lease:lease,
+      sessions:ui.documentSessions(api),working:working,isCurrent:current,
+      prepare:function(){return sessionAutosave.prepareWorkingCopy(root.indexedDB,{
+        tabId:claim.tabId,lease:lease,storage:preferencesStorage(),codec:experiments,
+        crypto:root.crypto,explicitIntent:false,isCurrent:current});}});
+    experimentPreview.controller=controller;
+    await controller.open();
+    return controller.state();
+  }
+  function bindExperimentPreview(){
+    if(!documentSessionPreviewRequested)return;
+    var download=newUiEl('ModernDocumentSessionDownload');
+    if(download)download.addEventListener('click',function(){
+      try{
+        var c=experimentPreview.controller;
+        if(!c)return;
+        var evidence={format:'curvature-experiment-session-recovery',version:1,
+          controller:c.state(),live:persistence.ready?experimentSnapshot():null};
+        var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
+          {type:'application/json'})),link=document.createElement('a');
+        link.href=uri;link.download='curvature-experiment-recovery.json';
+        document.body.appendChild(link);link.click();link.remove();
+        root.setTimeout(function(){root.URL.revokeObjectURL(uri);},1000);
+      }catch(error){persistenceStatus('Recovery export failed: '+error.message,true);}
+    });
+    var accept=newUiEl('ModernDocumentSessionAcceptHead');
+    if(accept)accept.addEventListener('click',function(){
+      var c=experimentPreview.controller,offer=c&&c.recoveryOffer();
+      if(experimentPreview.status!=='recovering'||!offer)return;
+      if(!root.confirm('Accept durable revision '+offer.revision+
+        '? The previously acknowledged revision remains stored.'))return;
+      accept.disabled=true;
+      c.acceptHead(offer).then(function(){root.location.reload();})
+        .catch(function(error){previewFailure(error);});
+    });
+    root.addEventListener('beforeunload',function(event){
+      if(experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving')){
+        event.preventDefault();event.returnValue='';
+      }
+    });
+    root.addEventListener('pagehide',function(){
+      if(!experimentPreview.live)return;
+      experimentPreview.status='suspended';
+      if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
+    });
+    root.addEventListener('pageshow',function(event){
+      if(event.persisted&&experimentPreview.live)
+        previewFailure(Error('Cached document preview requires reload to reacquire ownership'));
+    });
+  }
   function storeExperiment(publishUrl){
     if(keyframeEditSession)return; // Temporary frame must never become working experiment.
     if(!persistence.ready||!persistence.dirty||!experiments||!root.location)return;
     var current;
     try{current=experimentSnapshot();}
     catch(error){persistenceStatus('Cannot save working session: '+error.message,true);return;}
+    if(experimentPreview.live){savePreviewExperiment(current);return;}
     var errors=[],saved=false,localSaved=false,idbPending=false;
     var timestamp=Math.max(Date.now(),persistence.latestTimestamp+1);
     persistence.latestTimestamp=timestamp;
@@ -1687,6 +1800,14 @@
     updateSnapshotSaveAction();
     refreshCalibrationApplicability();
     persistence.dirty=true;
+    if(experimentPreview.live){
+      if(!experimentPreview.controller||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
+      try{
+        experimentPreview.controller.markDirty();
+        experimentPreview.status=experimentPreview.controller.state().status;
+        persistenceStatus('Document session has unsaved changes');
+      }catch(error){previewFailure(error);return;}
+    }
     if(persistence.timer!==null)clearTimeout(persistence.timer);
     persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment();},550);
   }
@@ -1700,7 +1821,7 @@
     // Navigation may already have selected its destination address. Preserve
     // the published working URL and its matching local identity while saving
     // the latest checkpoint synchronously. Never issue a new URL on unload.
-    function checkpointOnly(){flushWorkingSession(false);}
+    function checkpointOnly(){if(!experimentPreview.live)flushWorkingSession(false);}
     if(root.addEventListener){
       root.addEventListener('pagehide',checkpointOnly);
       // On mobile pagehide can be skipped when the browser is suspended.
@@ -1724,9 +1845,9 @@
     var bar=newUiEl('ModernSnapshotSaveBar'),button=newUiEl('ModernSnapshotSave');
     var status=newUiEl('ModernSnapshotSaveStatus');
     if(!button||!status)return;
-    if(bar)bar.hidden=!!state.demosActive;
+    if(bar)bar.hidden=!!state.demosActive||experimentPreview.live;
     button.hidden=true;button.disabled=snapshotSaveBusy;
-    if(state.demosActive){modernStatus(status,'','info');return;}
+    if(state.demosActive||experimentPreview.live){modernStatus(status,'','info');return;}
     if(!persistence.ready){modernStatus(status,'Preparing current experiment…','info');return;}
     if(historyLoadError){modernStatus(status,'History unavailable: '+historyLoadError,'error');return;}
     if(!savedHistorySignatures){modernStatus(status,'Checking History…','info');return;}
@@ -1808,7 +1929,7 @@
   }
   function queueHistoryAuto(){
     if(keyframeEditSession)return;
-    if(!experimentHistory||!persistence.ready||state.demosActive||cameraTransition||autoCameraActive||cameraDirectMotion)return;
+    if(experimentPreview.live||!experimentHistory||!persistence.ready||state.demosActive||cameraTransition||autoCameraActive||cameraDirectMotion)return;
     var key;
     try{key=historyPhysicalSignature();}
     catch(error){return;}
@@ -4538,6 +4659,7 @@
     }catch(error){return false;}
   }
   function tryResumeKeyframeRecovery(){
+    if(experimentPreview.live)return;
     if(!keyframeRecoveryPending||keyframeRecoveryAttempted||!keyframeRecoverySettled||
        !persistence.ready||!studioWorkspaceReady||!studioRouteReady||keyframeEditSession)
       return;
@@ -6176,6 +6298,7 @@
     }catch(error){persistenceStatus('Cannot share experiment: '+error.message,true);}
   }
   function resetExperiment(){
+    if(experimentPreview.live){persistenceStatus('Reset is unavailable in document session preview',true);return;}
     if(calibrationApplyBusy){persistenceStatus('Finish calibration Apply before resetting the session',true);return;}
     cancelEdits();cancelPending();
     persistence.dirty=false;
@@ -8319,6 +8442,7 @@
   // All top-level workspace choices use this one success/remember path.
   // Individual activation branches own only their rendering and lifecycle.
   function setMode(mode,remember){
+    if(experimentPreview.live&&!previewModeAllowed(mode))return false;
     if(keyframeEditSession&&!keyframeEditEntering){
       updateStatus('Cancel & Return before changing editor workspace.',true);
       return false;
@@ -8844,6 +8968,7 @@
     bindUiRegistryRecoveryControls();
     bindUiRegistryPageLifecycle();
     bindPersistence();
+    bindExperimentPreview();
     bindNumber('ModernHeight',function(v){adapter?adapter.setCamera(model,'Height',v):model.Height=v;},'observer height');
     if(typeof document.querySelector==='function'&&document.querySelector('#ModernCameraEast'))
     bindNumber('ModernCameraEast',function(v){
@@ -8942,8 +9067,11 @@
     // Resolve link intent once for the whole startup transaction. Do not
     // reclassify it after the asynchronous checkpoint read.
     var explicitAtStartup=isExplicitSharedExperiment();
-    function finishStartup(remoteRecord,remoteError){
-      var restored=restoreExperiment(remoteRecord,remoteError,explicitAtStartup);
+    function finishStartup(remoteRecord,remoteError,preview){
+      var restored=false;
+      if(experimentPreview.live){
+        if(preview&&preview.bound){applyExperiment(preview.bound.experiment);restored=true;}
+      }else restored=restoreExperiment(remoteRecord,remoteError,explicitAtStartup);
       if(!initialCamera)initialCamera=captureCameraPose();
       syncNumericInputs();
       // Resolve the top-level workspace once, independently of the scene
@@ -8965,7 +9093,12 @@
           persistence.explicitUrl,historyEntry&&historyEntry[WORKSPACE_ENTRY_KEY]):
         (['scene','compare','demos'].includes(explicitMode)?explicitMode:state.mode);
       if(allowStudioRoute)startupMode='animation';
-      if(!persistence.explicitUrl&&workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
+      if(experimentPreview.live){
+        allowStudioRoute=false;
+        startupMode=preview&&preview.row&&preview.row.envelope?preview.row.envelope.workspace:'scene';
+        if(!previewModeAllowed(startupMode))startupMode='scene';
+      }
+      if(!experimentPreview.live&&!persistence.explicitUrl&&workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
       if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
       // Initialize physical controls before restoring an auxiliary workspace.
       var baseMode=['scene','compare','demos'].includes(startupMode)?startupMode:state.mode;
@@ -8977,6 +9110,12 @@
       if(restored||state.compareConfig)syncCompareEditor();
       // No autosave or preference writes from startup selection.
       persistence.ready=true;
+      if(experimentPreview.live){
+        updateSnapshotSaveAction();resetHistoryBaseline();refreshCalibrationApplicability();
+        previewControls();
+        if(experimentPreview.status==='clean')persistenceStatus('Document session restored');
+        return; // Do not restore legacy auxiliary workspaces or UI registry mode.
+      }
       // The physical session is now authoritative. Do not allow an early
       // click to be overwritten by asynchronous startup restoration.
       Object.keys(workspaceTabs).forEach(function(mode){
@@ -9040,7 +9179,23 @@
       root.addEventListener('pagehide',checkpointKeyframeOnLeave);
       root.addEventListener('beforeunload',checkpointKeyframeOnLeave);
     }
-    if(sessionAutosave&&root.indexedDB&&!explicitAtStartup){
+    var previewParams=new URLSearchParams(root.location&&root.location.search||'');
+    var previewRoute=studioViewsApi&&studioViewsApi.route&&studioViewsApi.route(root.location&&root.location.href);
+    if(documentSessionPreviewRequested&&!explicitAtStartup&&!previewRoute&&
+       !previewParams.has('mode')&&!previewParams.has('state')&&!previewParams.has('tab')&&!previewParams.has('model')){
+      experimentPreview.live=true;experimentPreview.status='loading';previewControls();
+      persistenceStatus('Restoring document session…');
+      openExperimentPreview().then(function(preview){
+        if(experimentPreview.status==='suspended')return;
+        experimentPreview.status=preview.status;
+        if(preview.status==='empty')experimentPreview.error='No verified legacy checkpoint. Open ordinary Modern and save an experiment first.';
+        if(preview.status==='recovering')persistenceStatus('Document session recovery required',true);
+        finishStartup(null,null,preview);
+      }).catch(function(error){
+        if(experimentPreview.status==='suspended')return;
+        previewFailure(error);finishStartup(null,null,null);
+      });
+    }else if(sessionAutosave&&root.indexedDB&&!explicitAtStartup){
       persistenceStatus('Restoring working session…');
       sessionAutosave.read(root.indexedDB).then(function(record){
         finishStartup(record,null);
@@ -9200,6 +9355,10 @@
           '. Download UI recovery JSON before further changes.');
         throw error;
       });
+    },
+    getExperimentSessionPreview:function(){
+      return {status:experimentPreview.status,error:experimentPreview.error,
+        controller:experimentPreview.controller&&experimentPreview.controller.state()};
     },
     getWorkspaceUiRegistryPreview:function(){
       var trial=workspaceUiRegistryPreview;

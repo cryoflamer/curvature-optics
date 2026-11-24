@@ -129,6 +129,7 @@
 <script src="src/ui/modern/ModernAnimationStudioUI.js?status-messages=2&amp;compatible-sequences=1&amp;thumbnail-preview=1&amp;preview-navigation=1&amp;library-card-state=2&amp;stash-restore=1&amp;explicit-card-details=1&amp;unified-delete-corners=1&amp;spline-easing=1&amp;adaptive-live-preview=1&amp;studio-undo-focus=1&amp;storyboard=1&amp;keyframe-thumbnails=1&amp;storyboard-export=1&amp;atmosphere-switcher=1&amp;atmosphere-export=1&amp;keyframe-references=1&amp;reference-presentation=1&amp;reference-transport=1&amp;presentation-cleanup=1&amp;presentation-resize=1&amp;png-project-fields=1&amp;image-library-tab=1"></script>
 <script src="src/storage/ModernStateRegistry.js"></script>
 <script src="src/storage/ModernUiSessionStore.js"></script>
+<script src="src/storage/ModernDocumentSession.js"></script>
 <script src="src/storage/ModernUiSessionManager.js"></script>
 <script src="src/storage/ModernWorkspaceStateBridge.js"></script>
 <script src="src/storage/ModernBackupWriteBarrier.js"></script>
@@ -174,6 +175,13 @@
     <div class="modern-ui-registry-recovery-actions">
       <button type="button" class="modern-ghost-button" id="ModernUiRegistryRetry">Retry UI save</button>
       <button type="button" class="modern-ghost-button" id="ModernUiRegistryDownload">Download UI recovery JSON</button>
+    </div>
+  </section>
+  <section id="ModernDocumentSessionRecovery" class="modern-ui-registry-recovery" aria-label="Document session recovery" hidden>
+    <p id="ModernDocumentSessionRecoveryStatus" class="modern-status-message" role="alert"></p>
+    <div class="modern-ui-registry-recovery-actions">
+      <button type="button" class="modern-ghost-button" id="ModernDocumentSessionAcceptHead" hidden>Accept durable revision</button>
+      <button type="button" class="modern-ghost-button" id="ModernDocumentSessionDownload" hidden>Download revision evidence</button>
     </div>
   </section>
   <!-- GraphX3DX needs parser-time document.writeln and a positive initial width.

@@ -249,3 +249,17 @@ test('controller keeps a later edit dirty after successful acknowledgement',asyn
   assert.equal(c.state().busy,false);
   assert.equal(f.row().revision,2);
 });
+
+test('document acknowledgement can select another workspace only for the same document kind',()=>{
+  const m=tracker();m.markDirty();const token=m.beginSave();
+  assert.throws(()=>m.acknowledgeDocument(token,receipt(token),'calibration'),/workspace mismatch/);
+  const p=m.acknowledgeDocument(token,receipt(token),'compare');
+  assert.equal(p.envelope.workspace,'compare');
+  m.acknowledgeSession(token,{revision:5,envelope:p.envelope});
+  assert.equal(m.state().session.workspace,'compare');
+});
+test('controller verifies an unchanged edit without creating a revision',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  await c.save({value:1});assert.equal(c.state().status,'clean');
+  assert.equal(f.row().revision,1);
+});

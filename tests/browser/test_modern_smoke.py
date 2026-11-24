@@ -10673,5 +10673,50 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['after']['row']['revision'],3)
         self.assertEqual(after['after']['bound'],after['before']['head'])
 
+    def test_document_session_preview_live_scene_compare_edits_and_f5(self):
+        """Real UI save/restore without implicit URL or legacy checkpoint writes."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        before=self.page.evaluate("""async () => ({
+            legacy:await CurvatureModernSessionAutosave.read(indexedDB),
+            local:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
+        })""")
+        url=self.base_url+'?document-session=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        expect(self.page.locator('#ModernHeight')).to_be_enabled()
+        expect(self.page.locator('#ModernAnimationTab')).to_be_disabled()
+        expect(self.page.locator('#ModernResetExperiment')).to_be_disabled()
+        self.page.locator('#ModernHeight').fill(str(old+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""() => {
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return c&&c.status==='committed'&&c.row.envelope.workspace==='compare';
+        }""",timeout=30000)
+        saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.assertEqual(self.page.url,url)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getExperimentSessionPreview().controller.row'),saved)
+        self.assertEqual(self.page.evaluate("""async () => ({
+            legacy:await CurvatureModernSessionAutosave.read(indexedDB),
+            local:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
+        })"""),before)
+        self.assertEqual(self.page.url,url)
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
 if __name__ == '__main__':
     unittest.main()

@@ -130,7 +130,7 @@
       pending=null;error=null;status='saving';return active;
     }
     function stale(t){return status!=='saving'||t!==active;}
-    function acknowledgeDocument(t,receipt){
+    function acknowledgeDocument(t,receipt,mode=current.workspace){
       if(stale(t))return null;
       check(!pending,'document receipt already recorded');
       fields(receipt,['kind','id','revision'],'document receipt');
@@ -138,9 +138,10 @@
         'document acknowledgement does not match bound edit');
       // A domain fork needs separately verified activation; never silently
       // redirect later edits to a different document.
+      check(SLOT[workspace(mode)]===kind,'document acknowledgement workspace mismatch');
       const next=binding({id:receipt.id,revision:receipt.revision,recovery:null});
       pending=Object.freeze({expectedRevision:revision,
-        envelope:select(current,current.workspace,next)});
+        envelope:select(current,mode,next)});
       return pending;
     }
     function acknowledgeSession(t,receipt){
@@ -287,12 +288,24 @@
       check(status==='dirty'&&tracker,'dirty document required');
       begin();let attempt=null;
       try{
-        guard(true);attempt=tracker.beginSave();status='saving';
+        guard(true);
+        if(same(experiment,bound.experiment)){
+          // No new revision for a reverted edit. Check both durable stores,
+          // and retain any edit that arrived while verifying the no-op.
+          const edit=tracker.state().edit;
+          const verified=await inspect();guard(true);
+          check(!verified.unbound&&same(verified.saved,row)&&
+            verified.latest.revision===bound.revision,'unchanged edit verification conflict');
+          if(tracker.state().edit===edit)activate(row,bound);
+          return;
+        }
+        attempt=tracker.beginSave();status='saving';
         const receipt=await working.write(experiment,attempt.baseRevision);guard(true);
-        const pending=tracker.acknowledgeDocument(attempt,receipt);
-        check(pending,'stale document receipt');
         const verified=checkedDocument(await working.readRevision(receipt.revision),receipt.revision);
         guard(true);head=verified;
+        const mode=verified.experiment.display?.mode||row.envelope.workspace;
+        const pending=tracker.acknowledgeDocument(attempt,receipt,mode);
+        check(pending,'stale document receipt');
         const saved=await writeSession(pending.envelope,pending.expectedRevision);
         check(tracker.acknowledgeSession(attempt,saved),'stale session receipt');
         row=saved;bound=verified;status=tracker.state().status;failure=null;
@@ -332,7 +345,9 @@
         check(!result.unbound&&same(result.saved,row)&&
           result.previous.revision===offer.acknowledgedRevision&&
           result.latest.revision===offer.revision,'recovery offer changed; evidence retained');
-        const candidate=select(row.envelope,row.envelope.workspace,
+        const mode=result.latest.experiment.display?.mode||row.envelope.workspace;
+        check(scene(mode),'unsupported recovered experiment workspace');
+        const candidate=select(row.envelope,mode,
           {id:working.id,revision:offer.revision,recovery:null});
         const saved=await writeSession(candidate,row.revision);
         activate(saved,result.latest);

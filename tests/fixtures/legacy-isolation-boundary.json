@@ -117,8 +117,8 @@
     },
     "modern": {
       "file": "CurvatureModern.html",
-      "scriptTags": 148,
-      "uniqueScripts": 146,
+      "scriptTags": 149,
+      "uniqueScripts": 147,
       "inlineScriptBlocks": 0,
       "inlineScriptSha256": [],
       "scripts": [
@@ -241,6 +241,7 @@
         "src/ui/modern/ModernAnimationStudioUI.js",
         "src/storage/ModernStateRegistry.js",
         "src/storage/ModernUiSessionStore.js",
+        "src/storage/ModernDocumentSession.js",
         "src/storage/ModernUiSessionManager.js",
         "src/storage/ModernWorkspaceStateBridge.js",
         "src/storage/ModernBackupWriteBarrier.js",
@@ -444,6 +445,7 @@
       "src/renderers/CurvatureCanvasDirectPreview.js",
       "src/renderers/CurvatureWebGLGeometryRenderer.js",
       "src/storage/ModernBackupWriteBarrier.js",
+      "src/storage/ModernDocumentSession.js",
       "src/storage/ModernStateRegistry.js",
       "src/storage/ModernUiSessionManager.js",
       "src/storage/ModernUiSessionStore.js",
@@ -527,7 +529,6 @@
       "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
-      "src/storage/ModernDocumentSession.js",
       "src/storage/ModernPortableBackup.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
@@ -2919,7 +2920,9 @@
       "commonJsToolCallers": []
     },
     "src/storage/ModernDocumentSession.js": {
-      "directHtmlLoads": [],
+      "directHtmlLoads": [
+        "modern"
+      ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernDocumentSession.test.js",
