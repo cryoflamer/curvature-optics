@@ -803,7 +803,7 @@ test('project editor captures bound autosave before a queued task and persists i
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.resolve(__dirname,
     '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
-  const start=src.indexOf('function persist(forSwitch=false)'),end=src.indexOf('async function restoreDraft()',start);
+  const start=src.indexOf('function persist(forSwitch=false,changes=null)'),end=src.indexOf('async function restoreDraft()',start);
   const persistence=src.slice(start,end);
   assert.ok(start>=0&&end>start);
   assert.match(persistence,/session\.mark\(data,inline\);\s*\}\s*saved=session\.save\(\)/);
@@ -1236,7 +1236,7 @@ test('shared Calibration preserves later input while a previous selection receip
     }}});
   session.bind(start);
   const first=legacyDraft();first.view.x=13;
-  session.mark(first);const saving=session.save();
+  session.mark(first,null,{title:'Renamed while saving'});const saving=session.save();
   const failed=assert.rejects(saving,/Lost session acknowledgement/);
   while(!session.state().selectionPending)await new Promise(resolve=>setTimeout(resolve,0));
   const later=legacyDraft();later.view.x=99;
@@ -1245,9 +1245,11 @@ test('shared Calibration preserves later input while a previous selection receip
   release();await failed;await skipped;
   assert.equal((await store.get(db,A)).revision,2);
   assert.equal(JSON.parse(session.recovery()).draft.view.x,99);
+  assert.equal(JSON.parse(session.recovery()).title,'Renamed while saving');
   const result=await session.retry();
   assert.equal(result.project.revision,3);
   assert.equal(result.project.checkpoint.payload.draft.view.x,99);
+  assert.equal(result.project.title,'Renamed while saving');
   assert.deepEqual(receipts[1],receipts[0]);
   assert.equal(receipts[2].previous.revision,'rev:2');
   assert.equal(receipts[2].current.revision,'rev:3');
