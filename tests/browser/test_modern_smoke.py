@@ -10914,6 +10914,19 @@ class ModernBrowserSmoke(unittest.TestCase):
             child.wait_for_function("""() =>
                 CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
             self.assertEqual(child.evaluate('CurvatureModernApp.getModel().Height'),old+9)
+            child_saved=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+            # User-reported sequence: reload parent then child, and reverse.
+            # Each reload must keep the exact original session and value.
+            for tabs in ((self.page,child),(child,self.page)):
+                for tab in tabs:
+                    tab.reload(wait_until='load')
+                    tab.wait_for_function("""() =>
+                        CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+                    expected_row=parent['row'] if tab==self.page else child_saved
+                    expected_height=old+5 if tab==self.page else old+9
+                    self.assertEqual(tab.evaluate(
+                        'CurvatureModernApp.getExperimentSessionPreview().controller.row'),expected_row)
+                    self.assertEqual(tab.evaluate('CurvatureModernApp.getModel().Height'),expected_height)
         finally:
             child.close()
         link=self.page.evaluate("""() => {
@@ -10933,6 +10946,80 @@ class ModernBrowserSmoke(unittest.TestCase):
             'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
 
+
+    def test_document_session_preview_existing_working_url_does_not_fall_back_on_reload(self):
+        """Opt-in on a locally issued working URL retains private state across both tab reloads."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.assertTrue(self.page.evaluate("""() =>
+            CurvatureModernExperimentState.isWorkingExperimentUrl(location.href,localStorage)"""))
+        url=self.page.evaluate("""() => {
+            const u=new URL(location.href);
+            u.searchParams.set('document-session','preview');return u.href;
+        }""")
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.url,url)
+        self.page.locator('#ModernHeight').fill(str(old+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        parent=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        child=self.context.new_page()
+        try:
+            child.add_init_script("if(!sessionStorage.getItem('curvature-modern-ui-tab-id-v1'))sessionStorage.setItem("+
+                json.dumps('curvature-modern-ui-tab-id-v1')+","+
+                json.dumps(parent['row']['envelope']['tabId'])+");")
+            child.goto(url,wait_until='load')
+            child.wait_for_function("""() =>
+                CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+            child.locator('#ModernHeight').fill(str(old+9))
+            child.locator('#ModernHeight').press('Tab')
+            expect(child.locator('#ModernPersistenceStatus')).to_have_text(
+                'Document session saved',timeout=30000)
+            copied=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+            self.assertNotEqual(copied['bound']['id'],parent['bound']['id'])
+            # Simulate another ordinary tab issuing a different working URL.
+            self.page.evaluate("""() => {
+                const E=CurvatureModernExperimentState;
+                const e=CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment;
+                e.scene.camera.Height+=10;
+                E.rememberWorkingExperimentUrl(E.urlWithWorkingExperiment(location.origin+
+                    location.pathname,e),localStorage);
+            }""")
+            self.assertFalse(self.page.evaluate("""() => {
+                const u=new URL(location.href);u.searchParams.delete('document-session');
+                return CurvatureModernExperimentState.isWorkingExperimentUrl(u.href,localStorage);
+            }"""))
+            for tabs in ((self.page,child),(child,self.page)):
+                for tab in tabs:
+                    tab.reload(wait_until='load')
+                    tab.wait_for_function("""() =>
+                        CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+                    expected=parent if tab==self.page else copied
+                    self.assertEqual(tab.evaluate(
+                        'CurvatureModernApp.getExperimentSessionPreview().controller.row'),expected['row'])
+                    self.assertEqual(tab.evaluate('CurvatureModernApp.getModel().Height'),
+                        expected['bound']['experiment']['scene']['camera']['Height'])
+                    self.assertEqual(tab.url,url)
+            # A new entry with a foreign working URL still imports explicitly.
+            foreign=self.context.new_page()
+            try:
+                foreign.goto(url,wait_until='load')
+                expect(foreign.locator('#ModernSceneTab')).to_be_enabled()
+                self.assertEqual(foreign.evaluate(
+                    'CurvatureModernApp.getExperimentSessionPreview().status'),'disabled')
+                self.assertEqual(foreign.evaluate('CurvatureModernApp.getModel().Height'),old+2)
+            finally:
+                foreign.close()
+        finally:
+            child.close()
 
     def test_document_session_preview_durable_unsaved_draft_f5_and_workspace_restore(self):
         """Hold normal debounce while real early checkpoint commits; restore the draft explicitly."""

@@ -6313,12 +6313,37 @@
       calibrationApplyBusy=false;updatePresetNavigation();refreshCalibrationApplicability(true);
     }
   }
+  // Adding the private preview opt-in to an already issued working URL
+  // changes its string identity, not the intent of its verified resume marker.
+  // Only the exact locally registered address qualifies; a foreign URL with
+  // a working marker must still import its explicit public payload.
+  function isLocalWorkingPreviewUrl(){
+    if(!documentSessionPreviewRequested||!experiments||!root.location)return false;
+    try{
+      var url=new URL(root.location.href);
+      if(url.searchParams.getAll('document-session').length!==1||
+         url.searchParams.get('document-session')!=='preview')return false;
+      url.searchParams.delete('document-session');
+      return experiments.isWorkingExperimentUrl(url.href,preferencesStorage());
+    }catch(error){return false;}
+  }
+  function rememberWorkingPreviewEntry(){
+    // Remember the verified intent on THIS history entry. Another ordinary
+    // tab may later replace the origin-wide last issued working URL.
+    // Do not rewrite the address or copy any document payload.
+    if(!isLocalWorkingPreviewUrl()||!root.history)return;
+    var previous=root.history.state;
+    var next=Object.assign({},previous&&typeof previous==='object'?previous:{});
+    next[AUTO_EXPERIMENT_HISTORY_KEY]=true;
+    root.history.replaceState(next,'',root.location.href);
+  }
   function isExplicitSharedExperiment(){
     if(!experiments||!root.location)return false;
     var params=new URLSearchParams(root.location.search||'');
     var historyState=root.history&&root.history.state;
     var generated=!!(historyState&&historyState[AUTO_EXPERIMENT_HISTORY_KEY]===true)||
-      experiments.isWorkingExperimentUrl(root.location.href,preferencesStorage());
+      experiments.isWorkingExperimentUrl(root.location.href,preferencesStorage())||
+      isLocalWorkingPreviewUrl();
     var editedHere=!!(historyState&&historyState[EDITED_SHARED_URL_KEY]===root.location.href);
     return params.has(experiments.PARAM)&&!generated&&!editedHere;
   }
@@ -9274,7 +9299,13 @@
        !previewParams.has('mode')&&!previewParams.has('state')&&!previewParams.has('tab')&&!previewParams.has('model')){
       experimentPreview.live=true;experimentPreview.status='loading';previewControls();
       persistenceStatus('Restoring document session…');
-      openExperimentPreview().then(function(preview){
+      // Pin the resolved startup intent before any asynchronous storage read.
+      // If history state cannot be written, fail closed instead of enabling
+      // a route that could silently change meaning on the next reload.
+      Promise.resolve().then(function(){
+        rememberWorkingPreviewEntry();
+        return openExperimentPreview();
+      }).then(function(preview){
         if(experimentPreview.status==='suspended')return;
         experimentPreview.status=preview.status;
         if(preview.status==='empty')experimentPreview.error='No verified legacy checkpoint. Open ordinary Modern and save an experiment first.';

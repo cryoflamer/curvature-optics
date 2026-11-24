@@ -529,8 +529,15 @@ or a new active-workspace owner. No URL or default persistence changes.
 ### Scene/Compare document session preview
 
 The explicit `?document-session=preview` route uses the owned experiment
-controller for startup, edit checkpoints and F5. The ordinary route and
-explicit shared/Studio/mode/tab/model routes retain existing behavior; the
+controller for startup, edit checkpoints and F5. Adding this flag to an
+exact locally registered automatic working URL preserves its verified
+resume intent: the flag alone is removed for the identity comparison,
+and the generated-entry marker is pinned in the current history entry
+without rewriting the address. Later ordinary tabs may replace the
+origin-wide issued URL without affecting those pinned entries on reload.
+A foreign working marker is not sufficient evidence; explicit experiment
+links still import their payload. The ordinary route and explicit
+shared/Studio/mode/tab/model routes retain existing behavior; the
 document preview and UI registry preview are not combined. Only Scene and
 Compare are enabled: other workspaces, History navigation and reset are
 disabled pending migration. Startup locks the physical workspace until
