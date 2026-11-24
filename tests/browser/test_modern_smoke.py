@@ -11389,8 +11389,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         return self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
             const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
+            // Initialize the actual metadata schema before writing historical fixtures.
+            const empty=await sessions.read();
+            if(empty.revision!==0||empty.envelope!==null)throw Error('Expected empty historical metadata');
             const working=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
             const source=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current');
+            if(!source||source.workspace!=='compare')throw Error('Expected saved Compare migration source');
             const prepared=await seedHistoricalSharedImport(source);
             const bound=await working.read();
             const calibration={id:'cal-history',revision:'r4',recovery:null};
@@ -11429,6 +11433,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         """Actual migration buttons preserve old evidence and restore a compatible draft explicitly."""
         seeded=self.seed_bound_preview_history()
         before=self.read_bound_preview_history()
+        self.assertIn(['shared-document', {'id':'shared-document','version':1,
+            **seeded['metadata']}],before['metadata'])
         url=self.base_url+'?document-session=shared'
         self.page.goto(url,wait_until='load')
         choices=self.page.locator('#ModernDocumentSessionMigrationChoices button')
@@ -11485,6 +11491,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         """An incompatible draft cannot be kept against a later HEAD; archive preserves all old bytes."""
         seeded=self.seed_bound_preview_history()
         before=self.read_bound_preview_history()
+        self.assertIn(['shared-document', {'id':'shared-document','version':1,
+            **seeded['metadata']}],before['metadata'])
         url=self.base_url+'?document-session=shared'
         self.page.goto(url,wait_until='load')
         choices=self.page.locator('#ModernDocumentSessionMigrationChoices button')
