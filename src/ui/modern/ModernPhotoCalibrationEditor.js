@@ -512,7 +512,10 @@
   function mount(doc,sharedSelection=null){
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
     if(!workspace)return null;
-    if(mounted)return mounted;
+    if(mounted){
+      if(sharedSelection)mounted.configureSharedSelection(sharedSelection);
+      return mounted;
+    }
     const photo=$('ModernCalibrationPhoto'),sceneCanvas=$('ModernCalibrationMesh'),
       list=$('ModernCalibrationPairs'),status=$('ModernCalibrationStatus'),
       add=$('ModernCalibrationAdd'),weight=$('ModernCalibrationWeight'),px=$('ModernCalibrationX'),py=$('ModernCalibrationY');
@@ -2852,8 +2855,18 @@
         persist();
       });
     syncFitControls();syncPairToolbar();
+    function configureSharedSelection(context){
+      if(sharedSelection===context)return;
+      if(!context||projectSession||scene||restoring||projectSwitchBusy||leavingPage)
+        throw Error('Cannot replace an active Calibration persistence owner');
+      // DOMContentLoaded mounts the controls before Modern resolves its
+      // route. Only the still-unbound editor may acquire the shared owner.
+      sharedSelection=context;
+      deletedProjectHandoff=null;
+      syncFitControls();projectsControls();
+    }
     mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
-      openSharedProject,prepareSharedLeave,
+      configureSharedSelection,openSharedProject,prepareSharedLeave,
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,

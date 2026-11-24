@@ -11748,9 +11748,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         other=self.context.new_page()
         try:
             other.goto(url,wait_until='load')
-            other.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
-                CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'&&
-                CurvatureModernApp.getWorkspaceMode()==='calibration'""",timeout=30000)
+            other.wait_for_function("""() => {
+                const app=window.CurvatureModernApp,status=app?.getExperimentSessionPreview().status;
+                return status==='failed'||status==='clean'&&app.getWorkspaceUiRegistryPreview().status==='ready';
+            }""",timeout=30000)
+            diagnostic=other.evaluate("""() => {
+                const app=CurvatureModernApp,preview=app.getExperimentSessionPreview();
+                return {status:preview.status,error:preview.error,mode:app.getWorkspaceMode(),
+                    registry:app.getWorkspaceUiRegistryPreview().status};
+            }""")
+            self.assertEqual(diagnostic['status'],'clean',diagnostic)
+            self.assertEqual(diagnostic['mode'],'calibration',diagnostic)
             expect(other.locator('#ModernPhotoCalibration')).to_be_visible()
             self.assertEqual(other.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document)
                 .projectPersistenceStatus().projectId"""),setup['project']['id'])

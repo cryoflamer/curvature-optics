@@ -1981,6 +1981,11 @@
       fail:previewFailure,
       usable:function(){return ['clean','committed'].includes(experimentPreview.status);}
     };
+    if(calibrationEnabled){
+      var editorApi=root.CurvatureModernPhotoCalibrationEditor;
+      if(!editorApi||!editorApi.mount(document,experimentPreview.calibrationContext))
+        throw Error('Shared Calibration editor unavailable');
+    }
     await controller.open();
     experimentPreview.migration=null;
     return controller.state();
