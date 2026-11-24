@@ -11893,6 +11893,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 seeded=self.page.evaluate("""async ({data,committed}) => {
                     const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
                         P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
                     const lease=U.captureSharedDocumentLifetime();
                     const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                         lease,codec:CurvatureModernExperimentState,crypto,contract:D});
@@ -11914,6 +11915,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 restored=self.page.evaluate("""async () => {
                     const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
                         P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
                     const lease=U.captureSharedDocumentLifetime();
                     const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                         lease,codec:CurvatureModernExperimentState,crypto,contract:D});
@@ -11921,11 +11923,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                         prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window),
                         selectionRecovery:P.sharedSelectionRecovery(window,lease)});
                     await c.open();const offer=c.state(),before=await make().read();
+                    const wrongBase={...offer.selectionRecovery.base,digest:'sha256:'+'0'.repeat(64)};
+                    const invalid=await make().proveSelectionReceipt(before,'calibration',
+                        offer.selectionRecovery.previous,offer.selectionRecovery.current,wrongBase);
                     const result=await c.recoverDocumentSelection(offer.selectionRecovery);
                     const after=await make().read(),project=await S.get(indexedDB,offer.selectionRecovery.current.id);
-                    return {offer,before,result,after,project,receipt:await S.readSharedSelectionReceipt(indexedDB),
+                    return {offer,before,result,after,project,invalid,receipt:await S.readSharedSelectionReceipt(indexedDB),
                         legacy:await S.legacy(indexedDB)};
                 }""")
+                self.assertIsNone(restored['invalid'])
                 self.assertEqual(restored['offer']['status'],'recovering-selection')
                 self.assertEqual(restored['before'],seeded['before'])
                 self.assertEqual(restored['project'],seeded['saved']['project'])
