@@ -11378,6 +11378,141 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def seed_bound_preview_history(self):
+        """Create three distinct historical payloads and unrelated domain bindings."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
+        self.install_historical_metadata_fixture()
+        return self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
+            const working=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
+            const source=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current');
+            const prepared=await seedHistoricalSharedImport(source);
+            const bound=await working.read();
+            const calibration={id:'cal-history',revision:'r4',recovery:null};
+            const animation={id:'animation-history',revision:'r7',recovery:null};
+            const frame=D.select(D.select(D.select(D.emptyShared(),'calibration',calibration),
+                'animation',animation),'compare',prepared.document);
+            const metadata=await seedHistoricalMetadata(frame,1);
+            const draft=structuredClone(bound.experiment);draft.scene.camera.Height+=1;
+            draft.compare.A.atmosphere='vacuum';draft.compare.B.atmosphere='inverse-spherical';
+            const head=structuredClone(draft);head.scene.camera.Height+=2;
+            await seedHistoricalRecovery(draft,bound.revision);
+            const receipt=await seedHistoricalRevision(head,bound.revision);
+            return {bound:bound.experiment,draft,head,metadata,receipt,calibration,animation};
+        }""")
+
+    def read_bound_preview_history(self):
+        return self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,U=CurvatureModernUiSessionStore;
+            async function rows(name,store,exclude){
+                return new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(name);req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{const db=req.result,tx=db.transaction(store,'readonly'),s=tx.objectStore(store);
+                        const keys=s.getAllKeys(),values=s.getAll();
+                        tx.oncomplete=()=>{db.close();resolve(keys.result.map((key,i)=>[key,values.result[i]])
+                            .filter(([key])=>key!==exclude));};
+                        tx.onabort=()=>{db.close();reject(tx.error);};};
+                });
+            }
+            return {working:await rows(S.DATABASE,S.STORE,'shared-checkpoint'),
+                metadata:await rows(U.DATABASE,'sessions',null),
+                local:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+                stamp:localStorage.getItem(S.META_KEY)};
+        }""")
+
+    def test_shared_document_session_preview_bound_migration_keeps_draft(self):
+        """Actual migration buttons preserve old evidence and restore a compatible draft explicitly."""
+        seeded=self.seed_bound_preview_history()
+        before=self.read_bound_preview_history()
+        url=self.base_url+'?document-session=shared'
+        self.page.goto(url,wait_until='load')
+        choices=self.page.locator('#ModernDocumentSessionMigrationChoices button')
+        keep=choices.filter(has_text='Use acknowledged revision · draft: keep')
+        expect(keep).to_be_visible(timeout=30000)
+        expect(choices).to_have_count(3)
+        expect(choices.filter(has_text='Use durable HEAD · draft: keep')).to_have_count(0)
+        expect(self.page.locator('#ModernCompareTab')).to_be_disabled()
+        self.page.once('dialog',lambda dialog:dialog.dismiss())
+        keep.click()
+        expect(keep).to_be_visible()
+        self.assertEqual(self.read_bound_preview_history(),before)
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernDocumentSessionDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['migration']['legacy']['bound']['experiment'],seeded['bound'])
+        self.assertEqual(evidence['migration']['legacy']['head']['experiment'],seeded['head'])
+        self.assertEqual(evidence['migration']['legacy']['draft']['experiment'],seeded['draft'])
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        with self.page.expect_navigation(wait_until='load'):
+            keep.click()
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='recovering'""",timeout=30000)
+        initial=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(initial['row']['revision'],1)
+        self.assertEqual(initial['bound']['experiment'],seeded['bound'])
+        self.assertEqual(initial['draft']['experiment'],seeded['draft'])
+        self.assertEqual(initial['row']['envelope']['documents']['calibration'],seeded['calibration'])
+        self.assertEqual(initial['row']['envelope']['documents']['animation'],seeded['animation'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),
+                         seeded['bound']['scene']['camera']['Height'])
+        expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_be_visible()
+        self.assertEqual(self.read_bound_preview_history(),before)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='recovering'""",timeout=30000)
+        self.page.locator('#ModernDocumentSessionRestoreDraft').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(saved['bound']['experiment'],seeded['draft'])
+        self.assertIsNone(saved['draft'])
+        self.assertEqual(saved['row']['envelope']['documents']['calibration'],seeded['calibration'])
+        self.assertEqual(saved['row']['envelope']['documents']['animation'],seeded['animation'])
+        self.assertEqual(self.read_bound_preview_history(),before)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound'),saved['bound'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.assertEqual(self.page.url,url)
+
+    def test_shared_document_session_preview_bound_migration_archives_draft(self):
+        """An incompatible draft cannot be kept against a later HEAD; archive preserves all old bytes."""
+        seeded=self.seed_bound_preview_history()
+        before=self.read_bound_preview_history()
+        url=self.base_url+'?document-session=shared'
+        self.page.goto(url,wait_until='load')
+        choices=self.page.locator('#ModernDocumentSessionMigrationChoices button')
+        archive=choices.filter(has_text='Use durable HEAD · draft: archive')
+        expect(archive).to_be_visible(timeout=30000)
+        expect(choices).to_have_count(3)
+        expect(choices.filter(has_text='Use durable HEAD · draft: keep')).to_have_count(0)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        with self.page.expect_navigation(wait_until='load'):
+            archive.click()
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(saved['row']['revision'],1)
+        self.assertEqual(saved['bound']['experiment'],seeded['head'])
+        self.assertIsNone(saved['draft'])
+        self.assertEqual(saved['row']['envelope']['documents']['calibration'],seeded['calibration'])
+        self.assertEqual(saved['row']['envelope']['documents']['animation'],seeded['animation'])
+        expect(self.page.locator('#ModernDocumentSessionRecovery')).to_be_hidden()
+        self.assertEqual(self.read_bound_preview_history(),before)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound'),saved['bound'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.assertEqual(self.read_bound_preview_history(),before)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_document_session_preview_live_migration_and_reload(self):
         """Mounted atomic shared session, explicit initial selection, stale page and global F5."""
         self.open_modern()
