@@ -11952,8 +11952,13 @@ class ModernBrowserSmoke(unittest.TestCase):
                     return s?.status==='failed'||s?.status==='clean'&&app.getWorkspaceUiRegistryPreview().status==='ready';
                 }""",timeout=30000)
                 restored=self.page.evaluate("""async id => {
-                    const S=CurvatureModernCalibrationProjectStore,app=CurvatureModernApp;
+                    const S=CurvatureModernCalibrationProjectStore,app=CurvatureModernApp,
+                        D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
+                    const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                        lease:U.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:D});
                     return {preview:app.getExperimentSessionPreview(),mode:app.getWorkspaceMode(),
+                        after:await checkpoint.read(),
                         editor:CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus(),
                         project:await S.get(indexedDB,id),receipt:await S.readSharedSelectionReceipt(indexedDB),
                         legacy:await S.legacy(indexedDB)};
@@ -11962,7 +11967,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.assertEqual(restored['mode'],'calibration')
                 self.assertEqual(restored['editor']['projectId'],seeded['saved']['project']['id'])
                 self.assertEqual(restored['project'],seeded['saved']['project'])
-                after=restored['preview']['controller']['row']
+                after=restored['after']
                 self.assertEqual(after['revision'],seeded['before']['revision']+(0 if committed else 1))
                 if committed:
                     self.assertEqual(after,seeded['before'])
