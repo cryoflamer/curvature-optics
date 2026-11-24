@@ -11721,6 +11721,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 P=CurvatureModernCalibrationProjectPersistence;
             const project=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
             const ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
             const lease=ui.captureSharedDocumentLifetime();
             const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                 lease,codec:CurvatureModernExperimentState,crypto,contract:D});
@@ -11754,7 +11755,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(other.locator('#ModernSceneTab')).to_be_disabled()
             restored=other.evaluate("""async () => {
                 const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence;
-                const ui=CurvatureModernUiSessionStore.create(window),lease=ui.captureSharedDocumentLifetime();
+                const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
+                const lease=ui.captureSharedDocumentLifetime();
                 const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                     lease,codec:CurvatureModernExperimentState,crypto,contract:D});
                 const c=D.createAtomicExperimentController({lease,checkpoint,isCurrent:()=>true,
@@ -11767,7 +11769,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence,
                     S=CurvatureModernCalibrationProjectStore;
                 const renamed=await S.rename(indexedDB,id,1,'Changed calibration');
-                const ui=CurvatureModernUiSessionStore.create(window),lease=ui.captureSharedDocumentLifetime();
+                const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
+                const lease=ui.captureSharedDocumentLifetime();
                 const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                     lease,codec:CurvatureModernExperimentState,crypto,contract:D});
                 const before=await checkpoint.read();

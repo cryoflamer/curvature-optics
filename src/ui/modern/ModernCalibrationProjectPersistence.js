@@ -39,7 +39,7 @@
       throw Error('Calibration project changed during activation preparation');
     return prepared;
   }
-  function prepareSharedSelection(env,reference,options={}){
+  async function prepareSharedSelection(env,reference,options={}){
     if(!reference||Object.keys(reference).length!==3||reference.recovery!==null||
        typeof reference.revision!=='string'||!/^rev:[1-9][0-9]*$/.test(reference.revision))
       throw Error('Unsupported Calibration selection or recovery reference');
