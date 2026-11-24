@@ -10484,6 +10484,40 @@ class ModernBrowserSmoke(unittest.TestCase):
     def install_historical_shared_import_fixture(self):
         """Seed the retired import format directly; no production migration writer."""
         self.page.evaluate("""() => {
+            window.seedHistoricalRevision=async (experiment,previousRevision)=>{
+                const S=CurvatureModernSessionAutosave,id='shared-experiment';
+                const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+                    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+                const n=previousRevision.startsWith('rev:')?Number(previousRevision.split(':')[1])+1:2;
+                const revision='rev:'+n+':sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest(
+                    'SHA-256',new TextEncoder().encode(canonical(experiment)))),x=>x.toString(16).padStart(2,'0')).join('');
+                await new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readwrite'),store=tx.objectStore(S.STORE);
+                        store.add({format:'curvature-modern-working-revision',version:1,id,revision,previousRevision,experiment},
+                            'working-revision:'+id+':'+revision);
+                        store.put({format:'curvature-modern-working-head',version:1,id,revision},'working-head:'+id);
+                        tx.oncomplete=()=>{db.close();resolve();};
+                        tx.onabort=()=>{db.close();reject(tx.error);};};
+                });
+                return {kind:'experiment',id,revision};
+            };
+            window.seedHistoricalRecovery=async (experiment,baseRevision)=>{
+                const S=CurvatureModernSessionAutosave,documentId='shared-experiment',id='shared-experiment-recovery',revision=crypto.randomUUID();
+                const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+                    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+                const data={format:'curvature-modern-working-recovery',version:1,id,documentId,revision,baseRevision,experiment};
+                const digest='sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest(
+                    'SHA-256',new TextEncoder().encode(canonical(data)))),x=>x.toString(16).padStart(2,'0')).join('');
+                await new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readwrite');
+                        tx.objectStore(S.STORE).put({...data,digest},'working-recovery:'+documentId);
+                        tx.oncomplete=()=>{db.close();resolve();};
+                        tx.onabort=()=>{db.close();reject(tx.error);};};
+                });
+                return {kind:'experiment',id,documentId,revision,baseRevision,experiment};
+            };
             window.seedHistoricalSharedImport=async candidate=>{
                 const S=CurvatureModernSessionAutosave;
                 const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
@@ -10550,7 +10584,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(read,result['read'])
 
     def test_shared_working_copy_migration_cas_and_stale_recovery(self):
-        """Seed old shared evidence; verify historical revision and recovery contracts."""
+        """Historical shared evidence is readable and has no mutation API."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -10580,18 +10614,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             const row=await sessions.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
             const edit=structuredClone(initial.experiment);edit.scene.camera.Height+=1;
             const stale=structuredClone(initial.experiment);stale.scene.camera.Height+=2;
-            const draft=await a.stageRecovery(edit,initial.revision,null);
-            const receipt=await a.write(edit,initial.revision);
+            const draft=await seedHistoricalRecovery(edit,initial.revision);
+            const receipt=await seedHistoricalRevision(edit,initial.revision);
             const tracker=D.createSaveTracker({session:row.envelope,sessionRevision:row.revision});
             tracker.markDirty();const token=tracker.beginSave();
             const pending=tracker.acknowledgeDocument(token,receipt);
             const saved=await sessions.write(pending.envelope,pending.expectedRevision);
             tracker.acknowledgeSession(token,saved);
-            await a.retireRecovery(draft.revision,receipt.revision);
-            const errors=[];
-            try{await b.write(stale,initial.revision);}catch(err){errors.push(err.message);}
-            try{await b.stageRecovery(stale,initial.revision,null);}catch(err){errors.push(err.message);}
-            return {candidate,initial,saved,edit,errors,
+            const readonly=['write','stageRecovery','retireRecovery'].every(key=>a[key]===undefined&&b[key]===undefined);
+            return {candidate,initial,saved,edit,readonly,draftSeed:draft,
                 latest:await a.read(),draft:await a.readRecovery(),
                 original:await a.readRevision(initial.revision),
                 legacySame:JSON.stringify(await S.read(indexedDB))===JSON.stringify({version:1,savedAt:stamp,experiment:e}),
@@ -10600,9 +10631,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result['candidate']['document']['id'],'shared-experiment')
         self.assertEqual(result['initial'],result['original'])
         self.assertEqual(result['latest']['experiment'],result['edit'])
-        self.assertIsNone(result['draft'])
-        self.assertIn('revision or envelope conflict',result['errors'][0])
-        self.assertIn('base is no longer current',result['errors'][1])
+        self.assertEqual(result['draft'],result['draftSeed'])
+        self.assertTrue(result['readonly'])
         self.assertTrue(result['legacySame'])
         self.assertTrue(result['localSame'])
         self.assertTrue(result['urlSame'])
@@ -10783,9 +10813,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             const bound=await working.read(),edit=structuredClone(bound.experiment);
             edit.scene.camera.Height+=1;
             edit.compare.A.atmosphere='vacuum';edit.compare.B.atmosphere='inverse-spherical';
-            const draft=await working.stageRecovery(edit,bound.revision,null);
+            const draft=await seedHistoricalRecovery(edit,bound.revision);
             const later=structuredClone(edit);later.scene.camera.Height+=2;
-            const receipt=await working.write(later,bound.revision);
+            const receipt=await seedHistoricalRevision(later,bound.revision);
             const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
             const opts={sessions,coordinate,isCurrent};
             const view=await checkpoint.inspectLegacy(opts);
@@ -11047,7 +11077,7 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
     def test_working_copy_edit_cas_keeps_acknowledged_revision_after_session_failure(self):
-        """Real domain commit followed by session CAS: old document remains readable."""
+        """Historical split-store commit evidence remains readable and distinct."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -11070,10 +11100,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             edit.compare.B.atmosphere='inverse-spherical';edit.scene.camera.Height+=1;
             const tracker=D.createSaveTracker({session:bound.envelope,sessionRevision:bound.revision});
             tracker.markDirty();const token=tracker.beginSave();
-            const receipt=await a.write(edit,token.baseRevision);
+            const receipt=await seedHistoricalRevision(edit,token.baseRevision);
             const pending=tracker.acknowledgeDocument(token,receipt);
-            let conflict;
-            try{await b.write(edit,initial.revision);}catch(e){conflict=e.message;}
+            const readonly=a.write===undefined&&b.write===undefined;
             // Do not write the session yet: simulate failure between stores.
             tracker.fail(token,'simulated session failure');
             const oldSession=await doc.read(),old=await a.readRevision(initial.revision);
@@ -11082,15 +11111,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 readDocument:(_,id)=>a.readRevision(oldSession.envelope.documents.experiment.revision)});
             // Explicit reconciliation can acknowledge the already durable revision.
             const saved=await doc.write(pending.envelope,pending.expectedRevision);
-            const again=await a.write(initial.experiment,receipt.revision);
-            return {initial,receipt,pending,conflict,oldSession,old,latest,restored,
+            const again=await seedHistoricalRevision(initial.experiment,receipt.revision);
+            return {initial,receipt,pending,readonly,oldSession,old,latest,restored,
                 saved,again,edit,failed:tracker.state().status,
                 initialStill:await a.readRevision(initial.revision),
                 legacySame:JSON.stringify(legacy)===JSON.stringify(await S.read(indexedDB)),
                 localSame:raw===localStorage.getItem(C.STORAGE_KEY)};
         }""")
         self.assertEqual(result['failed'],'failed')
-        self.assertIn('revision or envelope conflict',result['conflict'])
+        self.assertTrue(result['readonly'])
         self.assertEqual(result['old'],result['initial'])
         self.assertEqual(result['initialStill'],result['initial'])
         self.assertEqual(result['latest']['experiment'],result['edit'])
@@ -11120,7 +11149,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(reloaded['head']['revision'],result['again']['revision'])
 
     def test_working_copy_recovery_checkpoint_cas_and_f5(self):
-        """A durable draft is not a committed revision and is scoped to the owned document."""
+        """Historical draft is read-only, survives F5, and stays distinct from HEAD."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -11135,7 +11164,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             await seedHistoricalSharedImport((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
             const initial=await a.read(),edit=structuredClone(initial.experiment);
             edit.scene.camera.Height+=1;
-            const draft=await a.stageRecovery(edit,initial.revision,null);
+            const draft=await seedHistoricalRecovery(edit,initial.revision);
             return {initial,draft,head:await a.read()};
         }""")
         self.assertEqual(first['head'],first['initial'])
@@ -11149,27 +11178,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const restored=await a.readRecovery(),head=await a.read();
-            const receipt=await a.write(restored.experiment,head.revision);
-            const next=structuredClone(restored.experiment);next.scene.camera.Height+=1;
-            const newer=await a.stageRecovery(next,receipt.revision,restored.revision);
-            let stale,wrong;
-            try{await b.retireRecovery(restored.revision,receipt.revision);}catch(e){stale=e.message;}
-            try{await b.retireRecovery(newer.revision,receipt.revision);}catch(e){wrong=e.message;}
-            const preserved=await b.readRecovery();
-            const saved=await a.write(next,receipt.revision);
-            const retired=await a.retireRecovery(newer.revision,saved.revision);
-            return {restored,head,newer,stale,wrong,preserved,retired,remaining:await b.readRecovery()};
+            return {restored,head,readonly:['write','stageRecovery','retireRecovery'].every(key=>a[key]===undefined&&b[key]===undefined)};
         }""")
         self.assertEqual(second['restored'],first['draft'])
         self.assertEqual(second['head'],first['initial'])
-        self.assertIn('revision conflict',second['stale'])
-        self.assertIn('differs',second['wrong'])
-        self.assertEqual(second['preserved'],second['newer'])
-        self.assertTrue(second['retired'])
-        self.assertIsNone(second['remaining'])
+        self.assertTrue(second['readonly'])
 
     def test_working_copy_edit_lost_lease_and_lost_readback_preserve_revisions(self):
-        """No acknowledgement after lease loss or a failed post-commit read."""
+        """Atomic write refuses lost readback, stale lease and transaction interruption."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -11180,56 +11196,51 @@ class ModernBrowserSmoke(unittest.TestCase):
             const ui=CurvatureModernUiSessionStore.create(window);
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
-            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            await seedHistoricalSharedImport((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
-            const initial=await a.read(),edit=structuredClone(initial.experiment);
-            edit.scene.camera.Height+=1;
+            const D=CurvatureModernDocumentSession;
+            const a=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            await a.read();
+            const initial=await a.initialize((await S.read(indexedDB)).experiment);
+            const edit=structuredClone(initial.experiment);edit.scene.camera.Height+=1;
             const open=indexedDB.open.bind(indexedDB);let calls=0,failed,blind,stale;
             try{
                 Object.defineProperty(indexedDB,'open',{configurable:true,value:function(...args){
-                    if(args[0]===S.DATABASE&&++calls===2)throw Error('lost working readback');
+                    if(args[0]===S.DATABASE&&++calls===2)throw Error('lost atomic readback');
                     return open(...args);
                 }});
-                try{await a.write(edit,initial.revision);}catch(e){failed=e.message;}
+                try{await a.stage(edit,initial.revision);}catch(e){failed=e.message;}
             }finally{Object.defineProperty(indexedDB,'open',{configurable:true,value:open});}
-            try{await a.write(edit,initial.revision);}catch(e){blind=e.message;}
+            try{await a.stage(edit,initial.revision);}catch(e){blind=e.message;}
             const committed=await a.read();
             const next=structuredClone(edit);next.scene.camera.Height+=1;
             dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
             await new Promise(resolve=>setTimeout(resolve,0));
-            try{await a.write(next,committed.revision);}catch(e){stale=e.message;}
-            const freshUi=CurvatureModernUiSessionStore.create(window);
-            freshUi.sharedDocumentSessions(CurvatureModernDocumentSession);
-            const fresh=S.openWorkingCopy(indexedDB,{lease:freshUi.captureSharedDocumentLifetime(),codec:C,crypto});
-            const after=await fresh.read(),old=await fresh.readRevision(initial.revision);
-            // Abort while the head update has been queued, not merely before
-            // opening the database. Neither the head nor revision may survive.
+            try{await a.stage(next,committed.revision);}catch(e){stale=e.message;}
+            const freshUi=CurvatureModernUiSessionStore.create(window);freshUi.sharedDocumentSessions(D);
+            const fresh=S.openSharedCheckpoint(indexedDB,{lease:freshUi.captureSharedDocumentLifetime(),codec:C,crypto,contract:D});
+            const after=await fresh.read();
             const proto=IDBObjectStore.prototype,put=proto.put;
             let aborted,interrupted=false;
             try{
                 proto.put=function(value,...args){
                     const request=put.call(this,value,...args);
-                    if(typeof args[0]==='string'&&args[0]==='working-head:'+fresh.id){
-                        interrupted=true;
-                        dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+                    if(args[0]==='shared-checkpoint'){
+                        interrupted=true;dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
                     }
                     return request;
                 };
-                try{await fresh.write(next,after.revision);}catch(e){aborted=e.message;}
+                try{await fresh.stage(next,after.revision);}catch(e){aborted=e.message;}
             }finally{proto.put=put;}
             await new Promise(resolve=>setTimeout(resolve,0));
-            const reopenedUi=CurvatureModernUiSessionStore.create(window);
-            reopenedUi.sharedDocumentSessions(CurvatureModernDocumentSession);
-            const reopened=S.openWorkingCopy(indexedDB,{lease:reopenedUi.captureSharedDocumentLifetime(),codec:C,crypto});
-            const final=await reopened.read();
-            return {initial,edit,committed,after,old,failed,blind,stale,interrupted,aborted,final};
+            const reopenedUi=CurvatureModernUiSessionStore.create(window);reopenedUi.sharedDocumentSessions(D);
+            const reopened=S.openSharedCheckpoint(indexedDB,{lease:reopenedUi.captureSharedDocumentLifetime(),codec:C,crypto,contract:D});
+            return {initial,edit,committed,after,failed,blind,stale,interrupted,aborted,final:await reopened.read()};
         }""")
-        self.assertIn('lost working readback',result['failed'])
-        self.assertIn('read current working copy before write',result['blind'])
+        self.assertIn('lost atomic readback',result['failed'])
+        self.assertIn('read current shared checkpoint',result['blind'])
         self.assertIn('page suspended',result['stale'])
-        self.assertEqual(result['committed']['experiment'],result['edit'])
+        self.assertEqual(result['committed']['draft'],result['edit'])
         self.assertEqual(result['after'],result['committed'])
-        self.assertEqual(result['old'],result['initial'])
+        self.assertEqual(result['committed']['experiment'],result['initial']['experiment'])
         self.assertTrue(result['interrupted'])
         self.assertTrue(result['aborted'])
         self.assertEqual(result['final'],result['after'])

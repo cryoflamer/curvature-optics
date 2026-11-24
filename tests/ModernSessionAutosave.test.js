@@ -151,7 +151,7 @@ test('retired implicit migration is absent and local-only selection is explicit'
   assert.equal(autosave.prepareWorkingCopy,undefined);
   const crypto=require('node:crypto').webcrypto,lease={sessionId:'shared',check(){},track(){return ()=>{};}};
   const codec={STORAGE_KEY:'fixture',validate(v){assert.equal(v.display.mode,'scene');return v;}};
-  assert.throws(()=>autosave.makeAdapter(null).openWorkingCopy(db,{lease,codec,crypto}),/coordinated working-session writer required/);
+  assert.equal(autosave.makeAdapter(null).openWorkingCopy(db,{lease,codec,crypto}).write,undefined);
   const working=adapter.openWorkingCopy(db,{lease,codec,crypto});
   const empty={getItem:()=>null};
   assert.deepEqual(await working.inspectMigration(empty),{candidates:[],issues:[]});
@@ -230,6 +230,28 @@ async function seedHistoricalImport(db,crypto,candidate){
     revision,experiment,origin:candidate.selection});
   return {id,revision,recovery:null};
 }
+// Historical fixtures construct on-disk bytes, not a production writer.
+async function historicalDigest(crypto,value){
+  const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  return 'sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
+    new TextEncoder().encode(canonical(value)))),x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function seedHistoricalRevision(db,crypto,experiment,previousRevision){
+  const id='shared-experiment',n=previousRevision.startsWith('rev:')?Number(previousRevision.split(':')[1])+1:2;
+  const revision='rev:'+n+':'+await historicalDigest(crypto,experiment);
+  db.rows.set('working-revision:'+id+':'+revision,{format:'curvature-modern-working-revision',
+    version:1,id,revision,previousRevision,experiment:structuredClone(experiment)});
+  db.rows.set('working-head:'+id,{format:'curvature-modern-working-head',version:1,id,revision});
+  return {kind:'experiment',id,revision};
+}
+async function seedHistoricalRecovery(db,crypto,experiment,baseRevision){
+  const documentId='shared-experiment',id='shared-experiment-recovery',revision=crypto.randomUUID();
+  const data={format:'curvature-modern-working-recovery',version:1,id,documentId,revision,baseRevision,
+    experiment:structuredClone(experiment)};
+  db.rows.set('working-recovery:'+documentId,{...data,digest:await historicalDigest(crypto,data)});
+  return {kind:'experiment',id,documentId,revision,baseRevision,experiment};
+}
 async function recoveryFixture(){
   const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
   const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
@@ -245,12 +267,12 @@ async function recoveryFixture(){
   const inventory=await a.inspectMigration(storage);
   await seedHistoricalImport(db,crypto,inventory.candidates[0]);
   const initial=await a.read();
-  return {db,open,a,initial,base,lease,lose(){active=false;}};
+  return {db,crypto,open,a,initial,base,lease,lose(){active=false;}};
 }
 test('working recovery survives reopening and historical fork remains readable',async()=>{
   const f=await recoveryFixture(),edit={...f.base,height:2};
   assert.equal(await f.a.readRecovery(),null);
-  const staged=await f.a.stageRecovery(edit,f.initial.revision,null);
+  const staged=await seedHistoricalRecovery(f.db,f.crypto,edit,f.initial.revision);
   assert.equal(staged.baseRevision,f.initial.revision);
   assert.deepEqual((await f.open().readRecovery()),staged);
   assert.deepEqual(await f.a.read(),f.initial);
@@ -271,68 +293,48 @@ test('working recovery survives reopening and historical fork remains readable',
   const inventory=await shared.inspectMigration({getItem:()=>null});
   assert.deepEqual(inventory.candidates.find(x=>x.selection.key==='working-copy:'+id).experiment,f.base);
 });
-test('working recovery CAS never erases a later edit or acknowledges a different payload',async()=>{
+test('historical revisions and recovery are read-only and preserve divergent evidence',async()=>{
   const f=await recoveryFixture(),one={...f.base,height:2},two={...f.base,height:3};
-  const first=await f.a.stageRecovery(one,f.initial.revision,null);
-  const receipt=await f.a.write(one,f.initial.revision);
-  const second=await f.a.stageRecovery(two,receipt.revision,first.revision);
-  await assert.rejects(f.open().stageRecovery(one,f.initial.revision,first.revision),/revision conflict/);
-  await assert.rejects(f.a.retireRecovery(first.revision,receipt.revision),/revision conflict/);
-  await assert.rejects(f.a.retireRecovery(second.revision,receipt.revision),/differs/);
-  await assert.rejects(f.a.stageRecovery(one,f.initial.revision,second.revision),/backwards/);
-  assert.deepEqual(await f.a.readRecovery(),second);
-  const saved=await f.a.write(two,receipt.revision);
-  assert.equal(await f.a.retireRecovery(second.revision,saved.revision),true);
-  assert.equal(await f.open().readRecovery(),null);
+  const receipt=await seedHistoricalRevision(f.db,f.crypto,one,f.initial.revision);
+  const draft=await seedHistoricalRecovery(f.db,f.crypto,two,receipt.revision);
+  const before=structuredClone([...f.db.rows.entries()]);
+  assert.equal(f.a.write,undefined);
+  assert.equal(f.a.stageRecovery,undefined);
+  assert.equal(f.a.retireRecovery,undefined);
+  assert.deepEqual(await f.a.readRecovery(),draft);
+  assert.deepEqual((await f.a.read()).experiment,one);
   assert.deepEqual((await f.a.readRevision(f.initial.revision)).experiment,f.base);
+  assert.deepEqual([...f.db.rows.entries()],before);
 });
 test('working recovery refuses corrupt evidence, invalid base and lost lease',async()=>{
   const f=await recoveryFixture(),edit={...f.base,height:2};
-  await assert.rejects(f.a.stageRecovery(edit,'sha256:'+'0'.repeat(64),null),/identity mismatch/);
-  const staged=await f.a.stageRecovery(edit,f.initial.revision,null);
+  await seedHistoricalRecovery(f.db,f.crypto,edit,'sha256:'+'0'.repeat(64));
+  await assert.rejects(f.a.readRecovery(),/identity mismatch|missing or incompatible/);
+  const staged=await seedHistoricalRecovery(f.db,f.crypto,edit,f.initial.revision);
   const key='working-recovery:'+f.initial.id,original=f.db.rows.get(key);
   f.db.rows.set(key,{...original,experiment:{...edit,height:99}});
   const corrupt=structuredClone(f.db.rows.get(key));
   await assert.rejects(f.a.readRecovery(),/digest mismatch/);
-  await assert.rejects(f.a.stageRecovery(edit,f.initial.revision,staged.revision),/digest mismatch/);
-  await assert.rejects(f.a.retireRecovery(staged.revision,f.initial.revision),/digest mismatch/);
+  await assert.rejects(f.open().readRecovery(),/digest mismatch/);
   assert.deepEqual(f.db.rows.get(key),corrupt);
   f.db.rows.set(key,original);f.lose();
   await assert.rejects(f.a.readRecovery(),/lease lost/);
   assert.deepEqual(f.db.rows.get(key),original);
 });
 
-test('shared experiment migration, stale writers and recovery retain the original checkpoint',async()=>{
-  const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
-  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
-  const codec={STORAGE_KEY:'fixture',validate:v=>v};
-  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
-  const base={display:{mode:'compare'},height:1,compare:{A:'vacuum',B:'standard'}};
-  const opts={storage:{getItem:()=>null},isCurrent:()=>true};
-  await adapter.write(db,base,100);
-  db.rows.set('working-recovery:working-old',{legacy:true});
-  const a=adapter.openWorkingCopy(db,{lease,codec,crypto}),b=adapter.openWorkingCopy(db,{lease,codec,crypto});
-  const inventory=await a.inspectMigration(opts.storage);
-  assert.equal(inventory.issues[0].key,'working-recovery:working-old');
-  assert.equal(inventory.candidates.length,1);
-  assert.equal(db.rows.has('working-copy:shared-experiment'),false);
-  const document=await seedHistoricalImport(db,crypto,inventory.candidates[0]);
-  assert.equal(document.id,'shared-experiment');
-  assert.deepEqual(db.rows.get('working-recovery:working-old'),{legacy:true});
-  assert.equal(a.prepareFork,undefined);
-  const initial=await a.read();await b.read();
-  const edit={...base,height:2},stale={...base,height:3};
-  const draft=await a.stageRecovery(edit,initial.revision,null);
-  const saved=await a.write(edit,initial.revision);
-  await assert.rejects(b.write(stale,initial.revision),/revision or envelope conflict/);
-  await a.retireRecovery(draft.revision,saved.revision);
-  await assert.rejects(b.stageRecovery(stale,initial.revision,null),/base is no longer current/);
-  assert.equal(await a.readRecovery(),null);
-  assert.deepEqual((await a.read()).experiment,edit);
-  assert.deepEqual((await a.readRevision(initial.revision)).experiment,base);
-  assert.deepEqual(await adapter.read(db),{version:1,savedAt:100,experiment:base});
-  assert.equal(a.prepareSelectedMigration,undefined);
-  assert.deepEqual(db.rows.get('working-recovery:working-old'),{legacy:true});
+test('historical shared revision and malformed record retain original checkpoint',async()=>{
+  const f=await recoveryFixture(),edit={...f.base,height:2};
+  f.db.rows.set('working-recovery:working-old',{legacy:true});
+  const receipt=await seedHistoricalRevision(f.db,f.crypto,edit,f.initial.revision);
+  const draft=await seedHistoricalRecovery(f.db,f.crypto,edit,f.initial.revision);
+  const before=structuredClone([...f.db.rows.entries()]);
+  const evidence=await f.a.readMigrationEvidence(f.initial.revision);
+  assert.equal(evidence.head.revision,receipt.revision);
+  assert.deepEqual(evidence.bound,f.initial);
+  assert.deepEqual(evidence.draft,draft);
+  assert.deepEqual(await autosave.read(f.db),{version:1,savedAt:100,experiment:f.base});
+  assert.deepEqual([...f.db.rows.entries()],before);
+  assert.equal((await f.a.inspectMigration({getItem:()=>null})).issues[0].key,'working-recovery:working-old');
 });
 
 test('explicit shared migration selects a verified old draft and retains every source',async()=>{
@@ -468,7 +470,7 @@ async function legacyAtomicFixture(){
 test('atomic migration preserves the acknowledged experiment, compatible draft and old records',async()=>{
   const f=await legacyAtomicFixture(),a=f.open();
   const edit={...f.base,display:{mode:'compare'},height:2};
-  await f.working.stageRecovery(edit,f.initial.revision,null);
+  await seedHistoricalRecovery(f.db,f.crypto,edit,f.initial.revision);
   const view=await a.inspectLegacy(f.opts);
   assert.equal(view.bound.revision,view.head.revision);
   assert.deepEqual(view.choices,[{revision:f.initial.revision,draftModes:['keep','archive']}]);
@@ -490,8 +492,8 @@ test('atomic migration preserves the acknowledged experiment, compatible draft a
 test('atomic migration explicitly resolves divergent HEAD and incompatible recovery',async()=>{
   const f=await legacyAtomicFixture(),a=f.open();
   const edit={...f.base,height:2},later={...f.base,height:3};
-  await f.working.stageRecovery(edit,f.initial.revision,null);
-  const receipt=await f.working.write(later,f.initial.revision);
+  await seedHistoricalRecovery(f.db,f.crypto,edit,f.initial.revision);
+  const receipt=await seedHistoricalRevision(f.db,f.crypto,later,f.initial.revision);
   const view=await a.inspectLegacy(f.opts);
   assert.equal(view.head.revision,receipt.revision);
   assert.deepEqual(view.choices,[{revision:f.initial.revision,draftModes:['keep','archive']},
@@ -517,7 +519,7 @@ test('atomic migration compares the old raw evidence inside the destination tran
     const result=await f.crypto.subtle.digest(name,bytes);
     if(!injected&&String.fromCharCode(...bytes).includes('"format":"curvature-modern-shared-checkpoint"')){
       injected=true;
-      await f.working.write({...f.base,height:9},f.initial.revision);
+      await seedHistoricalRevision(f.db,f.crypto,{...f.base,height:9},f.initial.revision);
     }
     return result;
   }}};
@@ -581,7 +583,7 @@ test('atomic source migration preserves orphaned shared evidence and refuses a n
   const sources=await working.inspectMigration(f.opts.storage);
   const document=await seedHistoricalImport(f.db,f.crypto,sources.candidates[0]);
   const bound=await working.read(),edit={...f.base,height:3};
-  await working.stageRecovery(edit,bound.revision,null);
+  await seedHistoricalRecovery(f.db,f.crypto,edit,bound.revision);
   const view=await a.inspectSources(f.opts);
   const selected=view.candidates.find(item=>item.selection.key==='working-recovery:shared-experiment');
   assert.equal(view.candidates.length,3);

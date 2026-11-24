@@ -576,32 +576,15 @@ experiment. Explicit URL/import startup bypasses the preview as before.
 Ordinary Modern is unchanged pending acceptance. Old keys and backups
 are not modified; the new key is included by raw backup inventory.
 
-### Editable Scene/Compare revision adapter
+### Historical Scene/Compare revision reader
 
-The explicit `openWorkingCopy(indexedDB,{lease,codec,crypto})` adapter
-requires the fixed shared `captureSharedDocumentLifetime()` capability.
-The migration row stays immutable. Each edit is a validated, immutable
-`working-revision:<id>:<revision>` row; its revision token contains a
-monotonic sequence and SHA-256 of canonical experiment JSON. Returning to
-identical historical content cannot reuse an earlier revision token. An
-atomic transaction adds that row and updates `working-head:<id>` only after
-comparing the previously read head and payload. No-op edits are rejected.
-The adapter requires an explicit current read before a write and invalidates
-its baseline on an attempted database write. It acknowledges only after
-transaction completion and exact verified head/payload readback.
-
-The captured page lifetime is invalid after pagehide; a fresh page must
-read durable state again. Domain transactions participate in the existing
-backup writer barrier and are tracked for abort on pagehide. An already
-committed transaction may survive lost acknowledgement; a fresh read and
-reconciliation are mandatory before retry. The explicit `readRevision()`
-reads the exact bound immutable revision even if a later head exists, so
-a failed session CAS does not lose the previously acknowledged document.
-This is not a completed two-database commit protocol: a head ahead of its
-session binding requires explicit reconciliation before editing or activation.
-No revision deletion, garbage collection, live consumer switch, or automatic
-URL rewrite is implemented here. Existing legacy checkpoint, migration
-snapshot, History and independent A/B physics remain untouched.
+`openWorkingCopy(indexedDB,{lease,codec,crypto})` reads the historical
+immutable revision, HEAD and recovery formats. It has no mutation API.
+The exact bound revision remains readable even when HEAD has advanced.
+The reader verifies payload digests, revision identities and recovery
+bases; malformed evidence remains untouched. Migration captures all
+relevant raw rows and compares them in the atomic destination transaction.
+The old revision and HEAD writers have been retired.
 
 ### Atomic experiment session controller
 
@@ -667,67 +650,15 @@ The former document-fork writers are removed. Existing
 read by migration inventory. No old records are deleted. UI-only tab
 claims remain temporarily for the separate UI registry preview.
 
-### Working-copy recovery checkpoint adapter
+### Historical recovery evidence
 
-The existing working-session database has a disjoint
-`working-recovery:<working-copy-id>` record. It contains the validated
-experiment, owning document ID, immutable base revision, unique draft
-revision, format/version and SHA-256 over all recovery fields. It is not a
-document head, history entry, or another tab's migration source. A read
-verifies the base revision and payload digest; invalid or unsupported bytes
-are preserved. No Web Storage payload or new database/schema is needed.
-
-`stageRecovery(experiment, baseRevision, expectedRevision)` snapshots the
-input before awaiting I/O, uses the same owned lease and backup writer
-barrier, and performs CAS against the observed draft and base bytes in one
-readwrite transaction. `null` expects no existing draft. A newer draft
-receives a distinct token even if its payload is identical. The adapter
-acknowledges only after completion and verified readback. It refuses a
-backward base revision. `readRecovery()` restores the draft independently
-of HEAD; it does not activate or promote anything.
-
-`retireRecovery(expectedRevision, acknowledgedRevision)` removes only the
-exact draft whose payload equals the verified immutable acknowledged
-revision (at or after the base). It refuses stale acknowledgements and
-mismatched data. The controller must verify session CAS acknowledgement
-before invoking retirement; a domain adapter cannot prove that separate
-database's transaction. A draft left after interrupted retirement is
-recoverable evidence. Parent forks still copy only acknowledged documents.
-
-The live preview uses this adapter via the recovery-aware controller.
-Memory-only input and interrupted IndexedDB writes are not guaranteed durable.
-
-### Recovery-aware experiment controller (opt-in)
-
-The recovery-aware controller composes the existing experiment controller,
-rather than replacing its domain/session CAS. `markDirty(experiment)`
-captures a snapshot synchronously and starts a serialized, coalescing
-checkpoint writer immediately. The latest queued edit supersedes older
-queued (not in-flight) input. `flushCheckpoint()` confirms the current
-snapshot's durable readback; `save()` waits for it before starting normal
-document/session CAS. The checkpoint writer may stage subsequent edits
-while document CAS is pending, using the then-acknowledged base. A later
-draft remains intact when an older save completes. Retirement is serialized
-against staging and requires the exact saved payload and acknowledged
-session; an edit arriving during retirement is staged afterwards. A write
-failure is visible and the latest in-memory input remains available for
-export, not silently marked saved.
-
-On open, explicit external intent still bypasses private reads. A draft
-matching the freshly verified acknowledged document may be retired without
-a new revision (interruption after session CAS). Otherwise, the controller
-offers the exact draft for explicit loading, rechecking session, HEAD and
-draft before activation. A divergent HEAD is reconciled through the existing
-explicit head offer first, retaining any different draft and then offering
-it separately. A draft may be based on an earlier immutable revision of
-the same document; it is never silently promoted or inherited by a fork.
-Loading a draft updates only the controller's in-memory dirty state; the
-caller activates its returned payload and separately requests save.
-
-ModernApp mounts this API only on the explicit document-session preview
-route. A pending checkpoint is not crash-durable until acknowledgement;
-a failed checkpoint requires reload/export or a future explicit retry UX.
-No Web Storage changes or new URL behavior are introduced.
+The old `working-recovery:<working-copy-id>` record retains its format,
+including document identity, base revision, UUID and SHA-256 digest.
+`readRecovery()` verifies the base and payload without promoting or
+retiring the record. Both historical recovery writers have been removed.
+Live draft staging and promotion use only the atomic checkpoint; historical
+drafts remain explicit migration choices. Memory-only input and interrupted
+transactions are not guaranteed durable.
 
 ## One-user rollback drill
 
