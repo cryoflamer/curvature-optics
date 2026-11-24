@@ -12146,8 +12146,26 @@ class ModernBrowserSmoke(unittest.TestCase):
             return s.status==='failed'||s.controller.row.envelope.workspace==='calibration'&&
                 e?.projectId===id&&!e.pending&&!e.unsaved;
         }""",arg=project['id'],timeout=30000)
+        # A resize of the integrated viewer and a non-mutating pointer
+        # event must not create a durable project revision.
+        initial=self.page.evaluate(read,project['id'])
+        self.assertEqual(initial['project'],project)
+        canvas=self.page.locator('#ModernCalibrationInlineViewer canvas')
+        expect(canvas).to_be_visible()
+        raster=canvas.evaluate('(c)=>[c.width,c.height]')
+        self.page.set_viewport_size({'width':960,'height':760})
+        self.page.wait_for_function("""before=>{
+            const c=document.querySelector('#ModernCalibrationInlineViewer canvas');
+            return c.width!==before[0]||c.height!==before[1];
+        }""",arg=raster,timeout=30000)
+        self.page.locator('[data-calibration-stage="calibration"]').dispatch_event('pointerup')
+        self.page.wait_for_function("""()=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return e.error||!e.pending&&!e.unsaved&&!e.selectionPending;
+        }""",timeout=30000)
+        self.assertEqual(self.page.evaluate(read,project['id']),initial)
         # Exercise the deletion barrier with an explicitly edited and
-        # acknowledged project, rather than a just-mounted imported draft.
+        # acknowledged project; a single stage change is one revision.
         self.page.locator('[data-calibration-stage="calibration"]').click()
         self.page.wait_for_function("""id => {
             const app=CurvatureModernApp,s=app.getExperimentSessionPreview();

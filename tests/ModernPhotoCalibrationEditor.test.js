@@ -217,3 +217,20 @@ test('calibration destination descriptions disclose shared changes and explicit 
   }
   for(const target of [undefined,null,'compare','a','C'])assert.throws(()=>editor.applyDestination(target),/destination/);
 });
+
+test('shared Calibration fingerprints ignore only equivalent version-4 backing raster changes',()=>{
+  const draft={stage:'correspondences',rows:[{pixel:[100,200]}]};
+  const inline={id:'session',photo:'photo',sessions:{initial:{source:'scene',session:{version:4,
+    raster:[800,520],view:{pan:[37.3,-10.1],zoom:2},base:{focal:35}}}}};
+  const resized=structuredClone(inline),view=resized.sessions.initial.session;
+  view.raster=[1000,650];view.view.pan=view.view.pan.map(n=>n*650/520);
+  const raw=JSON.stringify(resized),fingerprint=editor.sharedInputFingerprint(draft,inline);
+  assert.equal(editor.sharedInputFingerprint(draft,resized),fingerprint);
+  assert.equal(JSON.stringify(resized),raw);
+  view.view.pan[0]+=1;
+  assert.notEqual(editor.sharedInputFingerprint(draft,resized),fingerprint);
+  view.view.pan[0]-=1;view.view.zoom=3;
+  assert.notEqual(editor.sharedInputFingerprint(draft,resized),fingerprint);
+  assert.notEqual(editor.sharedInputFingerprint({...draft,rows:[{pixel:[100,201]}]},inline),fingerprint);
+  assert.notEqual(editor.sharedInputFingerprint(draft,{...inline,photo:'different'}),fingerprint);
+});

@@ -23,6 +23,26 @@
       description:effect+' '+shared+' '+recovery+' Canvas Direct Fit RMS is historical, not an Accurate render error.',
       confirmation:'Apply the best fitted camera and captured scene to '+label+'?\n\n'+effect+'\n\n'+shared+'\n\n'+recovery});
   }
+  // Backing-raster dimensions depend on the current viewport and DPR, not
+  // an editor gesture. Compare version-4 viewer pan in raster-relative units.
+  // The original full snapshot (including raster) is still saved on edits.
+  function sharedInputFingerprint(draft,inline){
+    if(!inline?.sessions)return JSON.stringify([draft,inline]);
+    const sessions=Object.fromEntries(Object.entries(inline.sessions).map(([role,entry])=>{
+      const session=entry?.session,raster=session?.raster,pan=session?.view?.pan;
+      if(session?.version!==4||!Array.isArray(raster)||raster.length!==2||
+         !raster.every(n=>Number.isInteger(n)&&n>0)||
+         !Array.isArray(pan)||pan.length!==2||!pan.every(Number.isFinite))
+        return [role,entry];
+      const scale=Math.min(...raster);
+      // Only comparison of presentation pan uses this rounding, to absorb
+      // floating-point noise from resizeRaster's multiplication by a ratio.
+      const normalized=pan.map(n=>Number((n/scale).toPrecision(14)));
+      return [role,{...entry,session:{...session,raster:null,
+        view:{...session.view,pan:normalized}}}];
+    }));
+    return JSON.stringify([draft,{...inline,sessions}]);
+  }
   function fit(width,height,w,h){
     const scale=Math.min(w/width,h/height);
     return {scale,x:(w-width*scale)/2,y:(h-height*scale)/2};
@@ -1589,7 +1609,7 @@
         // yielding to any earlier async write. Queuing mark() itself would
         // allow a late callback to accidentally mark a newly opened project.
         try{
-          const fingerprint=sharedSelection?JSON.stringify([data,inline]):null;
+          const fingerprint=sharedSelection?sharedInputFingerprint(data,inline):null;
           if(sharedSelection&&!changes&&fingerprint===sharedInput){
             if(forSwitch&&(session.state().unsaved||session.state().pending||session.state().error))
               return sharedWrite||Promise.reject(Error('Resolve unsaved Calibration work first'));
@@ -1877,7 +1897,7 @@
         try{
           if(editingStage()&&inlineViewer.isOpen()&&inlineRole&&inlineSource)
             restoreInlineRole(inlineRole,inlineSource);
-          sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);
+          sharedInput=sharedInputFingerprint(captureDraftState(),captureInlineState());
           sharedWrite=null;
         }finally{sharedPresentationHydrating=false;}
         projectStartupStatus={status:'active',projectId:prepared.project.id};
@@ -2359,7 +2379,7 @@
           meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}
           const state=projectSession?.state();
           if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&!state.selectionPending)
-            sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);
+            sharedInput=sharedInputFingerprint(captureDraftState(),captureInlineState());
         }finally{sharedPresentationHydrating=false;}
       }else{meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}}
     }).observe(workspace,{attributes:true,attributeFilter:['hidden']});
@@ -2943,5 +2963,5 @@
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({applyDestination,calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({applyDestination,sharedInputFingerprint,calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
 }));
