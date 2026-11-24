@@ -704,8 +704,7 @@
   var workspaceViewEditGeneration={animation:0,calibration:0};
   var documentSessionRoute=typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'').get('document-session');
-  var sharedSessionPreviewRequested=documentSessionRoute==='shared';
-  var documentSessionPreviewRequested=sharedSessionPreviewRequested||documentSessionRoute==='preview';
+  var documentSessionPreviewRequested=['shared','preview'].includes(documentSessionRoute);
   var experimentPreview={status:'disabled',controller:null,live:false,error:null,recoveryAction:false,
     migration:null};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
@@ -1731,35 +1730,21 @@
   async function openExperimentPreview(selection){
     var api=root.CurvatureModernDocumentSession,store=root.CurvatureModernUiSessionStore;
     if(!api||!store||!sessionAutosave||!root.indexedDB)throw Error('Document session dependencies unavailable');
-    var ui=store.create(root),claim,lease,sessions,coordinate;
-    if(sharedSessionPreviewRequested){
-      sessions=ui.sharedDocumentSessions(api);lease=ui.captureSharedDocumentLifetime();
+    var ui=store.create(root),sessions=ui.sharedDocumentSessions(api),
+      lease=ui.captureSharedDocumentLifetime(),
       coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
-    }else{
-      claim=await ui.claimTab({documentFork:true});lease=ui.captureDocumentLease();
-      sessions=ui.documentSessions(api);
-    }
     var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
     var controller=api.createRecoverableExperimentController({lease:lease,
       sessions:sessions,working:working,isCurrent:current,coordinate:coordinate,
       prepare:async function(){
-        if(sharedSessionPreviewRequested){
-          var storage=preferencesStorage();
-          var inventory=await working.inspectMigration(storage);
-          inventory.metadata=await sessions.inspectLegacyDocuments();
-          experimentPreview.migration=inventory;
-          if(selection)return working.prepareSelectedMigration(selection,{storage:storage,isCurrent:current});
-          if(!inventory.candidates.length)throw Error('No verified migration source. Save an experiment in ordinary Modern first or recover from backup.');
-          throw Error('Shared session setup: choose a verified source after checking your local backup. Old records remain unchanged.'+
-            (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
-        }
-        var source=await sessions.readForkSource();
-        if(source)return working.prepareFork(source,current);
-        if(claim.forkedFrom)throw Error('Missing durable fork origin; legacy fallback refused');
-        return sessionAutosave.prepareWorkingCopy(root.indexedDB,{
-          tabId:claim.tabId,lease:lease,storage:preferencesStorage(),codec:experiments,
-          crypto:root.crypto,explicitIntent:false,isCurrent:current});
+        var storage=preferencesStorage(),inventory=await working.inspectMigration(storage);
+        inventory.metadata=await sessions.inspectLegacyDocuments();
+        experimentPreview.migration=inventory;
+        if(selection)return working.prepareSelectedMigration(selection,{storage:storage,isCurrent:current});
+        if(!inventory.candidates.length)throw Error('No verified migration source. Save an experiment in ordinary Modern first or recover from backup.');
+        throw Error('Shared session setup: choose a verified source after checking your local backup. Old records remain unchanged.'+
+          (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
       }});
     experimentPreview.controller=controller;
     await controller.open();
@@ -1767,7 +1752,7 @@
     return controller.state();
   }
   function selectSharedMigration(selection){
-    if(!sharedSessionPreviewRequested||!experimentPreview.migration||
+    if(!experimentPreview.migration||
        experimentPreview.recoveryAction||experimentPreview.status!=='failed')return;
     if(!root.confirm('Use this exact verified experiment for the shared session? Confirm you have a verified local backup or are using a disposable test profile. Old records will be retained.'))return;
     experimentPreview.recoveryAction=true;previewControls();
@@ -9528,9 +9513,9 @@
     },
     getExperimentSessionPreview:function(){
       return {status:experimentPreview.status,error:experimentPreview.error,
-        ...(sharedSessionPreviewRequested?{route:documentSessionRoute,migration:experimentPreview.migration?
+        route:documentSessionRoute,migration:experimentPreview.migration?
           {candidates:experimentPreview.migration.candidates.map(function(c){return {selection:c.selection,workspace:c.workspace};}),
-            issues:experimentPreview.migration.issues}:null}:{}),
+            issues:experimentPreview.migration.issues}:null,
         controller:experimentPreview.controller&&experimentPreview.controller.state()};
     },
     getWorkspaceUiRegistryPreview:function(){

@@ -218,8 +218,9 @@ validation is not domain verification or authorization to activate.
 These diagnostic APIs do not change startup or bind the shared session;
 the caller must still CAS the verified selection. Separate databases
 are not a single atomic inventory. The opt-in live consumer is `CurvatureModern.html?document-session=shared`.
-Normal Modern and the historical `document-session=preview` remain
-unchanged. First open with no bound experiment shows verified migration
+Normal Modern remains unchanged. The historical
+`document-session=preview` URL is a compatibility alias for the same
+shared controller; it no longer starts a per-tab writer. First open with no bound experiment shows verified migration
 sources in the existing recovery panel; an explicit selection and
 confirmation of backup/test-profile use are required. The confirmation
 is not proof of a verified backup. A successful selection writes the
@@ -651,8 +652,9 @@ or a new active-workspace owner. No URL or default persistence changes.
 
 ### Scene/Compare document session preview
 
-The explicit `?document-session=preview` route uses the owned experiment
-controller for startup, edit checkpoints and F5. Adding this flag to an
+The explicit `?document-session=shared` route (and its old
+`?document-session=preview` alias) uses the shared experiment controller
+for startup, edit checkpoints and F5. Adding this flag to an
 exact locally registered automatic working URL preserves its verified
 resume intent: the flag alone is removed for the identity comparison,
 and the generated-entry marker is pinned in the current history entry
@@ -694,9 +696,11 @@ is not guaranteed recoverable. Native BFCache return requires
 reload, not stale lease reuse. Existing local UI preferences and unrelated
 legacy startup modules remain; this is not yet final ID-only persistence.
 
-### Duplicate experiment document
+### Historical duplicate experiment document
 
-The document preview requests `claimTab({documentFork:true})`. On a live
+No live document route invokes this old writer; the implementation is
+retained temporarily for migration compatibility and low-level tests.
+Historically the document preview requested `claimTab({documentFork:true})`. On a live
 token collision, the new identity is claimed and a `document-fork:<childId>`
 row is added in the existing sessions store, containing the parent's exact
 acknowledged document-session row at that transaction's read. The row is
