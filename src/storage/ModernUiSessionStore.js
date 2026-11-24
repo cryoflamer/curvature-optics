@@ -525,7 +525,31 @@
         check(record.source!==null,'duplicate has no acknowledged parent document');
         return decode(record.source,record.parentTabId);
       }
-      const api=Object.freeze(shared?{read,write}:{read,write,readForkSource});
+      async function inspectLegacyDocuments(){
+        const lease=currentLease();verifyDocumentLease(lease,false);
+        const records=await transact('sessions','readonly',(store,reply)=>{
+          const req=store.getAll();
+          req.onsuccess=()=>reply.result(req.result);
+        },lease);
+        verifyDocumentLease(lease,false);
+        return records.filter(row=>typeof row?.id==='string'&&
+          (row.id.startsWith('document:')||row.id.startsWith('document-fork:'))).map(row=>{
+          try{
+            const fork=row.id.startsWith('document-fork:');
+            const source=fork?row.source:row;
+            check(source&&Object.keys(source).length===4&&source.version===1&&
+              Number.isSafeInteger(source.revision)&&source.revision>=1,
+              'invalid legacy document row');
+            const envelope=contract.normalize(source.envelope);
+            check(envelope.version===contract.VERSION&&source.id==='document:'+envelope.tabId&&
+              (!fork||(row.version===1&&Object.keys(row).length===4&&
+                row.parentTabId===envelope.tabId&&row.id!=='document-fork:'+envelope.tabId)),
+              'legacy document identity mismatch');
+            return {id:row.id,status:'verified-metadata',revision:source.revision,envelope};
+          }catch(error){return {id:row.id,status:'invalid',error:error.message};}
+        });
+      }
+      const api=Object.freeze(shared?{read,write,inspectLegacyDocuments}:{read,write,readForkSource});
       if(shared)sharedDocumentAdapter={contract,api};
       else documentAdapter={contract,api};
       return api;

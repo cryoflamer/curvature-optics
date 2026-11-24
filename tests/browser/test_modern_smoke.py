@@ -10609,6 +10609,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def test_shared_migration_explicit_preview_draft_preserves_sources(self):
+        """Enumerate old records, select exact verified draft, never overwrite source."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const opts={tabId,lease,storage:localStorage,codec:C,crypto,
+                explicitIntent:false,isCurrent:()=>true};
+            const candidate=await S.prepareWorkingCopy(indexedDB,opts);
+            const legacy=ui.documentSessions(D);await legacy.read();
+            await legacy.write(D.select(D.empty(tabId),'compare',candidate.document),0);
+            const old=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const before=await old.read(),e=structuredClone(before.experiment);
+            e.scene.camera.Height+=5;e.compare.A.atmosphere='vacuum';
+            e.compare.B.atmosphere='inverse-spherical';
+            const draft=await old.stageRecovery(e,before.revision,null);
+            const sessions=ui.sharedDocumentSessions(D);
+            const working=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
+            const inventory=await working.inspectMigration(localStorage);
+            const metadata=await sessions.inspectLegacyDocuments();
+            const chosen=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+old.id);
+            const raw=localStorage.getItem(C.STORAGE_KEY);
+            const selectionOpts={storage:localStorage,isCurrent:()=>true};
+            let refused=false;
+            try{await working.prepareSelectedMigration({...chosen.selection,digest:'wrong'},selectionOpts);}
+            catch(error){refused=/evidence changed/.test(error.message);}
+            const selected=await working.prepareSelectedMigration(chosen.selection,selectionOpts);
+            const retry=await working.prepareSelectedMigration(chosen.selection,selectionOpts);
+            await sessions.read();
+            const row=await sessions.write(D.select(D.emptyShared(),'compare',selected.document),0);
+            return {refused,metadata,selected,retry,row,e,
+                value:await working.read(),old:await old.read(),before,
+                oldDraft:await old.readRecovery(),draft,
+                unchanged:raw===localStorage.getItem(C.STORAGE_KEY)};
+        }""")
+        self.assertTrue(result['refused'])
+        self.assertEqual(result['metadata'][0]['status'],'verified-metadata')
+        self.assertEqual(result['selected'],result['retry'])
+        self.assertEqual(result['value']['experiment'],result['e'])
+        self.assertEqual(result['old'],result['before'])
+        self.assertEqual(result['oldDraft'],result['draft'])
+        self.assertTrue(result['unchanged'])
+        self.page.reload(wait_until='load')
+        restored=self.page.evaluate("""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const row=await ui.sharedDocumentSessions(CurvatureModernDocumentSession).read();
+            const working=CurvatureModernSessionAutosave.openWorkingCopy(indexedDB,{
+                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto});
+            return {row,value:await working.readRevision(row.envelope.documents.experiment.revision)};
+        }""")
+        self.assertEqual(restored['row'],result['row'])
+        self.assertEqual(restored['value']['experiment'],result['e'])
+
     def test_shared_experiment_controller_serializes_save_and_later_edits(self):
         """Actual IndexedDB/locks: shared save, later input, stale second page and F5."""
         self.open_modern()

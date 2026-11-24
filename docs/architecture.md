@@ -199,9 +199,26 @@ acknowledged, then is staged against that base. A failure preserves the
 latest input and existing durable evidence. This coordinates cooperating
 shared controllers, not direct diagnostic or legacy writes; the CAS
 guards still apply. Missing Web Locks blocks shared controller creation.
-Explicit recovery selection of divergent old records and metadata
-inventory remain necessary before mounting a shared consumer. This is not yet activation
-of the shared writer in Modern. The old v1 format and `document:<tabId>` keys remain readable and
+The shared working adapter exposes read-only `inspectMigration(storage)`
+and explicit `prepareSelectedMigration(selection,{storage,isCurrent})`.
+Inventory reads the domain rows in one readonly transaction and validates
+legacy current, local fallback, old immutable revisions and old recovery
+drafts (including their base revisions). HEAD is a pointer, not a candidate.
+Invalid records are reported and retained. Each selectable payload has a
+SHA-256 evidence token over its source, key, raw record and any draft base.
+The selected import rechecks those exact bytes in the writer transaction,
+refuses an existing shared HEAD/draft or different initial candidate, and
+verifies readback and selected evidence after commit. Its immutable base
+has explicit source provenance; old rows and Web Storage stay intact.
+Identical retries are allowed. Selecting an old draft explicitly imports
+its payload as a new base, never deletes its original recovery record.
+The shared metadata adapter separately exposes
+`inspectLegacyDocuments()` for old document/fork pointers: structural
+validation is not domain verification or authorization to activate.
+These diagnostic APIs do not change startup or bind the shared session;
+the caller must still CAS the verified selection. Separate databases
+are not a single atomic inventory. The live migration selection UI and
+shared consumer remain unmounted. The old v1 format and `document:<tabId>` keys remain readable and
 unchanged; a separate key avoids collisions with historical tab IDs.
 
 Old per-tab preview rows, fork provenance, pending

@@ -309,3 +309,34 @@ test('shared experiment migration, stale writers and recovery retain the origina
   assert.deepEqual(await adapter.read(db),{version:1,savedAt:100,experiment:base});
   await assert.rejects(adapter.prepareWorkingCopy(db,opts),/explicit migration selection/);
 });
+
+test('explicit shared migration selects a verified old draft and retains every source',async()=>{
+  const f=await recoveryFixture(),crypto=require('node:crypto').webcrypto;
+  const draft=await f.a.stageRecovery({...f.base,height:4},f.initial.revision,null);
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  const codec={STORAGE_KEY:'fixture',validate:v=>v};
+  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+  const shared=adapter.openWorkingCopy(f.db,{lease,codec,crypto});
+  const storage={getItem:key=>key==='fixture'?JSON.stringify({...f.base,height:7}):null};
+  f.db.rows.set('bad-row',{version:99});
+  const inventory=await shared.inspectMigration(storage);
+  assert.equal(inventory.candidates.length,4);
+  assert.equal(inventory.issues[0].key,'bad-row');
+  const choice=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+f.initial.id);
+  assert.deepEqual(choice.experiment,draft.experiment);
+  const opts={storage,isCurrent:()=>true};
+  await assert.rejects(shared.prepareSelectedMigration({...choice.selection,digest:'wrong'},opts),
+    /evidence changed/);
+  const saved=await shared.prepareSelectedMigration(choice.selection,opts);
+  assert.equal(saved.document.id,'shared-experiment');
+  assert.deepEqual((await shared.read()).experiment,draft.experiment);
+  assert.deepEqual(await shared.prepareSelectedMigration(choice.selection,opts),saved);
+  const local=inventory.candidates.find(x=>x.selection.source==='local');
+  await assert.rejects(shared.prepareSelectedMigration(local.selection,opts),/existing shared migration differs/);
+  assert.deepEqual(await f.a.readRecovery(),draft);
+  assert.deepEqual((await f.a.read()).experiment,f.base);
+  assert.deepEqual(f.db.rows.get('bad-row'),{version:99});
+  await shared.read();
+  await shared.write({...f.base,height:8},saved.document.revision);
+  await assert.rejects(shared.prepareSelectedMigration(choice.selection,opts),/shared HEAD already exists/);
+});
