@@ -515,3 +515,20 @@ test('atomic migration compares the old raw evidence inside the destination tran
   assert.equal(f.db.rows.has('shared-checkpoint'),false);
   assert.equal((await f.working.read()).experiment.height,9);
 });
+
+test('atomic migration rejects a stale generation after asynchronous hashing',async()=>{
+  const f=await legacyAtomicFixture();
+  const view=await f.open().inspectLegacy(f.opts);
+  let current=true;
+  const crypto={subtle:{async digest(name,bytes){
+    const result=await f.crypto.subtle.digest(name,bytes);
+    if(String.fromCharCode(...bytes).includes('"format":"curvature-modern-shared-checkpoint"'))
+      current=false;
+    return result;
+  }}};
+  const a=f.adapter.openSharedCheckpoint(f.db,{lease:f.lease,codec:f.codec,crypto,contract:f.contract});
+  await assert.rejects(a.migrateLegacy({digest:view.digest,revision:view.bound.revision,draft:'none'},
+    {...f.opts,isCurrent:()=>current}),/stale migration generation/);
+  assert.equal(current,false);
+  assert.equal(f.db.rows.has('shared-checkpoint'),false);
+});

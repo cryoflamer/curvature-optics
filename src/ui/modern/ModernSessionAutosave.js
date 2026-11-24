@@ -253,7 +253,7 @@
       }
       // The entire row, including the last observed draft, is the CAS
       // baseline. Revision tokens are never reused, even on reverted edits.
-      async function mutate(expectedRevision,build,evidence=[]){
+      async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true)){
         ensure(!busy,'shared checkpoint operation pending');
         lease.check(true);
         ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
@@ -266,14 +266,14 @@
           const payload=build(before.present?before.row:null,revision);
           const data=clone({format,version:1,revision,...payload});
           const row={...data,digest:await digest(canonical(data),crypto)};
-          await decode({present:true,row});lease.check(true);
+          await decode({present:true,row});guard();
           let failure;
           try{
             await transaction(indexedDB,store=>{
               const req=store.get(key);
               req.onsuccess=()=>{
                 try{
-                  lease.check(true);
+                  guard();
                   const current=req.result===undefined?{present:false}:{present:true,row:req.result};
                   ensure(canonical(current)===canonical(before),'shared checkpoint CAS conflict; evidence retained');
                   function verifySource(index){
@@ -284,7 +284,7 @@
                     const item=evidence[index],source=store.get(item.key);
                     source.onsuccess=()=>{
                       try{
-                        lease.check(true);
+                        guard();
                         const value=source.result===undefined?{present:false}:{present:true,row:source.result};
                         ensure(canonical(value)===canonical(item.value),
                           'legacy checkpoint evidence changed during migration');
@@ -298,7 +298,7 @@
               return null;
             },lease);
           }catch(error){throw failure||error;}
-          const saved=await fetch(),value=await decode(saved);lease.check(true);
+          const saved=await fetch(),value=await decode(saved);guard();
           ensure(saved.present&&canonical(saved.row)===canonical(row),'shared checkpoint readback conflict');
           observed=saved;return value;
         }finally{busy=false;}
@@ -380,7 +380,7 @@
             const experiment=normalizeExperiment(value.experiment);
             return {envelope:envelopeFor(plan.frame,experiment,revision),experiment,
               draft:selection.draft==='keep'?normalizeExperiment(view.draft.experiment):null};
-          },plan.evidence);
+          },plan.evidence,guard);
         });
       }
       return Object.freeze({read,initialize,stage,promote,inspectLegacy,migrateLegacy});
