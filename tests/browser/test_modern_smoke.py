@@ -11964,12 +11964,12 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_shared_calibration_mounted_project_edit_navigation_and_f5(self):
         """Explicit project selection and live edits use the shared pointer, not tab markers."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
-        self.page.add_init_script("""() => {
-            if(!localStorage.getItem('curvature-calibration-inline-v2'))
-                localStorage.setItem('curvature-calibration-inline-v2','retained legacy inline evidence');
-            if(!sessionStorage.getItem('curvature-calibration-clean-reload-project-v1'))
-                sessionStorage.setItem('curvature-calibration-clean-reload-project-v1','retained legacy tab evidence');
-        }""")
+        self.page.add_init_script("""(() => {
+            if(sessionStorage.getItem('test-calibration-legacy-seeded'))return;
+            localStorage.setItem('curvature-calibration-inline-v2','retained legacy inline evidence');
+            sessionStorage.setItem('curvature-calibration-clean-reload-project-v1','retained legacy tab evidence');
+            sessionStorage.setItem('test-calibration-legacy-seeded','yes');
+        })()""")
         self.page.goto(url,wait_until='load')
         ready="""() => {
             const app=window.CurvatureModernApp,s=app?.getExperimentSessionPreview();
