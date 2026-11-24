@@ -18,7 +18,7 @@
   const SUFFIX=/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/;
   function check(ok,what){if(!ok)throw Error('Workspace State Bridge: '+what);}
   function create({registryApi,sessionStoreApi,managerApi,env,
-    suffixes,legacyValue,legacyTab,legacyMode,legacyView}={}){
+    suffixes,legacyValue,legacyTab,legacyMode,legacyView,sharedPresentation=false}={}){
     check(registryApi&&typeof registryApi.create==='function'&&
       sessionStoreApi&&typeof sessionStoreApi.create==='function'&&
       managerApi&&typeof managerApi.create==='function'&&
@@ -26,6 +26,8 @@
     check(Array.isArray(suffixes)&&suffixes.length&&new Set(suffixes).size===suffixes.length&&
       suffixes.every(x=>typeof x==='string'&&SUFFIX.test(x)),
       'invalid section declarations');
+    check(typeof sharedPresentation==='boolean','invalid presentation ownership');
+    const scope=sharedPresentation?'workspace':'per-tab-and-workspace';
     const supported=new Set(suffixes),store=sessionStoreApi.create(env);
     const managers=new Map();
     for(const mode of MODES){
@@ -33,16 +35,16 @@
       for(const suffix of suffixes){
         const initial=legacyValue(mode,suffix);
         check(typeof initial==='boolean','invalid legacy section default: '+mode+'.'+suffix);
-        manager.register({key:KEY_PREFIX+suffix,scope:'per-tab-and-workspace',
+        manager.register({key:KEY_PREFIX+suffix,scope,
           version:1,defaultValue:initial,validate:v=>typeof v==='boolean'});
       }
       // Tab selection belongs to this same workspace snapshot, not to a new
       // DOM listener or a second storage controller.
       const tab=legacyTab?legacyTab(mode):'Camera';
       check(TABS.includes(tab),'invalid legacy settings tab: '+mode);
-      manager.register({key:TAB_KEY,scope:'per-tab-and-workspace',
+      manager.register({key:TAB_KEY,scope,
         version:1,defaultValue:tab,validate:v=>TABS.includes(v)});
-      if(mode==='scene'){
+      if(mode==='scene'&&!sharedPresentation){
         const active=legacyMode?legacyMode():null;
         check(active===null||WORKSPACES.includes(active),'invalid legacy workspace');
         manager.register({key:ACTIVE_KEY,scope:'per-tab',version:1,
@@ -55,7 +57,7 @@
       const manager=managerApi.create({registry:registryApi.create(),store,workspace});
       const fallback=legacyView?legacyView(workspace):VIEWS[workspace][0];
       check(VIEWS[workspace].includes(fallback),'invalid legacy '+workspace+' view');
-      manager.register({key:VIEW_KEY,scope:'per-tab-and-workspace',version:1,
+      manager.register({key:VIEW_KEY,scope,version:1,
         defaultValue:fallback,validate:value=>VIEWS[workspace].includes(value)});
       managers.set(workspace,manager);
     }
@@ -101,8 +103,9 @@
         VIEWS[workspace].includes(value),'invalid workspace view');
       return managers.get(workspace).set(VIEW_KEY,value);
     }
-    function getMode(){check(ready,'restore first');return managers.get('scene').get(ACTIVE_KEY);}
+    function getMode(){check(!sharedPresentation,'document session owns workspace selection');check(ready,'restore first');return managers.get('scene').get(ACTIVE_KEY);}
     function setMode(value){
+      check(!sharedPresentation,'document session owns workspace selection');
       check(ready&&(value===null||WORKSPACES.includes(value)),'invalid workspace');
       return managers.get('scene').set(ACTIVE_KEY,value);
     }
@@ -125,13 +128,14 @@
       }
       // Scopes are independently acknowledged, not falsely atomic.
       await Promise.all(MODES.map(mode=>managers.get(mode).setMany(patches.get(mode))));
-      await managers.get('scene').set(ACTIVE_KEY,null);
+      if(!sharedPresentation)await managers.get('scene').set(ACTIVE_KEY,null);
       await Promise.all(Object.keys(VIEWS).map(workspace=>
         managers.get(workspace).set(VIEW_KEY,VIEWS[workspace][0])));
     }
     async function flush(){await Promise.all([...managers.values()].map(m=>m.flush()));}
     async function resumeAfterPageShow(verifyNavigation){
       check(ready,'restore first');
+      if(sharedPresentation)throw Error('Shared UI page suspended; reload before writing');
       if(typeof store.reclaimTab!=='function')return false;
       await store.reclaimTab();
       for(const manager of managers.values())
@@ -155,7 +159,7 @@
     }
     return Object.freeze({restore,resumeAfterPageShow,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
       supports:suffix=>supported.has(suffix),isReady:()=>ready,
-      tabId:()=>store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});
+      tabId:()=>sharedPresentation?null:store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});
   }
   return Object.freeze({KEY_PREFIX,MODES,create});
 }));

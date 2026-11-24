@@ -6,7 +6,8 @@ const managerApi=require('../src/storage/ModernUiSessionManager.js');
 const bridgeApi=require('../src/storage/ModernWorkspaceStateBridge.js');
 function memoryStore(id,rows=new Map()){
   function address(scope,context){
-    return scope==='global'?'global':scope+':'+context.tabId+':'+(context.workspace||'');
+    return scope==='global'?'global':scope==='workspace'?'workspace:'+context.workspace:
+      scope+':'+context.tabId+':'+(context.workspace||'');
   }
   return {tabId(){return id;},rows,
     async read(scope,context){return rows.get(address(scope,context))||{revision:0,envelope:null};},
@@ -293,4 +294,43 @@ test('bridge resumes only after all workspace scopes validate their saved revisi
   rows.set(key,{revision:prior.revision+1,envelope:prior.envelope});
   await assert.rejects(bridge.resumeAfterPageShow(),/BFCache revision conflict/);
   assert.equal(completed,false,'a stale workspace must never re-enable the lease');
+});
+
+test('shared presentation has independent workspace rows and no tab or active workspace owner',async()=>{
+  const rows=new Map();
+  function open(){
+    const store=memoryStore('unused',rows);
+    store.tabId=()=>{throw Error('tab identity accessed');};
+    store.claimTab=()=>{throw Error('tab lease accessed');};
+    return bridgeApi.create({registryApi,managerApi,env:{},
+      sessionStoreApi:{create:()=>store},sharedPresentation:true,
+      suffixes:['camera.navigation'],legacyValue:()=>false,
+      legacyMode:()=>{throw Error('legacy active workspace accessed');}});
+  }
+  const first=open(),stale=open();
+  await first.restore();await stale.restore();
+  assert.equal(rows.size,0);
+  assert.equal(first.tabId(),null);
+  assert.throws(()=>first.getMode(),/document session owns workspace/);
+  assert.throws(()=>first.setMode('compare'),/document session owns workspace/);
+  await first.setTab('scene','Objects');
+  await first.set('scene','camera.navigation',true);
+  await first.setTab('compare','Atmosphere');
+  await first.setView('animation','preview');
+  const reopened=open();await reopened.restore();
+  assert.equal(reopened.getTab('scene'),'Objects');
+  assert.equal(reopened.getTab('compare'),'Atmosphere');
+  assert.equal(reopened.get('scene','camera.navigation'),true);
+  assert.equal(reopened.get('compare','camera.navigation'),false);
+  assert.equal(reopened.getView('animation'),'preview');
+  assert.deepEqual([...rows.keys()].sort(),['workspace:animation','workspace:compare','workspace:scene']);
+  const before=structuredClone(rows.get('workspace:scene'));
+  await assert.rejects(stale.setTab('scene','Surface'),/revision conflict/);
+  assert.deepEqual(rows.get('workspace:scene'),before);
+  await assert.rejects(stale.retryFailed(),/revision conflict/);
+  await assert.rejects(reopened.resumeAfterPageShow(),/reload before writing/);
+  await reopened.reset(()=>false);
+  assert.equal(reopened.getTab('scene'),'Camera');
+  assert.equal(reopened.getView('animation'),'library');
+  assert.equal([...rows.values()].some(row=>'workspace.active' in row.envelope.values),false);
 });
