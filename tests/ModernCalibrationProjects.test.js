@@ -1391,3 +1391,18 @@ test('shared receipt startup inventory does not open or upgrade a missing or leg
   await assert.rejects(store.readExistingSharedSelectionReceipt(db,lease),/Unsupported Calibration database version/);
   assert.equal(opens,0);
 });
+
+test('shared Calibration removal refuses unresolved receipts and stale revisions',async()=>{
+  const db=memoryIndexedDB(),lease=sharedCalibrationLease(),start=project(A);
+  await store.create(db,start);
+  const base={revision:9,digest:'sha256:'+'a'.repeat(64)};
+  const saved=await store.saveOrForkWithSelectionReceipt(db,A,1,{title:'Renamed'},B,1200,base,lease);
+  await assert.rejects(store.removeShared(db,A,2,lease),/receipt unresolved/);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  await store.retireSharedSelectionReceipt(db,saved.selectionReceipt,lease);
+  await assert.rejects(store.removeShared(db,A,1,lease),/changed in another tab/);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  await store.removeShared(db,A,2,lease);
+  assert.equal(await store.get(db,A),null);
+  assert.equal((await store.list(db)).length,0);
+});

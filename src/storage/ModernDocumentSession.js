@@ -299,6 +299,31 @@
       }
       return selectWorkspace(kind,after);
     }
+    // Must be called inside the same mounted auxiliary-operation lock as
+    // selection and domain saves. Clear the durable pointer before allowing
+    // destructive domain CRUD, never the other way around.
+    async function detachDocument(kind,reference){
+      guard(true);
+      check(['calibration','animation'].includes(kind),'auxiliary document kind required');
+      const ref=binding(reference);
+      check(ref&&ref.recovery===null,'verified document reference required');
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&!selectionAttempt&&!recoveryReceipt&&
+        row.draft===null&&['clean','committed'].includes(status),
+        'resolve pending session work before removal');
+      busy=true;selecting=true;
+      try{
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'auxiliary removal CAS conflict; reload required');
+        const selected=binding(row.envelope.documents[kind]);
+        if(!selected||selected.id!==ref.id)return {detached:false};
+        check(same(selected,ref),'selected document revision changed; removal rejected');
+        check(typeof checkpoint.detachDocument==='function','auxiliary removal adapter required');
+        row=await checkpoint.detachDocument(kind,ref,row.revision,{isCurrent});
+        guard(true);status='committed';
+        return {detached:true};
+      }catch(e){fail(e);throw e;}
+      finally{busy=false;selecting=false;}
+    }
     // A new controller can reconcile a persisted domain receipt, but only
     // on explicit request. No inference from the newest domain revision.
     async function recoverDocumentSelection(selection){
@@ -337,7 +362,7 @@
       return state();
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
-      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,recoverDocumentSelection,state});
+      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,detachDocument,recoverDocumentSelection,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,

@@ -301,9 +301,19 @@
     return update(db,id,expected,{title},now);
   }
   function remove(db,id,expected){
+    return removeProject(db,id,expected,null);
+  }
+  // The mounted coordinator must first detach/verify the shared pointer
+  // under its operation lock. Check receipt absence again atomically with
+  // the destructive domain CAS, and never delete a referenced asset.
+  function removeShared(db,id,expected,lease){
+    requireSharedLease(lease);
+    return removeProject(db,id,expected,lease);
+  }
+  function removeProject(db,id,expected,lease){
     model.id(id);
     if(!Number.isSafeInteger(expected)||expected<1)throw RangeError('Invalid expected project revision');
-    return stores(db,'readwrite',(records,summaries,read,finish)=>{
+    const work=(records,summaries,read,finish)=>{
       read(records.get(id),raw=>{
         if(raw===undefined)throw Error('Calibration project missing; delete rejected');
         const current=model.normalize(raw);
@@ -315,7 +325,14 @@
           records.delete(id);summaries.delete(id);finish(current);
         });
       });
-    });
+    };
+    if(!lease)return stores(db,'readwrite',work);
+    return openTransaction(db,[PROJECTS,SUMMARIES,CONTROL],'readwrite',(tx,read,finish)=>{
+      read(tx.objectStore(CONTROL).get(SHARED_SELECTION_KEY),receipt=>{
+        if(receipt!==undefined)throw Error('Shared Calibration receipt unresolved; delete rejected');
+        work(tx.objectStore(PROJECTS),tx.objectStore(SUMMARIES),read,finish);
+      });
+    },lease);
   }
   function legacy(db){
     return openTransaction(db,[LEGACY],'readonly',(tx,read,finish)=>{
@@ -390,7 +407,7 @@
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
-    create,get,list,update,saveOrFork,rename,remove,legacy,migrationMarker,adoptLegacy,
+    create,get,list,update,saveOrFork,rename,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
     readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
 }));

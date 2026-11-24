@@ -12072,6 +12072,53 @@ class ModernBrowserSmoke(unittest.TestCase):
             CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope.workspace==='calibration'""",timeout=30000)
         self.assertEqual(self.page.evaluate(read,project['id'])['project'],saved['project'])
 
+        # Delete a different project without changing the acknowledged pointer.
+        spare=self.page.evaluate("""data => CurvatureModernCalibrationProjectActions.importAsNew(window,data)""",data)
+        panel=self.page.locator('#ModernCalibrationProjectsPanel')
+        if not panel.is_visible():
+            self.page.locator('#ModernCalibrationProjectsToggle').click()
+        self.page.locator('#ModernCalibrationProjectsRefresh').click()
+        delete_spare=self.page.locator('[data-calibration-project-delete="'+spare['id']+'"]')
+        expect(delete_spare).to_be_enabled()
+        selected=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        delete_spare.click()
+        expect(delete_spare).to_have_count(0,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),selected)
+        self.assertIsNone(self.page.evaluate("""id=>CurvatureModernCalibrationProjectStore.get(indexedDB,id)""",spare['id']))
+
+        # A stale tab may still display this project, but cannot re-create
+        # its shared pointer or write a new receipt after acknowledged deletion.
+        stale=self.context.new_page()
+        try:
+            stale.goto(url,wait_until='load')
+            stale.wait_for_function(ready,timeout=30000)
+            self.assertEqual(stale.evaluate('CurvatureModernApp.getWorkspaceMode()'),'calibration')
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            with self.page.expect_navigation(wait_until='load',timeout=30000):
+                self.page.locator('[data-calibration-project-delete="'+project['id']+'"]').click()
+            self.page.wait_for_function(ready,timeout=30000)
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'scene')
+            removed=self.page.evaluate(read,project['id'])
+            self.assertIsNone(removed['project'])
+            self.assertIsNone(removed['row']['envelope']['documents']['calibration'])
+            self.assertEqual(removed['row']['revision'],selected['revision']+1)
+            self.assertEqual(removed['row']['envelope']['documents']['experiment'],selected['envelope']['documents']['experiment'])
+            self.assertIsNone(removed['journal'])
+            self.assertEqual(removed['inline'],'retained legacy inline evidence')
+            self.assertEqual(removed['tab'],'retained legacy tab evidence')
+            # The stale editor's next save must fail before a domain transaction.
+            stale.locator('[data-calibration-stage="correspondences"]').click()
+            stale.wait_for_function("""() => !!CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().error""",timeout=30000)
+            evidence=stale.evaluate("""async id=>({project:await CurvatureModernCalibrationProjectStore.get(indexedDB,id),
+                receipt:await CurvatureModernCalibrationProjectStore.readSharedSelectionReceipt(indexedDB),
+                state:CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus()})""",project['id'])
+            self.assertIsNone(evidence['project'])
+            self.assertIsNone(evidence['receipt'])
+            self.assertTrue(evidence['state']['unsaved'])
+        finally:
+            stale.close()
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()

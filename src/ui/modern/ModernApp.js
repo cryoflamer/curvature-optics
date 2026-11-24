@@ -1969,13 +1969,38 @@
     experimentPreview.ui=ui;
     experimentPreview.controller=controller;
     if(calibrationEnabled)experimentPreview.calibrationContext={
-      lease:lease,
+      lease:lease,coordinate:coordinate,
       captureBase:function(ref){return controller.captureSelectionBase('calibration',ref);},
       acknowledge:function(receipt){return controller.acknowledgeDocumentRevision('calibration',receipt);},
-      verify:function(ref){return controller.captureSelectionBase('calibration',ref);},
+      verify:function(ref){return coordinate(()=>controller.captureSelectionBase('calibration',ref));},
+      leave:function(mode){return coordinate(()=>controller.selectWorkspace(mode));},
+      recover:function(receipt){return coordinate(()=>controller.recoverDocumentSelection(receipt));},
+      remove:async function(ref){
+        var detached=false,storage=root.CurvatureModernCalibrationProjectStore;
+        try{
+          return await coordinate(async function(){
+            lease.check(true);
+            if(await storage.readSharedSelectionReceipt(root.indexedDB,lease))
+              throw Error('Resolve the interrupted Calibration save before deleting a project');
+            var saved=await storage.get(root.indexedDB,ref.id);
+            if(!saved||saved.revision!==Number(ref.revision.slice(4)))
+              throw Error('Calibration Project changed; delete rejected');
+            var result=await controller.detachDocument('calibration',ref);
+            detached=result.detached;experimentPreview.status=controller.state().status;
+            lease.check(true);
+            await storage.removeShared(root.indexedDB,saved.id,saved.revision,lease);
+            lease.check(true);
+            return result;
+          });
+        }catch(error){
+          if(experimentPreview.status!=='suspended'&&(detached||controller.state().status==='failed'))
+            previewFailure(Error('Calibration deletion was not acknowledged; reload and inspect the project library: '+error.message));
+          throw error;
+        }
+      },
       select:async function(ref){
         try{
-          var result=await controller.selectWorkspace('calibration',ref);
+          var result=await coordinate(()=>controller.selectWorkspace('calibration',ref));
           experimentPreview.status=result.status;return result;
         }catch(error){
           if(controller.state().status==='failed'&&experimentPreview.status!=='suspended')previewFailure(error);
@@ -2031,7 +2056,7 @@
       if(receipt&&['recovering-selection','failed'].includes(experimentPreview.status)){
         if(experimentPreview.recoveryAction)return;
         experimentPreview.recoveryAction=true;previewControls();
-        c.recoverDocumentSelection(receipt).then(function(){
+        experimentPreview.calibrationContext.recover(receipt).then(function(){
           if(experimentPreview.status!=='suspended')root.location.reload();
         }).catch(function(error){
           experimentPreview.recoveryAction=false;
@@ -8899,7 +8924,7 @@
       }else{
         await editor.prepareSharedLeave();
         if(c.state().row.envelope.workspace==='calibration'){
-          var view=await c.selectWorkspace(state.mode);
+          var view=await experimentPreview.calibrationContext.leave(state.mode);
           experimentPreview.status=view.status;
         }
       }

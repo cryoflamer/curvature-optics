@@ -70,7 +70,8 @@
       throw TypeError('Invalid Calibration Project persistence callback');
     if(sharedSelection&&(!sharedSelection.lease||sharedSelection.lease.sessionId!=='shared'||
        typeof sharedSelection.lease.check!=='function'||typeof sharedSelection.lease.track!=='function'||
-       typeof sharedSelection.acknowledge!=='function'))
+       typeof sharedSelection.acknowledge!=='function'||
+       sharedSelection.coordinate!==undefined&&typeof sharedSelection.coordinate!=='function'))
       throw TypeError('Invalid shared Calibration selection coordinator');
     const durableSelection=sharedSelection?.captureBase!==undefined;
     if(durableSelection&&(typeof sharedSelection.captureBase!=='function'||
@@ -157,7 +158,7 @@
       const running=owner.tasks.get(captured.sequence);
       if(running)return running;
       owner.pending++;notify();
-      const work=tail.then(async()=>{
+      const run=async()=>{
         if(owner.generation!==captured.generation||owner!==active)
           throw Error('Stale calibration generation; save was not redirected');
         checkLifetime();
@@ -203,7 +204,11 @@
         }
         return {status:result.status,project:durable,
           current:owner===active&&owner.generation===captured.generation};
-      }).catch(error=>{
+      };
+      // Serialize capture of the shared base, domain transaction, pointer
+      // acknowledgement and receipt retirement against selection/deletion.
+      const work=tail.then(()=>sharedSelection?.coordinate?
+        sharedSelection.coordinate(run):run()).catch(error=>{
         if(owner===active&&owner.generation===captured.generation){
           owner.error=String(error.message||error);
           // Keep latest raw draft for explicit retry/export, never put it in localStorage.

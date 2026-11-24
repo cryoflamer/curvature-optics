@@ -364,6 +364,22 @@
             experiment:before.experiment,draft:null};
         },[],guard,false,verify);
       }
+      function detachDocument(kind,reference,expectedRevision,{isCurrent}={}){
+        ensure(typeof isCurrent==='function','removal generation guard required');
+        const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale removal generation');};
+        return mutate(expectedRevision,before=>{
+          guard();
+          ensure(before&&before.draft===null&&['calibration','animation'].includes(kind)&&
+            (['scene','compare'].includes(before.envelope.workspace)||before.envelope.workspace===kind),
+            'invalid auxiliary removal workspace');
+          ensure(reference&&reference.recovery===null&&
+            canonical(before.envelope.documents[kind])===canonical(reference),
+            'auxiliary removal reference changed');
+          const cleared=contract.select(before.envelope,kind,null);
+          const envelope=contract.select(cleared,before.experiment.display.mode);
+          return {envelope,experiment:before.experiment,draft:null};
+        },[],guard);
+      }
       // Prove the exact pre-write checkpoint even after a process restart.
       // The selection transition changes only revision and envelope; reversing
       // it must reproduce the recorded SHA-256, including all other slots and
@@ -531,7 +547,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){

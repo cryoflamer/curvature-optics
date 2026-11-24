@@ -1158,9 +1158,11 @@
       deletion.className='modern-animation-library-delete modern-card-delete';
       deletion.dataset.calibrationProjectDelete=entry.id;
       deletion.disabled=projectListBusy;
-      if(sharedSelection){deletion.disabled=true;deletion.title='Delete is not yet enabled in shared-session preview';}
+      if(sharedSelection&&(active&&(unsaved||state?.pending||state?.error)||!sharedSelection.remove)){
+        deletion.disabled=true;deletion.title='Resolve pending work before deleting this project';
+      }
       deletion.setAttribute('aria-label','Delete calibration '+entry.title);
-      if(!sharedSelection)deletion.title=active?'Delete the currently opened calibration project':
+      if(!sharedSelection||!deletion.disabled)deletion.title=active?'Delete the currently opened calibration project':
         'Delete calibration '+entry.title;
       deletion.onclick=event=>{event.stopPropagation();void deleteFromProjects(entry);};
       ['pointerdown','mousedown','dblclick','dragstart'].forEach(type=>
@@ -1422,7 +1424,7 @@
       finally{projectListBusy=false;renderProjects();}
     }
     async function deleteFromProjects(entry){
-      if(sharedSelection||projectListBusy)return;
+      if(projectListBusy||sharedSelection&&!sharedSelection.remove)return;
       const active=projectSession?.project()?.id===entry.id;
       if(active&&(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
           photoGestures.active||resultGestures.active)){
@@ -1454,6 +1456,18 @@
             throw Error('Active calibration has unsaved work');
           revision=current.revision;
         }
+        if(sharedSelection){
+          const result=await sharedSelection.remove({id:entry.id,revision:'rev:'+revision,recovery:null});
+          if(result.detached||active){
+            // Do not auto-select any other project or write a tab handoff.
+            // The durable workspace is already the physical experiment.
+            projectsMessage('Project deleted. Restoring the acknowledged physical workspace…');
+            env.location.reload();return;
+          }
+          projectListBusy=false;await refreshProjectList();
+          projectsMessage('Deleted project "'+entry.title+'". Photos and archived results were retained.');
+          return;
+        }
         await storage.remove(env.indexedDB,entry.id,revision);
         if(active){
           // Only this explicit Delete may reopen the next remaining project.
@@ -1476,7 +1490,7 @@
       }catch(error){projectActionMessage(error,'Delete failed');}
       finally{
         projectListBusy=false;
-        if(active){projectSwitchBusy=false;workspace.inert=previousInert;}
+        if(active){projectSwitchBusy=false;if(!sharedSelection||sharedSelection.usable())workspace.inert=previousInert;}
         renderProjects();
       }
     }
