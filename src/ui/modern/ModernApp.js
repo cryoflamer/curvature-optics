@@ -742,8 +742,8 @@
       storage.setItem(STUDIO_LIBRARY_FILTER_KEY,JSON.stringify(studioLibraryFilters));}
     catch(error){/* Private mode or disabled storage: in-memory filters still work. */}
   }
-  if(applicationPreferences){
-    var remembered=applicationPreferences.read(preferencesStorage());
+  var sharedPreferenceOwner=null,sharedPreferencesRestored=false;
+  function applyGlobalPreferences(remembered){
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
     studioPlaybackDetail=remembered.studioPlaybackDetail;
@@ -767,13 +767,43 @@
     }
     studioPickerQueryDraft=studioPickerFilters.query;
     historyStoryboardQueue=remembered.historyStoryboardQueue.slice();
+    navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
+  }
+  if(applicationPreferences){
+    var remembered=applicationPreferences.read(preferencesStorage());
+    applyGlobalPreferences(remembered);
     displayPanels=Object.assign({},remembered.displayPanels);
     legacyDisplayPanels=Object.assign({},displayPanels);
     workspaceState={mode:remembered.workspace.mode,sceneTab:remembered.workspace.sceneTab,
       compareTab:remembered.workspace.compareTab,compareModel:remembered.workspace.compareModel,
       calibrationView:remembered.workspace.calibrationView,
       sections:Object.assign({},remembered.workspace.sections)};
-    navigationPrefs=navigation?navigation.settings(remembered.navigation):remembered.navigation;
+  }
+  async function restoreSharedPreferences(){
+    sharedPreferenceOwner=applicationPreferences.createShared({
+      registryApi:root.CurvatureModernStateRegistry,managerApi:root.CurvatureModernUiSessionManager,
+      store:experimentPreview.ui,storage:preferencesStorage()});
+    var values=await sharedPreferenceOwner.restore();
+    if(experimentPreview.status==='suspended')return;
+    applyGlobalPreferences(values);
+    // All controls are already bound. Hydrate values, not synthetic edits.
+    [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
+      ['ModernAnimationPlaybackDetail',studioPlaybackDetail],['ModernAnimationPlaybackFps',studioPlaybackFps],
+      ['ModernGeometryBackend',state.geometryBackend],['ModernCameraMoveSpeed',navigationPrefs.speed],
+      ['ModernCameraTurnRate',navigationPrefs.turnRate],['ModernCameraWheelStep',navigationPrefs.wheelStep]
+    ].forEach(function(entry){var node=geometryUi(entry[0]);if(node)node.value=String(entry[1]);});
+    syncCameraHudToggle();syncCameraHudAppearance();syncTargetIndicatorControls();syncStudioTargetIndicator();
+    updateNavigationPanelSummary();updateOpticalQualityStatus();updatePreviewDetailStatus();
+    syncHistoryFilterControls();
+    var size=newUiEl('ModernHistorySize');if(size)size.value=historyGallerySize;
+    if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
+    // History is not enabled in this preview; retain its saved preference
+    // without showing an inaccessible modal over the physical editor.
+    ['ModernHistoryPanel','ModernHistoryBackdrop'].forEach(function(id){
+      var node=newUiEl(id);if(node)node.hidden=true;
+    });
+    var toggle=newUiEl('ModernHistoryToggle');if(toggle)toggle.setAttribute('aria-expanded','false');
+    sharedPreferencesRestored=true;
   }
   function preferencesStatus(message,error){
     if(error&&message.indexOf('UI Registry')===0)
@@ -788,24 +818,26 @@
   function saveApplicationPreferences(){
     if(!applicationPreferences)return;
     try{
-      var storage=preferencesStorage();
-      // The shared registry owns layout. Unrelated legacy preference writes
-      // must not backfill registry-owned values into the rollback source.
-      var legacyLayout=sharedPresentationActive()?applicationPreferences.read(storage):null;
-      if(!applicationPreferences.write(storage,{
+      var snapshot={
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         studioPlaybackDetail:studioPlaybackDetail,studioPlaybackFps:studioPlaybackFps,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
         cameraHudAppearance:cameraHudAppearance,
         targetIndicatorVisible:targetIndicatorVisible,studioTargetVisible:studioTargetVisible,
         targetIndicatorSelection:targetIndicatorSelection,
-        navigation:navigationPrefs,displayPanels:legacyLayout?legacyLayout.displayPanels:displayPanels,
+        navigation:navigationPrefs,displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
         studioPickerFilters:studioPickerFilters,
         historyStoryboardQueue:historyStoryboardQueue,
-        workspace:legacyLayout?legacyLayout.workspace:workspaceState
-      }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
+        workspace:workspaceState
+      };
+      if(sharedPresentationActive()){
+        if(sharedPreferencesRestored&&persistence.ready)
+          observeUiRegistrySave(sharedPreferenceOwner.save(snapshot),'UI Registry global preference save failed: ');
+        return; // Never mirror new values into the legacy migration source.
+      }
+      if(!applicationPreferences.write(preferencesStorage(),snapshot))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
   }
@@ -998,13 +1030,30 @@
     return legacyWorkspaceSectionValue(scope,suffix);
   }
   var uiRegistryRecoveryBusy=false;
+  function registryErrors(trial){
+    var errors=trial.bridge?trial.bridge.lastErrors():[];
+    if(sharedPreferenceOwner)errors=errors.concat(sharedPreferenceOwner.lastErrors().map(function(item){
+      return {mode:'global',scope:item.scope,message:item.message};
+    }));
+    return errors;
+  }
+  function registryUnacknowledged(){
+    var trial=workspaceUiRegistryPreview;
+    return !!(sharedLayoutResetPending||(trial.bridge&&trial.bridge.hasUnacknowledged())||
+      (sharedPreferenceOwner&&sharedPreferenceOwner.hasUnacknowledged()));
+  }
+  async function retryRegistry(trial){
+    var result=await trial.bridge.retryFailed();
+    if(sharedPreferencesRestored)await sharedPreferenceOwner.retryFailed();
+    return result;
+  }
   function refreshUiRegistryRecoveryNotice(message){
     if(sharedPresentationActive())syncPreviewUnloadWarning();
     if(!uiRegistryRouteRequested())return;
     var panel=newUiEl('ModernUiRegistryRecovery');
     if(!panel)return;
     var trial=workspaceUiRegistryPreview;
-    var errors=trial.bridge&&trial.status==='ready'?trial.bridge.lastErrors():[];
+    var errors=registryErrors(trial);
     var issue=trial.error||errors.map(function(item){
       return item.mode+': '+item.message;
     }).join('; ');
@@ -1027,8 +1076,7 @@
   async function collectUiRegistryRecoveryEvidence(){
     if(!uiRegistryRouteRequested())
       throw Error('UI Registry recovery export requires preview mode');
-    var trial=workspaceUiRegistryPreview,errors=trial.bridge?
-      trial.bridge.lastErrors():[];
+    var trial=workspaceUiRegistryPreview,errors=registryErrors(trial);
     var evidence={format:'curvature-modern-ui-recovery-evidence',version:1,
       capturedAt:new Date().toISOString(),
       preview:{status:trial.status,error:trial.error,errors:errors},
@@ -1045,6 +1093,19 @@
           trial.bridge.sections.forEach(function(key){sections[key]=trial.bridge.get(mode,key);});
           evidence.live[mode]={tab:trial.bridge.getTab(mode),sections:sections};
         });
+      }
+      if(sharedPreferenceOwner&&sharedPreferencesRestored)evidence.global=sharedPreferenceOwner.values();
+      var globalItem={scope:'global'};
+      try{
+        if(!shared)throw Error('UI Session Store unavailable');
+        var globalSaved=await shared.read('global',{});
+        globalItem.revision=globalSaved.revision;globalItem.envelope=globalSaved.envelope;
+      }catch(error){globalItem.readError=String(error&&error.message||error);}
+      evidence.durable.push(globalItem);
+      evidence.legacyPreferences={};
+      for(var key of [applicationPreferences.STORAGE_KEY,applicationPreferences.LEGACY_NAVIGATION_KEY]){
+        try{evidence.legacyPreferences[key]=preferencesStorage().getItem(key);}
+        catch(error){evidence.storageErrors.push({key:key,message:String(error&&error.message||error)});}
       }
       for(var workspace of ['scene','compare','animation','calibration']){
         var item={scope:'workspace',workspace:workspace};
@@ -1124,7 +1185,7 @@
       var trial=workspaceUiRegistryPreview;
       if(trial.status!=='ready'||!trial.bridge)return;
       uiRegistryRecoveryBusy=true;refreshUiRegistryRecoveryNotice();
-      trial.bridge.retryFailed().then(function(){
+      retryRegistry(trial).then(function(){
         uiRegistryRecoveryBusy=false;refreshUiRegistryRecoveryNotice();
       }).catch(function(error){
         uiRegistryRecoveryBusy=false;
@@ -1684,9 +1745,8 @@
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare';}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
-    var bridge=workspaceUiRegistryPreview.bridge;
     return experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving'||
-      (sharedPresentationActive()&&(sharedLayoutResetPending||(bridge&&bridge.hasUnacknowledged()))));
+      (sharedPresentationActive()&&registryUnacknowledged()));
   }
   function warnUnsavedExperiment(event){
     if(previewHasUnacknowledged()){
@@ -1985,6 +2045,18 @@
   function scheduleExperimentSave(){
     if(keyframeEditSession)return;
     if(!persistence.ready||!experiments||!root.location)return;
+    var snapshot=null;
+    if(sharedPresentationActive()&&experimentPreview.controller&&
+       ['clean','dirty','saving','committed'].includes(experimentPreview.status)){
+      try{
+        snapshot=experiments.validate(experimentSnapshot());
+        var current=experimentPreview.controller.state();
+        var previous=current.latestInput||(current.bound&&current.bound.experiment);
+        // A renderer/quality preference redraw is not a physical edit.
+        // Compare the entire validated payload, including A/B selection.
+        if(previous&&JSON.stringify(experiments.validate(previous))===JSON.stringify(snapshot))return;
+      }catch(error){previewFailure(error);return;}
+    }
     calibrationSceneRevision++;
     updateSnapshotSaveAction();
     refreshCalibrationApplicability();
@@ -1992,7 +2064,7 @@
     if(experimentPreview.live){
       if(!experimentPreview.controller||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
       try{
-        experimentPreview.controller.markDirty(experiments.validate(experimentSnapshot()));
+        experimentPreview.controller.markDirty(snapshot||experiments.validate(experimentSnapshot()));
         var view=experimentPreview.controller.state();
         experimentPreview.status=view.busy?'saving':view.status;
         persistenceStatus(view.checkpoint==='durable'?
@@ -9343,7 +9415,8 @@
         updateSnapshotSaveAction();resetHistoryBaseline();refreshCalibrationApplicability();
         previewControls();
         if(experimentPreview.status==='clean')persistenceStatus('Document session restored');
-        if(sharedPresentationActive()&&preview&&preview.bound)startWorkspaceUiRegistryPreview();
+        if(sharedPresentationActive()&&preview&&preview.bound&&sharedPreferencesRestored)
+          startWorkspaceUiRegistryPreview();
         return; // Do not restore legacy auxiliary workspaces or a second active mode.
       }
       // The physical session is now authoritative. Do not allow an early
@@ -9423,7 +9496,16 @@
       Promise.resolve().then(function(){
         rememberWorkingPreviewEntry();
         return openExperimentPreview();
-      }).then(function(preview){
+      }).then(async function(preview){
+        if(experimentPreview.status==='suspended')return;
+        if(sharedPresentationActive()&&preview.bound){
+          try{await restoreSharedPreferences();}
+          catch(error){
+            if(experimentPreview.status==='suspended')return;
+            workspaceUiRegistryPreview={status:'error',bridge:null,error:'Global preferences: '+error.message};
+            refreshUiRegistryRecoveryNotice();
+          }
+        }
         if(experimentPreview.status==='suspended')return;
         experimentPreview.status=preview.status;
         if(preview.status==='empty')experimentPreview.error='No verified document checkpoint. Reload or recover from backup.';
@@ -9585,7 +9667,7 @@
       var trial=workspaceUiRegistryPreview;
       if(trial.status!=='ready'||!trial.bridge)
         return Promise.reject(Error('UI Registry preview is not writable'));
-      return trial.bridge.retryFailed().then(function(result){
+      return retryRegistry(trial).then(function(result){
         refreshUiRegistryRecoveryNotice();
         return result;
       },function(error){
@@ -9610,8 +9692,8 @@
           compareTab:trial.bridge.getTab('compare'),
           animationView:trial.bridge.getView('animation'),
           calibrationView:trial.bridge.getView('calibration')}:null,
-        errors:trial.bridge?trial.bridge.lastErrors():[],
-        unacknowledged:!!(sharedLayoutResetPending||(trial.bridge&&trial.bridge.hasUnacknowledged()))};
+        errors:registryErrors(trial),
+        unacknowledged:registryUnacknowledged()};
     },
     getWorkspaceState:function(){return {mode:currentWorkspaceMode(),
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,

@@ -11541,6 +11541,70 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernSettingsObjects')).to_have_attribute('aria-selected','true')
         self.assertEqual(self.page.evaluate(read),after)
 
+    def test_shared_document_session_preview_global_preferences_across_tabs(self):
+        """Global preferences migrate once, use CAS, and do not checkpoint optics."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        legacy=json.dumps({'version':1,'cameraHudVisible':False,
+            'navigation':{'speed':100},'workspace':{'mode':'animation'}})
+        self.page.add_init_script("""(() => {
+            const key='curvature-modern-application-preferences-v1';
+            if(localStorage.getItem(key)===null)localStorage.setItem(key,%s);
+        })()""" % json.dumps(legacy))
+        self.page.goto(url,wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return {global:await ui.read('global',{}),
+                doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                local:localStorage.getItem(CurvatureModernApplicationPreferences.STORAGE_KEY),
+                tab:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)};
+        }"""
+        before=self.page.evaluate(read)
+        self.assertEqual(before['global']['revision'],1)
+        self.assertEqual(before['local'],legacy)
+        self.assertIsNone(before['tab'])
+        self.assertFalse(before['global']['envelope']['values']['application.cameraHudVisible']['value'])
+        self.assertNotIn('application.workspace',before['global']['envelope']['values'])
+        expect(self.page.locator('#ModernCameraHudToggle')).not_to_be_checked()
+        other=self.context.new_page()
+        try:
+            other.goto(url,wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            self.assertEqual(other.evaluate(read),before)
+            self.page.locator('#ModernCameraHudToggle').check()
+            self.page.wait_for_function("""() =>
+                !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+            self.page.locator('#ModernSettingsDisplay').click()
+            self.page.locator('#ModernOpticalQuality').select_option('auto')
+            self.page.wait_for_function("""() =>
+                !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+            after=self.page.evaluate(read)
+            self.assertEqual(after['global']['revision'],3)
+            self.assertEqual(after['doc'],before['doc'])
+            self.assertEqual(after['local'],legacy)
+            self.assertEqual(after['global']['envelope']['values']['application.opticalQuality']['value'],'auto')
+            other.locator('#ModernSettingsDisplay').click()
+            other.locator('#ModernOpticalQuality').select_option('fast')
+            other.wait_for_function("""() => CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+                .some(x=>x.mode==='global'&&x.message.includes('revision conflict'))""",timeout=30000)
+            expect(other.locator('#ModernUiRegistryRetry')).to_be_disabled()
+            with other.expect_download() as event:
+                other.locator('#ModernUiRegistryDownload').click()
+            evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+            self.assertEqual(evidence['global']['opticalQuality'],'fast')
+            self.assertEqual(evidence['legacyPreferences']['curvature-modern-application-preferences-v1'],legacy)
+            self.assertEqual(self.page.evaluate(read),after)
+            other.once('dialog',lambda dialog:dialog.accept())
+            other.reload(wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            self.assertEqual(other.evaluate(read),after)
+            expect(other.locator('#ModernOpticalQuality')).to_have_value('auto')
+            expect(other.locator('#ModernCameraHudToggle')).to_be_checked()
+        finally:
+            other.close()
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()

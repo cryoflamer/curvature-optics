@@ -618,8 +618,13 @@ and disclosure values use fixed workspace-scoped IndexedDB snapshots with
 CAS, not tab IDs or sessionStorage. The document checkpoint remains the sole
 active workspace owner; no automatic import of divergent old tab snapshots
 occurs. Legacy preference layout values are read-first defaults and are not
-updated by registry interactions. Other application preferences still use
-their existing writer; bulk preference reset is disabled in this preview.
+updated by registry interactions. Global application preferences now use a complete versioned global Registry
+snapshot: first backfill from validated legacy preferences is explicitly
+acknowledged, subsequent restores read IndexedDB without rewriting the
+legacy keys, and conflicting global writes surface the same recovery panel.
+Global preferences do not own workspace or display-panel layout. A
+preference-only redraw does not advance the physical checkpoint. Bulk
+preference reset remains disabled in this preview.
 A failed or incompatible UI restore blocks editing and offers diagnostic
 export. The shared layout reset does not change physics or the active
 document. Only Scene and Compare are enabled: other workspaces, History navigation and reset are
