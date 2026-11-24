@@ -45,11 +45,13 @@
       throw RangeError('Calibration Projects storage limit reached; export your work before adding more');
     return next;
   }
-  function openTransaction(indexedDB,stores,mode,action){
+  function openTransaction(indexedDB,stores,mode,action,lease=null){
     return new Promise((resolve,reject)=>{
-      let request,db,tx,done=false,value;
+      let request,db,tx,done=false,value,untrack=null;
+      function checkLease(){if(lease)lease.check(mode==='readwrite');}
+      function release(){if(untrack){untrack();untrack=null;}}
       function fail(error){
-        if(done)return;done=true;if(db)db.close();
+        if(done)return;done=true;release();if(db)db.close();
         reject(error||Error('Calibration Projects storage unavailable'));
       }
       function abort(error){
@@ -57,11 +59,13 @@
         fail(error);
       }
       try{
+        checkLease();
         if(!indexedDB||typeof indexedDB.open!=='function')throw Error('IndexedDB unavailable');
         request=indexedDB.open(DATABASE,VERSION);
       }catch(error){fail(error);return;}
       request.onupgradeneeded=()=>{
         try{
+          checkLease();
           const database=request.result;
           for(const name of [LEGACY,PROJECTS,SUMMARIES,CONTROL]){
             if(!database.objectStoreNames.contains(name))
@@ -77,20 +81,27 @@
       request.onsuccess=()=>{
         db=request.result;
         if(done){db.close();return;}
-        try{tx=db.transaction(stores,mode);}catch(error){fail(error);return;}
-        tx.oncomplete=()=>{if(done)return;done=true;db.close();resolve(value);};
+        try{
+          checkLease();tx=db.transaction(stores,mode);
+          if(lease)untrack=lease.track(tx,mode==='readwrite');
+        }catch(error){abort(error);return;}
+        tx.oncomplete=()=>{
+          if(done)return;
+          try{checkLease();}catch(error){fail(error);return;}
+          done=true;release();db.close();resolve(value);
+        };
         tx.onabort=()=>fail(tx.error||Error('Calibration Projects transaction aborted'));
         tx.onerror=()=>fail(tx.error||Error('Calibration Projects transaction failed'));
         function read(request,fn){
-          request.onsuccess=()=>{if(done)return;try{fn(request.result);}catch(error){abort(error);}};
+          request.onsuccess=()=>{if(done)return;try{checkLease();fn(request.result);}catch(error){abort(error);}};
         }
         try{action(tx,read,v=>{value=v;});}catch(error){abort(error);}
       };
     });
   }
-  function stores(db,mode,work){
+  function stores(db,mode,work,lease=null){
     return openTransaction(db,[PROJECTS,SUMMARIES],mode,(tx,read,finish)=>
-      work(tx.objectStore(PROJECTS),tx.objectStore(SUMMARIES),read,finish));
+      work(tx.objectStore(PROJECTS),tx.objectStore(SUMMARIES),read,finish),lease);
   }
   function match(row,stored){
     const expected=metadata(model.summary(row));
@@ -131,7 +142,7 @@
       });
     });
   }
-  function change(db,id,expected,changes,now,forkId=null){
+  function change(db,id,expected,changes,now,forkId=null,lease=null){
     model.id(id);
     if(!Number.isSafeInteger(expected)||expected<1)throw RangeError('Invalid expected project revision');
     if(forkId!==null)model.id(forkId);
@@ -176,13 +187,13 @@
           });
         });
       });
-    });
+    },lease);
   }
   function update(db,id,expected,changes,now=Date.now()){
     return change(db,id,expected,changes,now).then(result=>result.project);
   }
-  function saveOrFork(db,id,expected,changes,forkId,now=Date.now()){
-    return change(db,id,expected,changes,now,forkId);
+  function saveOrFork(db,id,expected,changes,forkId,now=Date.now(),lease=null){
+    return change(db,id,expected,changes,now,forkId,lease);
   }
   function rename(db,id,expected,title,now=Date.now()){
     return update(db,id,expected,{title},now);

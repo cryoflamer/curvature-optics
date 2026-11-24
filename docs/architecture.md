@@ -768,3 +768,14 @@ readback and exact revision. It rejects empty checkpoints and unresolved
 recovery references. No sessionStorage selection marker or legacy draft
 write is needed by this reader. Domain-specific mounted activation is a
 separate step.
+
+The Calibration persistence coordinator optionally uses the shared page
+lifetime and an explicit session-selection acknowledgement callback. A
+project transaction (including a domain conflict copy) commits first. The
+coordinator retains its exact previous/current reference receipt until the
+session CAS is acknowledged; failed selection acknowledgement does not
+mark the editor clean or repeat the project write. Explicit retry retries
+that receipt before saving any later in-memory edit. The shared lifetime
+tracks and aborts active project write transactions on pagehide; a
+suspended page cannot acknowledge a later save. This contract is not yet
+enabled in the mounted editor.

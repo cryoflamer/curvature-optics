@@ -1178,3 +1178,104 @@ test('shared Calibration preflight rejects missing, empty, changed and stale pro
   assert.equal((await store.get(db,B)).revision,2);
   assert.equal((await store.list(db)).length,2);
 });
+
+function sharedCalibrationLease(){
+  let live=true;
+  const tracked=new Set();
+  return {sessionId:'shared',check(){if(!live)throw Error('Shared page suspended');},
+    track(tx){this.check();tracked.add(tx);return ()=>tracked.delete(tx);},
+    suspend(){live=false;for(const tx of tracked)tx.abort();},
+    tracked};
+}
+test('shared Calibration keeps the exact durable receipt when selection acknowledgement fails',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),adapter=originalCatalog(env),start=project(A);
+  await store.create(db,start);
+  const lease=sharedCalibrationLease(),receipts=[];
+  let fail=true;
+  const session=coordinator.create(env,{adapter,decoder:importer,clock:()=>1300,
+    sharedSelection:{lease,async acknowledge(receipt){
+      receipts.push(receipt);
+      assert.equal((await store.get(db,receipt.current.id)).revision,Number(receipt.current.revision.slice(4)));
+      if(fail)throw Error('Session CAS conflict');
+    }}});
+  session.bind(start);
+  const draft=legacyDraft();draft.view.x=137;
+  session.mark(draft,inlineState(draft));
+  await assert.rejects(session.save(),/Session CAS conflict/);
+  const saved=await store.get(db,A),pending=session.state().selectionPending;
+  assert.equal(saved.revision,2);
+  assert.equal(session.state().unsaved,true);
+  assert.equal(session.state().lastAck,null);
+  assert.deepEqual(pending,{previous:{id:A,revision:'rev:1',recovery:null},
+    current:{id:A,revision:'rev:2',recovery:null},status:'updated'});
+  assert.deepEqual(JSON.parse(session.recovery()).selectionPending,pending);
+  assert.throws(()=>session.discard(),/selection acknowledgement/);
+  await assert.rejects(session.save(),/explicit retry required/);
+  assert.deepEqual(await store.get(db,A),saved);
+  fail=false;
+  const retried=await session.retry();
+  assert.equal(retried.project.revision,2);
+  assert.deepEqual(receipts[1],receipts[0]);
+  assert.deepEqual(await store.get(db,A),saved,'retry must not write another domain revision');
+  assert.equal(session.state().selectionPending,null);
+  assert.equal(session.state().unsaved,false);
+  assert.equal(session.state().lastAck.revision,2);
+  assert.equal(lease.tracked.size,0);
+});
+test('shared Calibration preserves later input while a previous selection receipt is unresolved',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),adapter=originalCatalog(env),start=project(A);
+  await store.create(db,start);
+  const lease=sharedCalibrationLease(),receipts=[];
+  let release;
+  const paused=new Promise(resolve=>{release=resolve;});
+  const session=coordinator.create(env,{adapter,decoder:importer,clock:()=>1300,
+    sharedSelection:{lease,async acknowledge(receipt){
+      receipts.push(receipt);
+      if(receipts.length===1){await paused;throw Error('Lost session acknowledgement');}
+    }}});
+  session.bind(start);
+  const first=legacyDraft();first.view.x=13;
+  session.mark(first);const saving=session.save();
+  const failed=assert.rejects(saving,/Lost session acknowledgement/);
+  while(!session.state().selectionPending)await new Promise(resolve=>setTimeout(resolve,0));
+  const later=legacyDraft();later.view.x=99;
+  session.mark(later);const queued=session.save();
+  const skipped=assert.rejects(queued,/explicit retry required/);
+  release();await failed;await skipped;
+  assert.equal((await store.get(db,A)).revision,2);
+  assert.equal(JSON.parse(session.recovery()).draft.view.x,99);
+  const result=await session.retry();
+  assert.equal(result.project.revision,3);
+  assert.equal(result.project.checkpoint.payload.draft.view.x,99);
+  assert.deepEqual(receipts[1],receipts[0]);
+  assert.equal(receipts[2].previous.revision,'rev:2');
+  assert.equal(receipts[2].current.revision,'rev:3');
+  assert.equal(session.state().unsaved,false);
+});
+test('suspended shared Calibration lifetime prevents late domain writes and acknowledgement',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),adapter=originalCatalog(env),start=project(A);
+  await store.create(db,start);
+  const lease=sharedCalibrationLease();let acknowledgements=0;
+  const original=adapter.ensureOriginal;
+  adapter.ensureOriginal=async(...args)=>{const result=await original(...args);lease.suspend();return result;};
+  const session=coordinator.create(env,{adapter,decoder:importer,clock:()=>1300,
+    sharedSelection:{lease,async acknowledge(){acknowledgements++;}}});
+  session.bind(start);session.mark(legacyDraft());
+  await assert.rejects(session.save(),/Shared page suspended/);
+  assert.equal(acknowledgements,0);
+  assert.equal((await store.get(db,A)).revision,1);
+  assert.equal(session.state().unsaved,true);
+  assert.equal(session.state().selectionPending,null);
+  assert.equal(lease.tracked.size,0);
+  assert.throws(()=>session.mark(legacyDraft()),/Shared page suspended/);
+});
+test('Calibration store tracks shared write transactions and aborts before a stale mutation',async()=>{
+  const db=memoryIndexedDB(),start=project(A);await store.create(db,start);
+  const lease=sharedCalibrationLease(),track=lease.track;
+  lease.track=function(tx){const untrack=track.call(this,tx);this.suspend();return untrack;};
+  await assert.rejects(store.saveOrFork(db,A,1,details(start,{title:'No late mutation'}),B,200,lease),
+    /aborted|suspended/i);
+  assert.deepEqual(await store.get(db,A),start);
+  assert.equal(await store.get(db,B),null);
+  assert.equal(lease.tracked.size,0);
+});

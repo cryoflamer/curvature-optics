@@ -11789,6 +11789,61 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def test_shared_calibration_domain_save_acknowledges_session_after_project(self):
+        """Actual separate databases retain a committed project if its session CAS fails."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        data=self.soundly_calibration_experiment()
+        outcome=self.page.evaluate("""async data => {
+            const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
+                P=CurvatureModernCalibrationProjectPersistence;
+            const project=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+            const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+            const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
+                prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
+            await c.open();const physical=c.state().bound;
+            await c.selectWorkspace('calibration',P.projectReference(project));
+            const prepared=await P.prepareSharedSelection(window,P.projectReference(project));
+            const calls=[];
+            let block=true;
+            const session=P.create(window,{sharedSelection:{lease,async acknowledge(receipt){
+                const durable=await S.get(indexedDB,receipt.current.id);
+                calls.push({receipt,durableRevision:durable.revision});
+                if(block)throw Error('Injected pointer failure');
+                if(JSON.stringify(c.state().row.envelope.documents.calibration)!==JSON.stringify(receipt.previous))
+                    throw Error('Unexpected selection base');
+                await c.selectWorkspace('calibration',receipt.current);
+            }}});
+            session.bind(project);
+            prepared.draft.weight='2';
+            session.mark(prepared.draft,prepared.inline);
+            let failure=null;try{await session.save();}catch(e){failure=e.message;}
+            const pending=session.state(),saved=await S.get(indexedDB,project.id),
+                beforeRetry=await make().read();
+            block=false;await session.retry();
+            const after=await make().read(),final=await S.get(indexedDB,project.id);
+            return {physical,failure,pending,saved,beforeRetry,after,final,calls,state:session.state(),
+                legacy:await S.legacy(indexedDB),projectCount:(await S.list(indexedDB)).length};
+        }""",data)
+        self.assertIn('Injected pointer failure',outcome['failure'])
+        self.assertEqual(outcome['saved']['revision'],2)
+        self.assertEqual(outcome['pending']['selectionPending']['current']['revision'],'rev:2')
+        self.assertEqual(outcome['beforeRetry']['envelope']['documents']['calibration']['revision'],'rev:1')
+        self.assertEqual(outcome['after']['envelope']['documents']['calibration']['revision'],'rev:2')
+        self.assertEqual(outcome['final'],outcome['saved'])
+        self.assertEqual(outcome['calls'][0],outcome['calls'][1])
+        self.assertEqual(outcome['state']['lastAck']['revision'],2)
+        self.assertFalse(outcome['state']['unsaved'])
+        self.assertIsNone(outcome['state']['selectionPending'])
+        self.assertEqual(outcome['after']['experiment'],outcome['physical']['experiment'])
+        self.assertIsNone(outcome['legacy'])
+        self.assertEqual(outcome['projectCount'],1)
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()
