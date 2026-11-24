@@ -10302,6 +10302,83 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(restored,{'tabId':result['tabId'],'row':result['next']})
 
+    def test_shared_document_session_cas_reload_and_legacy_preservation(self):
+        """One fixed document session, no tab token, stale writes fail, legacy rows survive."""
+        self.open_modern()
+        other=self.context.new_page()
+        init="""async () => {
+            const C=CurvatureModernDocumentSession;
+            const env={indexedDB,addEventListener:window.addEventListener.bind(window),
+                get sessionStorage(){throw Error('sessionStorage accessed');},
+                get crypto(){throw Error('crypto accessed');},
+                get navigator(){throw Error('locks accessed');}};
+            window.sharedDoc=CurvatureModernUiSessionStore.create(env).sharedDocumentSessions(C);
+            return sharedDoc.read();
+        }"""
+        try:
+            other.goto(self.base_url,wait_until='load')
+            self.assertEqual(self.page.evaluate(init),{'revision':0,'envelope':None})
+            self.assertEqual(other.evaluate(init),{'revision':0,'envelope':None})
+            first=self.page.evaluate("""async () => {
+                const C=CurvatureModernDocumentSession;
+                return sharedDoc.write(C.select(C.emptyShared(),'compare',
+                    {id:'working-shared',revision:'digest:a',recovery:null}),0);
+            }""")
+            self.assertEqual(first['revision'],1)
+            self.assertEqual(first['envelope']['sessionId'],'shared')
+            self.assertNotIn('tabId',first['envelope'])
+            self.assertTrue(other.evaluate("""async () => {
+                const C=CurvatureModernDocumentSession;
+                try{await sharedDoc.write(C.select(C.emptyShared(),'calibration',
+                    {id:'cal-other',revision:'r1',recovery:null}),0);}
+                catch(e){return /revision or envelope conflict/.test(e.message);}
+                return false;
+            }"""))
+            other.reload(wait_until='load')
+            self.assertEqual(other.evaluate(init),first)
+            second=other.evaluate("""async (row) => {
+                const C=CurvatureModernDocumentSession;
+                return sharedDoc.write(C.select(row.envelope,'calibration',
+                    {id:'cal-a',revision:'r4',recovery:null}),row.revision);
+            }""",first)
+            self.assertEqual(second['revision'],2)
+            self.assertEqual(second['envelope']['documents']['experiment']['id'],'working-shared')
+            self.page.reload(wait_until='load')
+            self.assertEqual(self.page.evaluate(init),second)
+            evidence=self.page.evaluate("""async () => {
+                const C=CurvatureModernDocumentSession;
+                const legacy={id:'document:old-tab',version:1,revision:1,
+                    envelope:C.empty('old-tab')};
+                const corrupt={id:'shared-document',version:1,revision:2,
+                    envelope:{...C.emptyShared(),version:99}};
+                async function access(write){
+                    return new Promise((resolve,reject)=>{
+                        const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE,1);
+                        req.onerror=()=>reject(req.error);
+                        req.onsuccess=()=>{
+                            const db=req.result,tx=db.transaction('sessions',write?'readwrite':'readonly');
+                            const store=tx.objectStore('sessions');
+                            if(write){store.put(legacy);store.put(corrupt);}
+                            const a=store.get(legacy.id),b=store.get(corrupt.id);
+                            tx.oncomplete=()=>{db.close();resolve([a.result,b.result]);};
+                            tx.onabort=()=>{db.close();reject(tx.error);};
+                        };
+                    });
+                }
+                const before=await access(true);
+                let refused=false;
+                try{await sharedDoc.read();}catch(e){refused=/unsupported/.test(e.message);}
+                const after=await access(false);
+                dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+                let suspended=false;
+                try{await sharedDoc.read();}catch(e){suspended=/page suspended/.test(e.message);}
+                return {refused,suspended,unchanged:JSON.stringify(before)===JSON.stringify(after),
+                    token:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)};
+            }""")
+            self.assertEqual(evidence,{'refused':True,'suspended':True,'unchanged':True,'token':None})
+        finally:
+            other.close()
+
     def test_document_session_adapter_duplicate_and_invalid_row_preservation(self):
         """A copied tab cannot inherit a document; invalid rows remain untouched."""
         self.open_modern()

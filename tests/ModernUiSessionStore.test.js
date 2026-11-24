@@ -269,3 +269,21 @@ test('document fork does not rotate the copied token if durable origin capture f
   assert.equal(locks.held.size,1);
   parentEnv.leave();
 });
+
+test('shared document adapter needs no tab dependencies and suspends on pagehide',async()=>{
+  let opened=0,leave;
+  const env={indexedDB:{open(){opened++;throw Error('unexpected DB open');}},
+    get sessionStorage(){throw Error('sessionStorage accessed');},
+    get crypto(){throw Error('crypto accessed');},
+    get navigator(){throw Error('locks accessed');},
+    addEventListener(name,fn){if(name==='pagehide')leave=fn;}};
+  const ui=store.create(env),doc=ui.sharedDocumentSessions(documents);
+  assert.equal(ui.sharedDocumentSessions(documents),doc);
+  assert.equal(doc.readForkSource,undefined);
+  await assert.rejects(doc.write(documents.empty('tab-a'),0),/shared document session identity mismatch/);
+  await assert.rejects(doc.write(documents.emptyShared(),0),/read current document session/);
+  leave();
+  await assert.rejects(doc.read(),/page suspended/);
+  await assert.rejects(doc.write(documents.emptyShared(),0),/page suspended/);
+  assert.equal(opened,0);
+});

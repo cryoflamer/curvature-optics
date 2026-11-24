@@ -33,6 +33,8 @@
     // tab inherits sessionStorage, so its token alone is not proof of identity.
     let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
     let lifecycleAttached=false,documentAdapter=null,claimEpoch=0;
+    let sharedDocumentAdapter=null,sharedDocumentLifetime=null;
+    const SHARED_DOCUMENT_KEY='shared-document';
     function tabId(){
       requireTabDependencies();
       const existing=sessionStorage.getItem(TAB_KEY);
@@ -270,6 +272,10 @@
       });
     }
     function verifyDocumentLease(lease,writable){
+      if(lease&&lease===sharedDocumentLifetime){
+        check(lease.active,'shared document page suspended; reload before accessing session');
+        return;
+      }
       check(lease&&lease===owner&&lease.active&&(!writable||lease.writable)&&
         sessionStorage.getItem(TAB_KEY)===lease.id,
         'document session tab ownership lost or not validated');
@@ -401,30 +407,48 @@
       }
       return saved;
     }
-    // Use the same tab lease and database but a disjoint metadata namespace.
-    // Unlike UI preview, a duplicated tab never inherits document pointers.
-    function documentSessions(contract){
+    // Both document adapters use the same CAS/readback machinery. The old
+    // tab preview retains its namespace and lock; the shared adapter uses a
+    // fixed key and a page lifetime guard, never a tab token or fork.
+    function documentSessions(contract,shared=false){
       check(contract&&contract.FORMAT==='curvature-modern-document-session'&&
         contract.VERSION===1&&typeof contract.normalize==='function',
         'document session contract required');
-      if(documentAdapter){
-        check(documentAdapter.contract===contract,'document contract already bound');
-        return documentAdapter.api;
+      const cached=shared?sharedDocumentAdapter:documentAdapter;
+      if(cached){
+        check(cached.contract===contract,'document contract already bound');
+        return cached.api;
+      }
+      if(shared){
+        check(contract.SHARED_VERSION===2&&contract.SHARED_ID==='shared'&&
+          typeof contract.emptyShared==='function','shared document session contract required');
+        sharedDocumentLifetime={id:contract.SHARED_ID,active:true,documentTransactions:new Set()};
+        const lifetime=sharedDocumentLifetime;
+        if(typeof env.addEventListener==='function')env.addEventListener('pagehide',()=>{
+          lifetime.active=false;
+          for(const tx of lifetime.documentTransactions){try{tx.abort();}catch(ignore){}}
+        });
+      }
+      const currentLease=()=>shared?sharedDocumentLifetime:owner;
+      const key=id=>shared?SHARED_DOCUMENT_KEY:'document:'+id;
+      function matches(envelope,id){
+        return shared?envelope.version===contract.SHARED_VERSION&&envelope.sessionId===id:
+          envelope.version===contract.VERSION&&envelope.tabId===id;
       }
       let observed=null,busy=false;
       function decode(row,id){
         if(row===undefined)return Object.freeze({revision:0,envelope:null});
-        check(row&&Object.keys(row).length===4&&row.id==='document:'+id&&
+        check(row&&Object.keys(row).length===4&&row.id===key(id)&&
           row.version===1&&Number.isSafeInteger(row.revision)&&row.revision>=1,
           'unsupported or corrupt document session row');
         const envelope=contract.normalize(row.envelope);
-        check(envelope.tabId===id,'document session row identity mismatch');
+        check(matches(envelope,id),'document session row identity mismatch');
         return Object.freeze({revision:row.revision,envelope});
       }
       function same(a,b){return JSON.stringify(a)===JSON.stringify(b);}
       function fetchRow(lease){
         return transact('sessions','readonly',(store,reply)=>{
-          const req=store.get('document:'+lease.id);
+          const req=store.get(key(lease.id));
           req.onsuccess=()=>{
             try{verifyDocumentLease(lease,false);reply.result(decode(req.result,lease.id));}
             catch(error){reply.reject(error);}
@@ -433,7 +457,7 @@
       }
       async function read(){
         check(!busy,'document session operation already pending');
-        const lease=owner;verifyDocumentLease(lease,false);
+        const lease=currentLease();verifyDocumentLease(lease,false);
         busy=true;observed=null;
         try{
           const row=await fetchRow(lease);
@@ -443,9 +467,10 @@
       }
       async function write(envelope,expectedRevision){
         check(!busy,'document session operation already pending');
-        const lease=owner;verifyDocumentLease(lease,true);
+        const lease=currentLease();verifyDocumentLease(lease,true);
         const frame=contract.normalize(envelope);
-        check(frame.tabId===lease.id,'document session tab identity mismatch');
+        check(matches(frame,lease.id),shared?'shared document session identity mismatch':
+          'document session tab identity mismatch');
         check(Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
           expectedRevision<Number.MAX_SAFE_INTEGER,'invalid document session expected revision');
         check(observed&&observed.lease===lease&&observed.row.revision===expectedRevision,
@@ -454,13 +479,13 @@
         busy=true;observed=null;
         try{
           const committed=await transact('sessions','readwrite',(store,reply)=>{
-            const req=store.get('document:'+lease.id);
+            const req=store.get(key(lease.id));
             req.onsuccess=()=>{
               try{
                 verifyDocumentLease(lease,true);
                 const before=decode(req.result,lease.id);
                 check(same(before,baseline),'document session revision or envelope conflict');
-                const row={id:'document:'+lease.id,version:1,
+                const row={id:key(lease.id),version:1,
                   revision:expectedRevision+1,envelope:frame};
                 store.put(row);reply.result(decode(row,lease.id));
               }catch(error){reply.reject(error);}
@@ -488,11 +513,15 @@
         check(record.source!==null,'duplicate has no acknowledged parent document');
         return decode(record.source,record.parentTabId);
       }
-      const api=Object.freeze({read,write,readForkSource});
-      documentAdapter={contract,api};return api;
+      const api=Object.freeze(shared?{read,write}:{read,write,readForkSource});
+      if(shared)sharedDocumentAdapter={contract,api};
+      else documentAdapter={contract,api};
+      return api;
     }
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
-      read,write,stage,readPending,acknowledge,documentSessions,captureDocumentLease});
+      read,write,stage,readPending,acknowledge,
+      documentSessions:contract=>documentSessions(contract),
+      sharedDocumentSessions:contract=>documentSessions(contract,true),captureDocumentLease});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));

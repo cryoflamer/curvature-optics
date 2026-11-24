@@ -8,6 +8,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const FORMAT='curvature-modern-document-session',VERSION=1;
+  const SHARED_VERSION=2,SHARED_ID='shared';
   const KINDS=Object.freeze(['experiment','calibration','animation']);
   const WORKSPACES=Object.freeze(['scene','compare','calibration','animation','images','demos']);
   const SLOT=Object.freeze({scene:'experiment',compare:'experiment',
@@ -39,16 +40,24 @@
     return Object.freeze({id,revision,recovery});
   }
   function normalize(v){
-    fields(v,['format','version','tabId','workspace','documents'],'session');
-    check(v.format===FORMAT&&v.version===VERSION,'unsupported session format/version');
+    check(v&&v.format===FORMAT&&(v.version===VERSION||
+      (v.version===SHARED_VERSION&&v.sessionId===SHARED_ID)),
+      'unsupported session format/version or shared identity');
+    const shared=v.version===SHARED_VERSION;
+    fields(v,['format','version',shared?'sessionId':'tabId','workspace','documents'],'session');
     fields(v.documents,KINDS,'document slots');
-    return Object.freeze({format:FORMAT,version:VERSION,tabId:token(v.tabId,'tab ID',128),
+    const identity=shared?{sessionId:SHARED_ID}:{tabId:token(v.tabId,'tab ID',128)};
+    return Object.freeze({format:FORMAT,version:v.version,...identity,
       workspace:workspace(v.workspace),documents:Object.freeze(Object.fromEntries(
         KINDS.map(kind=>[kind,binding(v.documents[kind])])))});
   }
   function empty(tabId){
     return normalize({format:FORMAT,version:VERSION,tabId,workspace:'scene',
       documents:{experiment:null,calibration:null,animation:null}});
+  }
+  function emptyShared(){
+    return normalize({format:FORMAT,version:SHARED_VERSION,sessionId:SHARED_ID,
+      workspace:'scene',documents:{experiment:null,calibration:null,animation:null}});
   }
   // Pure candidate only. The owner must preflight and CAS before activation.
   function select(session,mode,document){
@@ -125,7 +134,9 @@
       check(revision<Number.MAX_SAFE_INTEGER&&attempt<Number.MAX_SAFE_INTEGER,
         'save/session revision exhausted');
       const ref=current.documents[kind];
-      active=Object.freeze({tabId:current.tabId,kind,id:ref.id,
+      const identity=current.version===SHARED_VERSION?
+        {sessionId:current.sessionId}:{tabId:current.tabId};
+      active=Object.freeze({...identity,kind,id:ref.id,
         baseRevision:ref.revision,sessionRevision:revision,edit,attempt:++attempt});
       pending=null;error=null;status='saving';return active;
     }
@@ -540,6 +551,6 @@
     return Object.freeze({open,markDirty,flushCheckpoint,save,recoveryOffer,
       acceptHead,draftOffer,loadDraft,state});
   }
-  return Object.freeze({FORMAT,VERSION,KINDS,WORKSPACES,empty,normalize,
+  return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,createSaveTracker,createExperimentController,createRecoverableExperimentController});
 }));

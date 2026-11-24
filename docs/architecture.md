@@ -159,8 +159,25 @@ acknowledged revision. The new scope is opt-in and not yet mounted in Modern.
 One registered owner supplies each complete workspace envelope; do not
 split the same envelope among partial registries.
 
-The target document session will use a fixed shared identity, not the
-browser tab token. Old per-tab preview rows, fork provenance, pending
+The opt-in shared document-session adapter now uses the fixed
+`sessions/shared-document` key and v2 metadata envelope
+(`sessionId: "shared"`, workspace and the three existing domain bindings).
+The row revision remains independent of the envelope schema version.
+`ModernDocumentSession.emptyShared()` creates the initial metadata candidate;
+`select()`, `planRestore()` and the save tracker support it without a tab ID.
+`ModernUiSessionStore.create(env).sharedDocumentSessions(contract)` reuses
+the exact baseline CAS and post-commit readback implementation of the old
+adapter. Each instance must read before writing; a stale revision or
+different baseline fails closed. No sessionStorage, UUID, identity claim
+or fork is involved. Pagehide invalidates the in-memory access capability
+and aborts tracked transactions where possible; a cached page must reload.
+Construction does not open IndexedDB. The adapter is metadata only:
+domain verification before pointer CAS remains the caller's responsibility.
+A shared experiment writer and its migration/coordination are not mounted
+yet. The old v1 format and `document:<tabId>` keys remain readable and
+unchanged; a separate key avoids collisions with historical tab IDs.
+
+Old per-tab preview rows, fork provenance, pending
 journals and immutable revisions are migration/recovery evidence. Do not
 auto-merge divergent copies, select one arbitrarily, or delete old bytes.
 Verify a selected source and the new shared record before changing startup

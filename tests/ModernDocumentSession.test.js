@@ -392,3 +392,25 @@ test('recoverable controller retires matching post-CAS draft on F5 and rejects c
   await assert.rejects(next.loadDraft(selection),/offer changed/);
   assert.equal(f.draft().experiment.value,4);
 });
+
+test('shared document envelope uses fixed identity and retains independent domain slots',async()=>{
+  const empty=contract.emptyShared();
+  assert.equal(empty.sessionId,'shared');
+  assert.equal(empty.version,2);
+  assert.equal(Object.hasOwn(empty,'tabId'),false);
+  const first=contract.select(empty,'compare',{id:'working-shared',revision:'r1',recovery:null});
+  const second=contract.select(first,'calibration',{id:'cal-a',revision:'r2',recovery:null});
+  assert.equal(second.documents.experiment.id,'working-shared');
+  assert.equal(second.documents.calibration.id,'cal-a');
+  assert.throws(()=>contract.normalize({...second,sessionId:'other'}),/unsupported/);
+  assert.throws(()=>contract.normalize({...second,tabId:'tab-a'}),/fields/);
+  const plan=await contract.planRestore(second,{readDocument:async(kind,id)=>({kind,id,revision:'r2'})});
+  assert.equal(plan.document.id,'cal-a');
+  const m=tracker(first);m.markDirty();const token=m.beginSave();
+  assert.equal(token.sessionId,'shared');
+  assert.equal(Object.hasOwn(token,'tabId'),false);
+  const pending=m.acknowledgeDocument(token,receipt(token,'r3'));
+  assert.equal(pending.envelope.sessionId,'shared');
+  assert.equal(m.acknowledgeSession(token,{revision:5,envelope:pending.envelope}),true);
+  assert.equal(m.state().session.documents.experiment.revision,'r3');
+});
