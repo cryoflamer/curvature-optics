@@ -623,8 +623,10 @@ snapshot: first backfill from validated legacy preferences is explicitly
 acknowledged, subsequent restores read IndexedDB without rewriting the
 legacy keys, and conflicting global writes surface the same recovery panel.
 Global preferences do not own workspace or display-panel layout. A
-preference-only redraw does not advance the physical checkpoint. Bulk
-preference reset remains disabled in this preview.
+preference-only redraw does not advance the physical checkpoint. Reset
+preferences resets only global Registry values, not workspace folds,
+selected document or legacy data; the existing Reset workspace layout
+action separately resets workspace scopes.
 A failed or incompatible UI restore blocks editing and offers diagnostic
 export. The shared layout reset does not change physics or the active
 document. Only Scene and Compare are enabled: other workspaces, History navigation and reset are

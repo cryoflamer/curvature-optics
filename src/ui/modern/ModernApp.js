@@ -786,6 +786,10 @@
     var values=await sharedPreferenceOwner.restore();
     if(experimentPreview.status==='suspended')return;
     applyGlobalPreferences(values);
+    syncSharedGlobalPreferenceControls();
+    sharedPreferencesRestored=true;
+  }
+  function syncSharedGlobalPreferenceControls(){
     // All controls are already bound. Hydrate values, not synthetic edits.
     [['ModernOpticalQuality',state.opticalQuality],['ModernPreviewDetail',state.previewDetail],
       ['ModernAnimationPlaybackDetail',studioPlaybackDetail],['ModernAnimationPlaybackFps',studioPlaybackFps],
@@ -803,7 +807,32 @@
       var node=newUiEl(id);if(node)node.hidden=true;
     });
     var toggle=newUiEl('ModernHistoryToggle');if(toggle)toggle.setAttribute('aria-expanded','false');
-    sharedPreferencesRestored=true;
+  }
+  function resetSharedGlobalPreferences(){
+    if(!sharedPreferencesRestored||workspaceUiRegistryPreview.status!=='ready')return;
+    var defaults=applicationPreferences.defaults(),pending;
+    try{
+      pending=sharedPreferenceOwner.save(defaults);
+      syncPreviewUnloadWarning();
+      // Only application preferences are reset. Physical state, active
+      // document, workspace presentation and legacy bytes are untouched.
+      applyGlobalPreferences(defaults);
+      syncSharedGlobalPreferenceControls();
+      studioPlaybackFpsMeter.reset();
+      stopAutoCameraPreview();
+      if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
+      updateCameraHud();updateGeometryBackendStatus(null);redraw();
+      pending.then(function(){
+        preferencesStatus('Application preferences reset to defaults.',false);
+        refreshUiRegistryRecoveryNotice();
+      },function(error){
+        preferencesStatus('UI Registry global preference reset failed: '+error.message,true);
+        refreshUiRegistryRecoveryNotice();
+      });
+    }catch(error){
+      if(pending)observeUiRegistrySave(pending,'UI Registry global preference reset failed: ');
+      preferencesStatus('UI Registry global preference reset failed: '+error.message,true);
+    }
   }
   function preferencesStatus(message,error){
     if(error&&message.indexOf('UI Registry')===0)
@@ -1489,7 +1518,7 @@
     var button=geometryUi('ModernResetPreferences');
     if(!button||!applicationPreferences)return;
     button.addEventListener('click',function(){
-      if(sharedPresentationActive())return;
+      if(sharedPresentationActive()){resetSharedGlobalPreferences();return;}
       workspaceNavigationVersion++;workspaceTabEditGeneration++;
       var storage=preferencesStorage(),cleared=false;
       try{cleared=applicationPreferences.reset(storage);}
@@ -1774,7 +1803,7 @@
       var button=newUiEl(id);if(button)button.disabled=true;
     });
     if(sharedPresentationActive()){
-      var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=true;
+      var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=!usable||!presentationReady||!sharedPreferencesRestored;
     }
     var panel=newUiEl('ModernDocumentSessionRecovery');
     if(panel)panel.hidden=usable||status==='loading';

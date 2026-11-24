@@ -11605,6 +11605,95 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def test_shared_document_session_preview_global_reset_preserves_document_and_layout(self):
+        """The two reset actions are independent; neither rewrites legacy or physics."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        legacy=json.dumps({'version':1,'cameraHudVisible':False,'opticalQuality':'auto',
+            'workspace':{'mode':'animation','sections':{'scene.surface.geometry':False}}})
+        self.page.add_init_script("""(() => {
+            const key='curvature-modern-application-preferences-v1';
+            if(localStorage.getItem(key)===null)localStorage.setItem(key,%s);
+        })()""" % json.dumps(legacy))
+        self.page.goto(url,wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernSettingsDisplay').click()
+        self.page.wait_for_function("""() =>
+            !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return {global:await ui.read('global',{}),scene:await ui.read('workspace',{workspace:'scene'}),
+                compare:await ui.read('workspace',{workspace:'compare'}),
+                doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                local:localStorage.getItem(CurvatureModernApplicationPreferences.STORAGE_KEY)};
+        }"""
+        before=self.page.evaluate(read)
+        expect(self.page.locator('#ModernResetPreferences')).to_be_enabled()
+        self.page.locator('#ModernResetPreferences').click()
+        self.page.wait_for_function("""() =>
+            !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+        after=self.page.evaluate(read)
+        self.assertEqual(after['global']['revision'],before['global']['revision']+1)
+        self.assertEqual(after['global']['envelope']['values']['application.opticalQuality']['value'],'accurate')
+        self.assertTrue(after['global']['envelope']['values']['application.cameraHudVisible']['value'])
+        for key in ('scene','compare','doc','local'):
+            self.assertEqual(after[key],before[key],key)
+        self.assertEqual(after['local'],legacy)
+        expect(self.page.locator('#ModernOpticalQuality')).to_have_value('accurate')
+        expect(self.page.locator('#ModernCameraHudToggle')).to_be_checked()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),after)
+        expect(self.page.locator('#ModernSettingsDisplay')).to_have_attribute('aria-selected','true')
+        self.page.locator('#ModernResetWorkspace').click()
+        self.page.wait_for_function("""() =>
+            !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+        layout=self.page.evaluate(read)
+        self.assertEqual(layout['global'],after['global'])
+        self.assertEqual(layout['doc'],after['doc'])
+        self.assertEqual(layout['local'],legacy)
+        self.assertEqual(layout['scene']['envelope']['values']['workspace.settingsTab']['value'],'Camera')
+        expect(self.page.locator('#ModernSettingsCamera')).to_have_attribute('aria-selected','true')
+
+    def test_shared_document_session_preview_corrupt_global_preferences_fail_closed(self):
+        """Malformed legacy and incomplete durable global rows never get defaulted away."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.add_init_script("""localStorage.setItem(
+            'curvature-modern-application-preferences-v1','{broken')""")
+        self.page.goto(url,wait_until='load')
+        failed="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='error'"""
+        self.page.wait_for_function(failed,timeout=30000)
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return ui.read('global',{});
+        }"""
+        self.assertEqual(self.page.evaluate(read),{'revision':0,'envelope':None})
+        expect(self.page.locator('#ModernSceneTab')).to_be_disabled()
+        expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernUiRegistryDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['legacyPreferences']['curvature-modern-application-preferences-v1'],'{broken')
+        future=self.page.evaluate("""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const frame={format:CurvatureModernStateRegistry.FORMAT,version:1,scope:'global',
+                values:{'application.future':{version:2,value:true}}};
+            await ui.write('global',{},frame,0);
+            return ui.read('global',{});
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(failed,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),future)
+        expect(self.page.locator('#ModernSceneTab')).to_be_disabled()
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernUiRegistryDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        saved=next(x for x in evidence['durable'] if x['scope']=='global')
+        self.assertEqual(saved['envelope'],future['envelope'])
+        self.assertEqual(saved['revision'],future['revision'])
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()
