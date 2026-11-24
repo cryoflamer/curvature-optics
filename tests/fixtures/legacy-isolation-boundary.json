@@ -2945,6 +2945,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernApplicationPreferences.test.js",
         "tests/ModernStateRegistry.test.js",
         "tests/ModernUiSessionManager.test.js",
         "tests/ModernUiSessionStore.test.js",
@@ -2958,6 +2959,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernApplicationPreferences.test.js",
         "tests/ModernUiSessionManager.test.js",
         "tests/ModernWorkspaceStateBridge.test.js"
       ],
