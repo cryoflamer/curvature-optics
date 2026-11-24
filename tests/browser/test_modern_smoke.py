@@ -10198,5 +10198,174 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(saved['envelope'])
         expect(bar).to_be_visible()
 
+
+    def test_document_session_adapter_cas_readback_and_lease_revalidation(self):
+        """Explicit headless adapter, real IndexedDB, no Modern consumer yet."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        result=self.page.evaluate("""async () => {
+            const C=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            const keys=Object.keys(sessionStorage).sort();
+            const base=await doc.read();
+            const selected=C.select(C.empty(tabId),'compare',
+                {id:'experiment-a',revision:'digest:a',recovery:null});
+            const saved=await doc.write(selected,base.revision);
+            const keysUnchanged=JSON.stringify(keys)===JSON.stringify(Object.keys(sessionStorage).sort());
+            const errors=[];
+            try{await doc.write(selected,0);}catch(e){errors.push(e.message);}
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE,1);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction('sessions','readwrite');
+                    tx.objectStore('sessions').put({id:'document:'+tabId,version:1,revision:2,
+                        envelope:C.select(selected,'calibration',
+                            {id:'cal-a',revision:'rev:1',recovery:null})});
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=()=>{db.close();reject(tx.error);};
+                };
+            });
+            try{await doc.write(selected,1);}catch(e){errors.push(e.message);}
+            const foreign=await doc.read();
+            dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+            await new Promise(resolve=>setTimeout(resolve,0));
+            await ui.reclaimTab();
+            try{await doc.write(selected,2);}catch(e){errors.push(e.message);}
+            ui.finishResume();
+            try{await doc.write(selected,2);}catch(e){errors.push(e.message);}
+            const confirmed=await doc.read();
+            const next=await doc.write(C.select(confirmed.envelope,'compare'),2);
+            return {tabId,base,saved,errors,foreign,next,keysUnchanged};
+        }""")
+        self.assertEqual(result['base'],{'revision':0,'envelope':None})
+        self.assertEqual(result['saved']['revision'],1)
+        self.assertEqual(result['saved']['envelope']['documents']['experiment']['id'],'experiment-a')
+        self.assertIn('read current document session',result['errors'][0])
+        self.assertIn('revision or envelope conflict',result['errors'][1])
+        self.assertIn('ownership lost or not validated',result['errors'][2])
+        self.assertIn('read current document session',result['errors'][3])
+        self.assertEqual(result['foreign']['revision'],2)
+        self.assertEqual(result['foreign']['envelope']['documents']['calibration']['id'],'cal-a')
+        self.assertEqual(result['next']['revision'],3)
+        self.assertTrue(result['keysUnchanged'])
+        self.page.reload(wait_until='load')
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        restored=self.page.evaluate("""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab();
+            return {tabId,row:await ui.documentSessions(CurvatureModernDocumentSession).read()};
+        }""")
+        self.assertEqual(restored,{'tabId':result['tabId'],'row':result['next']})
+
+    def test_document_session_adapter_duplicate_and_invalid_row_preservation(self):
+        """A copied tab cannot inherit a document; invalid rows remain untouched."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        parent=self.page.evaluate("""async () => {
+            const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            await doc.read();
+            const row=await doc.write(C.select(C.empty(tabId),'animation',
+                {id:'draft-parent',revision:'digest:parent',recovery:null}),0);
+            window.__documentSession=doc;
+            return {tabId,row};
+        }""")
+        child=self.context.new_page()
+        child.add_init_script("sessionStorage.setItem("+
+            json.dumps('curvature-modern-ui-tab-id-v1')+","+
+            json.dumps(parent['tabId'])+");")
+        child.goto(self.base_url,wait_until='load')
+        child.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        copied=child.evaluate("""async () => {
+            const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const claim=await ui.claimTab(),doc=ui.documentSessions(C);
+            const before=await doc.read();
+            const after=await doc.write(C.empty(claim.tabId),0);
+            return {claim,before,after};
+        }""")
+        self.assertNotEqual(copied['claim']['tabId'],parent['tabId'])
+        self.assertEqual(copied['claim']['forkedFrom'],parent['tabId'])
+        self.assertEqual(copied['before'],{'revision':0,'envelope':None})
+        self.assertEqual(copied['after']['revision'],1)
+        self.assertEqual(self.page.evaluate("() => window.__documentSession.read()"),parent['row'])
+        child.close()
+        result=self.page.evaluate("""async ({tabId,row}) => {
+            const doc=window.__documentSession,C=CurvatureModernDocumentSession;
+            const raw={id:'document:'+tabId,version:1,revision:1,
+                envelope:{...row.envelope,version:99}};
+            async function access(write){
+                return new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE,1);
+                    req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{
+                        const db=req.result,tx=db.transaction('sessions',write?'readwrite':'readonly');
+                        const store=tx.objectStore('sessions');
+                        const op=write?store.put(raw):store.get(raw.id);
+                        tx.oncomplete=()=>{db.close();resolve(op.result);};
+                        tx.onabort=()=>{db.close();reject(tx.error);};
+                    };
+                });
+            }
+            await access(true);
+            let writeError,readError;
+            try{await doc.write(C.empty(tabId),1);}catch(e){writeError=e.message;}
+            try{await doc.read();}catch(e){readError=e.message;}
+            return {writeError,readError,unchanged:JSON.stringify(await access(false))===JSON.stringify(raw)};
+        }""",parent)
+        self.assertIn('unsupported session format/version',result['writeError'])
+        self.assertIn('unsupported session format/version',result['readError'])
+        self.assertTrue(result['unchanged'])
+
+
+    def test_document_session_adapter_failed_commit_and_lost_readback(self):
+        """Abort before commit and simulate a lost post-commit readback.
+        Neither operation may return an acknowledgement or retry blindly."""
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        result=self.page.evaluate("""async () => {
+            const C=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            const initial=await doc.read();
+            const next=C.select(C.empty(tabId),'scene',
+                {id:'work-a',revision:'digest:a',recovery:null});
+            const proto=IDBObjectStore.prototype,put=proto.put;
+            const open=indexedDB.open.bind(indexedDB);
+            let aborted,readbackFailed,blindRetry;
+            try{
+                proto.put=function(value,...args){
+                    const request=put.call(this,value,...args);
+                    if(value.id==='document:'+tabId)this.transaction.abort();
+                    return request;
+                };
+                try{await doc.write(next,0);}catch(e){aborted=e.message;}
+            }finally{proto.put=put;}
+            const afterAbort=await doc.read();
+            let calls=0;
+            try{
+                Object.defineProperty(indexedDB,'open',{configurable:true,
+                    value:function(...args){
+                        if(args[0]===CurvatureModernUiSessionStore.DATABASE&&++calls===2)
+                            throw Error('simulated lost readback');
+                        return open(...args);
+                    }});
+                try{await doc.write(next,0);}catch(e){readbackFailed=e.message;}
+            }finally{
+                Object.defineProperty(indexedDB,'open',{configurable:true,value:open});
+            }
+            try{await doc.write(next,0);}catch(e){blindRetry=e.message;}
+            const committed=await doc.read();
+            return {initial,afterAbort,aborted,readbackFailed,blindRetry,committed,next};
+        }""")
+        self.assertEqual(result['initial'],{'revision':0,'envelope':None})
+        self.assertEqual(result['afterAbort'],result['initial'])
+        self.assertTrue(result['aborted'])
+        self.assertIn('simulated lost readback',result['readbackFailed'])
+        self.assertIn('read current document session',result['blindRetry'])
+        self.assertEqual(result['committed'],{'revision':1,'envelope':result['next']})
+
+
 if __name__ == '__main__':
     unittest.main()

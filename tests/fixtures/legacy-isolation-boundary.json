@@ -2922,7 +2922,8 @@
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
-        "tests/ModernDocumentSession.test.js"
+        "tests/ModernDocumentSession.test.js",
+        "tests/ModernUiSessionStore.test.js"
       ],
       "commonJsToolCallers": []
     },

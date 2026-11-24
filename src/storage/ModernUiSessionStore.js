@@ -1,5 +1,5 @@
 /* Opt-in IndexedDB adapter for future Modern UI sessions.
- * Not loaded by Modern: no live schema, restore priority or URL changes.
+ * Document rows are explicitly opt-in; existing UI preview behavior remains.
  */
 (function(root,factory){
   const api=factory();
@@ -22,7 +22,7 @@
     // Web Locks owns the opaque tab ID for this document lifetime. A duplicated
     // tab inherits sessionStorage, so its token alone is not proof of identity.
     let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
-    let lifecycleAttached=false;
+    let lifecycleAttached=false,documentAdapter=null;
     function tabId(){
       const existing=sessionStorage.getItem(TAB_KEY);
       if(existing!==null){
@@ -68,7 +68,7 @@
         for(let attempt=0;attempt<4;attempt++){
           const release=await attemptLock(candidate);
           if(release){
-            owner={id:candidate,active:true,writable:true,release};
+            owner={id:candidate,active:true,writable:true,release,documentTransactions:new Set()};
             if(!lifecycleAttached&&typeof env.addEventListener==='function'){
               lifecycleAttached=true;
               // A cached document is NOT destroyed at pagehide. Release the
@@ -77,6 +77,8 @@
                 if(owner&&owner.active){
                   const old=owner;
                   old.active=false;old.writable=false;
+                  // Abort uncommitted document operations before releasing ownership.
+                  for(const tx of old.documentTransactions){try{tx.abort();}catch(ignore){}}
                   old.release();
                 }
                 claimPromise=null;
@@ -109,7 +111,7 @@
         const release=await attemptLock(old.id);
         check(!!release,
           'tab identity was claimed while this page was cached; reload to recover');
-        owner={id:old.id,active:true,writable:false,release};
+        owner={id:old.id,active:true,writable:false,release,documentTransactions:new Set()};
         claimPromise=Promise.resolve(
           Object.freeze({tabId:owner.id,forkedFrom}));
         return Object.freeze({tabId:owner.id,forkedFrom});
@@ -222,17 +224,37 @@
         };
       });
     }
-    async function transact(storeName,mode,action){
+    function verifyDocumentLease(lease,writable){
+      check(lease&&lease===owner&&lease.active&&(!writable||lease.writable)&&
+        sessionStorage.getItem(TAB_KEY)===lease.id,
+        'document session tab ownership lost or not validated');
+    }
+    async function transact(storeName,mode,action,documentLease=null){
       const db=await connect();
+      if(documentLease){
+        try{verifyDocumentLease(documentLease,mode==='readwrite');}
+        catch(error){db.close();throw error;}
+      }
       return new Promise((resolve,reject)=>{
         let tx,done=false,output=null,reportedError=null;
         const fail=error=>{
           if(done)return;
-          done=true;db.close();reject(error||reportedError||Error('IndexedDB transaction failed'));
+          done=true;
+          if(documentLease)documentLease.documentTransactions.delete(tx);
+          db.close();reject(error||reportedError||Error('IndexedDB transaction failed'));
         };
         try{
           tx=db.transaction(storeName,mode);
-          tx.oncomplete=()=>{if(done)return;done=true;db.close();resolve(output);};
+          if(documentLease)documentLease.documentTransactions.add(tx);
+          tx.oncomplete=()=>{
+            if(done)return;
+            if(documentLease){
+              try{verifyDocumentLease(documentLease,mode==='readwrite');}
+              catch(error){fail(error);return;}
+              documentLease.documentTransactions.delete(tx);
+            }
+            done=true;db.close();resolve(output);
+          };
           tx.onerror=()=>{reportedError=reportedError||tx.error||Error('IndexedDB transaction failed');};
           tx.onabort=()=>fail(reportedError||tx.error||Error('IndexedDB transaction aborted'));
           action(tx.objectStore(storeName),{
@@ -309,8 +331,83 @@
         };
       });
     }
+    // Use the same tab lease and database but a disjoint metadata namespace.
+    // Unlike UI preview, a duplicated tab never inherits document pointers.
+    function documentSessions(contract){
+      check(contract&&contract.FORMAT==='curvature-modern-document-session'&&
+        contract.VERSION===1&&typeof contract.normalize==='function',
+        'document session contract required');
+      if(documentAdapter){
+        check(documentAdapter.contract===contract,'document contract already bound');
+        return documentAdapter.api;
+      }
+      let observed=null,busy=false;
+      function decode(row,id){
+        if(row===undefined)return Object.freeze({revision:0,envelope:null});
+        check(row&&Object.keys(row).length===4&&row.id==='document:'+id&&
+          row.version===1&&Number.isSafeInteger(row.revision)&&row.revision>=1,
+          'unsupported or corrupt document session row');
+        const envelope=contract.normalize(row.envelope);
+        check(envelope.tabId===id,'document session row identity mismatch');
+        return Object.freeze({revision:row.revision,envelope});
+      }
+      function same(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+      function fetchRow(lease){
+        return transact('sessions','readonly',(store,reply)=>{
+          const req=store.get('document:'+lease.id);
+          req.onsuccess=()=>{
+            try{verifyDocumentLease(lease,false);reply.result(decode(req.result,lease.id));}
+            catch(error){reply.reject(error);}
+          };
+        },lease);
+      }
+      async function read(){
+        check(!busy,'document session operation already pending');
+        const lease=owner;verifyDocumentLease(lease,false);
+        busy=true;observed=null;
+        try{
+          const row=await fetchRow(lease);
+          verifyDocumentLease(lease,false);
+          observed={lease,row};return row;
+        }finally{busy=false;}
+      }
+      async function write(envelope,expectedRevision){
+        check(!busy,'document session operation already pending');
+        const lease=owner;verifyDocumentLease(lease,true);
+        const frame=contract.normalize(envelope);
+        check(frame.tabId===lease.id,'document session tab identity mismatch');
+        check(Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
+          expectedRevision<Number.MAX_SAFE_INTEGER,'invalid document session expected revision');
+        check(observed&&observed.lease===lease&&observed.row.revision===expectedRevision,
+          'read current document session before write');
+        const baseline=observed.row;
+        busy=true;observed=null;
+        try{
+          const committed=await transact('sessions','readwrite',(store,reply)=>{
+            const req=store.get('document:'+lease.id);
+            req.onsuccess=()=>{
+              try{
+                verifyDocumentLease(lease,true);
+                const before=decode(req.result,lease.id);
+                check(same(before,baseline),'document session revision or envelope conflict');
+                const row={id:'document:'+lease.id,version:1,
+                  revision:expectedRevision+1,envelope:frame};
+                store.put(row);reply.result(decode(row,lease.id));
+              }catch(error){reply.reject(error);}
+            };
+          },lease);
+          // Only acknowledge after oncomplete AND separate durable readback.
+          const saved=await fetchRow(lease);
+          verifyDocumentLease(lease,true);
+          check(same(saved,committed),'document session readback conflict');
+          observed={lease,row:saved};return saved;
+        }finally{busy=false;}
+      }
+      const api=Object.freeze({read,write});
+      documentAdapter={contract,api};return api;
+    }
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
-      read,write,stage,readPending,acknowledge});
+      read,write,stage,readPending,acknowledge,documentSessions});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));

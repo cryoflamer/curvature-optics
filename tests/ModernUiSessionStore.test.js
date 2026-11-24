@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const store=require('../src/storage/ModernUiSessionStore.js');
 const registry=require('../src/storage/ModernStateRegistry.js');
+const documents=require('../src/storage/ModernDocumentSession');
 function storage(initial={}){
   const data=new Map(Object.entries(initial));
   return {
@@ -207,4 +208,28 @@ test('BFCache collision fails closed without ever forking or changing the origin
   original.finishResume();
   originEnv.leave();await Promise.resolve();await Promise.resolve();
   assert.equal(locks.held.size,0);
+});
+
+test('document adapter is dormant and unclaimed operations never open IndexedDB',async()=>{
+  const state=env(),ui=store.create(state.result),doc=ui.documentSessions(documents);
+  assert.equal(ui.documentSessions(documents),doc);
+  await assert.rejects(doc.read(),/document session tab ownership/);
+  await assert.rejects(doc.write(documents.empty('tab-a'),0),/document session tab ownership/);
+  assert.equal(state.opened,0);
+  assert.deepEqual(state.result.sessionStorage.keys(),[]);
+  assert.throws(()=>ui.documentSessions({}),/document session contract required/);
+});
+test('document adapter requires a read in the current writable lease and exact tab identity',async()=>{
+  const locks=lockFixture(),ctx=ownedEnv(locks),ui=store.create(ctx);
+  const id=(await ui.claimTab()).tabId,doc=ui.documentSessions(documents);
+  await assert.rejects(doc.write(documents.empty('other'),0),/tab identity mismatch/);
+  await assert.rejects(doc.write(documents.empty(id),0),/read current document session/);
+  ctx.leave();await Promise.resolve();await Promise.resolve();
+  await assert.rejects(doc.read(),/document session tab ownership/);
+  await ui.reclaimTab();
+  await assert.rejects(doc.write(documents.empty(id),0),/not validated/);
+  ui.finishResume();
+  await assert.rejects(doc.write(documents.empty(id),0),/read current document session/);
+  assert.deepEqual(ctx.sessionStorage.keys(),[store.TAB_KEY]);
+  ctx.leave();
 });
