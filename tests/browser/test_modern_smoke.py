@@ -10546,6 +10546,53 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(reloaded['bound']['experiment'],result['edit'])
         self.assertEqual(reloaded['head']['revision'],result['again']['revision'])
 
+    def test_working_copy_recovery_checkpoint_cas_and_f5(self):
+        """A durable draft is not a committed revision and is scoped to the owned document."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        first=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            await S.prepareWorkingCopy(indexedDB,{tabId,lease,storage:localStorage,
+                codec:C,crypto,explicitIntent:false,isCurrent:()=>true});
+            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const initial=await a.read(),edit=structuredClone(initial.experiment);
+            edit.scene.camera.Height+=1;
+            const draft=await a.stageRecovery(edit,initial.revision,null);
+            return {initial,draft,head:await a.read()};
+        }""")
+        self.assertEqual(first['head'],first['initial'])
+        self.assertEqual(first['draft']['baseRevision'],first['initial']['revision'])
+        self.page.reload(wait_until='load')
+        second=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            await ui.claimTab();const lease=ui.captureDocumentLease();
+            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const restored=await a.readRecovery(),head=await a.read();
+            const receipt=await a.write(restored.experiment,head.revision);
+            const next=structuredClone(restored.experiment);next.scene.camera.Height+=1;
+            const newer=await a.stageRecovery(next,receipt.revision,restored.revision);
+            let stale,wrong;
+            try{await b.retireRecovery(restored.revision,receipt.revision);}catch(e){stale=e.message;}
+            try{await b.retireRecovery(newer.revision,receipt.revision);}catch(e){wrong=e.message;}
+            const preserved=await b.readRecovery();
+            const saved=await a.write(next,receipt.revision);
+            const retired=await a.retireRecovery(newer.revision,saved.revision);
+            return {restored,head,newer,stale,wrong,preserved,retired,remaining:await b.readRecovery()};
+        }""")
+        self.assertEqual(second['restored'],first['draft'])
+        self.assertEqual(second['head'],first['initial'])
+        self.assertIn('revision conflict',second['stale'])
+        self.assertIn('differs',second['wrong'])
+        self.assertEqual(second['preserved'],second['newer'])
+        self.assertTrue(second['retired'])
+        self.assertIsNone(second['remaining'])
+
     def test_working_copy_edit_lost_lease_and_lost_readback_preserve_revisions(self):
         """No acknowledgement after lease loss or a failed post-commit read."""
         self.open_modern()

@@ -466,7 +466,163 @@
             document:{id,revision:row.revision,recovery:null}};
         }finally{busy=false;}
       }
-      return Object.freeze({id,read,readRevision,write,prepareFork});
+
+      // A separately acknowledged draft never advances the document head.
+      // This namespace is private to the owned working copy, not inherited
+      // by prepareFork(). Keep the original bytes on every invalid read.
+      const RECOVERY_FORMAT='curvature-modern-working-recovery';
+      const recoveryId='recovery-'+lease.tabId,recoveryKey='working-recovery:'+id;
+      const recoveryToken=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      let recoveryBusy=false;
+      function recoveryFields(row){
+        ensure(row&&Object.keys(row).length===8&&row.format===RECOVERY_FORMAT&&
+          row.version===1&&row.id===recoveryId&&row.documentId===id&&
+          typeof row.revision==='string'&&recoveryToken.test(row.revision)&&
+          typeof row.digest==='string','invalid or unsupported working recovery; evidence retained');
+        sequence(row.baseRevision);
+        const {digest:checksum,...data}=row;
+        return {data,checksum};
+      }
+      function getRecoveryRaw(store,accept,fail){
+        const req=store.get(recoveryKey);
+        req.onsuccess=()=>{
+          try{
+            lease.check();
+            if(req.result===undefined){accept(null);return;}
+            const row=req.result;
+            recoveryFields(row);
+            const base=store.get(revisionKey(row.baseRevision));
+            base.onsuccess=()=>{
+              try{lease.check();accept({row,base:base.result});}
+              catch(error){fail(error);}
+            };
+          }catch(error){fail(error);}
+        };
+      }
+      async function recoverySnapshot(){
+        let failure;
+        try{
+          return await withStore(indexedDB,'readonly',store=>{
+            const out={result:null};
+            getRecoveryRaw(store,v=>{out.result=v;},error=>{
+              failure=error;store.transaction.abort();
+            });
+            return out;
+          },lease);
+        }catch(error){throw failure||error;}
+      }
+      async function verifyRecovery(raw){
+        if(raw===null)return null;
+        const {row,base}=raw,{data,checksum}=recoveryFields(row);
+        await decode(base,row.baseRevision);
+        ensure(checksum===await digest(canonical(data),crypto),
+          'working recovery digest mismatch; evidence retained');
+        const payload=canonical(row.experiment),experiment=codec.validate(JSON.parse(payload));
+        ensure(canonical(experiment)===payload,'noncanonical working recovery; evidence retained');
+        lease.check();
+        return {kind:'experiment',id:recoveryId,documentId:id,revision:row.revision,
+          baseRevision:row.baseRevision,experiment};
+      }
+      async function readRecovery(){
+        ensure(!recoveryBusy,'working recovery operation pending');
+        recoveryBusy=true;
+        try{return await verifyRecovery(await recoverySnapshot());}
+        finally{recoveryBusy=false;}
+      }
+      function recoverySignature(raw){return canonical(raw);}
+      async function mutateRecovery(before,revision,original,mutation){
+        let failure;
+        try{
+          await transaction(indexedDB,store=>{
+            const fail=error=>{failure=error;try{store.transaction.abort();}catch(ignore){}};
+            getRecoveryRaw(store,current=>{
+              try{
+                lease.check(true);
+                ensure(recoverySignature(current)===recoverySignature(before),
+                  'working recovery revision or envelope conflict; evidence retained');
+                const target=store.get(revisionKey(revision));
+                target.onsuccess=()=>{
+                  try{
+                    lease.check(true);
+                    ensure(canonical(target.result)===canonical(original),
+                      'working recovery document revision changed; evidence retained');
+                    mutation(store);
+                  }catch(error){fail(error);}
+                };
+              }catch(error){fail(error);}
+            },fail);
+            return null;
+          },lease);
+        }catch(error){throw failure||error;}
+      }
+      async function stageRecovery(experiment,baseRevision,expectedRevision){
+        ensure(!recoveryBusy,'working recovery operation pending');
+        lease.check(true);
+        ensure(expectedRevision===null||
+          typeof expectedRevision==='string'&&recoveryToken.test(expectedRevision),
+          'exact expected recovery revision required');
+        const baseKey=revisionKey(baseRevision);
+        // Snapshot before awaiting any I/O: later caller mutations cannot
+        // change the bytes covered by this recovery acknowledgement.
+        const raw=canonical(codec.validate(JSON.parse(canonical(experiment))));
+        recoveryBusy=true;
+        try{
+          const before=await recoverySnapshot(),previous=await verifyRecovery(before);
+          ensure((previous?previous.revision:null)===expectedRevision,
+            'working recovery revision conflict; evidence retained');
+          if(previous){
+            ensure(sequence(baseRevision)>sequence(previous.baseRevision)||
+              baseRevision===previous.baseRevision,'working recovery base moved backwards');
+          }
+          const original=await withStore(indexedDB,'readonly',store=>store.get(baseKey),lease);
+          await decode(original,baseRevision);
+          const revision=crypto.randomUUID();
+          ensure(typeof revision==='string'&&recoveryToken.test(revision)&&
+            revision!==expectedRevision,'invalid recovery revision');
+          const data={format:RECOVERY_FORMAT,version:1,id:recoveryId,documentId:id,
+            revision,baseRevision,experiment:JSON.parse(raw)};
+          const row={...data,digest:await digest(canonical(data),crypto)};
+          lease.check(true);
+          await mutateRecovery(before,baseRevision,original,store=>{
+            if(before===null)store.add(row,recoveryKey);else store.put(row,recoveryKey);
+          });
+          const saved=await recoverySnapshot(),verified=await verifyRecovery(saved);
+          lease.check(true);
+          ensure(saved&&canonical(saved.row)===canonical(row),
+            'working recovery post-commit readback conflict');
+          return verified;
+        }finally{recoveryBusy=false;}
+      }
+      // The caller MUST first verify the session CAS receipt. A domain
+      // adapter cannot make a cross-database session acknowledgement atomic.
+      // Exact CAS plus payload equality ensures an older completion cannot
+      // erase a newer edit, even if the new edit has identical bytes.
+      async function retireRecovery(expectedRevision,acknowledgedRevision){
+        ensure(!recoveryBusy,'working recovery operation pending');
+        lease.check(true);
+        ensure(typeof expectedRevision==='string'&&recoveryToken.test(expectedRevision),
+          'exact expected recovery revision required');
+        const ackKey=revisionKey(acknowledgedRevision);
+        recoveryBusy=true;
+        try{
+          const before=await recoverySnapshot(),previous=await verifyRecovery(before);
+          ensure(previous&&previous.revision===expectedRevision,
+            'working recovery revision conflict; evidence retained');
+          ensure(sequence(acknowledgedRevision)>sequence(previous.baseRevision)||
+            acknowledgedRevision===previous.baseRevision,'working recovery acknowledgement predates base');
+          const original=await withStore(indexedDB,'readonly',store=>store.get(ackKey),lease);
+          const acknowledged=await decode(original,acknowledgedRevision);
+          ensure(canonical(acknowledged.experiment)===canonical(previous.experiment),
+            'acknowledged document differs from working recovery; evidence retained');
+          lease.check(true);
+          await mutateRecovery(before,acknowledgedRevision,original,store=>store.delete(recoveryKey));
+          const after=await recoverySnapshot();lease.check(true);
+          ensure(after===null,'working recovery retirement readback conflict; evidence retained');
+          return true;
+        }finally{recoveryBusy=false;}
+      }
+      return Object.freeze({id,read,readRevision,write,prepareFork,
+        readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,
       coordination:writer?'participating-writer':'uncoordinated'});

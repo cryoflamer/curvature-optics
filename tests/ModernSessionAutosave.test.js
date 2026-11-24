@@ -169,3 +169,111 @@ test('working-copy preparation refuses local-only evidence instead of guessing a
   });
   assert.deepEqual(result,{status:'empty'});
 });
+
+
+// Transaction-level fake for the recovery contract. Requests run in order,
+// readwrite data becomes visible only at oncomplete, abort discards changes.
+// Real IndexedDB, Web Crypto and F5 are covered by targeted Chromium.
+function recoveryMemoryDB(){
+  const rows=new Map();
+  return {rows,open(){
+    const req={};
+    queueMicrotask(()=>{
+      req.result={objectStoreNames:{contains:()=>true},close(){},
+        transaction(key,mode){
+          assert.equal(key,autosave.STORE);
+          const values=new Map(rows);
+          let pending=0,finished=false;
+          const tx={error:null,abort(){
+            if(finished)throw Error('transaction inactive');
+            finished=true;queueMicrotask(()=>tx.onabort?.());
+          }};
+          function complete(){
+            if(finished||pending)return;
+            finished=true;
+            if(mode==='readwrite'){rows.clear();for(const [k,v] of values)rows.set(k,v);}
+            tx.oncomplete?.();
+          }
+          function request(action){
+            const op={};pending++;
+            queueMicrotask(()=>{
+              if(finished)return;
+              try{op.result=action();op.onsuccess?.();}
+              catch(error){tx.error=error;tx.abort();}
+              finally{pending--;queueMicrotask(complete);}
+            });
+            return op;
+          }
+          const store={transaction:tx,get:k=>request(()=>values.has(k)?structuredClone(values.get(k)):undefined),
+            add(v,k){return request(()=>{assert.equal(mode,'readwrite');assert(!values.has(k));values.set(k,structuredClone(v));});},
+            put(v,k){return request(()=>{assert.equal(mode,'readwrite');values.set(k,structuredClone(v));});},
+            delete(k){return request(()=>{assert.equal(mode,'readwrite');values.delete(k);});}};
+          tx.objectStore=()=>store;queueMicrotask(complete);return tx;
+        }};
+      req.onsuccess();
+    });
+    return req;
+  }};
+}
+async function recoveryFixture(){
+  const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  const base={display:{mode:'scene'},height:1};
+  const codec={STORAGE_KEY:'fixture',validate(v){
+    assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;
+  }};
+  let active=true;
+  const lease={tabId:'recovery-tab',check(){if(!active)throw Error('lease lost');},track(){return ()=>{};}};
+  const open=()=>adapter.openWorkingCopy(db,{lease,codec,crypto});
+  await adapter.write(db,base,100);
+  await adapter.prepareWorkingCopy(db,{tabId:lease.tabId,lease,storage:{getItem:()=>null},
+    codec,crypto,explicitIntent:false,isCurrent:()=>true});
+  const a=open(),initial=await a.read();
+  return {db,open,a,initial,base,lease,lose(){active=false;}};
+}
+test('working recovery survives reopening without moving HEAD or inheriting into a fork',async()=>{
+  const f=await recoveryFixture(),edit={...f.base,height:2};
+  assert.equal(await f.a.readRecovery(),null);
+  const staged=await f.a.stageRecovery(edit,f.initial.revision,null);
+  assert.equal(staged.baseRevision,f.initial.revision);
+  assert.deepEqual((await f.open().readRecovery()),staged);
+  assert.deepEqual(await f.a.read(),f.initial);
+  const childLease={...f.lease,tabId:'child-tab'};
+  const child=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}})
+    .openWorkingCopy(f.db,{lease:childLease,codec:{validate:v=>v},crypto:require('node:crypto').webcrypto});
+  await child.prepareFork({revision:1,envelope:{tabId:f.lease.tabId,workspace:'scene',
+    documents:{experiment:{id:f.initial.id,revision:f.initial.revision,recovery:null}}}},()=>true);
+  assert.equal(await child.readRecovery(),null);
+  assert.deepEqual((await child.read()).experiment,f.base);
+  assert.deepEqual(await f.a.readRecovery(),staged);
+});
+test('working recovery CAS never erases a later edit or acknowledges a different payload',async()=>{
+  const f=await recoveryFixture(),one={...f.base,height:2},two={...f.base,height:3};
+  const first=await f.a.stageRecovery(one,f.initial.revision,null);
+  const receipt=await f.a.write(one,f.initial.revision);
+  const second=await f.a.stageRecovery(two,receipt.revision,first.revision);
+  await assert.rejects(f.open().stageRecovery(one,f.initial.revision,first.revision),/revision conflict/);
+  await assert.rejects(f.a.retireRecovery(first.revision,receipt.revision),/revision conflict/);
+  await assert.rejects(f.a.retireRecovery(second.revision,receipt.revision),/differs/);
+  await assert.rejects(f.a.stageRecovery(one,f.initial.revision,second.revision),/backwards/);
+  assert.deepEqual(await f.a.readRecovery(),second);
+  const saved=await f.a.write(two,receipt.revision);
+  assert.equal(await f.a.retireRecovery(second.revision,saved.revision),true);
+  assert.equal(await f.open().readRecovery(),null);
+  assert.deepEqual((await f.a.readRevision(f.initial.revision)).experiment,f.base);
+});
+test('working recovery refuses corrupt evidence, invalid base and lost lease',async()=>{
+  const f=await recoveryFixture(),edit={...f.base,height:2};
+  await assert.rejects(f.a.stageRecovery(edit,'sha256:'+'0'.repeat(64),null),/identity mismatch/);
+  const staged=await f.a.stageRecovery(edit,f.initial.revision,null);
+  const key='working-recovery:'+f.initial.id,original=f.db.rows.get(key);
+  f.db.rows.set(key,{...original,experiment:{...edit,height:99}});
+  const corrupt=structuredClone(f.db.rows.get(key));
+  await assert.rejects(f.a.readRecovery(),/digest mismatch/);
+  await assert.rejects(f.a.stageRecovery(edit,f.initial.revision,staged.revision),/digest mismatch/);
+  await assert.rejects(f.a.retireRecovery(staged.revision,f.initial.revision),/digest mismatch/);
+  assert.deepEqual(f.db.rows.get(key),corrupt);
+  f.db.rows.set(key,original);f.lose();
+  await assert.rejects(f.a.readRecovery(),/lease lost/);
+  assert.deepEqual(f.db.rows.get(key),original);
+});

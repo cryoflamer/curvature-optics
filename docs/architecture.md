@@ -579,6 +579,39 @@ then binds the verified child. Fork origins and immutable revisions remain
 retained; cleanup and orphan handling are future work. Ordinary UI-only
 tab claims remain independent of this document-fork contract.
 
+### Working-copy recovery checkpoint adapter (not mounted)
+
+The existing working-session database has a disjoint
+`working-recovery:<working-copy-id>` record. It contains the validated
+experiment, owning document ID, immutable base revision, unique draft
+revision, format/version and SHA-256 over all recovery fields. It is not a
+document head, history entry, or another tab's migration source. A read
+verifies the base revision and payload digest; invalid or unsupported bytes
+are preserved. No Web Storage payload or new database/schema is needed.
+
+`stageRecovery(experiment, baseRevision, expectedRevision)` snapshots the
+input before awaiting I/O, uses the same owned lease and backup writer
+barrier, and performs CAS against the observed draft and base bytes in one
+readwrite transaction. `null` expects no existing draft. A newer draft
+receives a distinct token even if its payload is identical. The adapter
+acknowledges only after completion and verified readback. It refuses a
+backward base revision. `readRecovery()` restores the draft independently
+of HEAD; it does not activate or promote anything.
+
+`retireRecovery(expectedRevision, acknowledgedRevision)` removes only the
+exact draft whose payload equals the verified immutable acknowledged
+revision (at or after the base). It refuses stale acknowledgements and
+mismatched data. The controller must verify session CAS acknowledgement
+before invoking retirement; a domain adapter cannot prove that separate
+database's transaction. A draft left after interrupted retirement is
+recoverable evidence. Parent forks still copy only acknowledged documents.
+
+This is the storage foundation: the live preview does not yet stage drafts
+on edit, offer draft recovery, reconcile a divergent head, or retire drafts
+after session acknowledgement. Memory-only input and interrupted IndexedDB
+writes are not guaranteed durable. Those lifecycle and UI behaviors require
+separate integration and acceptance.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small
