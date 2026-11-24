@@ -142,3 +142,110 @@ test('recovery pointer is retired only on acknowledged replacement',async()=>{
   m.acknowledgeSession(t,{revision:5,envelope:p.envelope});
   assert.equal(m.state().session.documents.experiment.recovery,null);
 });
+
+function controllerFixture({existing=true}={}){
+  const tabId='tab-a',id='working-'+tabId;
+  const make=(revision,value)=>({kind:'experiment',id,revision,experiment:{value}});
+  const revisions=new Map([['r1',make('r1',1)]]);
+  let latest='r1',current=existing?{revision:1,
+    envelope:contract.select(contract.empty(tabId),'scene',{id,revision:'r1',recovery:null})}:
+    {revision:0,envelope:null};
+  const faults={session:null,domain:null,valid:true,reads:0,prepares:0};
+  const lease={tabId,check(){if(!faults.valid)throw Error('lease lost');}};
+  const sessions={async read(){faults.reads++;return current;},
+    async write(envelope,expected){
+      if(current.revision!==expected)throw Error('foreign session CAS');
+      if(faults.session==='before')throw Error('session failure');
+      current={revision:expected+1,envelope};
+      if(faults.session==='after')throw Error('lost session acknowledgement');
+      return current;
+    }};
+  const working={id,async read(){return revisions.get(latest);},
+    async readRevision(rev){return revisions.get(rev);},
+    async write(experiment,expected){
+      if(latest!==expected)throw Error('foreign domain CAS');
+      if(faults.domain==='before')throw Error('domain failure');
+      const revision='r'+(revisions.size+1);
+      revisions.set(revision,make(revision,experiment.value));latest=revision;
+      if(faults.domain==='after')throw Error('lost domain acknowledgement');
+      return {kind:'experiment',id,revision};
+    }};
+  const makeController=()=>contract.createExperimentController({lease,sessions,working,
+    isCurrent:()=>faults.valid,prepare:async()=>{
+      faults.prepares++;return {status:'verified',workspace:'scene',
+        document:{id,revision:'r1',recovery:null}};
+    }});
+  return {makeController,faults,working,sessions,row:()=>current};
+}
+test('controller binds only verified migration and external intent skips private reads',async()=>{
+  const f=controllerFixture({existing:false}),external=f.makeController();
+  await external.open({explicitIntent:true});
+  assert.equal(external.state().status,'external');assert.equal(f.faults.reads,0);
+  const c=f.makeController();await c.open();
+  assert.equal(c.state().status,'clean');assert.equal(f.row().revision,1);
+  assert.equal(f.faults.prepares,1);
+});
+test('controller saves document then session and restores exact acknowledged revision',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  await c.save({value:2});assert.equal(c.state().status,'committed');
+  assert.equal(f.row().envelope.documents.experiment.revision,'r2');
+  const reopened=f.makeController();await reopened.open();
+  assert.equal(reopened.state().bound.experiment.value,2);
+});
+test('controller requires explicit offer to advance a diverged session after reload',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  f.faults.session='before';await assert.rejects(c.save({value:2}),/session failure/);
+  assert.equal(f.row().revision,1);
+  const reopened=f.makeController();await reopened.open();
+  assert.equal(reopened.state().status,'recovering');
+  assert.equal(reopened.state().bound.experiment.value,1);
+  assert.equal(reopened.state().head.experiment.value,2);
+  assert.throws(()=>reopened.markDirty(),/resolve session recovery/);
+  await assert.rejects(reopened.acceptHead({revision:'r2'}),/explicit current/);
+  f.faults.session=null;await reopened.acceptHead(reopened.recoveryOffer());
+  assert.equal(reopened.state().status,'clean');assert.equal(f.row().revision,2);
+});
+test('controller read-first recovery accepts exact lost session acknowledgement',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  f.faults.session='after';await assert.rejects(c.save({value:2}),/lost session/);
+  f.faults.session=null;await c.recover();
+  assert.equal(c.state().status,'clean');assert.equal(f.row().revision,2);
+});
+test('controller retains failure if domain did not commit, and offers lost domain commit',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  f.faults.domain='before';await assert.rejects(c.save({value:2}),/domain failure/);
+  await assert.rejects(c.recover(),/retain unsaved input/);
+  assert.equal(c.state().status,'failed');
+  const g=controllerFixture(),d=g.makeController();await d.open();d.markDirty();
+  g.faults.domain='after';await assert.rejects(d.save({value:2}),/lost domain/);
+  await d.recover();assert.equal(d.state().status,'recovering');
+  assert.equal(d.recoveryOffer().revision,'r2');
+});
+test('recovery offer fails closed if head changes before explicit acceptance',async()=>{
+  const f=controllerFixture(),c=f.makeController();await f.working.write({value:2},'r1');
+  await c.open();const offer=c.recoveryOffer();await f.working.write({value:3},'r2');
+  await assert.rejects(c.acceptHead(offer),/offer changed/);
+  assert.equal(f.row().revision,1);
+});
+
+test('controller does not clear later edits when a save fails',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  const original=f.working.write;
+  f.working.write=async(...args)=>{const receipt=await original(...args);c.markDirty();return receipt;};
+  f.faults.session='before';
+  await assert.rejects(c.save({value:2}),/session failure/);
+  assert.equal(c.state().unsavedAfterAttempt,true);
+  assert.equal(c.state().busy,false);
+  await assert.rejects(c.recover(),/later unsaved edits/);
+  assert.equal(c.state().status,'failed');
+  assert.equal(f.row().revision,1);
+});
+test('controller keeps a later edit dirty after successful acknowledgement',async()=>{
+  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
+  const original=f.working.write;
+  f.working.write=async(...args)=>{const receipt=await original(...args);c.markDirty();return receipt;};
+  await c.save({value:2});
+  assert.equal(c.state().status,'dirty');
+  assert.equal(c.state().busy,false);
+  assert.equal(f.row().revision,2);
+});

@@ -170,6 +170,176 @@
     return Object.freeze({state,markDirty,recoveryLoaded,beginSave,
       acknowledgeDocument,acknowledgeSession,fail,beginRecovery,canSwitch});
   }
+  // Explicit Scene/Compare orchestration; the caller owns activation and
+  // supplies the same captured lease to both adapters. No UI/URL effects.
+  function createExperimentController({lease,sessions,working,prepare,isCurrent}={}){
+    check(lease&&typeof lease.check==='function'&&sessions&&working&&
+      typeof prepare==='function'&&typeof isCurrent==='function',
+      'owned experiment controller dependencies required');
+    const tabId=token(lease.tabId,'tab ID',128);
+    check(working.id==='working-'+tabId,'working-copy identity mismatch');
+    let status='idle',busy=false,tracker=null,row=null,head=null,bound=null,
+      failure=null,offer=null,unsavedAfterAttempt=false;
+    const clone=v=>JSON.parse(JSON.stringify(v));
+    const scene=mode=>mode==='scene'||mode==='compare';
+    function guard(writable=false){
+      check(isCurrent()===true,'stale controller generation');lease.check(writable);
+    }
+    function state(){
+      return clone({status,busy,row,head,bound,error:failure,
+        pending:tracker?tracker.state().pending:null,unsavedAfterAttempt});
+    }
+    function checkedRow(value){
+      check(value&&Number.isSafeInteger(value.revision)&&value.revision>=0,
+        'invalid session receipt');
+      check(value.revision===0?value.envelope===null:
+        normalize(value.envelope).tabId===tabId,'session identity mismatch');
+      return value.revision===0?{revision:0,envelope:null}:
+        {revision:value.revision,envelope:normalize(value.envelope)};
+    }
+    function checkedDocument(value,expected){
+      check(value&&value.kind==='experiment'&&value.id===working.id&&
+        typeof value.revision==='string'&&value.experiment&&
+        (expected===undefined||value.revision===expected),
+        'working-copy receipt mismatch');
+      return clone(value);
+    }
+    function activate(saved,value){
+      check(saved.envelope&&scene(saved.envelope.workspace)&&
+        saved.envelope.documents.experiment&&
+        saved.envelope.documents.experiment.id===value.id&&
+        saved.envelope.documents.experiment.revision===value.revision&&
+        !saved.envelope.documents.experiment.recovery,'experiment binding mismatch');
+      row=saved;head=bound=value;
+      tracker=createSaveTracker({session:row.envelope,sessionRevision:row.revision});
+      offer=null;failure=null;status='clean';
+    }
+    function begin(){
+      check(!busy,'controller operation pending');busy=true;
+    }
+    function failed(error){
+      failure=String(error&&error.message||error);status='failed';offer=null;
+    }
+    async function writeSession(candidate,expected){
+      guard(true);
+      const saved=checkedRow(await sessions.write(candidate,expected));guard(true);
+      check(saved.revision===expected+1&&same(saved.envelope,candidate),
+        'session CAS acknowledgement mismatch');
+      return saved;
+    }
+    // For an existing binding always read the precise acknowledged revision
+    // before comparing HEAD. Never migrate over another workspace or draft.
+    async function inspect(){
+      guard();
+      const saved=checkedRow(await sessions.read());guard();
+      if(!saved.envelope||!saved.envelope.documents.experiment){
+        check(!saved.envelope||scene(saved.envelope.workspace),
+          'active non-experiment workspace must not be replaced');
+        return {saved,unbound:true};
+      }
+      const ref=saved.envelope.documents.experiment;
+      check(scene(saved.envelope.workspace)&&ref.id===working.id&&!ref.recovery,
+        'unsupported experiment session binding; evidence retained');
+      const previous=checkedDocument(await working.readRevision(ref.revision),ref.revision);
+      guard();
+      const latest=checkedDocument(await working.read());guard();
+      return {saved,previous,latest};
+    }
+    function acceptInspection(result){
+      row=result.saved;bound=result.previous;head=result.latest;
+      if(bound.revision===head.revision){activate(row,bound);return;}
+      tracker=null;status='recovering';
+      // This offer is tied to exact observed session and document identities.
+      offer=Object.freeze({sessionRevision:row.revision,revision:head.revision,
+        acknowledgedRevision:bound.revision});
+    }
+    async function open({explicitIntent=false}={}){
+      check(typeof explicitIntent==='boolean','explicit intent must be boolean');
+      check(status==='idle','controller already opened');
+      begin();
+      try{
+        guard();
+        // Explicit URL/import priority: not even a private session read.
+        if(explicitIntent){status='external';return;}
+        const result=await inspect();
+        if(!result.unbound){acceptInspection(result);return;}
+        guard(true);
+        const candidate=await prepare();guard(true);
+        if(candidate.status==='empty'){status='empty';row=result.saved;return;}
+        check(candidate.status==='verified'&&scene(candidate.workspace)&&
+          candidate.document&&candidate.document.id===working.id&&!candidate.document.recovery,
+          'invalid migration candidate');
+        const current=checkedDocument(await working.read(),candidate.document.revision);
+        guard(true);
+        const envelope=select(result.saved.envelope||empty(tabId),
+          candidate.workspace,candidate.document);
+        const saved=await writeSession(envelope,result.saved.revision);
+        activate(saved,current);
+      }catch(error){failed(error);throw error;}finally{busy=false;}
+    }
+    function markDirty(){
+      guard(true);
+      check(tracker&&['clean','dirty','committed','saving'].includes(status),
+        'resolve session recovery before editing');
+      const next=tracker.markDirty();status=next.status;return state();
+    }
+    async function save(experiment){
+      check(status==='dirty'&&tracker,'dirty document required');
+      begin();let attempt=null;
+      try{
+        guard(true);attempt=tracker.beginSave();status='saving';
+        const receipt=await working.write(experiment,attempt.baseRevision);guard(true);
+        const pending=tracker.acknowledgeDocument(attempt,receipt);
+        check(pending,'stale document receipt');
+        const verified=checkedDocument(await working.readRevision(receipt.revision),receipt.revision);
+        guard(true);head=verified;
+        const saved=await writeSession(pending.envelope,pending.expectedRevision);
+        check(tracker.acknowledgeSession(attempt,saved),'stale session receipt');
+        row=saved;bound=verified;status=tracker.state().status;failure=null;
+      }catch(error){
+        if(attempt){unsavedAfterAttempt=tracker.state().edit!==attempt.edit;tracker.fail(attempt,error);}
+        failed(error);throw error;
+      }
+      finally{busy=false;}
+    }
+    // Read-first reconciliation after an ambiguous commit. A dirty edit
+    // without a durable new head remains failed; caller must retain its input.
+    async function recover(){
+      check(status==='failed'||status==='recovering','no unresolved save');
+      begin();
+      try{
+        check(!unsavedAfterAttempt,'later unsaved edits require explicit handling; retain input');
+        const result=await inspect();
+        check(!result.unbound,'unbound candidate requires a fresh explicit open');
+        if(tracker&&tracker.state().status==='failed'&&
+          result.latest.revision===result.previous.revision){
+          const pending=tracker.state().pending;
+          check(pending&&same(result.saved.envelope,pending.envelope)&&
+            result.saved.revision===pending.expectedRevision+1,
+            'no verified saved edit; retain unsaved input');
+        }
+        acceptInspection(result);failure=null;
+      }catch(error){failed(error);throw error;}finally{busy=false;}
+    }
+    function recoveryOffer(){return offer?clone(offer):null;}
+    async function acceptHead(selection){
+      check(status==='recovering'&&offer&&same(selection,offer),
+        'explicit current recovery offer required');
+      begin();
+      try{
+        guard(true);
+        const result=await inspect();guard(true);
+        check(!result.unbound&&same(result.saved,row)&&
+          result.previous.revision===offer.acknowledgedRevision&&
+          result.latest.revision===offer.revision,'recovery offer changed; evidence retained');
+        const candidate=select(row.envelope,row.envelope.workspace,
+          {id:working.id,revision:offer.revision,recovery:null});
+        const saved=await writeSession(candidate,row.revision);
+        activate(saved,result.latest);
+      }catch(error){failed(error);throw error;}finally{busy=false;}
+    }
+    return Object.freeze({open,markDirty,save,recover,recoveryOffer,acceptHead,state});
+  }
   return Object.freeze({FORMAT,VERSION,KINDS,WORKSPACES,empty,normalize,
-    select,planRestore,createSaveTracker});
+    select,planRestore,createSaveTracker,createExperimentController});
 }));

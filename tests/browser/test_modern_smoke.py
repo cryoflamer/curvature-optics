@@ -10609,5 +10609,69 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(result['aborted'])
         self.assertEqual(result['final'],result['after'])
 
+
+    def test_experiment_controller_owned_save_and_explicit_recovery_after_f5(self):
+        """Explicit controller uses both real owned stores; no live UI activation."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        first=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const sessions=ui.documentSessions(D);
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const legacy=await S.read(indexedDB),local=localStorage.getItem(C.STORAGE_KEY);
+            let fail=false;
+            const controller=D.createExperimentController({lease,working,
+                sessions:{read:()=>sessions.read(),write:(...args)=>{
+                    if(fail)throw Error('simulated session failure');
+                    return sessions.write(...args);
+                }},isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
+                    tabId,lease,storage:localStorage,codec:C,crypto,
+                    explicitIntent:false,isCurrent:()=>true})});
+            await controller.open();
+            const initial=controller.state(),edit=structuredClone(initial.bound.experiment);
+            edit.scene.camera.Height+=1;
+            controller.markDirty();await controller.save(edit);
+            const committed=controller.state(),next=structuredClone(edit);
+            next.scene.camera.Height+=1;controller.markDirty();fail=true;
+            let error;
+            try{await controller.save(next);}catch(e){error=e.message;}
+            const failed=controller.state();
+            return {initial,committed,failed,error,next,
+                unchanged:JSON.stringify(await S.read(indexedDB))===JSON.stringify(legacy)&&
+                    localStorage.getItem(C.STORAGE_KEY)===local};
+        }""")
+        self.assertEqual(first['initial']['status'],'clean')
+        self.assertEqual(first['committed']['status'],'committed')
+        self.assertEqual(first['committed']['row']['revision'],2)
+        self.assertEqual(first['failed']['status'],'failed')
+        self.assertIn('simulated session failure',first['error'])
+        self.assertTrue(first['unchanged'])
+        self.page.reload(wait_until='load')
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        after=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            await ui.claimTab();
+            const lease=ui.captureDocumentLease(),sessions=ui.documentSessions(D);
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const c=D.createExperimentController({lease,sessions,working,isCurrent:()=>true,
+                prepare:()=>{throw Error('must not migrate again');}});
+            await c.open();
+            const before=c.state(),offer=c.recoveryOffer();
+            await c.acceptHead(offer);
+            return {before,offer,after:c.state()};
+        }""")
+        self.assertEqual(after['before']['status'],'recovering')
+        self.assertEqual(after['before']['bound'],first['committed']['bound'])
+        self.assertEqual(after['before']['head']['experiment'],first['next'])
+        self.assertEqual(after['after']['status'],'clean')
+        self.assertEqual(after['after']['row']['revision'],3)
+        self.assertEqual(after['after']['bound'],after['before']['head'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -503,6 +503,29 @@ No revision deletion, garbage collection, live consumer switch, or automatic
 URL rewrite is implemented here. Existing legacy checkpoint, migration
 snapshot, History and independent A/B physics remain untouched.
 
+### Headless experiment session controller
+
+`ModernDocumentSession.createExperimentController()` coordinates the
+existing owned session and working-copy adapters without a live UI consumer.
+Explicit external intent skips private reads. An unbound session may bind
+only a verified migration candidate whose revision matches the durable head.
+Migration accepts the same captured tab lease for transaction tracking and
+ownership checks. Existing non-experiment workspace/recovery bindings are
+not replaced by this controller.
+
+Opening an existing binding reads its exact acknowledged immutable revision
+and the current domain head. Divergence enters `recovering`, exposing both
+versions and a recovery offer tied to the observed session revision and
+head. No editing or automatic promotion is allowed. Explicit acceptance
+rereads both stores and CASes only an unchanged offer. A normal save uses
+the existing save tracker: domain write/readback, followed by session CAS
+and acknowledgement. If an acknowledgement fails, recovery rereads both
+stores; it must not invent a saved edit or blindly repeat a write. The
+caller retains unsaved input. A later edit during a failed save blocks recovery
+until the caller handles that unsaved input explicitly. This controller does not provide crash
+recovery for edits that never reached IndexedDB, a UI recovery chooser,
+or a new active-workspace owner. No URL or default persistence changes.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small

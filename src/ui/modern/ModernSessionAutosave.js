@@ -154,10 +154,13 @@
       return transaction(indexedDB,function(store){store.delete(KEY);return null;});
     }
     async function prepareWorkingCopy(indexedDB,{tabId,storage,codec,crypto,
-      explicitIntent,isCurrent}={}){
+      explicitIntent,isCurrent,lease}={}){
       ensure(typeof explicitIntent==='boolean'&&typeof isCurrent==='function',
         'explicit restore intent and generation guard required');
-      const guard=()=>ensure(isCurrent()===true,'stale migration generation');
+      const guard=()=>{
+        ensure(isCurrent()===true,'stale migration generation');
+        if(lease)lease.check(true);
+      };
       guard();
       if(explicitIntent)return {status:'external'};
       ensure(writer,'coordinated working-session writer required');
@@ -166,6 +169,7 @@
         'invalid tab identity');
       ensure(codec&&typeof codec.validate==='function'&&typeof codec.STORAGE_KEY==='string',
         'experiment validator required');
+      if(lease)ensure(lease.tabId===tabId,'migration lease identity mismatch');
       const id='working-'+tabId,key=copyKey(id);
       const local=localEvidence(storage,codec);
       const checkpoint=await read(indexedDB);guard();
@@ -224,7 +228,7 @@
             }catch(error){fail(error);}
           };
           return output;
-        });
+        },lease||null);
       }catch(error){throw failure||error;}
       // Transaction completion is necessary, not sufficient. Re-read and
       // hash the durable candidate, then verify that source evidence is still
