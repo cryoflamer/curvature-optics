@@ -569,6 +569,30 @@ the shared preview. Explicit URL/import intent still skips private reads in
 the controller. `readWorkingCopy()` and the historical schema decoders
 remain available for compatibility with existing portable backups.
 
+### Atomic shared Scene/Compare checkpoint primitive
+
+The replacement primitive `openSharedCheckpoint()` uses the existing
+working-session database and store, with one fixed `shared-checkpoint` row.
+Version 1 contains the validated experiment, shared document envelope,
+optional full draft, monotonic row revision, and SHA-256 of the canonical
+row fields. The experiment binding uses `checkpoint:<sequence>`; unrelated
+document slots are preserved. Staging changes only the draft and CAS
+revision. Promotion replaces the current payload and its binding and clears
+the draft in the **same IndexedDB transaction**. Reverted edits clear the
+draft without changing the committed document identity.
+
+Every mutation requires an observed baseline, compares the entire row
+(including its draft) inside the readwrite transaction, and acknowledges
+only after exact digest-verified readback. A lost acknowledgement requires
+a fresh read. Page suspension aborts outstanding transactions. No new
+immutable revision or HEAD row is produced.
+
+This primitive is not yet the live preview authority: initialization takes
+an explicitly supplied snapshot, not an automatic migration decision.
+The existing preview continues to use its old two-store protocol until
+verified migration and controller replacement. Old keys and backups are
+not modified; the new key is included by the existing raw backup inventory.
+
 ### Editable Scene/Compare revision adapter
 
 The explicit `openWorkingCopy(indexedDB,{lease,codec,crypto})` adapter

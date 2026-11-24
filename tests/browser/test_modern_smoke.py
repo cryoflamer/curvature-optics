@@ -10692,6 +10692,99 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(restored['row'],result['row'])
         self.assertEqual(restored['value']['experiment'],result['e'])
 
+    def test_atomic_shared_checkpoint_promotion_and_interruption(self):
+        """Real IndexedDB: one row, stale CAS, aborted promotion, lost acknowledgement and F5."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        first=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const open=()=>{
+                const ui=CurvatureModernUiSessionStore.create(window);
+                ui.sharedDocumentSessions(D);
+                return S.openSharedCheckpoint(indexedDB,{lease:ui.captureSharedDocumentLifetime(),
+                    codec:C,crypto,contract:D});
+            };
+            const legacy=await S.read(indexedDB);
+            const a=open(),b=open();
+            await a.read();await b.read();
+            const initial=await a.initialize(legacy.experiment);
+            let staleInit,staleStage,aborted,lost,blind;
+            try{await b.initialize(legacy.experiment);}catch(e){staleInit=e.message;}
+            await b.read();
+            const edit=structuredClone(initial.experiment);
+            edit.scene.camera.Height+=1;
+            edit.compare.A.atmosphere='vacuum';edit.compare.B.atmosphere='inverse-spherical';
+            const staged=await a.stage(edit,initial.revision);
+            try{await b.stage(edit,initial.revision);}catch(e){staleStage=e.message;}
+            const proto=IDBObjectStore.prototype,put=proto.put;
+            let interrupted=false;
+            try{
+                proto.put=function(value,...args){
+                    const request=put.call(this,value,...args);
+                    if(args[0]==='shared-checkpoint'){
+                        interrupted=true;
+                        dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+                    }
+                    return request;
+                };
+                try{await a.promote(staged.revision);}catch(e){aborted=e.message;}
+            }finally{proto.put=put;}
+            const fresh=open(),afterAbort=await fresh.read();
+            const idbOpen=indexedDB.open.bind(indexedDB);let calls=0;
+            try{
+                Object.defineProperty(indexedDB,'open',{configurable:true,value:function(...args){
+                    if(args[0]===S.DATABASE&&++calls===2)throw Error('lost checkpoint readback');
+                    return idbOpen(...args);
+                }});
+                try{await fresh.promote(staged.revision);}catch(e){lost=e.message;}
+            }finally{Object.defineProperty(indexedDB,'open',{configurable:true,value:idbOpen});}
+            try{await fresh.promote(staged.revision);}catch(e){blind=e.message;}
+            const reopened=open(),committed=await reopened.read();
+            let current=committed;
+            for(let i=0;i<5;i++){
+                const next=structuredClone(current.experiment);next.scene.camera.Height+=1;
+                const draft=await reopened.stage(next,current.revision);
+                current=await reopened.promote(draft.revision);
+            }
+            const keys=await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readonly');
+                    const q=tx.objectStore(S.STORE).getAllKeys();
+                    tx.oncomplete=()=>{db.close();resolve(q.result);};
+                    tx.onabort=()=>{db.close();reject(tx.error);};};
+            });
+            return {initial,staged,afterAbort,committed,current,edit,keys,interrupted,
+                staleInit,staleStage,aborted,lost,blind,
+                legacySame:JSON.stringify(legacy)===JSON.stringify(await S.read(indexedDB))};
+        }""")
+        self.assertIn('CAS conflict',first['staleInit'])
+        self.assertIn('CAS conflict',first['staleStage'])
+        self.assertTrue(first['interrupted'])
+        self.assertTrue(first['aborted'])
+        self.assertEqual(first['afterAbort'],first['staged'])
+        self.assertIn('lost checkpoint readback',first['lost'])
+        self.assertIn('read current shared checkpoint',first['blind'])
+        self.assertEqual(first['committed']['experiment'],first['edit'])
+        self.assertIsNone(first['committed']['draft'])
+        self.assertEqual(first['staged']['experiment'],first['initial']['experiment'])
+        self.assertEqual(first['staged']['draft'],first['edit'])
+        self.assertEqual(first['staged']['envelope'],first['initial']['envelope'])
+        self.assertEqual(first['committed']['envelope']['documents']['experiment']['revision'],'checkpoint:3')
+        self.assertEqual(first['current']['revision'],13)
+        self.assertEqual(sorted(first['keys']),['current','shared-checkpoint'])
+        self.assertTrue(first['legacySame'])
+        self.page.reload(wait_until='load')
+        restored=self.page.evaluate("""async () => {
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            return CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:D}).read();
+        }""")
+        self.assertEqual(restored,first['current'])
+
+
     def test_shared_experiment_controller_serializes_save_and_later_edits(self):
         """Actual IndexedDB/locks: shared save, later input, stale second page and F5."""
         self.open_modern()

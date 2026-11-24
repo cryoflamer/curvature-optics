@@ -186,6 +186,130 @@
     function clear(indexedDB){
       return transaction(indexedDB,function(store){store.delete(KEY);return null;});
     }
+    // Atomic replacement primitive. Migration and activation are deliberately
+    // separate: no old preview rows or other domain slots are rewritten here.
+    function openSharedCheckpoint(indexedDB,{lease,codec,crypto,contract}={}){
+      ensure(writer,'coordinated working-session writer required');
+      ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
+      ensure(sharedLease(lease)&&typeof lease.check==='function'&&typeof lease.track==='function',
+        'shared document lifetime required');
+      ensure(codec&&typeof codec.validate==='function'&&contract&&
+        contract.SHARED_ID==='shared'&&typeof contract.normalize==='function'&&
+        typeof contract.select==='function'&&typeof contract.emptyShared==='function',
+        'shared checkpoint contracts required');
+      lease.check();
+      const key='shared-checkpoint',format='curvature-modern-shared-checkpoint';
+      let observed=null,busy=false;
+      const clone=value=>JSON.parse(canonical(value));
+      function normalizeExperiment(value){
+        const experiment=clone(codec.validate(clone(value)));
+        ensure(['scene','compare'].includes(experiment.display?.mode),'invalid checkpoint workspace');
+        return experiment;
+      }
+      function envelopeFor(envelope,experiment,revision){
+        const frame=contract.normalize(envelope);
+        ensure(frame.sessionId===contract.SHARED_ID&&['scene','compare'].includes(frame.workspace),
+          'unsupported shared checkpoint envelope');
+        return contract.select(frame,experiment.display.mode,
+          {id:SHARED_COPY_ID,revision:'checkpoint:'+revision,recovery:null});
+      }
+      function fetch(){
+        return withStore(indexedDB,'readonly',store=>{
+          const out={result:null},req=store.get(key);
+          req.onsuccess=()=>{out.result=req.result===undefined?{present:false}:{present:true,row:req.result};};
+          return out;
+        },lease);
+      }
+      async function decode(raw){
+        ensure(raw,'checkpoint read unavailable');
+        if(!raw.present)return null;
+        const row=raw.row;
+        ensure(row&&Object.keys(row).length===7&&row.format===format&&row.version===1&&
+          Number.isSafeInteger(row.revision)&&row.revision>=1,'invalid shared checkpoint');
+        const {digest:checksum,...data}=row;
+        ensure(typeof checksum==='string'&&checksum===await digest(canonical(data),crypto),
+          'shared checkpoint digest mismatch; evidence retained');
+        const experiment=normalizeExperiment(row.experiment),frame=contract.normalize(row.envelope);
+        const ref=frame.documents.experiment;
+        const match=ref&&/^checkpoint:([1-9][0-9]*)$/.exec(ref.revision);
+        const sequence=match&&Number(match[1]);
+        ensure(frame.sessionId===contract.SHARED_ID&&frame.workspace===experiment.display.mode&&
+          ref&&ref.id===SHARED_COPY_ID&&ref.recovery===null&&Number.isSafeInteger(sequence)&&
+          sequence<=row.revision&&canonical(experiment)===canonical(row.experiment),
+          'invalid shared checkpoint binding');
+        ensure(row.draft===null||canonical(normalizeExperiment(row.draft))===canonical(row.draft),
+          'invalid shared checkpoint draft');
+        lease.check();
+        return clone(row);
+      }
+      async function read(){
+        ensure(!busy,'shared checkpoint operation pending');
+        busy=true;observed=null;
+        try{
+          lease.check();
+          const raw=await fetch(),value=await decode(raw);
+          lease.check();observed=raw;return value;
+        }finally{busy=false;}
+      }
+      // The entire row, including the last observed draft, is the CAS
+      // baseline. Revision tokens are never reused, even on reverted edits.
+      async function mutate(expectedRevision,build){
+        ensure(!busy,'shared checkpoint operation pending');
+        lease.check(true);
+        ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
+          expectedRevision<Number.MAX_SAFE_INTEGER&&
+          (observed.present?observed.row.revision:0)===expectedRevision,
+          'read current shared checkpoint before write');
+        const before=observed,revision=expectedRevision+1;
+        busy=true;observed=null;
+        try{
+          const payload=build(before.present?before.row:null,revision);
+          const data=clone({format,version:1,revision,...payload});
+          const row={...data,digest:await digest(canonical(data),crypto)};
+          await decode({present:true,row});lease.check(true);
+          let failure;
+          try{
+            await transaction(indexedDB,store=>{
+              const req=store.get(key);
+              req.onsuccess=()=>{
+                try{
+                  lease.check(true);
+                  const current=req.result===undefined?{present:false}:{present:true,row:req.result};
+                  ensure(canonical(current)===canonical(before),'shared checkpoint CAS conflict; evidence retained');
+                  if(before.present)store.put(row,key);else store.add(row,key);
+                }catch(error){failure=error;store.transaction.abort();}
+              };
+              return null;
+            },lease);
+          }catch(error){throw failure||error;}
+          const saved=await fetch(),value=await decode(saved);lease.check(true);
+          ensure(saved.present&&canonical(saved.row)===canonical(row),'shared checkpoint readback conflict');
+          observed=saved;return value;
+        }finally{busy=false;}
+      }
+      function initialize(experiment,envelope=contract.emptyShared()){
+        return mutate(0,(before,revision)=>{
+          ensure(before===null,'shared checkpoint already initialized');
+          const value=normalizeExperiment(experiment);
+          return {envelope:envelopeFor(envelope,value,revision),experiment:value,draft:null};
+        });
+      }
+      function stage(experiment,expectedRevision){
+        return mutate(expectedRevision,before=>{
+          ensure(before,'shared checkpoint not initialized');
+          return {envelope:before.envelope,experiment:before.experiment,draft:normalizeExperiment(experiment)};
+        });
+      }
+      function promote(expectedRevision){
+        return mutate(expectedRevision,(before,revision)=>{
+          ensure(before&&before.draft!==null,'shared checkpoint draft required');
+          const envelope=canonical(before.draft)===canonical(before.experiment)?before.envelope:
+            envelopeFor(before.envelope,before.draft,revision);
+          return {envelope,experiment:before.draft,draft:null};
+        });
+      }
+      return Object.freeze({read,initialize,stage,promote});
+    }
     // Immutable revision rows plus an atomic head pointer. The migration
     // row stays intact and represents revision one, including raw provenance.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){
@@ -640,7 +764,7 @@
         inspectMigration,prepareSelectedMigration,
         readRecovery,stageRecovery,retireRecovery});
     }
-    return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,
+    return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,
       coordination:writer?'participating-writer':'uncoordinated'});
   }
   const defaultAdapter=makeAdapter(root.navigator&&root.navigator.locks||null);
@@ -661,6 +785,7 @@
     read:defaultAdapter.read,write:defaultAdapter.write,clear:defaultAdapter.clear,
     readWorkingCopy,
     openWorkingCopy:defaultAdapter.openWorkingCopy,
+    openSharedCheckpoint:defaultAdapter.openSharedCheckpoint,
     coordination:defaultAdapter.coordination,makeAdapter,
     normalize:normalize,newer:newer});
 }));

@@ -363,3 +363,77 @@ test('explicit shared migration selects a verified old draft and retains every s
   await shared.write({...base,height:8},saved.document.revision);
   await assert.rejects(shared.prepareSelectedMigration(choice.selection,opts),/shared HEAD already exists/);
 });
+
+function atomicFixture(){
+  const db=recoveryMemoryDB(),crypto=require('node:crypto').webcrypto;
+  const contract=require('../src/storage/ModernDocumentSession');
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  const codec={validate(v){assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;}};
+  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+  const open=()=>adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
+  return {db,adapter,contract,open,base:{display:{mode:'scene'},height:1}};
+}
+test('atomic shared checkpoint keeps only one current row and promotes the exact draft',async()=>{
+  const f=atomicFixture(),a=f.open();
+  await f.adapter.write(f.db,f.base,100);
+  const old=structuredClone(f.db.rows.get('current'));
+  const other={id:'animation-project',revision:'4',recovery:null};
+  const envelope=f.contract.select(f.contract.select(f.contract.emptyShared(),'animation',other),'scene');
+  assert.equal(await a.read(),null);
+  const initial=await a.initialize(f.base,envelope);
+  assert.equal(initial.revision,1);
+  assert.equal(initial.envelope.documents.experiment.revision,'checkpoint:1');
+  assert.deepEqual(initial.envelope.documents.animation,other);
+  let current=initial;
+  for(let i=0;i<10;i++){
+    const edit={display:{mode:'compare'},height:i+2};
+    const staged=await a.stage(edit,current.revision);
+    assert.deepEqual(staged.experiment,current.experiment);
+    assert.deepEqual(staged.draft,edit);
+    assert.deepEqual(staged.envelope,current.envelope);
+    current=await a.promote(staged.revision);
+    assert.deepEqual(current.experiment,edit);
+    assert.equal(current.draft,null);
+    assert.equal(current.envelope.workspace,'compare');
+    assert.equal(current.envelope.documents.experiment.revision,'checkpoint:'+current.revision);
+    assert.deepEqual(current.envelope.documents.animation,other);
+  }
+  assert.equal(current.revision,21);
+  const staged=await a.stage(current.experiment,current.revision);
+  const same=await a.promote(staged.revision);
+  assert.equal(same.revision,23);
+  assert.deepEqual(same.envelope,current.envelope);
+  assert.deepEqual(await f.open().read(),same);
+  assert.deepEqual([...f.db.rows.keys()],['current','shared-checkpoint']);
+  assert.deepEqual(f.db.rows.get('current'),old);
+});
+test('atomic checkpoint rejects stale initialization, stage and promotion without losing evidence',async()=>{
+  const f=atomicFixture(),a=f.open(),b=f.open();
+  await assert.rejects(a.initialize(f.base),/read current shared checkpoint/);
+  await a.read();await b.read();
+  const one=await a.initialize(f.base);
+  await assert.rejects(b.initialize(f.base),/CAS conflict/);
+  await b.read();
+  const edit={...f.base,height:2},two=await a.stage(edit,one.revision);
+  await assert.rejects(b.stage({...edit,height:3},one.revision),/CAS conflict/);
+  await b.read();
+  const three=await a.stage({...edit,height:4},two.revision);
+  await assert.rejects(b.promote(two.revision),/CAS conflict/);
+  assert.deepEqual(await f.open().read(),three);
+  const committed=await a.promote(three.revision);
+  assert.equal(committed.experiment.height,4);
+  assert.equal(committed.draft,null);
+});
+test('atomic checkpoint fails closed on corrupt bytes and invalid binding',async()=>{
+  const f=atomicFixture(),a=f.open();
+  await a.read();const initial=await a.initialize(f.base);
+  const row=f.db.rows.get('shared-checkpoint');
+  f.db.rows.set('shared-checkpoint',{...row,experiment:{...f.base,height:100}});
+  const corrupt=structuredClone(f.db.rows.get('shared-checkpoint'));
+  await assert.rejects(a.read(),/digest mismatch/);
+  await assert.rejects(a.stage(f.base,initial.revision),/read current shared checkpoint/);
+  assert.deepEqual(f.db.rows.get('shared-checkpoint'),corrupt);
+  f.db.rows.set('shared-checkpoint',null);
+  await assert.rejects(a.read(),/invalid shared checkpoint/);
+  assert.equal(f.db.rows.get('shared-checkpoint'),null);
+});
