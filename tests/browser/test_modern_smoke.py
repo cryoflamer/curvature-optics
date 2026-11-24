@@ -10401,7 +10401,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result['first']['status'],'verified')
         self.assertEqual(result['first'],result['again'])
         self.assertEqual(result['first']['workspace'],'compare')
-        self.assertRegex(result['first']['document']['revision'],r'^sha256:[0-9a-f]{64})
+        self.assertIsNotNone(re.fullmatch(r'sha256:[0-9a-f]{64}',
+                                             result['first']['document']['revision']))
         self.assertEqual(result['read']['experiment'],result['e'])
         self.assertEqual(result['after'],{'version':1,'savedAt':result['stamp'],
                                           'experiment':result['e']})
@@ -10468,6 +10469,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIn('existing working copy differs',result['existing'])
         self.assertEqual(result['saved']['revision'],result['first']['document']['revision'])
         self.assertEqual(result['saved']['experiment'],result['e'])
+        self.assertEqual(result['saved']['sourceSavedAt']+1,
+                         self.page.evaluate('async () => (await CurvatureModernSessionAutosave.read(indexedDB)).savedAt'))
 
 if __name__ == '__main__':
     unittest.main()
