@@ -11469,6 +11469,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertFalse(before['compare']['envelope']['values']['workspace.section.surface.geometry']['value'])
             self.assertEqual(before['local'],initial['local'])
             self.assertIsNone(before['tab'])
+            other.once('dialog',lambda dialog:dialog.accept())
             other.reload(wait_until='load')
             other.wait_for_function(ready,timeout=30000)
             after=other.evaluate(read)
@@ -11482,6 +11483,63 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(other.evaluate(read)['scene'],before['scene'])
         finally:
             other.close()
+
+    def test_shared_document_session_preview_ui_unload_warning_and_retry(self):
+        """Only durable UI acknowledgements clear the shared unload warning."""
+        self.page.goto(self.base_url+'?document-session=shared&ui-state-registry=preview',
+            wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        warn="""() => {
+            const event=new Event('beforeunload',{cancelable:true});
+            window.dispatchEvent(event);return event.defaultPrevented;
+        }"""
+        self.assertFalse(self.page.evaluate(warn))
+        doc=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        pending=self.page.evaluate("""() => {
+            document.querySelector('#ModernSettingsSurface').click();
+            const event=new Event('beforeunload',{cancelable:true});
+            window.dispatchEvent(event);
+            return {warn:event.defaultPrevented,
+                pending:CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged};
+        }""")
+        self.assertEqual(pending,{'warn':True,'pending':True})
+        self.page.wait_for_function("""() =>
+            !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+        self.assertFalse(self.page.evaluate(warn))
+        self.page.evaluate("""() => {
+            window.originalUiPut=IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put=function(value,...rest){
+                if(value?.id==='shared-workspace:scene')throw Error('simulated UI write failure');
+                return window.originalUiPut.call(this,value,...rest);
+            };
+        }""")
+        self.page.locator('#ModernSettingsObjects').click()
+        self.page.wait_for_function("""() => CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+            .some(x=>x.message.includes('simulated UI write failure'))""",timeout=30000)
+        self.assertTrue(self.page.evaluate(warn))
+        self.assertTrue(self.page.evaluate('CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged'))
+        expect(self.page.locator('#ModernUiRegistryRecovery')).to_be_visible()
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return ui.read('workspace',{workspace:'scene'});
+        }"""
+        before=self.page.evaluate(read)
+        self.assertEqual(before['envelope']['values']['workspace.settingsTab']['value'],'Surface')
+        self.page.evaluate('IDBObjectStore.prototype.put=window.originalUiPut')
+        self.page.locator('#ModernUiRegistryRetry').click()
+        self.page.wait_for_function("""() =>
+            !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
+        self.assertFalse(self.page.evaluate(warn))
+        after=self.page.evaluate(read)
+        self.assertEqual(after['revision'],before['revision']+1)
+        self.assertEqual(after['envelope']['values']['workspace.settingsTab']['value'],'Objects')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),doc)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernSettingsObjects')).to_have_attribute('aria-selected','true')
+        self.assertEqual(self.page.evaluate(read),after)
 
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""

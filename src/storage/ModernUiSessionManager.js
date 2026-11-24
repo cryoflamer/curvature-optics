@@ -19,7 +19,7 @@
       'registry and session-store adapters required');
     const specs=new Map(),revisions=new Map(),queues=new Map(),errors=new Map(),
       incompatible=new Map(),failedWrites=new Map(),locations=new Map();
-    let ready=false,restoring=false;
+    let ready=false,restoring=false,pendingWrites=0;
     function register(spec){
       check(!ready&&!restoring,'register before restore');
       if(spec&&(spec.scope==='per-tab'||spec.scope==='per-tab-and-workspace'))
@@ -111,6 +111,7 @@
     function schedule(scope,ctx){
       const id=group(scope),previous=queues.get(id)||Promise.resolve();
       locations.set(id,{scope,ctx});
+      pendingWrites++;
       const pending=previous.catch(()=>{}).then(async()=>{
         // Snapshot at commit time: rapid changes in one scope never
         // replay an old copy over later UI choices.
@@ -129,7 +130,7 @@
           failedWrites.set(id,{revision,frame});
           errors.set(id,error);throw error;
         }
-      });
+      }).finally(()=>{pendingWrites--;});
       queues.set(id,pending);
       return pending;
     }
@@ -310,7 +311,8 @@
       return ()=>{off();for(const fn of cleanup)fn();};
     }
     return Object.freeze({register,restore,get,set,setMany,reset,subscribe,flush,
-      lastErrors,retryFailed,verifyResumed,bindDetails,bindChoices,isReady:()=>ready});
+      lastErrors,retryFailed,verifyResumed,bindDetails,bindChoices,isReady:()=>ready,
+      hasUnacknowledged:()=>pendingWrites>0||errors.size>0});
   }
   return Object.freeze({create});
 }));

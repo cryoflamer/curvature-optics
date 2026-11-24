@@ -999,6 +999,7 @@
   }
   var uiRegistryRecoveryBusy=false;
   function refreshUiRegistryRecoveryNotice(message){
+    if(sharedPresentationActive())syncPreviewUnloadWarning();
     if(!uiRegistryRouteRequested())return;
     var panel=newUiEl('ModernUiRegistryRecovery');
     if(!panel)return;
@@ -1290,6 +1291,15 @@
       if(shared)previewControls();
     });
   }
+  function observeUiRegistrySave(promise,prefix){
+    if(sharedPresentationActive())syncPreviewUnloadWarning();
+    promise.then(function(){
+      refreshUiRegistryRecoveryNotice();
+    },function(error){
+      preferencesStatus(prefix+error.message,true);
+      refreshUiRegistryRecoveryNotice();
+    });
+  }
   function resetWorkspaceUiRegistryPreview(){
     var trial=workspaceUiRegistryPreview;
     if(trial.status!=='ready'||!trial.bridge)return;
@@ -1362,9 +1372,8 @@
         if(!sharedPresentationActive())saveApplicationPreferences();
         var trial=workspaceUiRegistryPreview;
         if(trial.status==='ready'&&trial.bridge&&trial.bridge.supports(entry.suffix)){
-          trial.bridge.set(scope,entry.suffix,entry.node.open).catch(function(error){
-            preferencesStatus('UI Registry preview save failed: '+error.message,true);
-          });
+          observeUiRegistrySave(trial.bridge.set(scope,entry.suffix,entry.node.open),
+            'UI Registry preview save failed: ');
         }
       });
     });
@@ -1387,14 +1396,16 @@
   function resetWorkspaceLayout(){
     if(sharedPresentationActive()){
       var trial=workspaceUiRegistryPreview;
-      if(trial.status!=='ready'||!trial.bridge)return;
+      if(trial.status!=='ready'||!trial.bridge||sharedLayoutResetPending)return;
+      sharedLayoutResetPending=true;syncPreviewUnloadWarning();
       trial.bridge.reset(function(mode,suffix){return workspaceInitialSections[suffix]===true;})
         .then(function(){
           ['scene','compare'].forEach(function(mode){workspaceState[mode+'Tab']=trial.bridge.getTab(mode);});
           applyWorkspaceSections();
           activateSettings(workspaceState[state.mode+'Tab'],false,false);
           preferencesStatus('Workspace layout reset to defaults.',false);
-        }).catch(function(error){preferencesStatus('UI Registry preview reset failed: '+error.message,true);});
+        }).catch(function(error){preferencesStatus('UI Registry preview reset failed: '+error.message,true);})
+        .finally(function(){sharedLayoutResetPending=false;refreshUiRegistryRecoveryNotice();});
       return;
     }
     workspaceNavigationVersion++;workspaceTabEditGeneration++;
@@ -1671,14 +1682,19 @@
     }catch(error){return null;}
   }
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare';}
-  var previewUnloadAttached=false;
+  var previewUnloadAttached=false,sharedLayoutResetPending=false;
+  function previewHasUnacknowledged(){
+    var bridge=workspaceUiRegistryPreview.bridge;
+    return experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving'||
+      (sharedPresentationActive()&&(sharedLayoutResetPending||(bridge&&bridge.hasUnacknowledged()))));
+  }
   function warnUnsavedExperiment(event){
-    if(experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving')){
+    if(previewHasUnacknowledged()){
       event.preventDefault();event.returnValue='';
     }
   }
   function syncPreviewUnloadWarning(){
-    var needed=experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving');
+    var needed=!!previewHasUnacknowledged();
     if(needed===previewUnloadAttached)return;
     if(needed)root.addEventListener('beforeunload',warnUnsavedExperiment);
     else root.removeEventListener('beforeunload',warnUnsavedExperiment);
@@ -9047,10 +9063,8 @@
       }
       var trial=workspaceUiRegistryPreview;
       if(trial.status==='ready'&&trial.bridge)
-        trial.bridge.setTab(state.mode==='compare'?'compare':'scene',name)
-          .catch(function(error){
-            preferencesStatus('UI Registry preview settings tab save failed: '+error.message,true);
-          });
+        observeUiRegistrySave(trial.bridge.setTab(state.mode==='compare'?'compare':'scene',name),
+          'UI Registry preview settings tab save failed: ');
     }
     settingGroups.forEach(function(group){
       var tab=el('ModernSettings'+group),scenePanel=el('ModernPanel'+group);
@@ -9596,7 +9610,8 @@
           compareTab:trial.bridge.getTab('compare'),
           animationView:trial.bridge.getView('animation'),
           calibrationView:trial.bridge.getView('calibration')}:null,
-        errors:trial.bridge?trial.bridge.lastErrors():[]};
+        errors:trial.bridge?trial.bridge.lastErrors():[],
+        unacknowledged:!!(sharedLayoutResetPending||(trial.bridge&&trial.bridge.hasUnacknowledged()))};
     },
     getWorkspaceState:function(){return {mode:currentWorkspaceMode(),
       sceneTab:workspaceState.sceneTab,compareTab:workspaceState.compareTab,

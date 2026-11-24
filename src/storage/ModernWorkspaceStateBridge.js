@@ -159,6 +159,7 @@
     }
     return Object.freeze({restore,resumeAfterPageShow,get,set,getTab,setTab,getView,setView,getMode,setMode,reset,flush,retryFailed,lastErrors,
       supports:suffix=>supported.has(suffix),isReady:()=>ready,
+      hasUnacknowledged:()=>[...managers.values()].some(m=>m.hasUnacknowledged()),
       tabId:()=>sharedPresentation?null:store.tabId(),modes:MODES.slice(),sections:suffixes.slice()});
   }
   return Object.freeze({KEY_PREFIX,MODES,create});

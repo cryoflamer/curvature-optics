@@ -412,3 +412,43 @@ test('shared workspace managers need no tab identity and refuse stale changes',a
   assert.equal(rows.get('scene').revision,1);
   assert.equal(rows.has('compare'),false);
 });
+
+test('unacknowledged shared UI changes include queued writes and survive failure until retry',async()=>{
+  let row={revision:0,envelope:null},release,fail=false;
+  const backend={
+    async read(){return row;},
+    async write(scope,ctx,envelope,revision){
+      assert.equal(revision,row.revision);
+      if(fail)throw Error('simulated UI write failure');
+      await new Promise(resolve=>{release=resolve;});
+      row={revision:revision+1,envelope:structuredClone(envelope)};
+      return {revision:row.revision};
+    }
+  };
+  const manager=managerApi.create({registry:registry.create(),store:backend,workspace:'scene'});
+  manager.register({key:'workspace.active-panel',scope:'workspace',version:1,
+    defaultValue:'camera',validate:v=>['camera','surface','objects'].includes(v)});
+  await manager.restore();
+  assert.equal(manager.hasUnacknowledged(),false);
+  const first=manager.set('workspace.active-panel','surface');
+  const second=manager.set('workspace.active-panel','objects');
+  assert.equal(manager.hasUnacknowledged(),true);
+  while(!release)await Promise.resolve();
+  const finish=release;release=null;finish();
+  await first;
+  assert.equal(manager.hasUnacknowledged(),true,'a queued later write is not acknowledged');
+  while(!release)await Promise.resolve();
+  release();await second;
+  assert.equal(manager.hasUnacknowledged(),false);
+  fail=true;
+  await assert.rejects(manager.set('workspace.active-panel','camera'),/simulated UI write failure/);
+  assert.equal(manager.hasUnacknowledged(),true);
+  assert.equal(row.revision,2);
+  fail=false;release=null;
+  const retry=manager.retryFailed();
+  while(!release)await Promise.resolve();
+  assert.equal(manager.hasUnacknowledged(),true);
+  release();assert.equal(await retry,1);
+  assert.equal(manager.hasUnacknowledged(),false);
+  assert.equal(row.revision,3);
+});
