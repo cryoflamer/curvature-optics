@@ -548,7 +548,10 @@ A no-op edit verifies both stores without allocating a new revision.
 A failed write leaves the preview blocked, retaining live data and old
 durable records; the explicit share action remains available. Closing or
 reloading with unacknowledged edits requests the browser's unload warning;
-uncommitted edits are not crash-durable. Native BFCache return requires
+the warning listener is installed only while a save or unsaved edit is pending
+and performs no write. It is removed after acknowledgement. Explicit Copy
+experiment URL removes the private document-session preview flag.
+Uncommitted edits are not crash-durable. Native BFCache return requires
 reload, not stale lease reuse. Existing local UI preferences and unrelated
 legacy startup modules remain; this is not yet final ID-only persistence.
 

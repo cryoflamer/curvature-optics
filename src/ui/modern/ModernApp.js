@@ -1615,6 +1615,19 @@
     }catch(error){return null;}
   }
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare';}
+  var previewUnloadAttached=false;
+  function warnUnsavedExperiment(event){
+    if(experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving')){
+      event.preventDefault();event.returnValue='';
+    }
+  }
+  function syncPreviewUnloadWarning(){
+    var needed=experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving');
+    if(needed===previewUnloadAttached)return;
+    if(needed)root.addEventListener('beforeunload',warnUnsavedExperiment);
+    else root.removeEventListener('beforeunload',warnUnsavedExperiment);
+    previewUnloadAttached=needed;
+  }
   function previewControls(){
     if(!experimentPreview.live)return;
     var status=experimentPreview.status;
@@ -1642,14 +1655,14 @@
     experimentPreview.status='failed';
     experimentPreview.error=String(error&&error.message||error);
     persistenceStatus('Document session not saved: '+experimentPreview.error,true);
-    previewControls();
+    syncPreviewUnloadWarning();previewControls();
   }
   function savePreviewExperiment(current){
     var c=experimentPreview.controller;
     if(!c||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
     if(c.state().busy)return;
     persistence.dirty=false;
-    experimentPreview.status='saving';
+    experimentPreview.status='saving';syncPreviewUnloadWarning();
     persistenceStatus('Saving document session…');
     c.save(experiments.validate(current)).then(function(){
       if(experimentPreview.status==='suspended')return;
@@ -1661,6 +1674,7 @@
         if(persistence.timer===null)
           persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment(false);},550);
       }
+      syncPreviewUnloadWarning();
     }).catch(function(error){persistence.dirty=true;
       if(experimentPreview.status!=='suspended')previewFailure(error);
     });
@@ -1705,11 +1719,6 @@
       accept.disabled=true;
       c.acceptHead(offer).then(function(){root.location.reload();})
         .catch(function(error){previewFailure(error);});
-    });
-    root.addEventListener('beforeunload',function(event){
-      if(experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving')){
-        event.preventDefault();event.returnValue='';
-      }
     });
     root.addEventListener('pagehide',function(){
       if(!experimentPreview.live)return;
@@ -1806,6 +1815,7 @@
         experimentPreview.controller.markDirty();
         experimentPreview.status=experimentPreview.controller.state().status;
         persistenceStatus('Document session has unsaved changes');
+        syncPreviewUnloadWarning();
       }catch(error){previewFailure(error);return;}
     }
     if(persistence.timer!==null)clearTimeout(persistence.timer);
@@ -6288,7 +6298,12 @@
     if(!experiments||!root.location||!root.location.href)return;
     try{
       cancelEdits();
-      var url=experiments.urlWithExperiment(root.location.href,experimentSnapshot());
+      var href=root.location.href;
+      if(documentSessionPreviewRequested){
+        var publicUrl=new URL(href);publicUrl.searchParams.delete('document-session');
+        href=publicUrl.href;
+      }
+      var url=experiments.urlWithExperiment(href,experimentSnapshot());
       if(root.navigator&&root.navigator.clipboard&&root.navigator.clipboard.writeText){
         root.navigator.clipboard.writeText(url).then(function(){persistenceStatus('Experiment URL copied');},
           function(){if(root.prompt)root.prompt('Copy experiment URL',url);
@@ -8442,7 +8457,8 @@
   // All top-level workspace choices use this one success/remember path.
   // Individual activation branches own only their rendering and lifecycle.
   function setMode(mode,remember){
-    if(experimentPreview.live&&!previewModeAllowed(mode))return false;
+    if(experimentPreview.live&&(!previewModeAllowed(mode)||
+      (persistence.ready&&!['clean','dirty','saving','committed'].includes(experimentPreview.status))))return false;
     if(keyframeEditSession&&!keyframeEditEntering){
       updateStatus('Cancel & Return before changing editor workspace.',true);
       return false;

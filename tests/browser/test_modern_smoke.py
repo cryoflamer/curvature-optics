@@ -10718,5 +10718,118 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.url,url)
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+
+    def test_document_session_preview_recovery_ui_preserves_both_revisions(self):
+        """Inject session CAS failure after the real working-copy commit."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        url=self.base_url+'?document-session=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.page.evaluate("""() => {
+            const put=IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put=function(value,...args){
+                if(this.name==='sessions'&&value?.id?.startsWith('document:'))
+                    throw Error('simulated document session CAS failure');
+                return put.call(this,value,...args);
+            };
+        }""")
+        self.page.locator('#ModernHeight').fill(str(old+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+        panel=self.page.locator('#ModernDocumentSessionRecovery')
+        expect(panel).to_be_visible()
+        expect(panel.get_by_role('alert')).to_contain_text('simulated document session CAS failure')
+        expect(self.page.locator('#ModernCompareTab')).to_be_disabled()
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernDocumentSessionDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['controller']['bound'],before['bound'])
+        self.assertEqual(evidence['live']['scene']['camera']['Height'],old+7)
+        self.assertEqual(evidence['controller']['head']['experiment']['scene']['camera']['Height'],old+7)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='recovering'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
+        expect(panel).to_be_visible()
+        expect(self.page.locator('#ModernDocumentSessionAcceptHead')).to_be_visible()
+        self.page.once('dialog',lambda dialog:dialog.dismiss())
+        self.page.locator('#ModernDocumentSessionAcceptHead').click()
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getExperimentSessionPreview().controller.row'),before['row'])
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.page.locator('#ModernDocumentSessionAcceptHead').click()
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        after=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(after['row']['revision'],before['row']['revision']+1)
+        self.assertEqual(after['bound']['experiment']['scene']['camera']['Height'],old+7)
+        expect(panel).to_be_hidden()
+        self.assertEqual(self.page.url,url)
+
+    def test_document_session_preview_duplicate_tabs_and_explicit_shared_url(self):
+        """Copied session ID is isolated, and explicit URL does not open private state."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        url=self.base_url+'?document-session=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.page.locator('#ModernHeight').fill(str(old+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        parent=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        child=self.context.new_page()
+        try:
+            child.add_init_script("sessionStorage.setItem("+
+                json.dumps('curvature-modern-ui-tab-id-v1')+","+
+                json.dumps(parent['row']['envelope']['tabId'])+");")
+            child.goto(url,wait_until='load')
+            child.wait_for_function("""() =>
+                CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+            copied=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+            self.assertNotEqual(copied['bound']['id'],parent['bound']['id'])
+            self.assertEqual(copied['bound']['experiment']['scene']['camera']['Height'],old+2)
+            child.locator('#ModernHeight').fill(str(old+9))
+            child.locator('#ModernHeight').press('Tab')
+            expect(child.locator('#ModernPersistenceStatus')).to_have_text(
+                'Document session saved',timeout=30000)
+            self.assertEqual(self.page.evaluate(
+                'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
+        finally:
+            child.close()
+        link=self.page.evaluate("""() => {
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            const e=structuredClone(c.bound.experiment);e.scene.camera.Height+=11;
+            return CurvatureModernExperimentState.urlWithExperiment(location.href,e);
+        }""")
+        self.page.goto(link,wait_until='load')
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+16)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'disabled')
+        self.assertEqual(self.page.url,link)
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate(
+            'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
+
 if __name__ == '__main__':
     unittest.main()
