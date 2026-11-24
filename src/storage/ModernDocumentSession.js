@@ -110,7 +110,7 @@
       'atomic experiment controller dependencies required');
     const clone=v=>JSON.parse(JSON.stringify(v));
     const guard=(write=false)=>{check(isCurrent()===true,'stale controller generation');lease.check(write);};
-    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false,selecting=false;
+    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false,selecting=false,selectionAttempt=null;
     function fail(e){error=String(e&&e.message||e);status='failed';}
     function bound(){
       return row?{kind:'experiment',id:'shared-experiment',
@@ -125,7 +125,9 @@
       return clone({status,busy,error,row:row?{revision:row.revision,envelope:row.envelope}:null,
         bound:bound(),draft:draft(),draftOffer:offer,
         checkpoint:error?'failed':latest&&latest!==staged?'pending':draft()?'durable':'none',
-        latestInput:latest?latest.experiment:null});
+        latestInput:latest?latest.experiment:null,
+        pendingSelection:selectionAttempt?{baseRevision:selectionAttempt.before.revision,
+          workspace:selectionAttempt.mode,document:selectionAttempt.document??null}:null});
     }
     function startPump(){
       if(pump||promoting||error||offer||!latest||latest===staged)return;
@@ -204,15 +206,47 @@
       check(row&&!busy&&!pump&&!latest&&!offer&&!error&&row.draft===null&&
         ['clean','committed'].includes(status),'resolve physical draft before workspace selection');
       check(typeof checkpoint.selectWorkspace==='function','workspace selection adapter required');
+      const expected=select(row.envelope,mode,document);
+      selectionAttempt={before:clone(row),expected,mode,document:document===undefined?undefined:clone(document)};
       busy=true;selecting=true;
       try{
         row=await checkpoint.selectWorkspace(mode,document,row.revision,{readDocument,readRecovery,isCurrent});
-        guard(true);status='committed';
+        guard(true);status='committed';selectionAttempt=null;
       }catch(e){fail(e);throw e;}
       finally{selecting=false;busy=false;}
       return state();
     }
-    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,state});
+    // Explicit retry only for this controller's failed selection. A fresh
+    // read may prove the original write committed, but must never rebase it.
+    async function retryWorkspaceSelection(){
+      guard(true);
+      check(!busy&&!pump&&!latest&&!offer&&status==='failed'&&selectionAttempt,
+        'failed workspace selection receipt required');
+      const attempt=selectionAttempt,before=attempt.before;
+      busy=true;selecting=true;
+      try{
+        const verified=await checkpoint.read();guard(true);
+        if(same(verified,before)){
+          row=await checkpoint.selectWorkspace(attempt.mode,attempt.document,before.revision,
+            {readDocument,readRecovery,isCurrent});
+        }else{
+          check(verified&&verified.revision===before.revision+1&&verified.draft===null&&
+            same(verified.experiment,before.experiment)&&same(normalize(verified.envelope),attempt.expected),
+            'workspace selection CAS conflict; original receipt retained');
+          if(['calibration','animation'].includes(attempt.mode)){
+            const plan=await planRestore(verified.envelope,{readDocument,readRecovery,isCurrent});
+            guard(true);check(plan.source==='session'||plan.source==='recovery','verified auxiliary document required');
+          }
+          const confirmed=await checkpoint.read();guard(true);
+          check(same(confirmed,verified),'workspace selection changed during acknowledgement; receipt retained');
+          row=confirmed;
+        }
+        guard(true);status='committed';error=null;selectionAttempt=null;
+      }catch(e){fail(e);throw e;}
+      finally{selecting=false;busy=false;}
+      return state();
+    }
+    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,retryWorkspaceSelection,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,

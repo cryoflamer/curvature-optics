@@ -108,7 +108,9 @@ function atomicControllerFixture(){
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
         const frame=contract.select(durable.envelope,mode,document);
         if(['calibration','animation'].includes(mode))await contract.planRestore(frame,options);
+        if(fault==='selection-before')throw Error('selection failed before commit');
         durable={...durable,revision:revision+1,envelope:frame,digest:'select:'+revision};
+        if(fault==='selection-after')throw Error('selection acknowledgement lost');
         seen=copy(durable);return copy(seen);
       },
       async promote(revision){
@@ -226,4 +228,38 @@ test('atomic controller selects a verified auxiliary document and refuses physic
   await assert.rejects(fresh.selectWorkspace('calibration',binding),/resolve physical draft/);
   await fresh.save();
   assert.equal(fresh.state().bound.experiment.height,2);
+});
+
+test('explicit selection retry distinguishes uncommitted write and lost acknowledgement',async()=>{
+  for(const fault of ['selection-before','selection-after']){
+    const f=atomicControllerFixture(),readDocument=async(kind,id)=>({kind,id,revision:'rev:7'});
+    const a=f.open({readDocument});await a.open();
+    const binding={id:'cal-a',revision:'rev:7',recovery:null};
+    f.fault(fault);await assert.rejects(a.selectWorkspace('calibration',binding),/selection/);
+    assert.deepEqual(a.state().pendingSelection,{baseRevision:1,workspace:'calibration',document:binding});
+    f.fault(null);const result=await a.retryWorkspaceSelection();
+    assert.equal(result.row.revision,2);assert.equal(result.pendingSelection,null);
+    assert.equal(result.status,'committed');assert.deepEqual(result.bound.experiment,f.base);
+    await assert.rejects(a.retryWorkspaceSelection(),/receipt required/);
+    const other=f.open({readDocument});await other.open();assert.equal(other.state().row.revision,2);
+  }
+});
+test('selection retry never rebases on competing workspace or experiment changes',async()=>{
+  const f=atomicControllerFixture(),readDocument=async(kind,id)=>({kind,id,revision:'rev:7'});
+  const a=f.open({readDocument}),b=f.open({readDocument});await a.open();await b.open();
+  const binding={id:'cal-a',revision:'rev:7',recovery:null};
+  f.fault('selection-before');await assert.rejects(a.selectWorkspace('calibration',binding),/selection/);
+  f.fault(null);b.markDirty({...f.base,height:9});await b.flushCheckpoint();await b.save();
+  await assert.rejects(a.retryWorkspaceSelection(),/CAS conflict/);
+  assert.equal(a.state().pendingSelection.baseRevision,1);
+  assert.equal(b.state().bound.experiment.height,9);
+});
+test('lost selection acknowledgement requires renewed domain verification',async()=>{
+  const f=atomicControllerFixture();let revision='rev:7';
+  const a=f.open({readDocument:async(kind,id)=>({kind,id,revision})});await a.open();
+  const binding={id:'cal-a',revision:'rev:7',recovery:null};
+  f.fault('selection-after');await assert.rejects(a.selectWorkspace('calibration',binding),/acknowledgement lost/);
+  f.fault(null);revision='rev:8';await assert.rejects(a.retryWorkspaceSelection(),/revision changed/);
+  assert.equal(a.state().pendingSelection.baseRevision,1);
+  revision='rev:7';assert.equal((await a.retryWorkspaceSelection()).row.revision,2);
 });

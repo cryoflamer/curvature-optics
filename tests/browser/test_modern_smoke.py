@@ -11846,6 +11846,38 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(outcome['legacy'])
         self.assertEqual(outcome['projectCount'],1)
 
+    def test_shared_selection_retry_recovers_lost_acknowledgement_without_rewrite(self):
+        """A committed selection is acknowledged only after renewed domain verification."""
+        self.page.goto(self.base_url+'?document-session=shared&ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        data=self.soundly_calibration_experiment()
+        outcome=self.page.evaluate("""async data => {
+            const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence;
+            const project=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+            const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+            const read=P.sharedDocumentReader(window);let calls=0;
+            const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
+                prepare:()=>{throw Error('Unexpected migration');},
+                readDocument:async (...args)=>{if(++calls===2)throw Error('Injected postflight failure');return read(...args);}});
+            await c.open();const before=c.state();
+            let failure=null;try{await c.selectWorkspace('calibration',P.projectReference(project));}catch(e){failure=e.message;}
+            const pending=c.state(),written=await make().read();
+            const result=await c.retryWorkspaceSelection(),after=await make().read();
+            return {before,failure,pending,written,result,after,calls};
+        }""",data)
+        self.assertIn('Injected postflight failure',outcome['failure'])
+        self.assertEqual(outcome['pending']['pendingSelection']['baseRevision'],outcome['before']['row']['revision'])
+        self.assertEqual(outcome['written']['revision'],outcome['before']['row']['revision']+1)
+        self.assertEqual(outcome['written'],outcome['after'])
+        self.assertEqual(outcome['result']['status'],'committed')
+        self.assertIsNone(outcome['result']['pendingSelection'])
+        self.assertEqual(outcome['result']['bound'],outcome['before']['bound'])
+        self.assertEqual(outcome['calls'],3)
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()
