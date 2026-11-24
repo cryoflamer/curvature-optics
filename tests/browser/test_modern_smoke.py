@@ -11573,10 +11573,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.goto(url,wait_until='load')
             other.wait_for_function(ready,timeout=30000)
             self.assertEqual(other.evaluate(read),before)
+            self.page.locator('#ModernSettingsDisplay').click()
             self.page.locator('#ModernCameraHudToggle').check()
             self.page.wait_for_function("""() =>
                 !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
-            self.page.locator('#ModernSettingsDisplay').click()
             self.page.locator('#ModernOpticalQuality').select_option('auto')
             self.page.wait_for_function("""() =>
                 !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
