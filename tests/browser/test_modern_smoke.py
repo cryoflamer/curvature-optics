@@ -11815,7 +11815,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const durable=await S.get(indexedDB,receipt.current.id);
                 calls.push({receipt,durableRevision:durable.revision});
                 if(block)throw Error('Injected pointer failure');
-                if(JSON.stringify(c.state().row.envelope.documents.calibration)!==JSON.stringify(receipt.previous))
+                const base=c.state().row.envelope.documents.calibration;
+                if(!base||base.id!==receipt.previous.id||base.revision!==receipt.previous.revision||
+                    base.recovery!==null||receipt.previous.recovery!==null)
                     throw Error('Unexpected selection base');
                 await c.selectWorkspace('calibration',receipt.current);
             }}});

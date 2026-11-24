@@ -1271,8 +1271,9 @@ test('suspended shared Calibration lifetime prevents late domain writes and ackn
 });
 test('Calibration store tracks shared write transactions and aborts before a stale mutation',async()=>{
   const db=memoryIndexedDB(),start=project(A);await store.create(db,start);
-  const lease=sharedCalibrationLease(),track=lease.track;
-  lease.track=function(tx){const untrack=track.call(this,tx);this.suspend();return untrack;};
+  const lease=sharedCalibrationLease(),check=lease.check;
+  let checks=0;
+  lease.check=function(){if(this.tracked.size&&++checks===2)this.suspend();return check.call(this);};
   await assert.rejects(store.saveOrFork(db,A,1,details(start,{title:'No late mutation'}),B,200,lease),
     /aborted|suspended/i);
   assert.deepEqual(await store.get(db,A),start);

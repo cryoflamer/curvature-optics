@@ -95,7 +95,7 @@
         function read(request,fn){
           request.onsuccess=()=>{if(done)return;try{checkLease();fn(request.result);}catch(error){abort(error);}};
         }
-        try{action(tx,read,v=>{value=v;});}catch(error){abort(error);}
+        try{checkLease();action(tx,read,v=>{value=v;});}catch(error){abort(error);}
       };
     });
   }
