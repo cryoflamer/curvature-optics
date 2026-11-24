@@ -622,7 +622,7 @@
       if(session)inlineSessions[inlineRole]={source:JSON.stringify(inlineSource),session};
     }
     function saveInline(fromPersist=false){
-      if(restoring||switchingInline||!physicalSessionId||!scene)return;
+      if(restoring||switchingInline||sharedPresentationHydrating||!physicalSessionId||!scene)return;
       try{
         captureInline();
         // Project views belong to their own IndexedDB checkpoint. Never
@@ -788,7 +788,7 @@
     let projectStartupStatus={status:'uninspected'};
     // No project owns the live editor until an explicit, fully qualified open.
     let projectSession=null,projectSwitchBusy=false,projectSwitchEpoch=0;
-    let editorMutation=0,switchInterference=false,sharedInput=null,sharedWrite=null;
+    let editorMutation=0,switchInterference=false,sharedInput=null,sharedWrite=null,sharedPresentationHydrating=false;
     function database(){
       if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
         // Opening without a fixed version also supports the project-store v2
@@ -1540,7 +1540,7 @@
       return projectSession;
     }
     function persist(forSwitch=false){
-      if(restoring||!scene||sharedSelection&&(!projectSession?.project()||leavingPage||workspace.hidden))return;
+      if(restoring||!scene||sharedSelection&&(sharedPresentationHydrating||!projectSession?.project()||leavingPage||workspace.hidden))return;
       if(projectSwitchBusy&&!forSwitch){
         // A programmatic event during a switch invalidates the pending
         // activation. Never silently drop its mutated editor state.
@@ -1832,7 +1832,15 @@
         pointerCommitted=true;requireGuard();
         activateVisualProject(incoming);
         session.bind(prepared.project);
-        sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);sharedWrite=null;
+        // A visible project switch can construct the inline viewer during
+        // activation. Restore its exact saved role after the draft is in place.
+        sharedPresentationHydrating=true;
+        try{
+          if(editingStage()&&inlineViewer.isOpen()&&inlineRole&&inlineSource)
+            restoreInlineRole(inlineRole,inlineSource);
+          sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);
+          sharedWrite=null;
+        }finally{sharedPresentationHydrating=false;}
         projectStartupStatus={status:'active',projectId:prepared.project.id};
         projectSelectedId=prepared.project.id;
         $('ModernCalibrationStorage').textContent='Calibration Project opened and verified.';
@@ -2303,7 +2311,17 @@
     }
     new env.MutationObserver(()=>{
       if(workspace.hidden){contextMenu.close();photoGestures.cancel();resultGestures.cancel();inlineViewer.cancelGesture();captureInline();}
-      else{meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}}
+      else if(sharedSelection){
+        // Visibility changes are hydration, not edits. Opening the inline
+        // viewer can emit onSessionChange even though no user changed it.
+        sharedPresentationHydrating=true;
+        try{
+          meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}
+          const state=projectSession?.state();
+          if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&!state.selectionPending)
+            sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);
+        }finally{sharedPresentationHydrating=false;}
+      }else{meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}}
     }).observe(workspace,{attributes:true,attributeFilter:['hidden']});
     function syncInline(){
       if(!editingStage()||workspace.hidden)return false;

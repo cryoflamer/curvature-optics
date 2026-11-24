@@ -11762,6 +11762,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             expect(other.locator('#ModernPhotoCalibration')).to_be_visible()
             self.assertEqual(other.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document)
                 .projectPersistenceStatus().projectId"""),setup['project']['id'])
+            mounted=other.evaluate("""() => {
+                const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+                return {status:editor.projectPersistenceStatus(),snapshot:editor.snapshot()};
+            }""")
+            self.assertEqual(mounted['status']['revision'],1)
+            self.assertFalse(mounted['status']['unsaved'])
+            self.assertEqual(mounted['snapshot']['width'],data['referenceImage']['original']['width'])
             restored=other.evaluate("""async () => {
                 const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence;
                 const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
@@ -11891,7 +11898,7 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
     def test_shared_calibration_durable_receipt_recovers_after_reload(self):
-        """A fresh page proves both uncommitted and committed pointers without a domain rewrite."""
+        """A fresh page exposes recovery and proves both pointer states without a domain rewrite."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
         self.page.goto(url,wait_until='load')
         self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
