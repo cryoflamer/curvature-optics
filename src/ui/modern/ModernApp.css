@@ -1565,6 +1565,7 @@ button{cursor:pointer}
 #ModernPhotoCalibration[hidden]{display:none!important}
 .modern-app.is-photo-calibration .modern-share-actions{visibility:hidden;pointer-events:none}
 .modern-photo-calibration { box-sizing:border-box;width:min(1740px,calc(100% - 32px));margin:20px auto 40px;padding:20px;color:#183550;background:#fff;border:1px solid #c4d5e5;border-radius:12px; }
+.modern-photo-calibration[data-shared-library-only="true"] > :not(header):not(#ModernCalibrationProjectsDisclosure){display:none!important}
 .modern-photo-calibration header p{margin:4px 0;color:#637c94}
 .modern-photo-calibration header h1{margin:0;font-size:24px}
 .modern-photo-calibration section{min-width:0}

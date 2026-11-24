@@ -1377,3 +1377,14 @@ test('durable Calibration coordinator retries retirement without repeating domai
   assert.deepEqual(await store.get(db,A),saved);
   assert.equal(session.state().unsaved,false);
 });
+
+test('shared receipt startup inventory does not open or upgrade a missing or legacy database',async()=>{
+  const lease=sharedCalibrationLease();let opens=0;
+  const db={databases:async()=>[],open(){opens++;throw Error('Unexpected database open');}};
+  assert.equal(await store.readExistingSharedSelectionReceipt(db,lease),null);
+  db.databases=async()=>[{name:store.DATABASE,version:1}];
+  assert.equal(await store.readExistingSharedSelectionReceipt(db,lease),null);
+  db.databases=async()=>[{name:store.DATABASE,version:3}];
+  await assert.rejects(store.readExistingSharedSelectionReceipt(db,lease),/Unsupported Calibration database version/);
+  assert.equal(opens,0);
+});

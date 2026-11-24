@@ -1795,7 +1795,7 @@
     }catch(error){return null;}
   }
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare'||
-    mode==='calibration'&&sharedPresentationActive()&&!!experimentPreview.calibrationEditor;}
+    mode==='calibration'&&sharedPresentationActive()&&!!experimentPreview.calibrationContext;}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
     var editor=experimentPreview.calibrationEditor,calibration=editor&&editor.projectPersistenceStatus();
@@ -1974,8 +1974,13 @@
       acknowledge:function(receipt){return controller.acknowledgeDocumentRevision('calibration',receipt);},
       verify:function(ref){return controller.captureSelectionBase('calibration',ref);},
       select:async function(ref){
-        var result=await controller.selectWorkspace('calibration',ref);
-        experimentPreview.status=result.status;return result;
+        try{
+          var result=await controller.selectWorkspace('calibration',ref);
+          experimentPreview.status=result.status;return result;
+        }catch(error){
+          if(controller.state().status==='failed'&&experimentPreview.status!=='suspended')previewFailure(error);
+          throw error;
+        }
       },
       onChange:syncPreviewUnloadWarning,
       fail:previewFailure,
@@ -1983,8 +1988,8 @@
     };
     if(calibrationEnabled){
       var editorApi=root.CurvatureModernPhotoCalibrationEditor;
-      if(!editorApi||!editorApi.mount(document,experimentPreview.calibrationContext))
-        throw Error('Shared Calibration editor unavailable');
+      experimentPreview.calibrationEditor=editorApi&&editorApi.mount(document,experimentPreview.calibrationContext);
+      if(!experimentPreview.calibrationEditor)throw Error('Shared Calibration editor unavailable');
     }
     await controller.open();
     experimentPreview.migration=null;
@@ -8879,26 +8884,32 @@
       setMode(mode);return;
     }
     var c=experimentPreview.controller,editor=experimentPreview.calibrationEditor;
-    if(!editor||!previewModeAllowed(mode)||experimentPreview.calibrationBusy||
-       !['clean','committed'].includes(experimentPreview.status))return;
+    if(!editor||!previewModeAllowed(mode)||experimentPreview.calibrationBusy)return;
+    if(!['clean','committed'].includes(experimentPreview.status)){
+      persistenceStatus('Finish saving the current document before opening Calibration.',true);return;
+    }
     if(mode===currentWorkspaceMode())return;
     experimentPreview.calibrationBusy=true;previewControls();
     try{
       if(mode==='calibration'){
         var ref=c.state().row.envelope.documents.calibration;
-        if(!ref)throw Error('No retained Calibration Project');
-        await editor.openSharedProject(ref,false);
+        if(ref)await editor.openSharedProject(ref,false);
+        // No reference: show the existing project library without advancing
+        // the durable pointer. Only explicit verified Open/New may select.
       }else{
         await editor.prepareSharedLeave();
-        var view=await c.selectWorkspace(state.mode);
-        experimentPreview.status=view.status;
+        if(c.state().row.envelope.workspace==='calibration'){
+          var view=await c.selectWorkspace(state.mode);
+          experimentPreview.status=view.status;
+        }
       }
       if(experimentPreview.status==='suspended')return;
       experimentPreview.calibrationNavigation=true;
       if(setMode(mode)===false)throw Error('Cannot activate selected workspace');
     }catch(error){
       if(experimentPreview.status==='suspended')return;
-      if(c.state().status==='failed'||c.state().row?.envelope.workspace!==currentWorkspaceMode())
+      if(c.state().status==='failed'||(!editor.isSharedLibraryOnly()&&
+         c.state().row?.envelope.workspace!==currentWorkspaceMode()))
         previewFailure(error);
       else{
         persistenceStatus(error.message,true);

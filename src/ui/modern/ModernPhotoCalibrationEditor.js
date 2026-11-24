@@ -1235,6 +1235,8 @@
       }finally{if(token===projectListToken)projectsControls();}
     }
     function showProjectList(open,hydrating){
+      const libraryOnly=!!sharedSelection&&!projectSession?.project();
+      if(libraryOnly){open=true;hydrating=true;}
       if(projectListBusy){
         projectsDisclosure.open=!projectsPanel.hidden;
         return;
@@ -1830,8 +1832,13 @@
         if(restore)await sharedSelection.verify(reference);
         else await sharedSelection.select(reference);
         pointerCommitted=true;requireGuard();
+        const confirmed=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,reference.id);
+        requireGuard();
+        if(!confirmed||JSON.stringify(confirmed)!==JSON.stringify(prepared.project))
+          throw Error('Calibration Project changed after shared selection');
         activateVisualProject(incoming);
         session.bind(prepared.project);
+        delete workspace.dataset.sharedLibraryOnly;
         // A visible project switch can construct the inline viewer during
         // activation. Restore its exact saved role after the draft is in place.
         sharedPresentationHydrating=true;
@@ -1850,7 +1857,7 @@
         throw error;
       }finally{
         projectSwitchBusy=false;
-        if(!pointerCommitted||sharedSelection.usable())workspace.inert=previousInert;
+        if(sharedSelection.usable())workspace.inert=previousInert;
         syncFitControls();
       }
     }
@@ -1861,7 +1868,8 @@
       const ack=persist(true);if(ack)await ack;
       await writeQueue;
       const state=projectSession?.state();
-      if(!state?.projectId||state.pending||state.unsaved||state.error||state.selectionPending)
+      if(!state?.projectId)return true; // No document was selected in the library.
+      if(state.pending||state.unsaved||state.error||state.selectionPending)
         throw Error('Resolve unsaved Calibration work before leaving');
       return true;
     }
@@ -2446,7 +2454,14 @@
     }
     function enter(snapshot){
       if(sharedSelection){
-        if(!projectSession?.project())return false;
+        if(!projectSession?.project()){
+          // Browsing is transient until a verified named project is selected.
+          // Never create a standalone draft or acknowledge an empty workspace.
+          workspace.dataset.sharedLibraryOnly='true';
+          showProjectList(true,true);
+          return true;
+        }
+        delete workspace.dataset.sharedLibraryOnly;
         void refreshSources();
         showProjectList(env.CurvatureModernApp?.getCalibrationView?.()==='projects',true);
         return true;
@@ -2885,6 +2900,7 @@
     }
     mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
       configureSharedSelection,openSharedProject,prepareSharedLeave,
+      isSharedLibraryOnly:()=>!!sharedSelection&&!projectSession?.project(),
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,

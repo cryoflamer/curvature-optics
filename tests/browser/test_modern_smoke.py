@@ -11960,6 +11960,77 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.assertIsNone(restored['legacy'])
                 self.assertEqual(restored['after']['experiment'],seeded['before']['experiment'])
 
+
+    def test_shared_calibration_mounted_project_edit_navigation_and_f5(self):
+        """Explicit project selection and live edits use the shared pointer, not tab markers."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.add_init_script("""() => {
+            if(!localStorage.getItem('curvature-calibration-inline-v2'))
+                localStorage.setItem('curvature-calibration-inline-v2','retained legacy inline evidence');
+            if(!sessionStorage.getItem('curvature-calibration-clean-reload-project-v1'))
+                sessionStorage.setItem('curvature-calibration-clean-reload-project-v1','retained legacy tab evidence');
+        }""")
+        self.page.goto(url,wait_until='load')
+        ready="""() => {
+            const app=window.CurvatureModernApp,s=app?.getExperimentSessionPreview();
+            return s?.status==='failed'||s?.status==='clean'&&app.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+        data=self.soundly_calibration_experiment()
+        project=self.page.evaluate("""data => CurvatureModernCalibrationProjectActions.importAsNew(window,data)""",data)
+        initial=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(self.page.locator('#ModernCalibrationProjectsPanel')).to_be_visible()
+        expect(self.page.locator('#ModernPhotoCalibration')).to_have_attribute('data-shared-library-only','true')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),initial)
+        self.page.locator('[data-calibration-project-open="'+project['id']+'"]').click()
+        self.page.wait_for_function("""id => {
+            const app=CurvatureModernApp,s=app.getExperimentSessionPreview();
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s.status==='failed'||s.controller.row.envelope.workspace==='calibration'&&
+                e?.projectId===id&&!e.pending&&!e.unsaved;
+        }""",arg=project['id'],timeout=30000)
+        self.assertNotEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'failed')
+        expect(self.page.locator('[data-calibration-stage="calibration"]')).to_be_visible()
+        self.page.locator('[data-calibration-stage="calibration"]').click()
+        self.page.wait_for_function("""id => {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            const s=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return e?.error||e?.projectId===id&&e.revision>1&&!e.pending&&!e.unsaved&&
+                s.row.envelope.documents.calibration.revision==='rev:'+e.revision;
+        }""",arg=project['id'],timeout=30000)
+        read="""async id => {
+            const app=CurvatureModernApp,e=CurvatureModernPhotoCalibrationEditor.mount(document);
+            return {row:app.getExperimentSessionPreview().controller.row,editor:e.projectPersistenceStatus(),
+                project:await CurvatureModernCalibrationProjectStore.get(indexedDB,id),
+                journal:await CurvatureModernCalibrationProjectStore.readSharedSelectionReceipt(indexedDB),
+                inline:localStorage.getItem('curvature-calibration-inline-v2'),
+                tab:sessionStorage.getItem('curvature-calibration-clean-reload-project-v1')};
+        }"""
+        saved=self.page.evaluate(read,project['id'])
+        self.assertIsNone(saved['editor']['error'],saved['editor'])
+        self.assertEqual(saved['project']['checkpoint']['payload']['draft']['stage'],'calibration')
+        self.assertIsNone(saved['journal'])
+        self.assertEqual(saved['inline'],'retained legacy inline evidence')
+        self.assertEqual(saved['tab'],'retained legacy tab evidence')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'calibration')
+        reopened=self.page.evaluate(read,project['id'])
+        for key in ['row','project','journal','inline','tab']:
+            self.assertEqual(reopened[key],saved[key],key)
+        self.page.locator('#ModernCalibrationClose').click()
+        self.page.wait_for_function("""() => CurvatureModernApp.getWorkspaceMode()==='scene'&&
+            CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope.workspace==='scene'""",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernPhotoCalibrationOpen')).to_be_enabled()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        self.page.wait_for_function("""() => CurvatureModernApp.getWorkspaceMode()==='calibration'&&
+            CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope.workspace==='calibration'""",timeout=30000)
+        self.assertEqual(self.page.evaluate(read,project['id'])['project'],saved['project'])
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()
