@@ -8,30 +8,34 @@
   root.CurvatureModernUiSessionManager=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const SCOPES=['global','per-tab','per-tab-and-workspace'];
+  const SCOPES=['global','workspace','per-tab','per-tab-and-workspace'];
   function check(ok,reason){if(!ok)throw Error('UI Session Manager: '+reason);}
   function create({registry,store,workspace=null}={}){
     check(registry&&typeof registry.register==='function'&&
       typeof registry.snapshot==='function'&&
       typeof registry.hydrate==='function'&&
       store&&typeof store.read==='function'&&
-      typeof store.write==='function'&&typeof store.tabId==='function',
+      typeof store.write==='function',
       'registry and session-store adapters required');
     const specs=new Map(),revisions=new Map(),queues=new Map(),errors=new Map(),
       incompatible=new Map(),failedWrites=new Map(),locations=new Map();
     let ready=false,restoring=false;
     function register(spec){
       check(!ready&&!restoring,'register before restore');
+      if(spec&&(spec.scope==='per-tab'||spec.scope==='per-tab-and-workspace'))
+        check(typeof store.tabId==='function','tab identity adapter required for legacy scope');
       const registered=registry.register(spec);
       specs.set(spec.key,registered);
       return registered;
     }
     function context(scope){
       if(scope==='global')return {};
+      if(scope==='workspace'||scope==='per-tab-and-workspace')
+        check(typeof workspace==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(workspace),
+          'workspace name required');
+      if(scope==='workspace')return {workspace};
       const id=store.tabId();
       if(scope==='per-tab')return {tabId:id};
-      check(typeof workspace==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(workspace),
-        'workspace name required');
       return {tabId:id,workspace};
     }
     function group(scope){return scope+':'+JSON.stringify(context(scope));}
@@ -42,7 +46,8 @@
       try{
         // One claim per underlying store, shared across all workspace managers.
         // The session ID must be unique BEFORE reading any per-tab records.
-        if(typeof store.claimTab==='function')await store.claimTab();
+        if([...specs.values()].some(x=>x.scope==='per-tab'||x.scope==='per-tab-and-workspace')&&
+           typeof store.claimTab==='function')await store.claimTab();
         for(const scope of SCOPES){
           if(![...specs.values()].some(x=>x.scope===scope))continue;
           const ctx=context(scope);

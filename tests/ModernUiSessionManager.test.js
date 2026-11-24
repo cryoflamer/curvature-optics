@@ -381,3 +381,34 @@ test('resumed manager refuses an unacknowledged journal even with matching durab
   await assert.rejects(manager.verifyResumed(),/unacknowledged UI write/);
   assert.equal(rows.size,0,'no implicit replay during BFCache re-entry');
 });
+
+test('shared workspace managers need no tab identity and refuse stale changes',async()=>{
+  const rows=new Map();
+  const backend={
+    async read(scope,ctx){return rows.get(ctx.workspace)||{revision:0,envelope:null};},
+    async write(scope,ctx,envelope,revision){
+      const current=await this.read(scope,ctx);
+      assert.equal(scope,'workspace');
+      if(current.revision!==revision)throw Error('revision conflict');
+      rows.set(ctx.workspace,{revision:revision+1,envelope:structuredClone(envelope)});
+      return {revision:revision+1};
+    },
+    claimTab(){throw Error('shared scope must not claim a tab');}
+  };
+  function make(workspace){
+    const m=managerApi.create({registry:registry.create(),store:backend,workspace});
+    m.register({key:'workspace.active-panel',scope:'workspace',version:1,
+      defaultValue:'objects',validate:v=>['objects','surface','display'].includes(v)});
+    return m;
+  }
+  const a=make('scene'),b=make('scene'),compare=make('compare');
+  await a.restore();await b.restore();await compare.restore();
+  await a.set('workspace.active-panel','surface');
+  assert.equal(compare.get('workspace.active-panel'),'objects');
+  await assert.rejects(b.set('workspace.active-panel','display'),/revision conflict/);
+  await assert.rejects(b.retryFailed(),/revision conflict/);
+  const fresh=make('scene');await fresh.restore();
+  assert.equal(fresh.get('workspace.active-panel'),'surface');
+  assert.equal(rows.get('scene').revision,1);
+  assert.equal(rows.has('compare'),false);
+});

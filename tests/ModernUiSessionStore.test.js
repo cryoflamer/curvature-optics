@@ -53,7 +53,11 @@ test('invalid or unguarded writes do not open a store',async()=>{
   assert.equal(state.opened,0);
 });
 test('store cannot be used without supported explicit browser dependencies',()=>{
-  assert.throws(()=>store.create({}),/IndexedDB, sessionStorage and UUID generator required/);
+  assert.throws(()=>store.create({}),/IndexedDB required/);
+  const adapter=store.create({indexedDB:{open(){throw Error('unexpected DB open');}}});
+  assert.throws(()=>adapter.tabId(),/sessionStorage and UUID generator required/);
+  assert.equal(adapter.readPending('workspace',{workspace:'scene'}),null);
+  assert.equal(adapter.stage('workspace',{workspace:'scene'},null,0),false);
   assert.equal(store.DATABASE,'curvature-modern-ui-state');
 });
 

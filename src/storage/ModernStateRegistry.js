@@ -9,7 +9,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const FORMAT='curvature-modern-ui-state',VERSION=1;
-  const SCOPES=Object.freeze(['per-tab','per-tab-and-workspace','global']);
+  const SCOPES=Object.freeze(['per-tab','per-tab-and-workspace','global','workspace']);
   const KEY=/^[a-z][a-zA-Z0-9-]*(?:\.[a-z][a-zA-Z0-9-]*)+$/;
   const ID=/^[A-Za-z0-9_-]{1,128}$/;
   function check(ok,message){if(!ok)throw Error('State Registry: '+message);}
@@ -25,6 +25,11 @@
     const specs=new Map(),values=new Map(),listeners=new Map(),unrecognized=[];
     function validContext(scope,context){
       if(scope==='global')return 'global';
+      if(scope==='workspace'){
+        check(context&&typeof context.workspace==='string'&&ID.test(context.workspace),
+          'workspace ID required');
+        return JSON.stringify(['shared-workspace',context.workspace]);
+      }
       check(context&&typeof context.tabId==='string'&&ID.test(context.tabId),
         'tab ID required for '+scope);
       if(scope==='per-tab')return JSON.stringify(['tab',context.tabId]);

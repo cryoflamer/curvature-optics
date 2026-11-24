@@ -130,7 +130,52 @@ The current `ModernSessionAutosave` adapter registers `working.session` through 
 
 If Web Locks are missing, ordinary user saves still use the prior IndexedDB path (and synchronous fallback); this **cannot** be treated as evidence for a coordinated backup. If the lock manager is present but rejects a lock, the IndexedDB save must fail rather than silently bypass its coordination request; the existing application already reports a failed IDB checkpoint while preserving its synchronous recovery copy. The backup process itself still makes no migration-ready claim. Multi-tab Chromium tests now cover a real working-session write held behind an exclusive backup reader, followed by durable readback and F5. These tests do not cover unregistered Animation, Calibration, History, Library or Web Storage writers.
 
+## Shared Modern session target
+
+The intended contract is **one working session per browser origin/profile**,
+shared by all Modern tabs. Normal startup/F5 restores the latest acknowledged
+global workspace and document selection; it may differ from the old in-memory
+view in that tab. Duplicating a browser tab does not duplicate a document.
+Real-time cross-tab synchronization and simultaneous independent editing
+sessions are not required. Explicit import/deep navigation still takes
+precedence; an ordinary reload is not a new import.
+
+Documents, immutable revisions, originals, archived experiments and recovery
+evidence retain their domain identity and ownership. A stale view must not
+silently replace a newer checkpoint: use expected-revision CAS, verified
+readback, generation guards, explicit conflict/reload/recovery and early
+durable checkpoints. A rejected edit remains recoverable/exportable; do not
+automatically rebase a stale snapshot. Cross-database acknowledgement still
+requires domain commit/readback before session-pointer CAS. UI hydration
+must not write back or change a document. Keep workspace-specific panel and
+subview choices distinct from global application preferences.
+
+The registry supports a shared `workspace` scope, addressed by workspace name
+alone (`sessions/shared-workspace:<workspace>` in the existing UI database).
+It requires no sessionStorage, UUID or Web Lock claim. The `global` scope
+remains available for shared preferences. Shared workspace writes use CAS
+and post-commit readback; a stale manager cannot replace another writer's
+acknowledged revision. The new scope is opt-in and not yet mounted in Modern.
+One registered owner supplies each complete workspace envelope; do not
+split the same envelope among partial registries.
+
+The target document session will use a fixed shared identity, not the
+browser tab token. Old per-tab preview rows, fork provenance, pending
+journals and immutable revisions are migration/recovery evidence. Do not
+auto-merge divergent copies, select one arbitrarily, or delete old bytes.
+Verify a selected source and the new shared record before changing startup
+or retiring legacy persistence. No tab-token or Web Storage payload is
+needed for final session restoration; transient writer coordination may
+remain independent of persisted selection. Existing backup/restore gates,
+explicit URL compatibility, protected Legacy behavior and asset ownership
+checks remain required.
+
 ## Extensible Modern UI-state and session primitives
+
+The per-tab mechanisms described below are the **existing opt-in experimental
+implementation**, not the target session model. Preserve their data until
+verified migration; their identity leases, per-tab forks and UI journals are
+not required features of the shared session.
 
 Issue [#31](https://github.com/cryoflamer/curvature-optics/issues/31) provides a
 **single future onboarding contract** for Scene, Compare, Animation, Calibration,
@@ -366,6 +411,11 @@ payloads stay readable until verified migration. The existing Modern DOM
 section controller must be migrated rather than duplicated.
 
 ## Document session contract (headless foundation)
+
+The v1 tab-addressed contract and previews below describe retained
+experimental code and stored evidence. They are superseded as the target
+architecture by the shared Modern session contract above; do not extend
+per-tab ownership to additional workspaces.
 
 [ModernDocumentSession.js](../src/storage/ModernDocumentSession.js) defines the
 versioned **metadata-only** session envelope and save/restore contract. It is

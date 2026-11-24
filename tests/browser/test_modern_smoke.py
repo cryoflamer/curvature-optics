@@ -9025,6 +9025,49 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
 
+    def test_shared_workspace_registry_f5_without_tab_identity(self):
+        """Shared workspace UI scope restores across tabs, with stale CAS rejection."""
+        self.open_modern()
+        other=self.context.new_page()
+        init="""async (workspace) => {
+            const env={indexedDB,
+                get sessionStorage(){throw Error('sessionStorage accessed');},
+                get crypto(){throw Error('crypto accessed');},
+                get navigator(){throw Error('tab lock accessed');}};
+            const store=CurvatureModernUiSessionStore.create(env);
+            const manager=CurvatureModernUiSessionManager.create({
+                registry:CurvatureModernStateRegistry.create(),store,workspace});
+            manager.register({key:'workspace.active-panel',scope:'workspace',
+                version:1,defaultValue:'objects',
+                validate:v=>['objects','surface','display'].includes(v)});
+            await manager.restore();
+            window.sharedWorkspaceManager=manager;
+            window.sharedWorkspaceStore=store;
+            return manager.get('workspace.active-panel');
+        }"""
+        try:
+            other.goto(self.base_url,wait_until='load')
+            self.assertEqual(self.page.evaluate(init,'scene'),'objects')
+            self.assertEqual(other.evaluate(init,'scene'),'objects')
+            self.page.evaluate("""() =>
+                sharedWorkspaceManager.set('workspace.active-panel','surface')""")
+            self.assertTrue(other.evaluate("""async () => {
+                try{await sharedWorkspaceManager.set('workspace.active-panel','display');}
+                catch(error){return /revision conflict/.test(error.message);}
+                return false;
+            }"""))
+            self.assertTrue(self.page.evaluate("""async () => {
+                const row=await sharedWorkspaceStore.read('workspace',{workspace:'scene'});
+                return row.revision===1&&row.envelope.values['workspace.active-panel'].value==='surface';
+            }"""))
+            other.reload(wait_until='load')
+            self.assertEqual(other.evaluate(init,'scene'),'surface')
+            self.assertEqual(other.evaluate(init,'compare'),'objects')
+            self.assertFalse(other.evaluate("""() =>
+                sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)!==null"""))
+        finally:
+            other.close()
+
     def test_universal_ui_manager_binds_new_explorer_panel_without_custom_storage(self):
         """Opt-in adapter binds a new details panel, persists it, and silently restores after F5."""
         self.open_modern()

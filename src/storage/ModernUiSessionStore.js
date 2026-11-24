@@ -14,16 +14,27 @@
   const ID=/^[A-Za-z0-9_-]{1,128}$/;
   function check(ok,reason){if(!ok)throw Error('UI Session Store: '+reason);}
   function create(env){
-    check(env&&env.indexedDB&&typeof env.indexedDB.open==='function'&&
-      env.sessionStorage&&typeof env.sessionStorage.getItem==='function'&&
-      env.crypto&&typeof env.crypto.randomUUID==='function',
-      'IndexedDB, sessionStorage and UUID generator required');
-    const {indexedDB,sessionStorage,crypto}=env;
+    check(env&&env.indexedDB&&typeof env.indexedDB.open==='function',
+      'IndexedDB required');
+    const {indexedDB}=env;
+    // Shared scopes do not need Web Storage or a tab identity. Keep legacy
+    // preview dependencies lazy, so even a blocked getter is never accessed.
+    let sessionStorage,crypto;
+    function requireTabDependencies(){
+      if(sessionStorage&&crypto)return;
+      const storage=env.sessionStorage,uuid=env.crypto;
+      check(storage&&typeof storage.getItem==='function'&&
+        typeof storage.setItem==='function'&&uuid&&typeof uuid.randomUUID==='function',
+        'sessionStorage and UUID generator required for tab scope');
+      sessionStorage=storage;crypto=uuid;
+    }
+    const sharedScope=scope=>scope==='global'||scope==='workspace';
     // Web Locks owns the opaque tab ID for this document lifetime. A duplicated
     // tab inherits sessionStorage, so its token alone is not proof of identity.
     let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
     let lifecycleAttached=false,documentAdapter=null,claimEpoch=0;
     function tabId(){
+      requireTabDependencies();
       const existing=sessionStorage.getItem(TAB_KEY);
       if(existing!==null){
         check(ID.test(existing),'invalid existing tab token; legacy evidence preserved');
@@ -153,9 +164,15 @@
       return owner.id;
     }
     function address(scope,context){
-      check(['per-tab','per-tab-and-workspace','global'].includes(scope),
+      check(['per-tab','per-tab-and-workspace','global','workspace'].includes(scope),
         'invalid state scope');
       if(scope==='global')return {store:'preferences',id:'global'};
+      if(scope==='workspace'){
+        const workspace=context&&context.workspace;
+        check(typeof workspace==='string'&&ID.test(workspace),'workspace identity required');
+        return {store:'sessions',id:'shared-workspace:'+workspace};
+      }
+      requireTabDependencies();
       const id=context&&context.tabId||tabId();
       check(typeof id==='string'&&ID.test(id),'invalid tab identity');
       if(scope==='per-tab')return {store:'sessions',id:'tab:'+id};
@@ -168,7 +185,7 @@
     // IndexedDB remains authoritative; no experiment, draft or project is
     // serialized here. A copied tab has a new ID and cannot replay its parent.
     function pendingKey(scope,context){
-      if(scope==='global')return null;
+      if(sharedScope(scope))return null;
       return PENDING_PREFIX+address(scope,context).id;
     }
     function validatePending(scope,context,entry){
@@ -328,7 +345,7 @@
         const req=store.get(target.id);
         req.onsuccess=()=>{
           if(req.result){accept(req.result,target.id,false);return;}
-          if(scope==='global'||!forkedFrom||!owner||!owner.active||
+          if(sharedScope(scope)||!forkedFrom||!owner||!owner.active||
              context?.tabId!==owner.id){
             accept(null,target.id,false);return;
           }
@@ -349,19 +366,23 @@
       // Diagnostic adapters may be unclaimed, but a claimed lease can never
       // write after suspension or while a BFCache restore is unvalidated.
       const lease=owner;
-      if(scope!=='global'&&(claimPromise||lease))
+      if(!sharedScope(scope)&&(claimPromise||lease))
         check(lease&&lease.active&&lease.writable&&context&&context.tabId===lease.id,
           'tab ownership lost; reload before writing UI state');
-      return transact(target.store,'readwrite',(store,reply)=>{
+      const saved=await transact(target.store,'readwrite',(store,reply)=>{
         const req=store.get(target.id);
         req.onsuccess=()=>{
-          if(scope!=='global'&&lease&&
+          if(!sharedScope(scope)&&lease&&
              (!lease.active||!lease.writable||owner!==lease)){
             reply.reject(Error('UI Session Store: tab ownership lost during write'));return;
           }
           const before=req.result,revision=before?before.revision:0;
           if(before&&(before.version!==1||!Number.isSafeInteger(before.revision)||
-            before.revision<1)){
+            before.revision<1||(scope==='workspace'&&
+              (before.id!==target.id||!before.envelope||
+               before.envelope.format!==FORMAT||before.envelope.version!==1||
+               before.envelope.scope!==scope||!before.envelope.values||
+               typeof before.envelope.values!=='object'||Array.isArray(before.envelope.values))))){
             reply.reject(Error('UI Session Store: incompatible stored revision'));return;
           }
           if(revision!==expectedRevision){
@@ -372,6 +393,13 @@
           catch(error){reply.reject(error);}
         };
       });
+      if(scope==='workspace'){
+        const verified=await read(scope,context);
+        check(verified.revision===saved.revision&&
+          JSON.stringify(verified.envelope)===JSON.stringify(envelope),
+          'shared workspace readback conflict');
+      }
+      return saved;
     }
     // Use the same tab lease and database but a disjoint metadata namespace.
     // Unlike UI preview, a duplicated tab never inherits document pointers.
