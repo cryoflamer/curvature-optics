@@ -391,7 +391,6 @@
         for(const tx of lease.documentTransactions){try{tx.abort();}catch(ignore){}}
       });
       const matches=envelope=>envelope.version===contract.SHARED_VERSION&&envelope.sessionId===lease.id;
-      let observed=null,busy=false;
       function decode(row){
         if(row===undefined)return Object.freeze({revision:0,envelope:null});
         check(row&&Object.keys(row).length===4&&row.id===SHARED_DOCUMENT_KEY&&
@@ -401,7 +400,6 @@
         check(matches(envelope),'document session row identity mismatch');
         return Object.freeze({revision:row.revision,envelope});
       }
-      function same(a,b){return JSON.stringify(a)===JSON.stringify(b);}
       function fetchRow(lease){
         return transact('sessions','readonly',(store,reply)=>{
           const req=store.get(SHARED_DOCUMENT_KEY);
@@ -412,46 +410,10 @@
         },lease);
       }
       async function read(){
-        check(!busy,'document session operation already pending');
         verifyDocumentLease(lease,false);
-        busy=true;observed=null;
-        try{
-          const row=await fetchRow(lease);
-          verifyDocumentLease(lease,false);
-          observed={lease,row};return row;
-        }finally{busy=false;}
-      }
-      async function write(envelope,expectedRevision){
-        check(!busy,'document session operation already pending');
-        verifyDocumentLease(lease,true);
-        const frame=contract.normalize(envelope);
-        check(matches(frame),'shared document session identity mismatch');
-        check(Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
-          expectedRevision<Number.MAX_SAFE_INTEGER,'invalid document session expected revision');
-        check(observed&&observed.lease===lease&&observed.row.revision===expectedRevision,
-          'read current document session before write');
-        const baseline=observed.row;
-        busy=true;observed=null;
-        try{
-          const committed=await transact('sessions','readwrite',(store,reply)=>{
-            const req=store.get(SHARED_DOCUMENT_KEY);
-            req.onsuccess=()=>{
-              try{
-                verifyDocumentLease(lease,true);
-                const before=decode(req.result);
-                check(same(before,baseline),'document session revision or envelope conflict');
-                const row={id:SHARED_DOCUMENT_KEY,version:1,
-                  revision:expectedRevision+1,envelope:frame};
-                store.put(row);reply.result(decode(row));
-              }catch(error){reply.reject(error);}
-            };
-          },lease);
-          // Only acknowledge after oncomplete AND separate durable readback.
-          const saved=await fetchRow(lease);
-          verifyDocumentLease(lease,true);
-          check(same(saved,committed),'document session readback conflict');
-          observed={lease,row:saved};return saved;
-        }finally{busy=false;}
+        const row=await fetchRow(lease);
+        verifyDocumentLease(lease,false);
+        return row;
       }
       async function inspectLegacyDocuments(){
         verifyDocumentLease(lease,false);
@@ -477,7 +439,7 @@
           }catch(error){return {id:row.id,status:'invalid',error:error.message};}
         });
       }
-      const api=Object.freeze({read,write,inspectLegacyDocuments});
+      const api=Object.freeze({read,inspectLegacyDocuments});
       sharedDocumentAdapter={contract,api};
       return api;
     }

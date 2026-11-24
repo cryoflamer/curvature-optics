@@ -232,12 +232,10 @@ test('shared document adapter needs no tab dependencies and suspends on pagehide
   const stop=lease.track({abort(){aborted++;}},true);
   const removed=lease.track({abort(){aborted+=100;}},true);
   removed();
-  await assert.rejects(doc.write(documents.empty('tab-a'),0),/shared document session identity mismatch/);
-  await assert.rejects(doc.write(documents.emptyShared(),0),/read current document session/);
+  assert.equal(doc.write,undefined);
   leave();
   assert.equal(aborted,1);stop();
   assert.throws(()=>lease.check(),/page suspended/);
   await assert.rejects(doc.read(),/page suspended/);
-  await assert.rejects(doc.write(documents.emptyShared(),0),/page suspended/);
   assert.equal(opened,0);
 });

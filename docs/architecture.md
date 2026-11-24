@@ -159,20 +159,15 @@ acknowledged revision. The new scope is opt-in and not yet mounted in Modern.
 One registered owner supplies each complete workspace envelope; do not
 split the same envelope among partial registries.
 
-The opt-in shared document-session adapter now uses the fixed
+The historical shared document-session adapter reads the fixed
 `sessions/shared-document` key and v2 metadata envelope
-(`sessionId: "shared"`, workspace and the three existing domain bindings).
-The row revision remains independent of the envelope schema version.
-`ModernDocumentSession.emptyShared()` creates the initial metadata candidate;
-`select()`, `planRestore()` and the save tracker support it without a tab ID.
-`ModernUiSessionStore.create(env).sharedDocumentSessions(contract)` reuses
-the exact baseline CAS and post-commit readback implementation of the old
-adapter. Each instance must read before writing; a stale revision or
-different baseline fails closed. No sessionStorage, UUID, identity claim
-or fork is involved. Pagehide invalidates the in-memory access capability
-and aborts tracked transactions where possible; a cached page must reload.
-Construction does not open IndexedDB. The adapter is metadata only:
-domain verification before pointer CAS remains the caller's responsibility.
+(`sessionId: "shared"`, workspace and three domain bindings).
+`ModernDocumentSession.emptyShared()` and `select()` construct normalized
+envelopes for the atomic checkpoint. The old metadata writer and two-phase
+save tracker are removed. Historical metadata remains read-only migration
+evidence; pagehide invalidates the shared lifetime and aborts tracked
+transactions where possible. No tab identity or Web Storage is accessed.
+
 The shared lifetime capability is used by the atomic Scene/Compare
 checkpoint. The old metadata and working-copy formats remain readable for
 explicit migration. The origin-wide operation lock coordinates migration
@@ -498,7 +493,7 @@ Focused tests: [ModernDocumentSession.test.js](../tests/ModernDocumentSession.te
 The only metadata writer is `sharedDocumentSessions(contract)`, using
 `sessions/shared-document`. Historical `document:<tabId>` and fork rows
 are read by `inspectLegacyDocuments()`, never written by the application.
-The shared adapter requires a validated baseline and CAS/readback; pagehide
+The shared metadata reader validates the historical envelope; pagehide
 invalidates the captured lifetime. Historical tab document and working-copy
 records are read-only migration evidence.
 

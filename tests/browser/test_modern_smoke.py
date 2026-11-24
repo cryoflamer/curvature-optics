@@ -10242,65 +10242,56 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(bar).to_be_visible()
 
 
+    def install_historical_metadata_fixture(self):
+        self.page.evaluate("""() => {
+            window.seedHistoricalMetadata=async (envelope,revision)=>{
+                const row={id:'shared-document',version:1,revision,envelope};
+                await new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE,1);
+                    req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{
+                        const db=req.result,tx=db.transaction('sessions','readwrite');
+                        tx.objectStore('sessions').put(row);
+                        tx.oncomplete=()=>{db.close();resolve();};
+                        tx.onabort=()=>{db.close();reject(tx.error);};
+                    };
+                });
+                return {revision,envelope};
+            };
+        }""")
+
     def test_document_session_adapter_cas_readback_and_lease_revalidation(self):
-        """Shared metadata CAS and pagehide invalidate the old capability."""
+        """Historical metadata is read-only, fresh reads see external evidence, pagehide blocks access."""
         self.open_modern()
-        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        self.install_historical_metadata_fixture()
         result=self.page.evaluate("""async () => {
-            const C=CurvatureModernDocumentSession;
-            const ui=CurvatureModernUiSessionStore.create(window);
-            const doc=ui.sharedDocumentSessions(C);
-            const keys=Object.keys(sessionStorage).sort();
+            const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const doc=ui.sharedDocumentSessions(C),keys=Object.keys(sessionStorage).sort();
             const base=await doc.read();
-            const selected=C.select(C.emptyShared(),'compare',
-                {id:'experiment-a',revision:'digest:a',recovery:null});
-            const saved=await doc.write(selected,base.revision);
-            const keysUnchanged=JSON.stringify(keys)===JSON.stringify(Object.keys(sessionStorage).sort());
-            const errors=[];
-            try{await doc.write(selected,0);}catch(e){errors.push(e.message);}
-            await new Promise((resolve,reject)=>{
-                const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE,1);
-                req.onerror=()=>reject(req.error);
-                req.onsuccess=()=>{
-                    const db=req.result,tx=db.transaction('sessions','readwrite');
-                    tx.objectStore('sessions').put({id:'shared-document',version:1,revision:2,
-                        envelope:C.select(selected,'calibration',
-                            {id:'cal-a',revision:'rev:1',recovery:null})});
-                    tx.oncomplete=()=>{db.close();resolve();};
-                    tx.onabort=()=>{db.close();reject(tx.error);};
-                };
-            });
-            try{await doc.write(selected,1);}catch(e){errors.push(e.message);}
-            const foreign=await doc.read();
+            const selected=C.select(C.emptyShared(),'compare',{id:'experiment-a',revision:'digest:a',recovery:null});
+            const saved=await seedHistoricalMetadata(selected,1);
+            const first=await doc.read();
+            const foreign=await seedHistoricalMetadata(C.select(selected,'calibration',
+                {id:'cal-a',revision:'rev:1',recovery:null}),2);
+            const second=await doc.read();
+            const readonly=doc.write===undefined;
             dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
-            await new Promise(resolve=>setTimeout(resolve,0));
-            try{await doc.write(selected,2);}catch(e){errors.push(e.message);}
-            try{await doc.read();}catch(e){errors.push(e.message);}
-            return {base,saved,errors,foreign,keysUnchanged};
+            let suspended;try{await doc.read();}catch(e){suspended=e.message;}
+            return {base,saved,first,foreign,second,readonly,suspended,
+                keysUnchanged:JSON.stringify(keys)===JSON.stringify(Object.keys(sessionStorage).sort())};
         }""")
         self.assertEqual(result['base'],{'revision':0,'envelope':None})
-        self.assertEqual(result['saved']['revision'],1)
-        self.assertEqual(result['saved']['envelope']['documents']['experiment']['id'],'experiment-a')
-        self.assertIn('read current document session',result['errors'][0])
-        self.assertIn('revision or envelope conflict',result['errors'][1])
-        self.assertIn('page suspended',result['errors'][2])
-        self.assertIn('page suspended',result['errors'][3])
-        self.assertEqual(result['foreign']['revision'],2)
-        self.assertEqual(result['foreign']['envelope']['documents']['calibration']['id'],'cal-a')
+        self.assertEqual(result['saved'],result['first'])
+        self.assertEqual(result['foreign'],result['second'])
+        self.assertTrue(result['readonly'])
+        self.assertIn('page suspended',result['suspended'])
         self.assertTrue(result['keysUnchanged'])
         self.page.reload(wait_until='load')
-        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
-        restored=self.page.evaluate("""async () => {
-            const ui=CurvatureModernUiSessionStore.create(window);
-            const doc=ui.sharedDocumentSessions(CurvatureModernDocumentSession);
-            const row=await doc.read();
-            return {row,next:await doc.write(CurvatureModernDocumentSession.select(row.envelope,'compare'),row.revision)};
-        }""")
-        self.assertEqual(restored['row'],result['foreign'])
-        self.assertEqual(restored['next']['revision'],3)
+        self.assertEqual(self.page.evaluate("""async () => CurvatureModernUiSessionStore.create(window)
+            .sharedDocumentSessions(CurvatureModernDocumentSession).read()"""),result['foreign'])
 
     def test_shared_document_session_cas_reload_and_legacy_preservation(self):
-        """One fixed document session, no tab token, stale writes fail, legacy rows survive."""
+        """Historical shared metadata is read-only across tabs; legacy rows survive."""
         self.open_modern()
         other=self.context.new_page()
         init="""async () => {
@@ -10316,27 +10307,22 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.goto(self.base_url,wait_until='load')
             self.assertEqual(self.page.evaluate(init),{'revision':0,'envelope':None})
             self.assertEqual(other.evaluate(init),{'revision':0,'envelope':None})
+            self.install_historical_metadata_fixture()
             first=self.page.evaluate("""async () => {
                 const C=CurvatureModernDocumentSession;
-                return sharedDoc.write(C.select(C.emptyShared(),'compare',
-                    {id:'working-shared',revision:'digest:a',recovery:null}),0);
+                return seedHistoricalMetadata(C.select(C.emptyShared(),'compare',
+                    {id:'working-shared',revision:'digest:a',recovery:null}),1);
             }""")
             self.assertEqual(first['revision'],1)
             self.assertEqual(first['envelope']['sessionId'],'shared')
             self.assertNotIn('tabId',first['envelope'])
-            self.assertTrue(other.evaluate("""async () => {
-                const C=CurvatureModernDocumentSession;
-                try{await sharedDoc.write(C.select(C.emptyShared(),'calibration',
-                    {id:'cal-other',revision:'r1',recovery:null}),0);}
-                catch(e){return /revision or envelope conflict/.test(e.message);}
-                return false;
-            }"""))
+            self.assertTrue(other.evaluate('sharedDoc.write===undefined'))
             other.reload(wait_until='load')
             self.assertEqual(other.evaluate(init),first)
-            second=other.evaluate("""async (row) => {
+            second=self.page.evaluate("""async (row) => {
                 const C=CurvatureModernDocumentSession;
-                return sharedDoc.write(C.select(row.envelope,'calibration',
-                    {id:'cal-a',revision:'r4',recovery:null}),row.revision);
+                return seedHistoricalMetadata(C.select(row.envelope,'calibration',
+                    {id:'cal-a',revision:'r4',recovery:null}),row.revision+1);
             }""",first)
             self.assertEqual(second['revision'],2)
             self.assertEqual(second['envelope']['documents']['experiment']['id'],'working-shared')
@@ -10380,12 +10366,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         """Copied tab tokens cannot create document rows; invalid shared rows remain untouched."""
         self.open_modern()
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        self.install_historical_metadata_fixture()
         parent=self.page.evaluate("""async () => {
             const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
             const doc=ui.sharedDocumentSessions(C);
             await doc.read();
-            const row=await doc.write(C.select(C.emptyShared(),'animation',
-                {id:'draft-parent',revision:'digest:parent',recovery:null}),0);
+            const row=await seedHistoricalMetadata(C.select(C.emptyShared(),'animation',
+                {id:'draft-parent',revision:'digest:parent',recovery:null}),1);
             window.__documentSession=doc;
             return row;
         }""")
@@ -10422,63 +10409,40 @@ class ModernBrowserSmoke(unittest.TestCase):
                 });
             }
             await access(true);
-            let writeError,readError;
-            try{await doc.write(C.emptyShared(),1);}catch(e){writeError=e.message;}
+            let readError;const readonly=doc.write===undefined;
             try{await doc.read();}catch(e){readError=e.message;}
-            return {writeError,readError,unchanged:JSON.stringify(await access(false))===JSON.stringify(raw)};
+            return {readonly,readError,unchanged:JSON.stringify(await access(false))===JSON.stringify(raw)};
         }""",parent)
-        self.assertIn('unsupported session format/version',result['writeError'])
+        self.assertTrue(result['readonly'])
         self.assertIn('unsupported session format/version',result['readError'])
         self.assertTrue(result['unchanged'])
 
 
     def test_document_session_adapter_failed_commit_and_lost_readback(self):
-        """Abort before commit and simulate a lost post-commit readback.
-        Neither operation may return an acknowledgement or retry blindly."""
+        """A historical reader never acknowledges writes and recovers from read failure."""
         self.open_modern()
-        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        self.install_historical_metadata_fixture()
         result=self.page.evaluate("""async () => {
-            const C=CurvatureModernDocumentSession;
-            const ui=CurvatureModernUiSessionStore.create(window);
+            const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
             const doc=ui.sharedDocumentSessions(C);
             const initial=await doc.read();
-            const next=C.select(C.emptyShared(),'scene',
-                {id:'work-a',revision:'digest:a',recovery:null});
-            const proto=IDBObjectStore.prototype,put=proto.put;
+            const saved=await seedHistoricalMetadata(C.select(C.emptyShared(),'scene',
+                {id:'work-a',revision:'digest:a',recovery:null}),1);
             const open=indexedDB.open.bind(indexedDB);
-            let aborted,readbackFailed,blindRetry;
+            let failed;
             try{
-                proto.put=function(value,...args){
-                    const request=put.call(this,value,...args);
-                    if(value.id==='shared-document')this.transaction.abort();
-                    return request;
-                };
-                try{await doc.write(next,0);}catch(e){aborted=e.message;}
-            }finally{proto.put=put;}
-            const afterAbort=await doc.read();
-            let calls=0;
-            try{
-                Object.defineProperty(indexedDB,'open',{configurable:true,
-                    value:function(...args){
-                        if(args[0]===CurvatureModernUiSessionStore.DATABASE&&++calls===2)
-                            throw Error('simulated lost readback');
-                        return open(...args);
-                    }});
-                try{await doc.write(next,0);}catch(e){readbackFailed=e.message;}
-            }finally{
-                Object.defineProperty(indexedDB,'open',{configurable:true,value:open});
-            }
-            try{await doc.write(next,0);}catch(e){blindRetry=e.message;}
-            const committed=await doc.read();
-            return {initial,afterAbort,aborted,readbackFailed,blindRetry,committed,next};
+                Object.defineProperty(indexedDB,'open',{configurable:true,value:function(...args){
+                    if(args[0]===CurvatureModernUiSessionStore.DATABASE)throw Error('simulated read failure');
+                    return open(...args);
+                }});
+                try{await doc.read();}catch(e){failed=e.message;}
+            }finally{Object.defineProperty(indexedDB,'open',{configurable:true,value:open});}
+            return {initial,saved,failed,restored:await doc.read(),readonly:doc.write===undefined};
         }""")
         self.assertEqual(result['initial'],{'revision':0,'envelope':None})
-        self.assertEqual(result['afterAbort'],result['initial'])
-        self.assertTrue(result['aborted'])
-        self.assertIn('simulated lost readback',result['readbackFailed'])
-        self.assertIn('read current document session',result['blindRetry'])
-        self.assertEqual(result['committed'],{'revision':1,'envelope':result['next']})
-
+        self.assertIn('simulated read failure',result['failed'])
+        self.assertEqual(result['restored'],result['saved'])
+        self.assertTrue(result['readonly'])
 
 
     def install_historical_shared_import_fixture(self):
@@ -10590,6 +10554,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
         self.install_historical_shared_import_fixture()
+        self.install_historical_metadata_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession;
@@ -10611,16 +10576,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const initial=await a.read();await b.read();
             const base=await sessions.read();
-            const row=await sessions.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
+            const row=await seedHistoricalMetadata(D.select(D.emptyShared(),'compare',candidate.document),base.revision+1);
             const edit=structuredClone(initial.experiment);edit.scene.camera.Height+=1;
             const stale=structuredClone(initial.experiment);stale.scene.camera.Height+=2;
             const draft=await seedHistoricalRecovery(edit,initial.revision);
             const receipt=await seedHistoricalRevision(edit,initial.revision);
-            const tracker=D.createSaveTracker({session:row.envelope,sessionRevision:row.revision});
-            tracker.markDirty();const token=tracker.beginSave();
-            const pending=tracker.acknowledgeDocument(token,receipt);
-            const saved=await sessions.write(pending.envelope,pending.expectedRevision);
-            tracker.acknowledgeSession(token,saved);
+            const saved=await seedHistoricalMetadata(D.select(row.envelope,'compare',{id:receipt.id,revision:receipt.revision,recovery:null}),row.revision+1);
             const readonly=['write','stageRecovery','retireRecovery'].every(key=>a[key]===undefined&&b[key]===undefined);
             return {candidate,initial,saved,edit,readonly,draftSeed:draft,
                 latest:await a.read(),draft:await a.readRecovery(),
@@ -10799,6 +10760,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
         self.install_historical_shared_import_fixture()
+        self.install_historical_metadata_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
             const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
@@ -10809,7 +10771,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const choice=inventory.candidates.find(x=>x.selection.key==='current');
             const prepared=await seedHistoricalSharedImport(choice);
             const empty=await sessions.read();
-            const row=await sessions.write(D.select(D.emptyShared(),'compare',prepared.document),empty.revision);
+            const row=await seedHistoricalMetadata(D.select(D.emptyShared(),'compare',prepared.document),empty.revision+1);
             const bound=await working.read(),edit=structuredClone(bound.experiment);
             edit.scene.camera.Height+=1;
             edit.compare.A.atmosphere='vacuum';edit.compare.B.atmosphere='inverse-spherical';
@@ -11084,6 +11046,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Working session saved',timeout=30000)
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         self.install_historical_shared_import_fixture()
+        self.install_historical_metadata_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
@@ -11092,33 +11055,30 @@ class ModernBrowserSmoke(unittest.TestCase):
             const migration=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const candidate=await seedHistoricalSharedImport((await migration.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
             const base=await doc.read();
-            const bound=await doc.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
+            const bound=await seedHistoricalMetadata(D.select(D.emptyShared(),'compare',candidate.document),base.revision+1);
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const initial=await a.read();await b.read();
             const edit=structuredClone(initial.experiment);edit.compare.A.atmosphere='vacuum';
             edit.compare.B.atmosphere='inverse-spherical';edit.scene.camera.Height+=1;
-            const tracker=D.createSaveTracker({session:bound.envelope,sessionRevision:bound.revision});
-            tracker.markDirty();const token=tracker.beginSave();
-            const receipt=await seedHistoricalRevision(edit,token.baseRevision);
-            const pending=tracker.acknowledgeDocument(token,receipt);
+            const receipt=await seedHistoricalRevision(edit,initial.revision);
+            const pending={envelope:D.select(bound.envelope,'compare',{id:receipt.id,revision:receipt.revision,recovery:null}),expectedRevision:bound.revision};
             const readonly=a.write===undefined&&b.write===undefined;
             // Do not write the session yet: simulate failure between stores.
-            tracker.fail(token,'simulated session failure');
             const oldSession=await doc.read(),old=await a.readRevision(initial.revision);
             const latest=await a.read();
             const restored=await D.planRestore(oldSession.envelope,{
                 readDocument:(_,id)=>a.readRevision(oldSession.envelope.documents.experiment.revision)});
             // Explicit reconciliation can acknowledge the already durable revision.
-            const saved=await doc.write(pending.envelope,pending.expectedRevision);
+            const saved=await seedHistoricalMetadata(pending.envelope,pending.expectedRevision+1);
             const again=await seedHistoricalRevision(initial.experiment,receipt.revision);
             return {initial,receipt,pending,readonly,oldSession,old,latest,restored,
-                saved,again,edit,failed:tracker.state().status,
+                saved,again,edit,metadataReadonly:doc.write===undefined,
                 initialStill:await a.readRevision(initial.revision),
                 legacySame:JSON.stringify(legacy)===JSON.stringify(await S.read(indexedDB)),
                 localSame:raw===localStorage.getItem(C.STORAGE_KEY)};
         }""")
-        self.assertEqual(result['failed'],'failed')
+        self.assertTrue(result['metadataReadonly'])
         self.assertTrue(result['readonly'])
         self.assertEqual(result['old'],result['initial'])
         self.assertEqual(result['initialStill'],result['initial'])

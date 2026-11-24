@@ -4,10 +4,6 @@ const contract=require('../src/storage/ModernDocumentSession');
 function bound(mode='scene',id='work-a',revision='digest:abc'){
   return contract.select(contract.empty('tab-a'),mode,{id,revision,recovery:null});
 }
-function tracker(session=bound()){
-  return contract.createSaveTracker({session,sessionRevision:4});
-}
-function receipt(t,revision='digest:def'){return {kind:t.kind,id:t.id,revision};}
 function recoverable(){
   return contract.select(bound(),'scene',{id:'work-a',revision:'digest:abc',
     recovery:{id:'recover-a',revision:'digest:draft',baseRevision:'digest:abc'}});
@@ -63,93 +59,17 @@ test('late restore fails after generation change',async()=>{
       current=false;return {kind,id,revision:'digest:abc'};
     }}),/stale restore generation/);
 });
-test('recovery matches document and base revision; forged plans cannot load it',async()=>{
+test('historical recovery plan verifies document and base revision',async()=>{
   const s=recoverable();
   await assert.rejects(contract.planRestore(s,{readDocument,
     readRecovery:async(kind,id)=>({...await readRecovery(kind,id),documentId:'wrong'})}),/recovery missing/);
   const plan=await contract.planRestore(s,{readDocument,readRecovery});
-  const m=tracker(s);assert.equal(m.state().status,'recovering');
-  assert.equal(m.canSwitch(),false);
-  assert.throws(()=>m.recoveryLoaded({...plan}),/verified recovery/);
-  m.recoveryLoaded(plan);assert.equal(m.state().status,'dirty');
-  assert.equal(m.state().session.documents.experiment.recovery.id,'recover-a');
-});
-test('recovery activation rechecks guard and session identity',async()=>{
-  const s=recoverable();let live=true;
-  const plan=await contract.planRestore(s,{readDocument,readRecovery,isCurrent:()=>live});
-  const other=tracker({...s,tabId:'tab-b'});
-  assert.throws(()=>other.recoveryLoaded(plan),/verified recovery/);
-  live=false;
-  assert.throws(()=>tracker(s).recoveryLoaded(plan),/verified recovery/);
-});
-test('domain receipt alone never commits the session pointer',()=>{
-  const m=tracker();assert.equal(m.canSwitch(),true);
-  m.markDirty();assert.equal(m.canSwitch(),false);const t=m.beginSave();
-  assert.throws(()=>m.acknowledgeSession(t,{revision:5,envelope:bound()}),/document commit/);
-  const p=m.acknowledgeDocument(t,receipt(t));
-  assert.equal(p.expectedRevision,4);
-  assert.equal(p.envelope.documents.experiment.revision,'digest:def');
-  assert.equal(m.state().session.documents.experiment.revision,'digest:abc');
-  assert.equal(m.state().status,'saving');
-  assert.equal(m.acknowledgeSession(t,{revision:5,envelope:p.envelope}),true);
-  assert.equal(m.state().status,'committed');assert.equal(m.state().sessionRevision,5);
-  assert.equal(m.canSwitch(),true);
-});
-test('session receipt checks CAS revision and exact candidate',()=>{
-  const m=tracker();m.markDirty();const t=m.beginSave();
-  const p=m.acknowledgeDocument(t,receipt(t));
-  assert.throws(()=>m.acknowledgeSession(t,{revision:6,envelope:p.envelope}),/CAS/);
-  assert.throws(()=>m.acknowledgeSession(t,{revision:5,envelope:bound('compare')}),/CAS/);
-  assert.equal(m.state().sessionRevision,4);assert.equal(m.state().status,'saving');
-  assert.equal(m.state().pending,p);
-});
-test('late receipts cannot acknowledge a newer edit',()=>{
-  const m=tracker();m.markDirty();const a=m.beginSave();
-  const p=m.acknowledgeDocument(a,receipt(a));m.markDirty();
-  assert.equal(m.acknowledgeSession(a,{revision:5,envelope:p.envelope}),true);
-  assert.equal(m.state().status,'dirty');assert.equal(m.canSwitch(),false);
-  const b=m.beginSave();assert.equal(b.baseRevision,'digest:def');
-  assert.equal(b.sessionRevision,5);
-  assert.equal(m.acknowledgeDocument(a,receipt(a)),null);
-  assert.equal(m.fail(a,'late error'),false);assert.equal(m.state().status,'saving');
-});
-test('cross-document or fork receipts never redirect current edits',()=>{
-  const m=tracker();m.markDirty();const t=m.beginSave();
-  assert.throws(()=>m.acknowledgeDocument(t,{kind:'calibration',id:t.id,revision:'rev:2'}),/match/);
-  assert.throws(()=>m.acknowledgeDocument(t,{kind:t.kind,id:'fork-a',revision:'rev:2'}),/match/);
-  assert.throws(()=>m.acknowledgeDocument(t,receipt(t,t.baseRevision)),/match/);
-  assert.equal(m.state().pending,null);
-});
-test('failure before or after domain commit requires reconciliation, never blind retry',()=>{
-  for(const after of [false,true]){
-    const m=tracker();m.markDirty();const t=m.beginSave();
-    const p=after?m.acknowledgeDocument(t,receipt(t)):null;
-    assert.equal(m.fail(t,'quota or conflict'),true);
-    assert.equal(m.state().status,'failed');assert.equal(m.state().pending,p);
-    assert.equal(m.state().sessionRevision,4);assert.equal(m.canSwitch(),false);
-    assert.throws(()=>m.beginSave(),/dirty document/);
-    assert.equal(m.acknowledgeSession(t,{revision:5,envelope:bound()}),false);
-    assert.equal(m.beginRecovery().status,'recovering');assert.equal(m.state().pending,p);
-  }
-});
-test('recovery pointer is retired only on acknowledged replacement',async()=>{
-  const s=recoverable();
-  const plan=await contract.planRestore(s,{readDocument,readRecovery});
-  const m=tracker(s);m.recoveryLoaded(plan);const t=m.beginSave();
-  const p=m.acknowledgeDocument(t,receipt(t));
-  assert.equal(m.state().session.documents.experiment.recovery.id,'recover-a');
-  assert.equal(p.envelope.documents.experiment.recovery,null);
-  m.acknowledgeSession(t,{revision:5,envelope:p.envelope});
-  assert.equal(m.state().session.documents.experiment.recovery,null);
-});
-
-test('document acknowledgement can select another workspace only for the same document kind',()=>{
-  const m=tracker();m.markDirty();const token=m.beginSave();
-  assert.throws(()=>m.acknowledgeDocument(token,receipt(token),'calibration'),/workspace mismatch/);
-  const p=m.acknowledgeDocument(token,receipt(token),'compare');
-  assert.equal(p.envelope.workspace,'compare');
-  m.acknowledgeSession(token,{revision:5,envelope:p.envelope});
-  assert.equal(m.state().session.workspace,'compare');
+  assert.equal(plan.source,'recovery');
+  assert.equal(plan.document.recovery.id,'recover-a');
+  assert.equal(contract.createSaveTracker,undefined);
+  let live=true;
+  await assert.rejects(contract.planRestore(s,{readDocument,isCurrent:()=>live,
+    readRecovery:async(kind,id)=>{live=false;return readRecovery(kind,id);}}),/stale restore generation/);
 });
 test('shared document envelope uses fixed identity and retains independent domain slots',async()=>{
   const empty=contract.emptyShared();
@@ -164,13 +84,8 @@ test('shared document envelope uses fixed identity and retains independent domai
   assert.throws(()=>contract.normalize({...second,tabId:'tab-a'}),/fields/);
   const plan=await contract.planRestore(second,{readDocument:async(kind,id)=>({kind,id,revision:'r2'})});
   assert.equal(plan.document.id,'cal-a');
-  const m=tracker(first);m.markDirty();const token=m.beginSave();
-  assert.equal(token.sessionId,'shared');
-  assert.equal(Object.hasOwn(token,'tabId'),false);
-  const pending=m.acknowledgeDocument(token,receipt(token,'r3'));
-  assert.equal(pending.envelope.sessionId,'shared');
-  assert.equal(m.acknowledgeSession(token,{revision:5,envelope:pending.envelope}),true);
-  assert.equal(m.state().session.documents.experiment.revision,'r3');
+  assert.equal(first.documents.experiment.revision,'r1');
+  assert.equal(second.documents.experiment.revision,'r1');
 });
 
 function atomicControllerFixture(){

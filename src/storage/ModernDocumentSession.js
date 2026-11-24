@@ -67,7 +67,6 @@
       {...before.documents,[kind]:document}:before.documents});
   }
   function same(a,b){return JSON.stringify(a)===JSON.stringify(b);}
-  const verifiedRecoveryPlans=new WeakMap();
   // Injected readers return domain-verified durable identities, not guessed
   // timestamps. Caller still checks its generation at actual activation.
   async function planRestore(session,{explicitIntent=false,readDocument,readRecovery,
@@ -93,94 +92,7 @@
     }
     const plan=Object.freeze({source:ref.recovery?'recovery':'session',
       workspace:current.workspace,kind,document:ref});
-    if(ref.recovery)verifiedRecoveryPlans.set(plan,{session:current,isCurrent});
     return plan;
-  }
-  // Starts from a verified, acknowledged session row. Receipt methods are
-  // invoked ONLY after actual domain commit/readback and session CAS/readback.
-  function createSaveTracker({session,sessionRevision}={}){
-    let current=normalize(session);
-    check(Number.isSafeInteger(sessionRevision)&&sessionRevision>=1&&
-      sessionRevision<Number.MAX_SAFE_INTEGER,'acknowledged session revision required');
-    const kind=SLOT[current.workspace];
-    check(kind&&current.documents[kind],'bound document required');
-    let revision=sessionRevision,edit=0,attempt=0,active=null,pending=null,error=null;
-    let status=current.documents[kind].recovery?'recovering':'clean';
-    function state(){
-      return Object.freeze({status,session:current,sessionRevision:revision,
-        edit,error,pending});
-    }
-    function markDirty(){
-      check(['clean','committed','dirty','saving'].includes(status),
-        'resolve recovery/failure before editing');
-      check(edit<Number.MAX_SAFE_INTEGER,'edit generation exhausted');
-      edit++;
-      if(status!=='saving')status='dirty';
-      return state();
-    }
-    // Explicitly load verified recovery through the domain adapter. Preserve
-    // its pointer until the replacement session has been acknowledged.
-    function recoveryLoaded(plan){
-      check(status==='recovering'&&!error&&!pending&&current.documents[kind].recovery,
-        'no original recovery to load');
-      const verified=verifiedRecoveryPlans.get(plan);
-      check(verified&&same(verified.session,current)&&verified.isCurrent()===true,
-        'verified recovery plan required');
-      verifiedRecoveryPlans.delete(plan);
-      status='dirty';edit++;return state();
-    }
-    function beginSave(){
-      check(status==='dirty','dirty document required before save');
-      check(revision<Number.MAX_SAFE_INTEGER&&attempt<Number.MAX_SAFE_INTEGER,
-        'save/session revision exhausted');
-      const ref=current.documents[kind];
-      const identity=current.version===SHARED_VERSION?
-        {sessionId:current.sessionId}:{tabId:current.tabId};
-      active=Object.freeze({...identity,kind,id:ref.id,
-        baseRevision:ref.revision,sessionRevision:revision,edit,attempt:++attempt});
-      pending=null;error=null;status='saving';return active;
-    }
-    function stale(t){return status!=='saving'||t!==active;}
-    function acknowledgeDocument(t,receipt,mode=current.workspace){
-      if(stale(t))return null;
-      check(!pending,'document receipt already recorded');
-      fields(receipt,['kind','id','revision'],'document receipt');
-      check(receipt.kind===kind&&receipt.id===t.id&&receipt.revision!==t.baseRevision,
-        'document acknowledgement does not match bound edit');
-      // A domain fork needs separately verified activation; never silently
-      // redirect later edits to a different document.
-      check(SLOT[workspace(mode)]===kind,'document acknowledgement workspace mismatch');
-      const next=binding({id:receipt.id,revision:receipt.revision,recovery:null});
-      pending=Object.freeze({expectedRevision:revision,
-        envelope:select(current,mode,next)});
-      return pending;
-    }
-    function acknowledgeSession(t,receipt){
-      if(stale(t))return false;
-      check(pending,'document commit must be acknowledged first');
-      fields(receipt,['revision','envelope'],'session receipt');
-      check(receipt.revision===pending.expectedRevision+1&&
-        same(normalize(receipt.envelope),pending.envelope),
-        'session CAS acknowledgement mismatch');
-      current=pending.envelope;revision=receipt.revision;
-      pending=null;active=null;error=null;
-      status=edit===t.edit?'committed':'dirty';
-      return true;
-    }
-    function fail(t,reason){
-      if(stale(t))return false;
-      error=String(reason&&reason.message||reason||'save failed');
-      // Preserve the candidate after a domain commit but before session CAS.
-      // Recovery rereads both stores; never retries blindly.
-      active=null;status='failed';return true;
-    }
-    function beginRecovery(){
-      check(status==='failed','failed save required before reconciliation');
-      status='recovering';return state();
-    }
-    function canSwitch(){return status==='clean'||status==='committed';}
-    return Object.freeze({state,markDirty,recoveryLoaded,beginSave,
-      acknowledgeDocument,acknowledgeSession,fail,beginRecovery,canSwitch});
   }
   function sharedExperimentCoordinator(locks){
     check(locks&&typeof locks.request==='function','shared experiment writer coordination unavailable');
@@ -286,6 +198,6 @@
       recoveryOffer:()=>null,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
-    select,planRestore,createSaveTracker,
+    select,planRestore,
     sharedExperimentCoordinator,createAtomicExperimentController});
 }));
