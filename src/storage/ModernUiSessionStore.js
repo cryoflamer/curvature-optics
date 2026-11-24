@@ -22,7 +22,7 @@
     // Web Locks owns the opaque tab ID for this document lifetime. A duplicated
     // tab inherits sessionStorage, so its token alone is not proof of identity.
     let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
-    let lifecycleAttached=false,documentAdapter=null;
+    let lifecycleAttached=false,documentAdapter=null,claimEpoch=0;
     function tabId(){
       const existing=sessionStorage.getItem(TAB_KEY);
       if(existing!==null){
@@ -55,48 +55,76 @@
         }catch(error){if(!settled){settled=true;reject(error);}}
       });
     }
-    function claimTab(){
+    // Document preview records a durable snapshot of the parent's acknowledged
+    // session BEFORE rotating the copied token. No parent write or HEAD read.
+    async function persistForkOrigin(child,parent,guard){
+      const key='document-fork:'+child;
+      const saved=await transact('sessions','readwrite',(store,reply)=>{
+        const req=store.get('document:'+parent);
+        req.onsuccess=()=>{
+          try{
+            guard();
+            const row={id:key,version:1,parentTabId:parent,
+              source:req.result===undefined?null:req.result};
+            store.add(row);reply.result(row);
+          }catch(error){reply.reject(error);}
+        };
+      });
+      guard();
+      const verified=await transact('sessions','readonly',(store,reply)=>{
+        const req=store.get(key);
+        req.onsuccess=()=>reply.result(req.result);
+      });
+      guard();
+      check(JSON.stringify(saved)===JSON.stringify(verified),'document fork origin readback conflict');
+    }
+    function attachLifecycle(){
+      if(lifecycleAttached||typeof env.addEventListener!=='function')return;
+      lifecycleAttached=true;
+      env.addEventListener('pagehide',()=>{
+        claimEpoch++;
+        if(owner&&owner.active){
+          const old=owner;
+          old.active=false;old.writable=false;
+          for(const tx of old.documentTransactions){try{tx.abort();}catch(ignore){}}
+          old.release();
+        }
+        claimPromise=null;resumePromise=null;
+      });
+    }
+    function claimTab({documentFork=false}={}){
       if(claimPromise)return claimPromise;
+      attachLifecycle();
+      const epoch=claimEpoch;
       claimPromise=(async()=>{
-        // Fail closed rather than accepting a cloned ID when the browser
-        // cannot coordinate live tab ownership. Normal Modern never calls this.
         check(env.navigator&&env.navigator.locks&&
           typeof env.navigator.locks.request==='function',
           'exclusive tab ownership unavailable (Web Locks required)');
         const original=tabId();
         let candidate=original;
+        const guard=()=>check(epoch===claimEpoch&&sessionStorage.getItem(TAB_KEY)===original,
+          'tab claim interrupted; original token retained');
         for(let attempt=0;attempt<4;attempt++){
           const release=await attemptLock(candidate);
           if(release){
-            owner={id:candidate,active:true,writable:true,release,documentTransactions:new Set()};
-            if(!lifecycleAttached&&typeof env.addEventListener==='function'){
-              lifecycleAttached=true;
-              // A cached document is NOT destroyed at pagehide. Release the
-              // lock on every departure, not just the first one.
-              env.addEventListener('pagehide',()=>{
-                if(owner&&owner.active){
-                  const old=owner;
-                  old.active=false;old.writable=false;
-                  // Abort uncommitted document operations before releasing ownership.
-                  for(const tx of old.documentTransactions){try{tx.abort();}catch(ignore){}}
-                  old.release();
-                }
-                claimPromise=null;
-                resumePromise=null;
-              });
-            }
-            return Object.freeze({tabId:candidate,forkedFrom});
+            try{
+              guard();
+              if(candidate!==original){
+                if(documentFork)await persistForkOrigin(candidate,original,guard);
+                guard();
+                sessionStorage.setItem(TAB_KEY,candidate);
+              }
+              owner={id:candidate,active:true,writable:true,release,documentTransactions:new Set()};
+              return Object.freeze({tabId:candidate,forkedFrom});
+            }catch(error){release();throw error;}
           }
+          guard();
           if(!forkedFrom)forkedFrom=original;
           candidate=crypto.randomUUID();
-          check(ID.test(candidate)&&candidate!==original,
-            'invalid forked tab token');
-          // Only overwrite our own copied opaque token. Legacy backups,
-          // another tab's IndexedDB rows and domain-specific IDs are untouched.
-          sessionStorage.setItem(TAB_KEY,candidate);
+          check(ID.test(candidate)&&candidate!==original,'invalid forked tab token');
         }
         throw Error('UI Session Store: unable to claim a unique tab identity');
-      })().catch(error=>{claimPromise=null;throw error;});
+      })().catch(error=>{if(epoch===claimEpoch)claimPromise=null;throw error;});
       return claimPromise;
     }
     // BFCache restores the SAME document heap: never invoke claimTab()'s
@@ -417,7 +445,22 @@
           observed={lease,row:saved};return saved;
         }finally{busy=false;}
       }
-      const api=Object.freeze({read,write});
+      async function readForkSource(){
+        const lease=owner;verifyDocumentLease(lease,false);
+        const record=await transact('sessions','readonly',(store,reply)=>{
+          const req=store.get('document-fork:'+lease.id);
+          req.onsuccess=()=>reply.result(req.result);
+        },lease);
+        verifyDocumentLease(lease,false);
+        if(record===undefined)return null;
+        check(record&&Object.keys(record).length===4&&
+          record.id==='document-fork:'+lease.id&&record.version===1&&
+          typeof record.parentTabId==='string'&&ID.test(record.parentTabId)&&
+          record.parentTabId!==lease.id,'invalid document fork origin');
+        check(record.source!==null,'duplicate has no acknowledged parent document');
+        return decode(record.source,record.parentTabId);
+      }
+      const api=Object.freeze({read,write,readForkSource});
       documentAdapter={contract,api};return api;
     }
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,

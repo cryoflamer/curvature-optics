@@ -1682,14 +1682,20 @@
   async function openExperimentPreview(){
     var api=root.CurvatureModernDocumentSession,store=root.CurvatureModernUiSessionStore;
     if(!api||!store||!sessionAutosave||!root.indexedDB)throw Error('Document session dependencies unavailable');
-    var ui=store.create(root),claim=await ui.claimTab(),lease=ui.captureDocumentLease();
+    var ui=store.create(root),claim=await ui.claimTab({documentFork:true}),lease=ui.captureDocumentLease();
     var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
+    var sessions=ui.documentSessions(api);
     var controller=api.createExperimentController({lease:lease,
-      sessions:ui.documentSessions(api),working:working,isCurrent:current,
-      prepare:function(){return sessionAutosave.prepareWorkingCopy(root.indexedDB,{
-        tabId:claim.tabId,lease:lease,storage:preferencesStorage(),codec:experiments,
-        crypto:root.crypto,explicitIntent:false,isCurrent:current});}});
+      sessions:sessions,working:working,isCurrent:current,
+      prepare:async function(){
+        var source=await sessions.readForkSource();
+        if(source)return working.prepareFork(source,current);
+        if(claim.forkedFrom)throw Error('Missing durable fork origin; legacy fallback refused');
+        return sessionAutosave.prepareWorkingCopy(root.indexedDB,{
+          tabId:claim.tabId,lease:lease,storage:preferencesStorage(),codec:experiments,
+          crypto:root.crypto,explicitIntent:false,isCurrent:current});
+      }});
     experimentPreview.controller=controller;
     await controller.open();
     return controller.state();

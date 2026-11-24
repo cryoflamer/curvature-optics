@@ -68,6 +68,7 @@
   // Read-first migration candidate. The legacy current row remains the
   // live owner until a separately verified document-session activation.
   const COPY_FORMAT='curvature-modern-working-copy',COPY_PREFIX='working-copy:';
+  const FORK_FORMAT='curvature-modern-working-fork';
   const COPY_ID=/^working-[A-Za-z0-9_-]{1,128}$/;
   function ensure(ok,message){if(!ok)throw Error('Working-copy migration: '+message);}
   function canonical(value){
@@ -118,12 +119,27 @@
       return output;
     });
   }
+  async function decodeFork(row,id,codec,crypto){
+    ensure(row&&Object.keys(row).length===6&&row.format===FORK_FORMAT&&
+      row.version===1&&row.id===id,'invalid working-copy fork');
+    const origin=row.origin;
+    ensure(origin&&Object.keys(origin).length===3&&COPY_ID.test(origin.id)&&
+      origin.id!==id&&typeof origin.revision==='string'&&
+      /^(rev:[1-9][0-9]*:)?sha256:[0-9a-f]{64}$/.test(origin.revision)&&
+      Number.isSafeInteger(origin.sessionRevision)&&origin.sessionRevision>=1,
+      'invalid working-copy fork provenance');
+    const raw=canonical(row.experiment),experiment=codec.validate(JSON.parse(raw));
+    ensure(canonical(experiment)===raw&&row.revision===await digest(raw,crypto),
+      'working-copy fork digest mismatch');
+    return {kind:'experiment',id,revision:row.revision,experiment,origin:row.origin};
+  }
   async function readWorkingCopy(indexedDB,id,codec,crypto){
     ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
     const found=await copyRead(indexedDB,id);
     ensure(found,'working-copy read unavailable');
     if(!found.present)return null;
     const row=found.value;
+    if(row&&row.format===FORK_FORMAT)return decodeFork(row,id,codec,crypto);
     ensure(row&&Object.keys(row).length===5&&row.format===COPY_FORMAT&&
       row.version===1&&row.id===id,'invalid or unsupported working-copy record');
     const source=validateSource(row.source,codec);
@@ -263,8 +279,8 @@
         ensure(Number.isSafeInteger(n)&&n>=2,'invalid working revision');
         return n;
       }
-      function revisionKey(revision){
-        return sequence(revision)===1?baseKey:'working-revision:'+id+':'+revision;
+      function revisionKey(revision,documentId=id){
+        return sequence(revision)===1?copyKey(documentId):'working-revision:'+documentId+':'+revision;
       }
       function headRevision(head){
         ensure(head&&Object.keys(head).length===4&&head.format===HEAD_FORMAT&&
@@ -272,8 +288,13 @@
           'invalid working-copy head');
         return head.revision;
       }
-      async function decode(row,expected){
-        ensure(row&&row.id===id&&row.version===1,'missing or incompatible working revision');
+      async function decode(row,expected,documentId=id){
+        ensure(row&&row.id===documentId&&row.version===1,'missing or incompatible working revision');
+        if(row.format===FORK_FORMAT){
+          const value=await decodeFork(row,documentId,codec,crypto);
+          if(expected!==undefined)ensure(value.revision===expected,'working revision identity mismatch');
+          return {kind:value.kind,id:value.id,revision:value.revision,experiment:value.experiment};
+        }
         if(row.format===COPY_FORMAT){
           ensure(Object.keys(row).length===5&&sequence(row.revision)===1,
             'invalid migration revision');
@@ -281,7 +302,7 @@
           ensure(row.revision===await digest(canonical(row.source.experiment),crypto),
             'working-copy digest mismatch');
           if(expected!==undefined)ensure(row.revision===expected,'working revision identity mismatch');
-          return {kind:'experiment',id,revision:row.revision,experiment:source.normalized};
+          return {kind:'experiment',id:documentId,revision:row.revision,experiment:source.normalized};
         }
         ensure(row.format===REV_FORMAT&&Object.keys(row).length===6&&
           sequence(row.revision)>=2&&sequence(row.previousRevision)===sequence(row.revision)-1,
@@ -291,7 +312,7 @@
         ensure(canonical(experiment)===raw,'noncanonical edited experiment');
         ensure(row.revision==='rev:'+sequence(row.revision)+':'+await digest(raw,crypto),
           'working revision digest mismatch');
-        return {kind:'experiment',id,revision:row.revision,experiment};
+        return {kind:'experiment',id:documentId,revision:row.revision,experiment};
       }
       // IDB reads both the head and its target in the same transaction.
       function readRaw(store,accept,fail){
@@ -388,7 +409,64 @@
           return Object.freeze({kind:'experiment',id,revision});
         }finally{busy=false;}
       }
-      return Object.freeze({id,read,readRevision,write});
+      async function prepareFork(source,isCurrent){
+        ensure(!busy&&typeof isCurrent==='function','working-copy fork guard required');
+        function guard(){lease.check(true);ensure(isCurrent()===true,'stale fork generation');}
+        guard();
+        busy=true;baseline=null;
+        try{
+          const envelope=source&&source.envelope,ref=envelope&&envelope.documents.experiment;
+          ensure(source&&Number.isSafeInteger(source.revision)&&source.revision>=1&&
+            envelope&&['scene','compare'].includes(envelope.workspace)&&
+            ref&&ref.id==='working-'+envelope.tabId&&ref.id!==id&&!ref.recovery,
+            'duplicate source is not an acknowledged experiment');
+          const parentKey=revisionKey(ref.revision,ref.id);
+          const original=await withStore(indexedDB,'readonly',store=>store.get(parentKey),lease);
+          const value=await decode(original,ref.revision,ref.id);guard();
+          const experiment=value.experiment;
+          ensure(experiment.display.mode===envelope.workspace,'duplicate source workspace mismatch');
+          const raw=canonical(experiment);
+          const row={format:FORK_FORMAT,version:1,id,revision:await digest(raw,crypto),
+            experiment:JSON.parse(raw),origin:{id:ref.id,revision:ref.revision,
+              sessionRevision:source.revision}};
+          guard();
+          let failure=null;
+          try{
+            await transaction(indexedDB,store=>{
+              const fail=error=>{failure=error;try{store.transaction.abort();}catch(ignore){}};
+              const sourceReq=store.get(parentKey);
+              sourceReq.onsuccess=()=>{
+                try{
+                  guard();
+                  ensure(canonical(sourceReq.result)===canonical(original),'duplicate source revision changed');
+                  const headReq=store.get(headKey);
+                  headReq.onsuccess=()=>{
+                    try{
+                      guard();ensure(headReq.result===undefined,'unbound fork has edited head; evidence retained');
+                      const target=store.get(baseKey);
+                      target.onsuccess=()=>{
+                        try{
+                          guard();
+                          if(target.result===undefined)store.add(row,baseKey);
+                          else ensure(canonical(target.result)===canonical(row),'existing fork differs; evidence retained');
+                        }catch(error){fail(error);}
+                      };
+                    }catch(error){fail(error);}
+                  };
+                }catch(error){fail(error);}
+              };
+              return null;
+            },lease);
+          }catch(error){throw failure||error;}
+          const saved=await readWorkingCopy(indexedDB,id,codec,crypto);guard();
+          ensure(saved&&saved.revision===row.revision&&
+            canonical(saved.experiment)===raw&&canonical(saved.origin)===canonical(row.origin),
+            'working-copy fork readback conflict');
+          return {status:'verified',workspace:envelope.workspace,
+            document:{id,revision:row.revision,recovery:null}};
+        }finally{busy=false;}
+      }
+      return Object.freeze({id,read,readRevision,write,prepareFork});
     }
     return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,
       coordination:writer?'participating-writer':'uncoordinated'});

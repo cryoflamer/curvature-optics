@@ -10796,7 +10796,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         parent=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
         child=self.context.new_page()
         try:
-            child.add_init_script("sessionStorage.setItem("+
+            child.add_init_script("if(!sessionStorage.getItem('curvature-modern-ui-tab-id-v1'))sessionStorage.setItem("+
                 json.dumps('curvature-modern-ui-tab-id-v1')+","+
                 json.dumps(parent['row']['envelope']['tabId'])+");")
             child.goto(url,wait_until='load')
@@ -10804,7 +10804,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
             copied=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
             self.assertNotEqual(copied['bound']['id'],parent['bound']['id'])
-            self.assertEqual(copied['bound']['experiment']['scene']['camera']['Height'],old+2)
+            self.assertEqual(copied['bound']['experiment'],parent['bound']['experiment'])
+            self.assertEqual(copied['bound']['experiment']['scene']['camera']['Height'],old+5)
             child.locator('#ModernHeight').fill(str(old+9))
             child.locator('#ModernHeight').press('Tab')
             expect(child.locator('#ModernPersistenceStatus')).to_have_text(
@@ -10812,6 +10813,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(self.page.evaluate(
                 'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
             self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
+            child.reload(wait_until='load')
+            child.wait_for_function("""() =>
+                CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+            self.assertEqual(child.evaluate('CurvatureModernApp.getModel().Height'),old+9)
         finally:
             child.close()
         link=self.page.evaluate("""() => {
@@ -10830,6 +10835,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(
             'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
+
+
+    def test_document_session_preview_interrupted_duplicate_uses_pinned_parent_revision(self):
+        """Child binding fails; parent advances; child F5 retries the exact fork."""
+        self.open_modern()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        url=self.base_url+'?document-session=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.page.locator('#ModernHeight').fill(str(old+5))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        parent=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        child=self.context.new_page()
+        try:
+            child.add_init_script("""(() => {
+                if(sessionStorage.getItem('curvature-modern-ui-tab-id-v1'))return;
+                sessionStorage.setItem('curvature-modern-ui-tab-id-v1',"""+
+                json.dumps(parent['row']['envelope']['tabId'])+""");
+                const put=IDBObjectStore.prototype.put;
+                IDBObjectStore.prototype.put=function(value,...args){
+                    if(this.name==='sessions'&&value?.id?.startsWith('document:'))
+                        throw Error('simulated child binding failure');
+                    return put.call(this,value,...args);
+                };
+            })()""")
+            child.goto(url,wait_until='load')
+            child.wait_for_function("""() =>
+                CurvatureModernApp.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+            expect(child.locator('#ModernDocumentSessionRecoveryStatus')).to_contain_text(
+                'simulated child binding failure')
+            child_id=child.evaluate("sessionStorage.getItem('curvature-modern-ui-tab-id-v1')")
+            self.assertNotEqual(child_id,parent['row']['envelope']['tabId'])
+            self.page.locator('#ModernHeight').fill(str(old+8))
+            self.page.locator('#ModernHeight').press('Tab')
+            expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+                'Document session saved',timeout=30000)
+            child.reload(wait_until='load')
+            child.wait_for_function("""() =>
+                CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+            self.assertEqual(child.evaluate("sessionStorage.getItem('curvature-modern-ui-tab-id-v1')"),child_id)
+            copied=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+            self.assertEqual(copied['bound']['experiment'],parent['bound']['experiment'])
+            provenance=child.evaluate("""async id =>
+                (await CurvatureModernSessionAutosave.readWorkingCopy(indexedDB,id,
+                    CurvatureModernExperimentState,crypto)).origin""",copied['bound']['id'])
+            self.assertEqual(provenance,{'id':parent['bound']['id'],
+                'revision':parent['bound']['revision'],'sessionRevision':parent['row']['revision']})
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+8)
+        finally:
+            child.close()
 
 if __name__ == '__main__':
     unittest.main()

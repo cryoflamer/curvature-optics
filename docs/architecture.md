@@ -555,6 +555,30 @@ Uncommitted edits are not crash-durable. Native BFCache return requires
 reload, not stale lease reuse. Existing local UI preferences and unrelated
 legacy startup modules remain; this is not yet final ID-only persistence.
 
+### Duplicate experiment document
+
+The document preview requests `claimTab({documentFork:true})`. On a live
+token collision, the new identity is claimed and a `document-fork:<childId>`
+row is added in the existing sessions store, containing the parent's exact
+acknowledged document-session row at that transaction's read. The row is
+read back before the copied sessionStorage token is replaced. Failure
+retains the original token; an abandoned origin row is harmless evidence.
+No new Web Storage key is required. A reload of an unbound child reads
+this durable origin, not the current parent selection or legacy checkpoint.
+
+The domain adapter copies the exact immutable parent revision, verifies
+its digest and workspace, and adds an independent
+`curvature-modern-working-fork` base row with its own working-copy ID,
+content revision and source identity/revision/session revision. It never
+reads the parent's mutable head or writes the parent. A newer unacknowledged
+parent head and unsaved edits are not inherited. Source and candidate
+are checked again within the domain writer transaction; identical retries
+are permitted, differing records are preserved. Missing or invalid parent
+binding/revision fails closed, without legacy fallback. Normal session CAS
+then binds the verified child. Fork origins and immutable revisions remain
+retained; cleanup and orphan handling are future work. Ordinary UI-only
+tab claims remain independent of this document-fork contract.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small
