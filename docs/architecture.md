@@ -599,10 +599,22 @@ archive does not delete anything. Old metadata is checked before and
 after reading domain evidence under the cooperative lock; old writers
 outside that lock must be stopped before migration.
 
+For a profile without a bound shared experiment, `inspectSources()` and
+`migrateSource()` use the same validated historical inventory, including
+ordinary localStorage/current IDB checkpoints, retired per-tab records,
+and orphaned shared imports/revisions/recovery. The explicit selection
+includes the source digest and unbound metadata digest. The selected payload
+becomes the initial committed experiment (no draft); an old recovery payload
+is only promoted by explicitly selecting that source. Existing domain slots
+are preserved. No intermediate legacy import or session binding is written.
+Selected IDB bytes and any recovery base are compared inside the destination
+transaction; localStorage is checked synchronously before put and on readback.
+There is no cross-storage transaction for localStorage; stop old ordinary
+writers before migration. A bound session must use the separate bound migration.
+
 This primitive is not yet the live preview authority. The existing preview
-continues to use its old two-store protocol until controller replacement;
-unbound/ordinary checkpoint migration remains separate. Old keys and
-backups are not modified; the new key is included by raw backup inventory.
+continues to use its old two-store protocol until controller replacement.
+Old keys and backups are not modified; the new key is included by raw backup inventory.
 
 ### Editable Scene/Compare revision adapter
 

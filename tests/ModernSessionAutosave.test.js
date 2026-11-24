@@ -368,7 +368,7 @@ function atomicFixture(){
   const db=recoveryMemoryDB(),crypto=require('node:crypto').webcrypto;
   const contract=require('../src/storage/ModernDocumentSession');
   const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
-  const codec={validate(v){assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;}};
+  const codec={STORAGE_KEY:'fixture',validate(v){assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;}};
   const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
   const open=()=>adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
   return {db,adapter,contract,open,lease,codec,crypto,base:{display:{mode:'scene'},height:1}};
@@ -531,4 +531,85 @@ test('atomic migration rejects a stale generation after asynchronous hashing',as
     {...f.opts,isCurrent:()=>current}),/stale migration generation/);
   assert.equal(current,false);
   assert.equal(f.db.rows.has('shared-checkpoint'),false);
+});
+
+function unboundAtomicFixture(){
+  const f=atomicFixture(),local=new Map();
+  let row={revision:0,envelope:null};
+  const storage={getItem:key=>local.has(key)?local.get(key):null};
+  const opts={sessions:{async read(){return structuredClone(row);}},storage,
+    coordinate:action=>action(),isCurrent:()=>true};
+  return {...f,local,opts,setSession(value){row=value;}};
+}
+test('atomic source migration selects ordinary local or IDB without writing intermediate rows',async()=>{
+  for(const source of ['local','idb']){
+    const f=unboundAtomicFixture(),a=f.open();
+    const local={...f.base,height:2};
+    f.local.set(f.codec.STORAGE_KEY,JSON.stringify(local));
+    await f.adapter.write(f.db,f.base,100);
+    f.db.rows.set('malformed-old-row',{version:999});
+    const view=await a.inspectSources(f.opts);
+    assert.equal(view.candidates.length,2);
+    assert.equal(view.issues.length,1);
+    const selected=view.candidates.find(item=>item.selection.source===source);
+    const before=[...f.db.rows.entries()],beforeLocal=[...f.local.entries()];
+    const saved=await a.migrateSource(selected.selection,f.opts);
+    assert.deepEqual(saved.experiment,source==='local'?local:f.base);
+    assert.equal(saved.draft,null);
+    assert.deepEqual([...f.db.rows.entries()].filter(([key])=>key!=='shared-checkpoint'),before);
+    assert.deepEqual([...f.local.entries()],beforeLocal);
+    assert.deepEqual(await f.open().read(),saved);
+    await assert.rejects(a.migrateSource(selected.selection,f.opts),/already initialized/);
+  }
+});
+test('atomic source migration preserves orphaned shared evidence and refuses a newly bound session',async()=>{
+  const f=unboundAtomicFixture(),a=f.open();
+  await f.adapter.write(f.db,f.base,100);
+  const working=f.adapter.openWorkingCopy(f.db,{lease:f.lease,codec:f.codec,crypto:f.crypto});
+  const sources=await working.inspectMigration(f.opts.storage);
+  const prepared=await working.prepareSelectedMigration(sources.candidates[0].selection,
+    {storage:f.opts.storage,isCurrent:()=>true});
+  const bound=await working.read(),edit={...f.base,height:3};
+  await working.stageRecovery(edit,bound.revision,null);
+  const view=await a.inspectSources(f.opts);
+  const selected=view.candidates.find(item=>item.selection.key==='working-recovery:shared-experiment');
+  assert.equal(view.candidates.length,3);
+  assert.deepEqual(selected.experiment,edit);
+  f.setSession({revision:1,envelope:f.contract.select(f.contract.emptyShared(),'scene',prepared.document)});
+  await assert.rejects(a.migrateSource(selected.selection,f.opts),/use bound migration/);
+  assert.equal(await a.read(),null);
+  const other={id:'animation-project',revision:'4',recovery:null};
+  const envelope=f.contract.select(f.contract.select(f.contract.emptyShared(),'animation',other),'scene');
+  f.setSession({revision:2,envelope});
+  await assert.rejects(a.migrateSource(selected.selection,f.opts),/evidence changed/);
+  const fresh=await a.inspectSources(f.opts);
+  const before=[...f.db.rows.entries()];
+  const saved=await a.migrateSource(fresh.candidates.find(item=>item.selection.key===selected.selection.key).selection,f.opts);
+  assert.deepEqual(saved.experiment,edit);
+  assert.deepEqual(saved.envelope.documents.animation,other);
+  assert.deepEqual([...f.db.rows.entries()].filter(([key])=>key!=='shared-checkpoint'),before);
+});
+test('atomic source migration detects local or IDB source changes during destination hashing',async()=>{
+  for(const source of ['local','idb']){
+    const f=unboundAtomicFixture();
+    f.local.set(f.codec.STORAGE_KEY,JSON.stringify(f.base));
+    await f.adapter.write(f.db,f.base,100);
+    const view=await f.open().inspectSources(f.opts);
+    let injected=false;
+    const crypto={subtle:{async digest(name,bytes){
+      const result=await f.crypto.subtle.digest(name,bytes);
+      if(!injected&&String.fromCharCode(...bytes).includes('"format":"curvature-modern-shared-checkpoint"')){
+        injected=true;
+        const edit={...f.base,height:8};
+        if(source==='local')f.local.set(f.codec.STORAGE_KEY,JSON.stringify(edit));
+        else await f.adapter.write(f.db,edit,101);
+      }
+      return result;
+    }}};
+    const a=f.adapter.openSharedCheckpoint(f.db,{lease:f.lease,codec:f.codec,crypto,contract:f.contract});
+    await assert.rejects(a.migrateSource(view.candidates.find(item=>item.selection.source===source).selection,f.opts),
+      /evidence changed/);
+    assert.equal(injected,true);
+    assert.equal(f.db.rows.has('shared-checkpoint'),false);
+  }
 });

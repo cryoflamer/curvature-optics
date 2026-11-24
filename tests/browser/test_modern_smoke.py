@@ -10692,6 +10692,59 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(restored['row'],result['row'])
         self.assertEqual(restored['value']['experiment'],result['e'])
 
+    def test_atomic_shared_checkpoint_direct_source_migration(self):
+        """Ordinary Modern IDB selection creates only the atomic record."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime(),coordinate=D.sharedExperimentCoordinator(navigator.locks);
+            const opts={sessions,storage:localStorage,coordinate,isCurrent:()=>true};
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const old=await S.read(indexedDB),oldLocal=localStorage.getItem(C.STORAGE_KEY);
+            const row=await sessions.read();
+            const view=await checkpoint.inspectSources(opts);
+            const selected=view.candidates.find(x=>x.selection.key==='current').selection;
+            const edit=structuredClone(old.experiment);edit.scene.camera.Height+=3;
+            await S.write(indexedDB,edit,old.savedAt+1);
+            let stale;
+            try{await checkpoint.migrateSource(selected,opts);}catch(e){stale=e.message;}
+            const absent=await checkpoint.read();
+            const fresh=await checkpoint.inspectSources(opts);
+            const saved=await checkpoint.migrateSource(fresh.candidates.find(x=>x.selection.key==='current').selection,opts);
+            const keys=await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readonly');
+                    const q=tx.objectStore(S.STORE).getAllKeys();
+                    tx.oncomplete=()=>{db.close();resolve(q.result);};
+                    tx.onabort=()=>{db.close();reject(tx.error);};};
+            });
+            return {stale,absent,saved,edit,keys,row,afterRow:await sessions.read(),
+                oldLocal,afterLocal:localStorage.getItem(C.STORAGE_KEY),after:await S.read(indexedDB)};
+        }""")
+        self.assertIn('evidence changed',result['stale'])
+        self.assertIsNone(result['absent'])
+        self.assertEqual(result['saved']['experiment'],result['edit'])
+        self.assertEqual(result['saved']['envelope']['workspace'],'compare')
+        self.assertEqual(result['saved']['revision'],1)
+        self.assertIsNone(result['saved']['draft'])
+        self.assertEqual(sorted(result['keys']),['current','shared-checkpoint'])
+        self.assertEqual(result['row'],result['afterRow'])
+        self.assertEqual(result['oldLocal'],result['afterLocal'])
+        self.assertEqual(result['after']['experiment'],result['edit'])
+        self.page.reload(wait_until='load')
+        restored=self.page.evaluate("""async () => {
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            return CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:D}).read();
+        }""")
+        self.assertEqual(restored,result['saved'])
+
+
     def test_atomic_shared_checkpoint_migration_keeps_legacy_evidence(self):
         """Migrate explicitly selected old bound/HEAD/draft; never rewrite source bytes."""
         self.open_modern()

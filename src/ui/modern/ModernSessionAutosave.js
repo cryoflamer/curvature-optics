@@ -383,7 +383,67 @@
           },plan.evidence,guard);
         });
       }
-      return Object.freeze({read,initialize,stage,promote,inspectLegacy,migrateLegacy});
+      // No bound shared metadata: select directly from historical evidence,
+      // including orphaned shared rows, without creating an old import.
+      async function sourcePlan(sessions,storage){
+        ensure(sessions&&typeof sessions.read==='function','legacy shared session reader required');
+        const saved=await sessions.read();lease.check();
+        ensure(saved&&Number.isSafeInteger(saved.revision)&&saved.revision>=0&&
+          (saved.revision===0)===(saved.envelope===null),'invalid legacy shared session row');
+        const frame=saved.envelope===null?contract.emptyShared():contract.normalize(saved.envelope);
+        ensure(frame.sessionId===contract.SHARED_ID&&['scene','compare'].includes(frame.workspace)&&
+          frame.documents.experiment===null,'bound or unsupported legacy session; use bound migration');
+        const legacy=openWorkingCopy(indexedDB,{lease,codec,crypto});
+        const inventory=await legacy.readMigrationSources(storage);
+        ensure(canonical(await sessions.read())===canonical(saved),
+          'legacy session changed during inspection');
+        lease.check();
+        const sessionDigest=await digest(canonical(saved),crypto);
+        const candidates=inventory.candidates.map(item=>({...item,
+          selection:{...item.selection,sessionDigest}}));
+        return {frame,candidates,issues:inventory.issues};
+      }
+      async function inspectSources({sessions,storage,coordinate}={}){
+        ensure(typeof coordinate==='function','shared migration coordinator required');
+        return coordinate(async()=>{
+          const plan=await sourcePlan(sessions,storage);
+          lease.check();
+          return {candidates:plan.candidates.map(({selection,workspace,experiment})=>
+            ({selection,workspace,experiment})),issues:plan.issues};
+        });
+      }
+      async function migrateSource(selection,{sessions,storage,coordinate,isCurrent}={}){
+        ensure(typeof coordinate==='function'&&typeof isCurrent==='function',
+          'shared migration coordinator and generation guard required');
+        return coordinate(async()=>{
+          const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale migration generation');};
+          guard();
+          const plan=await sourcePlan(sessions,storage);guard();
+          const selected=plan.candidates.find(item=>canonical(item.selection)===canonical(selection));
+          ensure(selected,'selected migration evidence changed or is invalid');
+          const evidence=[];
+          if(selected.selection.source==='idb'){
+            evidence.push({key:selected.selection.key,value:{present:true,row:selected.raw}});
+            if(selected.base)evidence.push({key:selected.base.key,value:{present:true,row:selected.base.row}});
+          }
+          // Local Storage has no IDB transaction. Old ordinary writers must
+          // be stopped; check synchronously before put and on readback.
+          const verify=()=>{
+            guard();
+            if(selected.selection.source==='local')
+              ensure(canonical(localEvidence(storage,codec))===canonical(selected.raw),
+                'selected local migration evidence changed');
+          };
+          const current=await read();verify();
+          ensure(current===null,'shared checkpoint already initialized; evidence retained');
+          return mutate(0,(_,revision)=>{
+            verify();
+            const experiment=normalizeExperiment(selected.experiment);
+            return {envelope:envelopeFor(plan.frame,experiment,revision),experiment,draft:null};
+          },evidence,verify);
+        });
+      }
+      return Object.freeze({read,initialize,stage,promote,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Immutable revision rows plus an atomic head pointer. The migration
     // row stays intact and represents revision one, including raw provenance.
@@ -737,7 +797,7 @@
         return {bound,head,draft,evidence:[...keys].sort().map(key=>({key,value:
           rows.has(key)?{present:true,row:rows.get(key)}:{present:false}}))};
       }
-      async function migrationCandidates(storage){
+      async function migrationCandidates(storage,includeShared=false){
         const local=localEvidence(storage,codec),rows=await inventoryRows();
         lease.check();
         const candidates=[],issues=[];
@@ -758,8 +818,9 @@
               await add('idb',key,row,validateSource(row,codec).normalized);continue;
             }
             ensure(typeof key==='string','unsupported working-store key');
-            if(key===baseKey||key===headKey||key===recoveryKey||
-               key.startsWith('working-revision:'+id+':'))continue;
+            if(key==='shared-checkpoint')continue;
+            if(!includeShared&&(key===baseKey||key===headKey||key===recoveryKey||
+               key.startsWith('working-revision:'+id+':')))continue;
             if(key.startsWith('working-head:')){
               // HEAD is only a pointer. Every retained immutable revision is
               // listed independently; no pointer alone can be selected.
@@ -778,7 +839,7 @@
               await add('idb',key,row,verified.experiment,{key:baseKey,row:base});continue;
             }
             const ownerId=row&&row.id;
-            ensure(typeof ownerId==='string'&&COPY_ID.test(ownerId)&&ownerId!==id&&
+            ensure(typeof ownerId==='string'&&COPY_ID.test(ownerId)&&(includeShared||ownerId!==id)&&
               key===revisionKey(row.revision,ownerId),'unsupported working-store record');
             const verified=await decode(row,row.revision,ownerId);
             await add('idb',key,row,verified.experiment);
@@ -788,6 +849,9 @@
         ensure(canonical(localEvidence(storage,codec))===canonical(local),
           'local evidence changed during inventory');
         return {candidates,issues};
+      }
+      function readMigrationSources(storage){
+        return migrationCandidates(storage,true);
       }
       async function inspectMigration(storage){
         const result=await migrationCandidates(storage);
@@ -857,7 +921,7 @@
         }finally{busy=false;}
       }
       return Object.freeze({id,read,readRevision,write,
-        inspectMigration,prepareSelectedMigration,readMigrationEvidence,
+        inspectMigration,prepareSelectedMigration,readMigrationEvidence,readMigrationSources,
         readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,
