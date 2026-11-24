@@ -365,6 +365,56 @@ state third, DOM bindings last. Legacy preference keys and raw recovery
 payloads stay readable until verified migration. The existing Modern DOM
 section controller must be migrated rather than duplicated.
 
+## Document session contract (headless foundation)
+
+[ModernDocumentSession.js](../src/storage/ModernDocumentSession.js) defines the
+versioned **metadata-only** session envelope and save/restore contract. It is
+not mounted in Modern and creates no database or Web Storage keys. Domain
+persistence coordinators remain the sole owners of their payloads. A later
+IndexedDB adapter must store the envelope under the opaque tab ID with a
+separate compare-and-swap session row revision.
+
+- Envelope version 1 contains `tabId`, `workspace` and three document slots.
+  Scene/Compare share the experiment slot (independent A/B settings remain in
+  the domain payload); Calibration and Animation retain their own selected
+  identities even when another workspace is active. Images and Demos have no
+  editable document binding in this version. History is an archive/import
+  source, not another working document. UI presentation stays separate.
+- A binding is `{id, revision, recovery}`. Revision is an opaque, exact,
+  domain-verified token. Calibration can encode its numeric revision;
+  Animation must identify the actual committed workspace checkpoint, not its
+  collection-wide activeId; Scene/Compare needs a unique working-copy ID and
+  verified revision (the legacy timestamp alone is insufficient).
+  Recovery is null or `{id, revision, baseRevision}` referencing durable
+  evidence belonging to the same document and base revision. No payloads,
+  photo bytes or unknown/future schema fields enter this envelope.
+- `select()` builds a candidate only. Selection requires an outgoing edit
+  guard, incoming domain preflight and verified session CAS before activation.
+  `planRestore()` gives explicit external URL/import intent priority without
+  reading private pointers; otherwise it reads the exact identity/revision
+  and recovery pointer through injected domain readers. Missing or stale
+  references never pick a different last-used document. Activation must
+  recheck its generation, including asset/provenance verification.
+- Live status is clean, dirty, saving, committed, failed or recovering.
+  A save token captures tab, document, base revision, session revision and
+  edit generation. First the domain owner commits and verifies the document;
+  only then may the caller CAS the session pointer. The tracker marks
+  committed only after the exact candidate and next session row revision
+  are acknowledged. Later edits remain dirty; stale receipts cannot finish
+  another attempt. A fork requires separate verified activation.
+- Failure after domain commit retains the candidate for reconciliation.
+  Recovery rereads both stores and retains original evidence, never blindly
+  retries over a newer session revision. A loaded recovery pointer is retired
+  only after an acknowledged replacement; actual evidence deletion is outside
+  this contract. Dirty/saving/failed/recovering states block switching.
+
+This is a protocol foundation, not a completed cross-database transaction,
+durable recovery store, tab-lease adapter or migration. Domain adapters must
+supply actual verified readbacks and CAS receipts; the tracker confers no
+storage authority. The existing opt-in UI journal is temporary and does not
+satisfy the final ID-only sessionStorage requirement.
+Focused tests: [ModernDocumentSession.test.js](../tests/ModernDocumentSession.test.js).
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small
