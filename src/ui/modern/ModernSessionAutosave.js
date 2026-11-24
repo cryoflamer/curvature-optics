@@ -202,25 +202,17 @@
       if(explicitIntent)return {status:'external'};
       ensure(writer,'coordinated working-session writer required');
       ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
-      const shared=sharedLease(lease);
-      if(shared)ensure(tabId===undefined,'shared migration cannot use a tab identity');
-      else ensure(typeof tabId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(tabId),
-        'invalid tab identity');
+      ensure(sharedLease(lease)&&tabId===undefined,'shared migration lifetime required');
       ensure(codec&&typeof codec.validate==='function'&&typeof codec.STORAGE_KEY==='string',
         'experiment validator required');
-      if(lease&&!shared)ensure(lease.tabId===tabId,'migration lease identity mismatch');
-      const id=shared?SHARED_COPY_ID:'working-'+tabId,key=copyKey(id);
+      const id=SHARED_COPY_ID,key=copyKey(id);
       const local=localEvidence(storage,codec);
-      if(shared){
-        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-        guard();migrationKeys(keys,key);
-      }
+      const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+      guard();migrationKeys(keys,key);
       const checkpoint=await read(indexedDB);guard();
       if(!checkpoint){
-        if(shared){
-          const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-          guard();ensure(keys.length===0,'existing working-copy evidence requires explicit recovery');
-        }
+        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+        guard();ensure(keys.length===0,'existing working-copy evidence requires explicit recovery');
         ensure(local.raw===null&&local.stamp===null,
           'local-only or incomplete checkpoint requires explicit recovery');
         return {status:'empty'};
@@ -277,13 +269,11 @@
             }catch(error){fail(error);}
             };
           }
-          if(shared){
-            const keys=store.getAllKeys();
-            keys.onsuccess=()=>{
-              try{guard();migrationKeys(keys.result,key);copySource();}
-              catch(error){fail(error);}
-            };
-          }else copySource();
+          const keys=store.getAllKeys();
+          keys.onsuccess=()=>{
+            try{guard();migrationKeys(keys.result,key);copySource();}
+            catch(error){fail(error);}
+          };
           return output;
         },lease||null);
       }catch(error){throw failure||error;}
@@ -297,10 +287,8 @@
         'working-copy readback mismatch');
       const after=await read(indexedDB);guard();verifyLocal();
       ensure(canonical(after)===source.raw,'IndexedDB source changed after copy');
-      if(shared){
-        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-        guard();verifyLocal();migrationKeys(keys,key);
-      }
+      const finalKeys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+      guard();verifyLocal();migrationKeys(finalKeys,key);
       return {status:'verified',workspace:saved.experiment.display.mode,
         document:{id:saved.id,revision:saved.revision,recovery:null}};
     }
@@ -312,8 +300,8 @@
       ensure(lease&&typeof lease.check==='function'&&typeof lease.track==='function',
         'captured document lease required');
       lease.check();
-      const shared=sharedLease(lease);
-      const id=shared?SHARED_COPY_ID:'working-'+lease.tabId,baseKey=copyKey(id);
+      ensure(sharedLease(lease),'shared document lifetime required');
+      const id=SHARED_COPY_ID,baseKey=copyKey(id);
       const headKey='working-head:'+id;
       const REV_FORMAT='curvature-modern-working-revision',HEAD_FORMAT='curvature-modern-working-head';
       const initial=/^sha256:[0-9a-f]{64}$/;
@@ -458,7 +446,7 @@
       // A separately acknowledged draft never advances the document head.
       // This namespace belongs to its document. Preserve invalid old bytes.
       const RECOVERY_FORMAT='curvature-modern-working-recovery';
-      const recoveryId=shared?'shared-experiment-recovery':'recovery-'+lease.tabId,
+      const recoveryId='shared-experiment-recovery',
         recoveryKey='working-recovery:'+id;
       const recoveryToken=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       let recoveryBusy=false;
@@ -536,7 +524,7 @@
                     lease.check(true);
                     ensure(canonical(target.result)===canonical(original),
                       'working recovery document revision changed; evidence retained');
-                    if(shared&&requireCurrentHead){
+                    if(requireCurrentHead){
                       readRaw(store,head=>{
                         lease.check(true);
                         ensure(head.row&&head.row.revision===revision&&
@@ -688,13 +676,12 @@
         return {candidates,issues};
       }
       async function inspectMigration(storage){
-        ensure(shared,'shared migration inventory required');
         const result=await migrationCandidates(storage);
         return {candidates:result.candidates.map(({selection,workspace,experiment})=>
           ({selection,workspace,experiment})),issues:result.issues};
       }
       async function prepareSelectedMigration(selection,{storage,isCurrent}={}){
-        ensure(shared&&!busy&&!recoveryBusy&&typeof isCurrent==='function',
+        ensure(!busy&&!recoveryBusy&&typeof isCurrent==='function',
           'shared migration selection and generation guard required');
         const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale migration generation');};
         guard();busy=true;baseline=null;
@@ -756,7 +743,7 @@
         }finally{busy=false;}
       }
       return Object.freeze({id,read,readRevision,write,
-        ...(shared?{inspectMigration,prepareSelectedMigration}:{}),
+        inspectMigration,prepareSelectedMigration,
         readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,

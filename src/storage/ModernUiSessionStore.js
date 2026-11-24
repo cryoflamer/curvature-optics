@@ -76,7 +76,6 @@
         if(owner&&owner.active){
           const old=owner;
           old.active=false;old.writable=false;
-          for(const tx of old.documentTransactions){try{tx.abort();}catch(ignore){}}
           old.release();
         }
         claimPromise=null;resumePromise=null;
@@ -102,7 +101,7 @@
               if(candidate!==original){
                 sessionStorage.setItem(TAB_KEY,candidate);
               }
-              owner={id:candidate,active:true,writable:true,release,documentTransactions:new Set()};
+              owner={id:candidate,active:true,writable:true,release};
               return Object.freeze({tabId:candidate,forkedFrom});
             }catch(error){release();throw error;}
           }
@@ -127,7 +126,7 @@
         const release=await attemptLock(old.id);
         check(!!release,
           'tab identity was claimed while this page was cached; reload to recover');
-        owner={id:old.id,active:true,writable:false,release,documentTransactions:new Set()};
+        owner={id:old.id,active:true,writable:false,release};
         claimPromise=Promise.resolve(
           Object.freeze({tabId:owner.id,forkedFrom}));
         return Object.freeze({tabId:owner.id,forkedFrom});
@@ -246,28 +245,9 @@
         };
       });
     }
-    function verifyDocumentLease(lease,writable){
-      if(lease&&lease===sharedDocumentLifetime){
-        check(lease.active,'shared document page suspended; reload before accessing session');
-        return;
-      }
-      check(lease&&lease===owner&&lease.active&&(!writable||lease.writable)&&
-        sessionStorage.getItem(TAB_KEY)===lease.id,
-        'document session tab ownership lost or not validated');
-    }
-    // Domain writers borrow the existing lease, not a second lock. A
-    // capability captures this lease generation and never survives pagehide.
-    function captureDocumentLease(){
-      const lease=owner;verifyDocumentLease(lease,false);
-      return Object.freeze({
-        tabId:lease.id,
-        check(writable=false){verifyDocumentLease(lease,writable);},
-        track(tx,writable=false){
-          verifyDocumentLease(lease,writable);
-          lease.documentTransactions.add(tx);
-          return ()=>lease.documentTransactions.delete(tx);
-        }
-      });
+    function verifyDocumentLease(lease){
+      check(lease&&lease===sharedDocumentLifetime&&lease.active,
+        'shared document page suspended; reload before accessing session');
     }
     function captureSharedDocumentLifetime(){
       const lease=sharedDocumentLifetime;verifyDocumentLease(lease,false);
@@ -504,7 +484,7 @@
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
       read,write,stage,readPending,acknowledge,
       sharedDocumentSessions,
-      captureDocumentLease,captureSharedDocumentLifetime});
+      captureSharedDocumentLifetime});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));

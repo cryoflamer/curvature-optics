@@ -214,25 +214,6 @@ test('BFCache collision fails closed without ever forking or changing the origin
   assert.equal(locks.held.size,0);
 });
 
-test('domain lease is generation-bound and tracks transactions until pagehide',async()=>{
-  const locks=lockFixture(),ctx=ownedEnv(locks),ui=store.create(ctx);
-  assert.throws(()=>ui.captureDocumentLease(),/ownership lost/);
-  const id=(await ui.claimTab()).tabId,lease=ui.captureDocumentLease();
-  assert.equal(lease.tabId,id);lease.check(true);
-  let aborted=0;
-  const remove=lease.track({abort(){aborted++;}},true);
-  const removed=lease.track({abort(){aborted+=100;}},true);
-  removed();ctx.leave();await Promise.resolve();await Promise.resolve();
-  assert.equal(aborted,1);remove();
-  assert.throws(()=>lease.check(),/ownership lost/);
-  await ui.reclaimTab();
-  const resumed=ui.captureDocumentLease();
-  resumed.check();assert.throws(()=>resumed.check(true),/not validated/);
-  ui.finishResume();resumed.check(true);
-  assert.throws(()=>lease.check(true),/ownership lost/);
-  ctx.leave();
-});
-
 test('shared document adapter needs no tab dependencies and suspends on pagehide',async()=>{
   let opened=0,leave;
   const env={indexedDB:{open(){opened++;throw Error('unexpected DB open');}},
@@ -243,6 +224,7 @@ test('shared document adapter needs no tab dependencies and suspends on pagehide
   const ui=store.create(env),doc=ui.sharedDocumentSessions(documents);
   assert.equal(ui.sharedDocumentSessions(documents),doc);
   assert.equal(ui.documentSessions,undefined);
+  assert.equal(ui.captureDocumentLease,undefined);
   assert.equal(doc.readForkSource,undefined);
   assert.throws(()=>ui.sharedDocumentSessions({}),/document session contract required/);
   const lease=ui.captureSharedDocumentLifetime();

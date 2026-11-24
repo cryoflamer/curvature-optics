@@ -545,8 +545,8 @@ The only metadata writer is `sharedDocumentSessions(contract)`, using
 `sessions/shared-document`. Historical `document:<tabId>` and fork rows
 are read by `inspectLegacyDocuments()`, never written by the application.
 The shared adapter requires a validated baseline and CAS/readback; pagehide
-invalidates the captured lifetime. Old domain test fixtures still use the
-historical working-copy capability until that writer is retired.
+invalidates the captured lifetime. Historical tab document and working-copy
+records are read-only migration evidence.
 
 ### Read-first Scene/Compare working-copy candidate
 
@@ -554,8 +554,8 @@ The existing domain owner, `ModernSessionAutosave`, provides an explicit
 `prepareWorkingCopy()` migration primitive and a digest-verified
 `readWorkingCopy()`. It does not mount a new live reader or writer. An
 external URL/import intent skips private reads. Otherwise the caller supplies
-a claimed tab ID, explicit generation guard, Web Crypto and the existing
-experiment validator. This primitive is not itself a tab-lease authority.
+the captured shared document lifetime, explicit generation guard, Web
+Crypto and the existing experiment validator.
 
 The first stage copies only a valid durable legacy `current` checkpoint.
 A present localStorage fallback must have exactly the same canonical JSON
@@ -563,7 +563,7 @@ experiment and a matching timestamp (or no timestamp); divergent, malformed,
 local-only or incomplete evidence blocks migration instead of guessing which
 copy to open. Source and destination are checked together inside the existing
 working-session IndexedDB store under its coordinated writer path. The
-candidate is add-only at `working-copy:working-<tabId>`, with format/version,
+candidate is add-only at `working-copy:shared-experiment`, with format/version,
 stable ID, SHA-256 revision of canonical raw experiment JSON, and the original
 checkpoint snapshot (including timestamp). Canonical JSON sorts object keys
 without reordering arrays; the existing validator supplies the same normalized
@@ -584,7 +584,7 @@ the portable backup inventory.
 ### Editable Scene/Compare revision adapter
 
 The explicit `openWorkingCopy(indexedDB,{lease,codec,crypto})` adapter
-borrows the existing tab owner's generation-bound `captureDocumentLease()`.
+requires the fixed shared `captureSharedDocumentLifetime()` capability.
 The migration row stays immutable. Each edit is a validated, immutable
 `working-revision:<id>:<revision>` row; its revision token contains a
 monotonic sequence and SHA-256 of canonical experiment JSON. Returning to
@@ -595,9 +595,9 @@ The adapter requires an explicit current read before a write and invalidates
 its baseline on an attempted database write. It acknowledges only after
 transaction completion and exact verified head/payload readback.
 
-A captured lease is invalid after pagehide even if the same tab reacquires
-ownership. Domain transactions participate in the existing backup writer
-barrier and are tracked by the tab lease for abort on pagehide. An already
+The captured page lifetime is invalid after pagehide; a fresh page must
+read durable state again. Domain transactions participate in the existing
+backup writer barrier and are tracked for abort on pagehide. An already
 committed transaction may survive lost acknowledgement; a fresh read and
 reconciliation are mandatory before retry. The explicit `readRevision()`
 reads the exact bound immutable revision even if a later head exists, so

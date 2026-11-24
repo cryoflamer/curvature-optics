@@ -155,16 +155,17 @@ test('working-copy preparation gives explicit external intent priority without r
   await assert.rejects(adapter.prepareWorkingCopy(null,{}),/generation guard required/);
 });
 test('working-copy preparation refuses local-only evidence instead of guessing a source',async()=>{
-  const db=memoryIndexedDB(),adapter=autosave.makeAdapter({request(name,options,action){
+  const db=recoveryMemoryDB(),adapter=autosave.makeAdapter({request(name,options,action){
     return action({name,mode:options.mode});
   }});
+  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
   const storage={getItem(key){return key===codec.STORAGE_KEY?'{"old":"draft"}':null;}};
   await assert.rejects(adapter.prepareWorkingCopy(db,{
-    tabId:'tab-a',storage,codec,explicitIntent:false,isCurrent:()=>true
+    lease,storage,codec,explicitIntent:false,isCurrent:()=>true
   }),/local-only or incomplete checkpoint/);
   assert.equal(await autosave.read(db),null);
   const result=await adapter.prepareWorkingCopy(db,{
-    tabId:'tab-a',storage:{getItem(){return null;}},codec,
+    lease,storage:{getItem(){return null;}},codec,
     explicitIntent:false,isCurrent:()=>true
   });
   assert.deepEqual(result,{status:'empty'});
@@ -224,10 +225,10 @@ async function recoveryFixture(){
     assert(['scene','compare'].includes(v.display.mode));assert(Number.isFinite(v.height));return v;
   }};
   let active=true;
-  const lease={tabId:'recovery-tab',check(){if(!active)throw Error('lease lost');},track(){return ()=>{};}};
+  const lease={sessionId:'shared',check(){if(!active)throw Error('lease lost');},track(){return ()=>{};}};
   const open=()=>adapter.openWorkingCopy(db,{lease,codec,crypto});
   await adapter.write(db,base,100);
-  await adapter.prepareWorkingCopy(db,{tabId:lease.tabId,lease,storage:{getItem:()=>null},
+  await adapter.prepareWorkingCopy(db,{lease,storage:{getItem:()=>null},
     codec,crypto,explicitIntent:false,isCurrent:()=>true});
   const a=open(),initial=await a.read();
   return {db,open,a,initial,base,lease,lose(){active=false;}};
@@ -239,17 +240,17 @@ test('working recovery survives reopening and historical fork remains readable',
   assert.equal(staged.baseRevision,f.initial.revision);
   assert.deepEqual((await f.open().readRecovery()),staged);
   assert.deepEqual(await f.a.read(),f.initial);
-  const childLease={...f.lease,tabId:'child-tab'};
-  const child=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}})
-    .openWorkingCopy(f.db,{lease:childLease,codec:{validate:v=>v},crypto:require('node:crypto').webcrypto});
+  const childLease={tabId:'child-tab',check(){},track(){return ()=>{};}};
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  assert.throws(()=>adapter.openWorkingCopy(f.db,{lease:childLease}),/shared document lifetime required/);
+  await assert.rejects(adapter.prepareWorkingCopy(f.db,{tabId:'child-tab',lease:childLease,
+    explicitIntent:false,isCurrent:()=>true}),/shared migration lifetime required/);
   // Historical on-disk fixture; production no longer creates fork records.
   const id='working-child-tab';
   f.db.rows.set('working-copy:'+id,{format:'curvature-modern-working-fork',version:1,
     id,revision:f.initial.revision,experiment:f.base,
     origin:{id:f.initial.id,revision:f.initial.revision,sessionRevision:1}});
-  assert.equal(child.prepareFork,undefined);
-  assert.equal(await child.readRecovery(),null);
-  assert.deepEqual((await child.read()).experiment,f.base);
+  assert.deepEqual((await adapter.readWorkingCopy(f.db,id,{validate:v=>v},require('node:crypto').webcrypto)).experiment,f.base);
   assert.deepEqual(await f.a.readRecovery(),staged);
   const shared=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}})
     .openWorkingCopy(f.db,{lease:{sessionId:'shared',check(){},track(){return ()=>{};}},
@@ -320,18 +321,29 @@ test('shared experiment migration, stale writers and recovery retain the origina
 });
 
 test('explicit shared migration selects a verified old draft and retains every source',async()=>{
-  const f=await recoveryFixture(),crypto=require('node:crypto').webcrypto;
-  const draft=await f.a.stageRecovery({...f.base,height:4},f.initial.revision,null);
+  const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
+  const base={display:{mode:'scene'},height:1},experiment={...base,height:4},id='working-recovery-tab';
+  const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  const digest=async v=>'sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
+    new TextEncoder().encode(canonical(v)))),x=>x.toString(16).padStart(2,'0')).join('');
+  const source={version:1,savedAt:100,experiment:base},revision=await digest(base);
+  const copy={format:'curvature-modern-working-copy',version:1,id,revision,source};
+  const data={format:'curvature-modern-working-recovery',version:1,id:'recovery-recovery-tab',
+    documentId:id,revision:crypto.randomUUID(),baseRevision:revision,experiment};
+  const draft={...data,digest:await digest(data)};
+  db.rows.set('current',source);db.rows.set('working-copy:'+id,copy);
+  db.rows.set('working-recovery:'+id,draft);
   const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
   const codec={STORAGE_KEY:'fixture',validate:v=>v};
   const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
-  const shared=adapter.openWorkingCopy(f.db,{lease,codec,crypto});
-  const storage={getItem:key=>key==='fixture'?JSON.stringify({...f.base,height:7}):null};
-  f.db.rows.set('bad-row',{version:99});
+  const shared=adapter.openWorkingCopy(db,{lease,codec,crypto});
+  const storage={getItem:key=>key==='fixture'?JSON.stringify({...base,height:7}):null};
+  db.rows.set('bad-row',{version:99});
   const inventory=await shared.inspectMigration(storage);
   assert.equal(inventory.candidates.length,4);
   assert.equal(inventory.issues[0].key,'bad-row');
-  const choice=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+f.initial.id);
+  const choice=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+id);
   assert.deepEqual(choice.experiment,draft.experiment);
   const opts={storage,isCurrent:()=>true};
   await assert.rejects(shared.prepareSelectedMigration({...choice.selection,digest:'wrong'},opts),
@@ -342,10 +354,10 @@ test('explicit shared migration selects a verified old draft and retains every s
   assert.deepEqual(await shared.prepareSelectedMigration(choice.selection,opts),saved);
   const local=inventory.candidates.find(x=>x.selection.source==='local');
   await assert.rejects(shared.prepareSelectedMigration(local.selection,opts),/existing shared migration differs/);
-  assert.deepEqual(await f.a.readRecovery(),draft);
-  assert.deepEqual((await f.a.read()).experiment,f.base);
-  assert.deepEqual(f.db.rows.get('bad-row'),{version:99});
+  assert.deepEqual(db.rows.get('working-recovery:'+id),draft);
+  assert.deepEqual(db.rows.get('working-copy:'+id),copy);
+  assert.deepEqual(db.rows.get('bad-row'),{version:99});
   await shared.read();
-  await shared.write({...f.base,height:8},saved.document.revision);
+  await shared.write({...base,height:8},saved.document.revision);
   await assert.rejects(shared.prepareSelectedMigration(choice.selection,opts),/shared HEAD already exists/);
 });
