@@ -233,7 +233,11 @@
         const ref=frame.documents.experiment;
         const match=ref&&/^checkpoint:([1-9][0-9]*)$/.exec(ref.revision);
         const sequence=match&&Number(match[1]);
-        ensure(frame.sessionId===contract.SHARED_ID&&frame.workspace===experiment.display.mode&&
+        const physical=['scene','compare'].includes(frame.workspace);
+        const auxiliary=['calibration','animation'].includes(frame.workspace);
+        ensure(frame.sessionId===contract.SHARED_ID&&
+          ((physical&&frame.workspace===experiment.display.mode)||
+           (auxiliary&&frame.documents[frame.workspace]&&row.draft===null))&&
           ref&&ref.id===SHARED_COPY_ID&&ref.recovery===null&&Number.isSafeInteger(sequence)&&
           sequence<=row.revision&&canonical(experiment)===canonical(row.experiment),
           'invalid shared checkpoint binding');
@@ -253,7 +257,7 @@
       }
       // The entire row, including the last observed draft, is the CAS
       // baseline. Revision tokens are never reused, even on reverted edits.
-      async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true),requireEmpty=false){
+      async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true),requireEmpty=false,verify=null){
         ensure(!busy,'shared checkpoint operation pending');
         lease.check(true);
         ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
@@ -267,6 +271,7 @@
           const data=clone({format,version:1,revision,...payload});
           const row={...data,digest:await digest(canonical(data),crypto)};
           await decode({present:true,row});guard();
+          if(verify){await verify(row.envelope);guard();}
           let failure;
           try{
             await transaction(indexedDB,store=>{
@@ -306,6 +311,7 @@
           }catch(error){throw failure||error;}
           const saved=await fetch(),value=await decode(saved);guard();
           ensure(saved.present&&canonical(saved.row)===canonical(row),'shared checkpoint readback conflict');
+          if(verify){await verify(value.envelope);guard();}
           observed=saved;return value;
         }finally{busy=false;}
       }
@@ -318,7 +324,8 @@
       }
       function stage(experiment,expectedRevision){
         return mutate(expectedRevision,before=>{
-          ensure(before,'shared checkpoint not initialized');
+          ensure(before&&['scene','compare'].includes(before.envelope.workspace),
+            'physical workspace must be active before staging');
           return {envelope:before.envelope,experiment:before.experiment,draft:normalizeExperiment(experiment)};
         });
       }
@@ -329,6 +336,33 @@
             envelopeFor(before.envelope,before.draft,revision);
           return {envelope,experiment:before.draft,draft:null};
         });
+      }
+      // Cross-database selection: the domain owns project contents and
+      // revision. Verify the exact acknowledged reference before CAS and
+      // again after readback; a changed/deleted domain can never be activated.
+      // This is not a cross-database atomic transaction. If postflight fails
+      // the new pointer is retained as explicit recovery evidence.
+      function selectWorkspace(mode,document,expectedRevision,{readDocument,readRecovery,isCurrent}={}){
+        ensure(typeof isCurrent==='function','selection generation guard required');
+        const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale selection generation');};
+        const verify=async frame=>{
+          guard();
+          if(['calibration','animation'].includes(frame.workspace)){
+            const plan=await contract.planRestore(frame,{readDocument,readRecovery,isCurrent});
+            ensure(plan.source==='session'||plan.source==='recovery','verified auxiliary document required');
+          }
+          guard();
+        };
+        return mutate(expectedRevision,before=>{
+          guard();
+          ensure(before&&before.draft===null,'resolve physical draft before workspace selection');
+          const physical=['scene','compare'].includes(mode);
+          ensure(physical?mode===before.experiment.display.mode&&document===undefined:
+            ['calibration','animation'].includes(mode)&&document!==undefined&&document!==null,
+            'invalid shared workspace selection');
+          return {envelope:contract.select(before.envelope,mode,document),
+            experiment:before.experiment,draft:null};
+        },[],guard,false,verify);
       }
       // The previous live controller uses this same operation lock for all
       // cross-store writes. Old sessions must not be edited outside it while
@@ -476,7 +510,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){

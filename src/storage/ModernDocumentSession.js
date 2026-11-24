@@ -104,13 +104,13 @@
   }
   // Live atomic checkpoint controller. One CAS baseline for both committed
   // and draft payloads; later edits remain in memory during promotion.
-  function createAtomicExperimentController({lease,checkpoint,prepare,isCurrent}={}){
+  function createAtomicExperimentController({lease,checkpoint,prepare,isCurrent,readDocument,readRecovery}={}){
     check(lease&&lease.sessionId===SHARED_ID&&!('tabId' in lease)&&
       checkpoint&&typeof prepare==='function'&&typeof isCurrent==='function',
       'atomic experiment controller dependencies required');
     const clone=v=>JSON.parse(JSON.stringify(v));
     const guard=(write=false)=>{check(isCurrent()===true,'stale controller generation');lease.check(write);};
-    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false;
+    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false,selecting=false;
     function fail(e){error=String(e&&e.message||e);status='failed';}
     function bound(){
       return row?{kind:'experiment',id:'shared-experiment',
@@ -153,6 +153,10 @@
         row=await checkpoint.read();guard();
         if(!row){row=await prepare();guard();}
         if(!row){status='empty';return;}
+        if(['calibration','animation'].includes(row.envelope.workspace)){
+          const plan=await planRestore(row.envelope,{readDocument,readRecovery,isCurrent});
+          guard();check(plan.source==='session'||plan.source==='recovery','verified auxiliary document required');
+        }
         if(row.draft!==null){
           offer={revision:row.revision,digest:row.digest};
           status='recovering';
@@ -161,7 +165,8 @@
     }
     function markDirty(experiment){
       guard(true);
-      check(row&&!offer&&!error&&['clean','committed','dirty','saving'].includes(status),
+      check(row&&!offer&&!error&&!selecting&&['scene','compare'].includes(row.envelope.workspace)&&
+        ['clean','committed','dirty','saving'].includes(status),
         'resolve session recovery before editing');
       latest={experiment:clone(experiment)};
       if(!promoting)status='dirty';
@@ -194,7 +199,19 @@
       }catch(e){fail(e);throw e;}
       finally{promoting=false;busy=false;startPump();}
     }
-    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,state});
+    async function selectWorkspace(mode,document){
+      guard(true);
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&row.draft===null&&
+        ['clean','committed'].includes(status),'resolve physical draft before workspace selection');
+      check(typeof checkpoint.selectWorkspace==='function','workspace selection adapter required');
+      busy=true;selecting=true;
+      try{
+        row=await checkpoint.selectWorkspace(mode,document,row.revision,{readDocument,readRecovery,isCurrent});
+        guard(true);status='committed';return state();
+      }catch(e){fail(e);throw e;}
+      finally{selecting=false;busy=false;}
+    }
+    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,

@@ -749,3 +749,17 @@ node --test tests/ModernPortableBackup.test.js
 ```
 
 This tests codec structure and content integrity, corruption/missing-store rejection, duplicate keys, binary round-trips, read-only empty-store capture and detection of changing Web Storage. It is **not** evidence of a full populated IndexedDB/browser restore.
+
+The atomic shared checkpoint also supports a guarded auxiliary document
+selection contract (Calibration and Animation). The physical experiment
+payload and its acknowledged revision are retained when the active workspace
+is auxiliary. Selection requires a clean physical checkpoint, exact
+domain-owned document/revision (and recovery identity when present), a
+current page generation, full-row CAS and readback. The domain reference
+is verified before the session transaction and after readback. These are
+separate databases: a postflight failure retains the pointer as recovery
+evidence and prevents activation; it does not roll back a committed domain
+record. Physical edits cannot be staged while an auxiliary workspace is
+active. The ordinary mounted preview does not yet enable auxiliary
+selection; an unsupported auxiliary restore fails closed without a domain
+reader. Domain-specific activation is a separate step.

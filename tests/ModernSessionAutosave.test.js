@@ -673,3 +673,57 @@ test('empty shared initialization refuses new evidence during hashing and stale 
     assert.equal(f.db.rows.has('shared-checkpoint'),false);
   }
 });
+
+test('atomic auxiliary selection verifies exact domain revision and keeps the physical checkpoint intact',async()=>{
+  const f=atomicFixture(),a=f.open(),b=f.open();
+  await a.read();const first=await a.initialize(f.base);await b.read();
+  const binding={id:'calibration-project',revision:'rev:7',recovery:null};
+  let reads=0;
+  const opts={isCurrent:()=>true,readDocument:async(kind,id)=>{
+    reads++;return {kind,id,revision:'rev:7'};
+  }};
+  const selected=await a.selectWorkspace('calibration',binding,first.revision,opts);
+  assert.equal(reads,2,'verify before CAS and after readback');
+  assert.equal(selected.envelope.workspace,'calibration');
+  assert.deepEqual(selected.envelope.documents.calibration,binding);
+  assert.deepEqual(selected.envelope.documents.experiment,first.envelope.documents.experiment);
+  assert.deepEqual(selected.experiment,first.experiment);
+  assert.equal(selected.draft,null);
+  await assert.rejects(b.stage({...f.base,height:9},first.revision),/CAS conflict/);
+  await assert.rejects(a.stage(f.base,selected.revision),/physical workspace/);
+  assert.deepEqual(await a.read(),selected);
+  const back=await a.selectWorkspace('scene',undefined,selected.revision,opts);
+  assert.equal(back.envelope.workspace,'scene');
+  assert.deepEqual(back.envelope.documents.calibration,binding);
+  assert.deepEqual(back.envelope.documents.experiment,first.envelope.documents.experiment);
+  assert.deepEqual(back.experiment,first.experiment);
+});
+test('auxiliary selection rejects missing references, dirty drafts and stale generations',async()=>{
+  const f=atomicFixture(),a=f.open();await a.read();const first=await a.initialize(f.base);
+  const binding={id:'calibration-project',revision:'rev:7',recovery:null};
+  const opts={isCurrent:()=>true,readDocument:async()=>null};
+  await assert.rejects(a.selectWorkspace('calibration',binding,first.revision,opts),/missing or revision changed/);
+  assert.deepEqual(await a.read(),first);
+  let current=true;
+  await assert.rejects(a.selectWorkspace('calibration',binding,first.revision,{
+    isCurrent:()=>current,readDocument:async(kind,id)=>{current=false;return {kind,id,revision:'rev:7'};}
+  }),/stale restore generation|stale selection generation/);
+  assert.deepEqual(await a.read(),first);
+  const draft=await a.stage({...f.base,height:2},first.revision);
+  await assert.rejects(a.selectWorkspace('calibration',binding,draft.revision,opts),/resolve physical draft/);
+  assert.deepEqual(await a.read(),draft);
+});
+test('auxiliary postflight failure retains the selected pointer but rejects acknowledgement',async()=>{
+  const f=atomicFixture(),a=f.open();await a.read();const first=await a.initialize(f.base);
+  const binding={id:'calibration-project',revision:'rev:7',recovery:null};
+  let reads=0;
+  await assert.rejects(a.selectWorkspace('calibration',binding,first.revision,{
+    isCurrent:()=>true,readDocument:async(kind,id)=>({kind,id,revision:++reads===1?'rev:7':'rev:8'})
+  }),/missing or revision changed/);
+  assert.equal(reads,2);
+  const saved=await f.open().read();
+  assert.equal(saved.revision,first.revision+1);
+  assert.deepEqual(saved.envelope.documents.calibration,binding);
+  assert.deepEqual(saved.experiment,first.experiment);
+  assert.equal(saved.draft,null);
+});

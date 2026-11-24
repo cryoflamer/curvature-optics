@@ -94,7 +94,7 @@ function atomicControllerFixture(){
   let durable={revision:1,envelope:contract.select(contract.emptyShared(),'scene',
     {id:'shared-experiment',revision:'checkpoint:1',recovery:null}),experiment:base,draft:null,digest:'initial'};
   let pause=null,fault=null,reads=0;
-  function open({lease={sessionId:'shared',check(){}},prepare=()=>{throw Error('unexpected migration');},isCurrent=()=>true}={}){
+  function open({lease={sessionId:'shared',check(){}},prepare=()=>{throw Error('unexpected migration');},isCurrent=()=>true,readDocument,readRecovery}={}){
     let seen;
     const checkpoint={
       async read(){reads++;seen=copy(durable);return copy(seen);},
@@ -102,6 +102,13 @@ function atomicControllerFixture(){
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
         if(fault==='stage')throw Error('stage failure');
         durable={...durable,revision:revision+1,draft:copy(experiment),digest:'stage:'+revision};
+        seen=copy(durable);return copy(seen);
+      },
+      async selectWorkspace(mode,document,revision,options){
+        if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
+        const frame=contract.select(durable.envelope,mode,document);
+        if(['calibration','animation'].includes(mode))await contract.planRestore(frame,options);
+        durable={...durable,revision:revision+1,envelope:frame,digest:'select:'+revision};
         seen=copy(durable);return copy(seen);
       },
       async promote(revision){
@@ -114,7 +121,7 @@ function atomicControllerFixture(){
         if(fault==='after')throw Error('lost acknowledgement');
         seen=copy(durable);return copy(seen);
       }};
-    return contract.createAtomicExperimentController({lease,checkpoint,prepare,isCurrent});
+    return contract.createAtomicExperimentController({lease,checkpoint,prepare,isCurrent,readDocument,readRecovery});
   }
   return {base,open,reads:()=>reads,fault(value){fault=value;},hold(){let release;pause=new Promise(resolve=>{release=resolve;});return ()=>{pause=null;release();};}};
 }
@@ -196,4 +203,27 @@ test('atomic controller failed promotion retains draft and later input; lost ack
     assert.equal(b.state().bound.experiment.height,2);
     assert.equal(b.state().draft,null);
   }
+});
+
+test('atomic controller selects a verified auxiliary document and refuses physical edits there',async()=>{
+  const f=atomicControllerFixture(),readDocument=async(kind,id)=>({kind,id,revision:'rev:7'});
+  const a=f.open({readDocument}),stale=f.open({readDocument});
+  await a.open();await stale.open();
+  const binding={id:'cal-a',revision:'rev:7',recovery:null};
+  await a.selectWorkspace('calibration',binding);
+  assert.equal(a.state().row.envelope.workspace,'calibration');
+  assert.deepEqual(a.state().bound.experiment,f.base);
+  assert.throws(()=>a.markDirty({...f.base,height:9}),/resolve session recovery/);
+  await assert.rejects(stale.selectWorkspace('calibration',binding),/CAS conflict/);
+  const invalid=f.open();await assert.rejects(invalid.open(),/document reader required/);
+  const changed=f.open({readDocument:async(kind,id)=>({kind,id,revision:'rev:8'})});
+  await assert.rejects(changed.open(),/missing or revision changed/);
+  const fresh=f.open({readDocument});await fresh.open();
+  assert.equal(fresh.state().row.envelope.workspace,'calibration');
+  await fresh.selectWorkspace('scene');
+  assert.deepEqual(fresh.state().row.envelope.documents.calibration,binding);
+  fresh.markDirty({...f.base,height:2});await fresh.flushCheckpoint();
+  await assert.rejects(fresh.selectWorkspace('calibration',binding),/resolve physical draft/);
+  await fresh.save();
+  assert.equal(fresh.state().bound.experiment.height,2);
 });
