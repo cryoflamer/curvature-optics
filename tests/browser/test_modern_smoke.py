@@ -11378,6 +11378,89 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+
+    def test_shared_document_session_preview_shared_ui_layout_across_tabs(self):
+        """The document owns active mode; shared registry owns only presentation."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.add_init_script("""() => {
+            const key='curvature-modern-application-preferences-v1';
+            if(localStorage.getItem(key)===null)localStorage.setItem(key,JSON.stringify({
+                version:1,workspace:{mode:'animation',sceneTab:'Camera',compareTab:'Camera',
+                    sections:{'scene.surface.geometry':false,'compare.surface.geometry':true}}}));
+        }""")
+        self.page.goto(url,wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        read="""async () => {
+            const store=CurvatureModernUiSessionStore.create(window);
+            return {scene:await store.read('workspace',{workspace:'scene'}),
+                compare:await store.read('workspace',{workspace:'compare'}),
+                doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                ui:CurvatureModernApp.getWorkspaceUiRegistryPreview().selection,
+                local:localStorage.getItem(CurvatureModernApplicationPreferences.STORAGE_KEY),
+                tab:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)};
+        }"""
+        initial=self.page.evaluate(read)
+        self.assertEqual(initial['ui']['mode'],'scene')
+        self.assertEqual(initial['scene']['revision'],0)
+        self.assertEqual(initial['compare']['revision'],0)
+        self.assertIsNone(initial['tab'])
+        other=self.context.new_page()
+        try:
+            other.goto(url,wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            self.page.locator('#ModernSettingsSurface').click()
+            self.page.locator('#ModernSceneSurfaceGeometrySection summary').click()
+            self.page.wait_for_function("""async () => {
+                const row=await CurvatureModernUiSessionStore.create(window).read('workspace',{workspace:'scene'});
+                return row.envelope?.values['workspace.section.surface.geometry']?.value===true&&
+                    row.envelope.values['workspace.settingsTab'].value==='Surface';
+            }""",timeout=30000)
+            scene=self.page.evaluate(read)
+            self.assertEqual(scene['doc'],initial['doc'],'presentation must not change the physical revision')
+            self.assertEqual(scene['local'],initial['local'])
+            self.assertNotIn('workspace.active',scene['scene']['envelope']['values'])
+            # An already open second tab cannot silently overwrite a newer scope.
+            other.locator('#ModernSettingsObjects').click()
+            other.wait_for_function("""() => CurvatureModernApp.getWorkspaceUiRegistryPreview().errors
+                .some(x=>x.message.includes('revision conflict'))""",timeout=30000)
+            expect(other.locator('#ModernUiRegistryRecovery')).to_be_visible()
+            expect(other.locator('#ModernUiRegistryRetry')).to_be_disabled()
+            with other.expect_download() as event:
+                other.locator('#ModernUiRegistryDownload').click()
+            evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+            self.assertEqual(evidence['scope'],'shared-workspace')
+            self.assertEqual(evidence['live']['scene']['tab'],'Objects')
+            self.assertIsNone(evidence['tabId'])
+            self.assertEqual(self.page.evaluate(read)['scene'],scene['scene'])
+            self.page.locator('#ModernCompareTab').click()
+            self.page.locator('#ModernSettingsSurface').click()
+            expect(self.page.locator('#ModernCompareSurfaceGeometrySection')).to_be_visible()
+            self.page.locator('#ModernCompareSurfaceGeometrySection summary').click()
+            self.page.wait_for_function("""async () => {
+                const row=await CurvatureModernUiSessionStore.create(window).read('workspace',{workspace:'compare'});
+                const doc=CurvatureModernApp.getExperimentSessionPreview().controller;
+                return row.envelope?.values['workspace.section.surface.geometry']?.value===false&&
+                    row.envelope.values['workspace.settingsTab'].value==='Surface'&&
+                    doc.status==='committed'&&doc.row.envelope.workspace==='compare';
+            }""",timeout=30000)
+            before=self.page.evaluate(read)
+            self.assertEqual(before['local'],initial['local'])
+            self.assertIsNone(before['tab'])
+            other.reload(wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            after=other.evaluate(read)
+            self.assertEqual(after,before,'F5 in another tab must read the same document and UI rows without writing')
+            self.assertFalse(other.locator('#ModernCompareSurfaceGeometrySection').evaluate('(node)=>node.open'))
+            expect(other.locator('#ModernSettingsSurface')).to_have_attribute('aria-selected','true')
+            other.locator('#ModernSceneTab').click()
+            self.assertTrue(other.locator('#ModernSceneSurfaceGeometrySection').evaluate('(node)=>node.open'))
+            self.assertEqual(other.evaluate(read)['scene'],before['scene'])
+        finally:
+            other.close()
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()

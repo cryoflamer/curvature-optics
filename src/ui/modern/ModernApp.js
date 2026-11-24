@@ -705,11 +705,15 @@
   var documentSessionRoute=typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'').get('document-session');
   var documentSessionPreviewRequested=['shared','preview'].includes(documentSessionRoute);
-  var experimentPreview={status:'disabled',controller:null,live:false,error:null,recoveryAction:false,
+  var experimentPreview={status:'disabled',controller:null,ui:null,live:false,error:null,recoveryAction:false,
     migration:null};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
+  var sharedPresentationRequested=documentSessionPreviewRequested&&
+    new URLSearchParams(root.location&&root.location.search||'').get('ui-state-registry')==='preview';
+  function sharedPresentationActive(){return sharedPresentationRequested&&experimentPreview.live;}
+  function uiRegistryRouteRequested(){return workspaceUiRegistryPreviewRequested||sharedPresentationRequested;}
   var workspaceInitialSections={
     'camera.pose':true,'camera.navigation':false,'camera.animation':true,
     'camera.savedViews':false,'camera.frameName':false,
@@ -784,19 +788,23 @@
   function saveApplicationPreferences(){
     if(!applicationPreferences)return;
     try{
-      if(!applicationPreferences.write(preferencesStorage(),{
+      var storage=preferencesStorage();
+      // The shared registry owns layout. Unrelated legacy preference writes
+      // must not backfill registry-owned values into the rollback source.
+      var legacyLayout=sharedPresentationActive()?applicationPreferences.read(storage):null;
+      if(!applicationPreferences.write(storage,{
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
         studioPlaybackDetail:studioPlaybackDetail,studioPlaybackFps:studioPlaybackFps,
         geometryBackend:state.geometryBackend,cameraHudVisible:cameraHudVisible,
         cameraHudAppearance:cameraHudAppearance,
         targetIndicatorVisible:targetIndicatorVisible,studioTargetVisible:studioTargetVisible,
         targetIndicatorSelection:targetIndicatorSelection,
-        navigation:navigationPrefs,displayPanels:displayPanels,
+        navigation:navigationPrefs,displayPanels:legacyLayout?legacyLayout.displayPanels:displayPanels,
         historyGallerySize:historyGallerySize,historyPinnedCollapsed:historyPinnedCollapsed,
         historyPanelOpen:historyPanelOpen,historyFilters:historyFilters,
         studioPickerFilters:studioPickerFilters,
         historyStoryboardQueue:historyStoryboardQueue,
-        workspace:workspaceState
+        workspace:legacyLayout?legacyLayout.workspace:workspaceState
       }))preferencesStatus('Browser storage unavailable; changes will not survive reload.',true);
       else preferencesStatus('Application preferences saved in this browser.',false);
     }catch(error){preferencesStatus('Cannot save application preferences: '+error.message,true);}
@@ -991,7 +999,7 @@
   }
   var uiRegistryRecoveryBusy=false;
   function refreshUiRegistryRecoveryNotice(message){
-    if(!workspaceUiRegistryPreviewRequested)return;
+    if(!uiRegistryRouteRequested())return;
     var panel=newUiEl('ModernUiRegistryRecovery');
     if(!panel)return;
     var trial=workspaceUiRegistryPreview;
@@ -1016,7 +1024,7 @@
     if(download)download.disabled=uiRegistryRecoveryBusy;
   }
   async function collectUiRegistryRecoveryEvidence(){
-    if(!workspaceUiRegistryPreviewRequested)
+    if(!uiRegistryRouteRequested())
       throw Error('UI Registry recovery export requires preview mode');
     var trial=workspaceUiRegistryPreview,errors=trial.bridge?
       trial.bridge.lastErrors():[];
@@ -1024,6 +1032,30 @@
       capturedAt:new Date().toISOString(),
       preview:{status:trial.status,error:trial.error,errors:errors},
       tabId:null,pending:[],durable:[],storageErrors:[]};
+    if(sharedPresentationActive()){
+      evidence.scope='shared-workspace';
+      evidence.live=null;
+      var api=root.CurvatureModernUiSessionStore;
+      var shared=api&&api.create(root);
+      if(trial.bridge&&trial.bridge.isReady()){
+        evidence.live={};
+        ['scene','compare'].forEach(function(mode){
+          var sections={};
+          trial.bridge.sections.forEach(function(key){sections[key]=trial.bridge.get(mode,key);});
+          evidence.live[mode]={tab:trial.bridge.getTab(mode),sections:sections};
+        });
+      }
+      for(var workspace of ['scene','compare','animation','calibration']){
+        var item={scope:'workspace',workspace:workspace};
+        try{
+          if(!shared)throw Error('UI Session Store unavailable');
+          var saved=await shared.read('workspace',{workspace:workspace});
+          item.revision=saved.revision;item.envelope=saved.envelope;
+        }catch(error){item.readError=String(error&&error.message||error);}
+        evidence.durable.push(item);
+      }
+      return evidence;
+    }
     // Preserve RAW pending bytes, including unreadable records. Never clear
     // corrupt or foreign state merely because export cannot parse it.
     // Access itself can throw (privacy settings, disabled storage). Preserve
@@ -1084,7 +1116,7 @@
     });
   }
   function bindUiRegistryRecoveryControls(){
-    if(!workspaceUiRegistryPreviewRequested)return;
+    if(!uiRegistryRouteRequested())return;
     var retry=newUiEl('ModernUiRegistryRetry'),download=newUiEl('ModernUiRegistryDownload');
     if(retry)retry.addEventListener('click',function(){
       if(uiRegistryRecoveryBusy||retry.disabled)return;
@@ -1111,7 +1143,7 @@
     });
   }
   function bindUiRegistryPageLifecycle(){
-    if(!workspaceUiRegistryPreviewRequested||!root.addEventListener)return;
+    if(!uiRegistryRouteRequested()||!root.addEventListener)return;
     root.addEventListener('pagehide',function(){
       var trial=workspaceUiRegistryPreview;
       if(trial.status==='ready'&&trial.bridge){
@@ -1145,7 +1177,8 @@
     });
   }
   function startWorkspaceUiRegistryPreview(){
-    if(!workspaceUiRegistryPreviewRequested)return;
+    var shared=sharedPresentationActive();
+    if(!workspaceUiRegistryPreviewRequested&&!shared)return;
     var api=root.CurvatureModernWorkspaceStateBridge;
     var registry=root.CurvatureModernStateRegistry;
     var store=root.CurvatureModernUiSessionStore;
@@ -1159,7 +1192,8 @@
       if(!api||!registry||!store||!manager)
         throw Error('UI State Registry preview dependencies not loaded');
       bridge=api.create({
-        registryApi:registry,sessionStoreApi:store,managerApi:manager,env:root,
+        registryApi:registry,sessionStoreApi:shared?{create:function(){return experimentPreview.ui;}}:store,
+        managerApi:manager,env:root,sharedPresentation:shared,
         // Declare each legacy disclosure once. The same reusable bridge
         // handles Scene and Compare independently; dynamic Object folds
         // use the same existing toggle controller.
@@ -1173,10 +1207,12 @@
     }catch(error){
       workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
       preferencesStatus('UI Registry preview unavailable: '+error.message,true);
+      if(shared)previewControls();
       return;
     }
     workspaceUiRegistryPreview={status:'loading',bridge:null,error:null};
-    bridge.restore().then(function(result){
+    return bridge.restore().then(function(result){
+      if(shared&&experimentPreview.status==='suspended')return;
       // Whole-scope IndexedDB snapshots may contain keys from a newer
       // version. Never replace those unknown bytes with an older snapshot:
       // leave this tab on legacy section preferences until compatible.
@@ -1184,6 +1220,7 @@
         var warning='Unsupported UI Registry values: '+result.warnings.join(', ');
         workspaceUiRegistryPreview={status:'incompatible',bridge:null,error:warning};
         preferencesStatus('UI Registry preview unavailable: '+warning,true);
+        if(shared)previewControls();
         return;
       }
       // A panel edited during async restore is authoritative; do not
@@ -1195,6 +1232,7 @@
          startCalibrationView!==workspaceViewEditGeneration.calibration){
         workspaceUiRegistryPreview={status:'skipped',bridge:null,
           error:'Workspace UI changed during preview restore'};
+        if(shared){refreshUiRegistryRecoveryNotice();previewControls();}
         return;
       }
       workspaceUiRegistryPreview={status:'ready',bridge:bridge,error:null};
@@ -1207,7 +1245,7 @@
           root.history.state[WORKSPACE_ENTRY_KEY])||
         !!(studioViewsApi&&studioViewsApi.route&&
           studioViewsApi.route(root.location&&root.location.href));
-      if(!explicitMode&&!explicitTab&&!keyframeEditSession){
+      if(!shared&&!explicitMode&&!explicitTab&&!keyframeEditSession){
         var restoredMode=bridge.getMode();
         if(restoredMode&&restoredMode!==currentWorkspaceMode())
           setMode(restoredMode,false); // Existing guarded workspace controller.
@@ -1223,7 +1261,7 @@
       // These are presentation-only selections. An explicit Studio URL,
       // shared experiment or an in-flight keyframe edit outranks private UI state.
       // Neither operation chooses a draft, project or physical document.
-      if(!persistence.explicitUrl&&!keyframeEditSession){
+      if(!shared&&!persistence.explicitUrl&&!keyframeEditSession){
         var explicitStudioView=studioViewsApi&&studioViewsApi.route&&
           studioViewsApi.route(root.location&&root.location.href);
         if(!explicitStudioView){
@@ -1244,9 +1282,12 @@
       }
       applyWorkspaceSections();
       refreshUiRegistryRecoveryNotice();
+      if(shared)previewControls();
     }).catch(function(error){
+      if(shared&&experimentPreview.status==='suspended')return;
       workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};
       preferencesStatus('UI Registry preview restore failed: '+error.message,true);
+      if(shared)previewControls();
     });
   }
   function resetWorkspaceUiRegistryPreview(){
@@ -1307,6 +1348,7 @@
     workspaceSections.forEach(function(entry){
       entry.node.addEventListener('toggle',function(){
         var scope=workspaceScope(),key=scope+'.'+entry.suffix;
+        if(sharedPresentationActive()&&workspaceUiRegistryPreview.status!=='ready')return;
         // This remains the ONE existing native-details controller. The
         // registry preview only changes where a declared key is persisted.
         if(entry.node.open===workspaceSectionValue(scope,entry.suffix))return;
@@ -1317,7 +1359,7 @@
           displayPanels[shortKey]=entry.node.open;
         }
         // Keep old preferences as a non-destructive rollback source.
-        saveApplicationPreferences();
+        if(!sharedPresentationActive())saveApplicationPreferences();
         var trial=workspaceUiRegistryPreview;
         if(trial.status==='ready'&&trial.bridge&&trial.bridge.supports(entry.suffix)){
           trial.bridge.set(scope,entry.suffix,entry.node.open).catch(function(error){
@@ -1343,6 +1385,18 @@
     });
   }
   function resetWorkspaceLayout(){
+    if(sharedPresentationActive()){
+      var trial=workspaceUiRegistryPreview;
+      if(trial.status!=='ready'||!trial.bridge)return;
+      trial.bridge.reset(function(mode,suffix){return workspaceInitialSections[suffix]===true;})
+        .then(function(){
+          ['scene','compare'].forEach(function(mode){workspaceState[mode+'Tab']=trial.bridge.getTab(mode);});
+          applyWorkspaceSections();
+          activateSettings(workspaceState[state.mode+'Tab'],false,false);
+          preferencesStatus('Workspace layout reset to defaults.',false);
+        }).catch(function(error){preferencesStatus('UI Registry preview reset failed: '+error.message,true);});
+      return;
+    }
     workspaceNavigationVersion++;workspaceTabEditGeneration++;
     setWorkspaceEntryChoice(null);
     workspaceState={mode:null,sceneTab:'Camera',compareTab:'Camera',compareModel:null,calibrationView:'editor',sections:{}};
@@ -1363,6 +1417,7 @@
     var button=geometryUi('ModernResetPreferences');
     if(!button||!applicationPreferences)return;
     button.addEventListener('click',function(){
+      if(sharedPresentationActive())return;
       workspaceNavigationVersion++;workspaceTabEditGeneration++;
       var storage=preferencesStorage(),cleared=false;
       try{cleared=applicationPreferences.reset(storage);}
@@ -1633,14 +1688,18 @@
     if(!experimentPreview.live)return;
     var status=experimentPreview.status;
     var usable=['clean','dirty','saving','committed'].includes(status);
-    var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable;
+    var presentationReady=!sharedPresentationActive()||workspaceUiRegistryPreview.status==='ready';
+    var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable||!presentationReady;
     Object.keys(workspaceTabs).forEach(function(mode){
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
-      if(tab)tab.disabled=!usable||!previewModeAllowed(mode);
+      if(tab)tab.disabled=!usable||!presentationReady||!previewModeAllowed(mode);
     });
     ['ModernResetExperiment','ModernHistoryToggle'].forEach(function(id){
       var button=newUiEl(id);if(button)button.disabled=true;
     });
+    if(sharedPresentationActive()){
+      var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=true;
+    }
     var panel=newUiEl('ModernDocumentSessionRecovery');
     if(panel)panel.hidden=usable||status==='loading';
     var controller=experimentPreview.controller;
@@ -1668,7 +1727,7 @@
       }
     }
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
-    if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction;}
+    if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction||!presentationReady;}
     var download=newUiEl('ModernDocumentSessionDownload');
     if(download){download.hidden=!controller;download.disabled=experimentPreview.recoveryAction;}
   }
@@ -1760,6 +1819,7 @@
         throw Error('Shared session setup: choose a verified source after checking your local backup. Close other old Modern tabs. Old records remain unchanged.'+
           (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
       }});
+    experimentPreview.ui=ui;
     experimentPreview.controller=controller;
     await controller.open();
     experimentPreview.migration=null;
@@ -1797,7 +1857,8 @@
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore)restore.addEventListener('click',function(){
       var c=experimentPreview.controller,offer=c&&c.draftOffer();
-      if(experimentPreview.status!=='recovering'||!offer||experimentPreview.recoveryAction)return;
+      if(experimentPreview.status!=='recovering'||!offer||experimentPreview.recoveryAction||
+         (sharedPresentationActive()&&workspaceUiRegistryPreview.status!=='ready'))return;
       experimentPreview.recoveryAction=true;previewControls();
       c.loadDraft(offer).then(function(data){
         if(experimentPreview.status==='suspended')return;
@@ -6358,6 +6419,10 @@
       if(url.searchParams.getAll('document-session').length!==1||
          url.searchParams.get('document-session')!==documentSessionRoute)return false;
       url.searchParams.delete('document-session');
+      if(sharedPresentationRequested){
+        if(url.searchParams.getAll('ui-state-registry').length!==1)return false;
+        url.searchParams.delete('ui-state-registry');
+      }
       return experiments.isWorkingExperimentUrl(url.href,preferencesStorage());
     }catch(error){return false;}
   }
@@ -6431,6 +6496,7 @@
       var href=root.location.href;
       if(documentSessionPreviewRequested){
         var publicUrl=new URL(href);publicUrl.searchParams.delete('document-session');
+        if(sharedPresentationRequested)publicUrl.searchParams.delete('ui-state-registry');
         href=publicUrl.href;
       }
       var url=experiments.urlWithExperiment(href,experimentSnapshot());
@@ -8975,7 +9041,10 @@
     if(remember!==false&&!keyframeEditSession){
       workspaceTabEditGeneration++;
       var tabKey=state.mode==='compare'?'compareTab':'sceneTab';
-      if(workspaceState[tabKey]!==name){workspaceState[tabKey]=name;saveApplicationPreferences();}
+      if(workspaceState[tabKey]!==name){
+        workspaceState[tabKey]=name;
+        if(!sharedPresentationActive())saveApplicationPreferences();
+      }
       var trial=workspaceUiRegistryPreview;
       if(trial.status==='ready'&&trial.bridge)
         trial.bridge.setTab(state.mode==='compare'?'compare':'scene',name)
@@ -9260,7 +9329,8 @@
         updateSnapshotSaveAction();resetHistoryBaseline();refreshCalibrationApplicability();
         previewControls();
         if(experimentPreview.status==='clean')persistenceStatus('Document session restored');
-        return; // Do not restore legacy auxiliary workspaces or UI registry mode.
+        if(sharedPresentationActive()&&preview&&preview.bound)startWorkspaceUiRegistryPreview();
+        return; // Do not restore legacy auxiliary workspaces or a second active mode.
       }
       // The physical session is now authoritative. Do not allow an early
       // click to be overwritten by asynchronous startup restoration.
@@ -9521,7 +9591,7 @@
       var trial=workspaceUiRegistryPreview;
       return {status:trial.status,error:trial.error,
         sections:trial.bridge?trial.bridge.sections:[],
-        selection:trial.bridge?{mode:trial.bridge.getMode(),
+        selection:trial.bridge?{mode:sharedPresentationActive()?currentWorkspaceMode():trial.bridge.getMode(),
           sceneTab:trial.bridge.getTab('scene'),
           compareTab:trial.bridge.getTab('compare'),
           animationView:trial.bridge.getView('animation'),

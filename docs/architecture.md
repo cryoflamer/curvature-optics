@@ -611,9 +611,18 @@ without rewriting the address. Later ordinary tabs may replace the
 origin-wide issued URL without affecting those pinned entries on reload.
 A foreign working marker is not sufficient evidence; explicit experiment
 links still import their payload. The ordinary route and explicit
-shared/Studio/mode/tab/model routes retain existing behavior; the
-document preview and UI registry preview are not combined. Only Scene and
-Compare are enabled: other workspaces, History navigation and reset are
+shared/Studio/mode/tab/model routes retain existing behavior. The joint opt-in
+`?document-session=shared&ui-state-registry=preview` enables the shared UI
+Registry after the physical document is verified. Scene/Compare settings tabs
+and disclosure values use fixed workspace-scoped IndexedDB snapshots with
+CAS, not tab IDs or sessionStorage. The document checkpoint remains the sole
+active workspace owner; no automatic import of divergent old tab snapshots
+occurs. Legacy preference layout values are read-first defaults and are not
+updated by registry interactions. Other application preferences still use
+their existing writer; bulk preference reset is disabled in this preview.
+A failed or incompatible UI restore blocks editing and offers diagnostic
+export. The shared layout reset does not change physics or the active
+document. Only Scene and Compare are enabled: other workspaces, History navigation and reset are
 disabled pending migration. Startup locks the physical workspace until
 verified binding; absent or conflicting evidence fails closed without
 falling back to the legacy writer. Historical divergent HEADs are handled
@@ -640,7 +649,8 @@ durable records; the explicit share action remains available. Closing or
 reloading with unacknowledged edits requests the browser's unload warning;
 the warning listener is installed only while a save or unsaved edit is pending
 and performs no write. It is removed after acknowledgement. Explicit Copy
-experiment URL removes the private document-session preview flag.
+experiment URL removes the private document-session preview flag (and the
+joint UI preview flag if present).
 Only an acknowledged recovery checkpoint (or committed document) is
 durable; an edit still in memory or an interrupted checkpoint transaction
 is not guaranteed recoverable. Native BFCache return requires
