@@ -11929,36 +11929,46 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.page.reload(wait_until='load')
                 self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='recovering-selection'""",timeout=30000)
                 expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_have_text('Complete Calibration save')
-                restored=self.page.evaluate("""async () => {
-                    const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
-                        P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
+                offered=self.page.evaluate("""async () => {
+                    const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
                     U.sharedDocumentSessions(D);
                     const lease=U.captureSharedDocumentLifetime();
-                    const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                    const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
                         lease,codec:CurvatureModernExperimentState,crypto,contract:D});
-                    const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
-                        prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window),
-                        selectionRecovery:P.sharedSelectionRecovery(window,lease)});
-                    await c.open();const offer=c.state(),before=await make().read();
+                    const offer=CurvatureModernApp.getExperimentSessionPreview().controller;
+                    const before=await checkpoint.read();
                     const wrongBase={...offer.selectionRecovery.base,digest:'sha256:'+'0'.repeat(64)};
-                    const invalid=await make().proveSelectionReceipt(before,'calibration',
+                    const invalid=await checkpoint.proveSelectionReceipt(before,'calibration',
                         offer.selectionRecovery.previous,offer.selectionRecovery.current,wrongBase);
-                    const result=await c.recoverDocumentSelection(offer.selectionRecovery);
-                    const after=await make().read(),project=await S.get(indexedDB,offer.selectionRecovery.current.id);
-                    return {offer,before,result,after,project,invalid,receipt:await S.readSharedSelectionReceipt(indexedDB),
-                        legacy:await S.legacy(indexedDB)};
+                    return {offer,before,invalid};
                 }""")
-                self.assertIsNone(restored['invalid'])
-                self.assertEqual(restored['offer']['status'],'recovering-selection')
-                self.assertEqual(restored['before'],seeded['before'])
+                self.assertIsNone(offered['invalid'])
+                self.assertEqual(offered['offer']['status'],'recovering-selection')
+                self.assertEqual(offered['before'],seeded['before'])
+                with self.page.expect_navigation(wait_until='load',timeout=30000):
+                    self.page.locator('#ModernDocumentSessionRestoreDraft').click()
+                self.page.wait_for_function("""() => {
+                    const app=window.CurvatureModernApp,s=app?.getExperimentSessionPreview();
+                    return s?.status==='failed'||s?.status==='clean'&&app.getWorkspaceUiRegistryPreview().status==='ready';
+                }""",timeout=30000)
+                restored=self.page.evaluate("""async id => {
+                    const S=CurvatureModernCalibrationProjectStore,app=CurvatureModernApp;
+                    return {preview:app.getExperimentSessionPreview(),mode:app.getWorkspaceMode(),
+                        editor:CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus(),
+                        project:await S.get(indexedDB,id),receipt:await S.readSharedSelectionReceipt(indexedDB),
+                        legacy:await S.legacy(indexedDB)};
+                }""",seeded['saved']['project']['id'])
+                self.assertEqual(restored['preview']['status'],'clean',restored['preview'])
+                self.assertEqual(restored['mode'],'calibration')
+                self.assertEqual(restored['editor']['projectId'],seeded['saved']['project']['id'])
                 self.assertEqual(restored['project'],seeded['saved']['project'])
-                self.assertEqual(restored['after']['revision'],seeded['before']['revision']+(0 if committed else 1))
+                after=restored['preview']['controller']['row']
+                self.assertEqual(after['revision'],seeded['before']['revision']+(0 if committed else 1))
                 if committed:
-                    self.assertEqual(restored['after'],seeded['before'])
-                self.assertEqual(restored['result']['status'],'committed')
+                    self.assertEqual(after,seeded['before'])
                 self.assertIsNone(restored['receipt'])
                 self.assertIsNone(restored['legacy'])
-                self.assertEqual(restored['after']['experiment'],seeded['before']['experiment'])
+                self.assertEqual(after['experiment'],seeded['before']['experiment'])
 
 
     def test_shared_calibration_mounted_project_edit_navigation_and_f5(self):

@@ -760,14 +760,19 @@ is verified before the session transaction and after readback. These are
 separate databases: a postflight failure retains the pointer as recovery
 evidence and prevents activation; it does not roll back a committed domain
 record. Physical edits cannot be staged while an auxiliary workspace is
-active. The ordinary mounted preview does not yet enable auxiliary
-selection; an unsupported auxiliary restore fails closed without a domain
-reader. The Calibration domain reader now reuses the existing project
-checkpoint hydration, verifying the original photograph, full project
-readback and exact revision. It rejects empty checkpoints and unresolved
-recovery references. No sessionStorage selection marker or legacy draft
-write is needed by this reader. Domain-specific mounted activation is a
-separate step.
+active. The combined opt-in preview (`document-session=shared` and
+`ui-state-registry=preview`) enables mounted Calibration selection and
+restoration; an unsupported auxiliary restore still fails closed without
+a domain reader. Calibration reuses project checkpoint hydration, verifying
+the original photograph, full project readback and exact revision. It
+rejects empty checkpoints and unresolved recovery references. Entering the
+project library without a selected project is transient; it does not
+replace the durable Scene/Compare pointer. Opening a verified project
+commits selection, and leaving Calibration is guarded by acknowledged
+project persistence. Viewer visibility and hydration are not edits. The
+ordinary route and historical Web Storage evidence remain unchanged.
+Rename, Delete, Apply, legacy adoption, Image Library navigation and
+mounted Animation are not enabled by this contract.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
@@ -777,5 +782,14 @@ session CAS is acknowledged; failed selection acknowledgement does not
 mark the editor clean or repeat the project write. Explicit retry retries
 that receipt before saving any later in-memory edit. The shared lifetime
 tracks and aborts active project write transactions on pagehide; a
-suspended page cannot acknowledge a later save. This contract is not yet
-enabled in the mounted editor.
+suspended page cannot acknowledge a later save. In shared Calibration the
+receipt is stored atomically with the project revision in its domain
+database. On reload the controller proves either the exact original
+session base or an already committed successor by reconstructing and
+verifying the previous checkpoint digest; it must not rebase a receipt
+onto a different session. A verified pending receipt offers explicit
+`Complete Calibration save` recovery, followed by a new page load.
+Retirement requires a verified pointer and exact domain readback. Unknown
+or conflicting evidence fails closed without a repeated project write.
+This is a two-database recovery protocol, not a cross-database atomic
+transaction.
