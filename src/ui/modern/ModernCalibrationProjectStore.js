@@ -224,12 +224,12 @@
       });
     },lease);
   }
-  function change(db,id,expected,changes,now,forkId=null,lease=null,receiptBase=null){
+  function change(db,id,expected,changes,now,forkId=null,lease=null,receiptBase=null,requireNoReceipt=false){
     model.id(id);
     if(!Number.isSafeInteger(expected)||expected<1)throw RangeError('Invalid expected project revision');
     if(forkId!==null)model.id(forkId);
     const base=receiptBase===null?null:selectionBase(receiptBase);
-    if(base)requireSharedLease(lease);
+    if(base||requireNoReceipt)requireSharedLease(lease);
     const work=(records,summaries,read,finish)=>{
       read(records.get(id),raw=>{
         if(raw===undefined){
@@ -272,12 +272,13 @@
         });
       });
     };
-    if(!base)return stores(db,'readwrite',work,lease);
+    if(!base&&!requireNoReceipt)return stores(db,'readwrite',work,lease);
     return openTransaction(db,[PROJECTS,SUMMARIES,CONTROL],'readwrite',(tx,read,finish)=>{
       const control=tx.objectStore(CONTROL);
       read(control.get(SHARED_SELECTION_KEY),raw=>{
         if(raw!==undefined)throw Error('Shared Calibration receipt unresolved; evidence retained');
         work(tx.objectStore(PROJECTS),tx.objectStore(SUMMARIES),read,result=>{
+          if(!base){finish(result);return;}
           const receipt=selectionReceipt({version:1,base,
             previous:{id,revision:'rev:'+expected,recovery:null},
             current:{id:result.project.id,revision:'rev:'+result.project.revision,recovery:null},
@@ -299,6 +300,13 @@
   }
   function rename(db,id,expected,title,now=Date.now()){
     return update(db,id,expected,{title},now);
+  }
+  // Caller has verified that the shared checkpoint does not retain this
+  // project under the origin-wide auxiliary-operation lock. The domain CAS
+  // also requires receipt absence atomically and does not fork.
+  function renameSharedUnselected(db,id,expected,title,lease,now=Date.now()){
+    requireSharedLease(lease);
+    return change(db,id,expected,{title},now,null,lease,null,true).then(result=>result.project);
   }
   function remove(db,id,expected){
     return removeProject(db,id,expected,null);
@@ -407,7 +415,7 @@
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
-    create,get,list,update,saveOrFork,rename,remove,removeShared,legacy,migrationMarker,adoptLegacy,
+    create,get,list,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
     readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
 }));

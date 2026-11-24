@@ -1406,3 +1406,20 @@ test('shared Calibration removal refuses unresolved receipts and stale revisions
   assert.equal(await store.get(db,A),null);
   assert.equal((await store.list(db)).length,0);
 });
+
+test('unselected shared Calibration rename is atomic, no-fork and refuses pending receipts',async()=>{
+  const db=memoryIndexedDB(),lease=sharedCalibrationLease(),start=project(A),spare=project(B);
+  await store.create(db,start);await store.create(db,spare);
+  const base={revision:9,digest:'sha256:'+'a'.repeat(64)};
+  const saved=await store.saveOrForkWithSelectionReceipt(db,A,1,{title:'Active'},B,1200,base,lease);
+  await assert.rejects(store.renameSharedUnselected(db,B,1,'New title',lease,1300),/receipt unresolved/);
+  assert.deepEqual(await store.get(db,B),spare);
+  await store.retireSharedSelectionReceipt(db,saved.selectionReceipt,lease);
+  const renamed=await store.renameSharedUnselected(db,B,1,'New title',lease,1300);
+  assert.deepEqual(renamed,{...spare,title:'New title',revision:2,updatedAt:1300});
+  await assert.rejects(store.renameSharedUnselected(db,B,1,'Stale',lease,1400),/changed in another tab/);
+  assert.deepEqual(await store.get(db,B),renamed);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  assert.equal(await store.readSharedSelectionReceipt(db),null);
+  assert.equal((await store.list(db)).length,2);
+});

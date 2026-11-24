@@ -299,6 +299,27 @@
       }
       return selectWorkspace(kind,after);
     }
+    // Metadata changes to an unselected auxiliary document must not
+    // advance or invalidate the retained shared reference. The caller holds
+    // the same operation lock through the subsequent domain CAS.
+    async function assertUnselectedDocument(kind,reference){
+      guard(true);
+      check(['calibration','animation'].includes(kind),'auxiliary document kind required');
+      const ref=binding(reference);
+      check(ref&&ref.recovery===null,'verified document reference required');
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&!selectionAttempt&&!recoveryReceipt&&
+        row.draft===null&&['clean','committed'].includes(status),
+        'resolve pending session work before changing unselected document');
+      busy=true;selecting=true;
+      try{
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'auxiliary metadata CAS conflict; reload required');
+      }catch(e){fail(e);throw e;}
+      finally{busy=false;selecting=false;}
+      const selected=binding(row.envelope.documents[kind]);
+      check(!selected||selected.id!==ref.id,'open the retained selected document before renaming');
+      return true;
+    }
     // Must be called inside the same mounted auxiliary-operation lock as
     // selection and domain saves. Clear the durable pointer before allowing
     // destructive domain CRUD, never the other way around.
@@ -362,7 +383,7 @@
       return state();
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
-      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,detachDocument,recoverDocumentSelection,state});
+      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,assertUnselectedDocument,detachDocument,recoverDocumentSelection,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,

@@ -1170,7 +1170,9 @@
       // The opened project is already being edited; reopening it is neither
       // useful nor safe while its live checkpoint may be changing.
       if(!active)action('Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
-      action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection&&(!active||unsaved||!!state?.pending||!!state?.error));
+      action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection&&
+        (active?(unsaved||!!state?.pending||!!state?.error):
+          !sharedSelection.canRenameUnselected?.(entry.id)));
       action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
       card.append(actions);
       const deletion=doc.createElement('button');
@@ -1380,7 +1382,11 @@
       const {storage}=projectActions();
       const active=projectSession?.project()?.id===entry.id;
       if(!active){
-        if(sharedSelection)throw Error('Open the project before renaming it in shared-session preview');
+        if(sharedSelection){
+          if(!sharedSelection.canRenameUnselected?.(entry.id))
+            throw Error('Open the retained selected project before renaming it');
+          return sharedSelection.renameUnselected({id:entry.id,revision:'rev:'+entry.revision,recovery:null},title);
+        }
         return storage.rename(env.indexedDB,entry.id,entry.revision,title);
       }
       if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
@@ -1417,7 +1423,8 @@
       }
     }
     async function renameFromProjects(entry){
-      if(projectListBusy||sharedSelection&&projectSession?.project()?.id!==entry.id)return;
+      if(projectListBusy||sharedSelection&&projectSession?.project()?.id!==entry.id&&
+         !sharedSelection.canRenameUnselected?.(entry.id))return;
       const title=env.prompt('Rename Calibration Project',entry.title);
       if(title===null||title===entry.title)return;
       projectListBusy=true;renderProjects();

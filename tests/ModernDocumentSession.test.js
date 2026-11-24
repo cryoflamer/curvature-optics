@@ -381,3 +381,20 @@ test('fresh receipt recovery rejects competing selection and changed receipt wit
   await assert.rejects(b.recoverDocumentSelection(offer),/CAS conflict/);
   assert.equal(retired,0);assert.deepEqual(b.state().selectionRecovery,offer);
 });
+
+test('unselected auxiliary metadata guard preserves retained bindings and rejects stale controllers',async()=>{
+  const f=atomicControllerFixture({canonicalBindings:true});
+  const readDocument=async(kind,id)=>({kind,id,revision:'rev:1'});
+  const a=f.open({readDocument});await a.open();
+  const selected={id:'cal-a',revision:'rev:1',recovery:null},other={id:'cal-b',revision:'rev:1',recovery:null};
+  await a.selectWorkspace('calibration',selected);
+  const before=a.state().row;
+  assert.equal(await a.assertUnselectedDocument('calibration',other),true);
+  assert.deepEqual(a.state().row,before);
+  await assert.rejects(a.assertUnselectedDocument('calibration',selected),/retained selected document/);
+  await a.selectWorkspace('scene');
+  await assert.rejects(a.assertUnselectedDocument('calibration',selected),/retained selected document/);
+  const b=f.open({readDocument});await b.open();await b.selectWorkspace('calibration',other);
+  await assert.rejects(a.assertUnselectedDocument('calibration',other),/CAS conflict/);
+  assert.deepEqual(b.state().row.envelope.documents.calibration,other);
+});

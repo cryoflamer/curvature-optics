@@ -1975,6 +1975,28 @@
       verify:function(ref){return coordinate(()=>controller.captureSelectionBase('calibration',ref));},
       leave:function(mode){return coordinate(()=>controller.selectWorkspace(mode));},
       recover:function(receipt){return coordinate(()=>controller.recoverDocumentSelection(receipt));},
+      canRenameUnselected:function(id){
+        var s=controller.state();
+        return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy&&
+          s.row.envelope.documents.calibration?.id!==id;
+      },
+      renameUnselected:async function(ref,title){
+        var storage=root.CurvatureModernCalibrationProjectStore;
+        try{
+          return await coordinate(async function(){
+            lease.check(true);
+            await controller.assertUnselectedDocument('calibration',ref);
+            lease.check(true);
+            var saved=await storage.renameSharedUnselected(root.indexedDB,ref.id,
+              Number(ref.revision.slice(4)),title,lease);
+            lease.check(true);
+            return saved;
+          });
+        }catch(error){
+          if(controller.state().status==='failed'&&experimentPreview.status!=='suspended')previewFailure(error);
+          throw error;
+        }
+      },
       remove:async function(ref){
         var detached=false,storage=root.CurvatureModernCalibrationProjectStore;
         try{

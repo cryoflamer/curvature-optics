@@ -775,9 +775,13 @@ The Calibration presentation scope is initialized from verified legacy
 preferences once and subsequently restored from its own shared IndexedDB
 row. Active project Rename uses the same captured save/receipt path as
 editor changes; later pending snapshots preserve captured metadata.
-Inactive Rename remains guarded until the project is opened. Apply,
-legacy adoption, Image Library navigation and mounted Animation are not
-enabled by this contract.
+An unselected project can be renamed under the same operation lock after
+verifying the shared checkpoint, then using a domain metadata-only CAS
+that atomically requires receipt absence. This does not advance the shared
+pointer or fork a stale record. A retained selected reference (including
+while the physical workspace is selected) must be opened before Rename;
+it uses the active receipt path instead. Apply, legacy adoption, Image
+Library navigation and mounted Animation are not enabled by this contract.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
