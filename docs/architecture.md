@@ -611,12 +611,13 @@ snapshot, History and independent A/B physics remain untouched.
 ### Headless experiment session controller
 
 `ModernDocumentSession.createExperimentController()` coordinates the
-existing owned session and working-copy adapters without a live UI consumer.
+shared metadata and working-copy adapters used by the document preview.
 Explicit external intent skips private reads. An unbound session may bind
 only a verified migration candidate whose revision matches the durable head.
-Migration accepts the same captured tab lease for transaction tracking and
-ownership checks. Existing non-experiment workspace/recovery bindings are
-not replaced by this controller.
+The controllers require the captured shared page lifetime and fixed working
+copy identity; the recoverable controller always coordinates operations.
+Historical tab envelopes remain readable for migration, not active control.
+Existing non-experiment workspace/recovery bindings are not replaced.
 
 Opening an existing binding reads its exact acknowledged immutable revision
 and the current domain head. Divergence enters `recovering`, exposing both

@@ -190,15 +190,14 @@
         return action();
       });
   }
-  const sharedLease=lease=>lease&&lease.sessionId===SHARED_ID&&!('tabId' in lease);
   // Explicit Scene/Compare orchestration; the caller owns activation and
   // supplies the same captured lease to both adapters. No UI/URL effects.
   function createExperimentController({lease,sessions,working,prepare,isCurrent}={}){
     check(lease&&typeof lease.check==='function'&&sessions&&working&&
       typeof prepare==='function'&&typeof isCurrent==='function',
       'owned experiment controller dependencies required');
-    const shared=sharedLease(lease),tabId=shared?null:token(lease.tabId,'tab ID',128);
-    check(working.id===(shared?'shared-experiment':'working-'+tabId),
+    check(lease.sessionId===SHARED_ID&&!('tabId' in lease),'shared document lifetime required');
+    check(working.id==='shared-experiment',
       'working-copy identity mismatch');
     let status='idle',busy=false,tracker=null,row=null,head=null,bound=null,
       failure=null,offer=null,unsavedAfterAttempt=false;
@@ -216,8 +215,7 @@
         'invalid session receipt');
       const frame=value.revision===0?null:normalize(value.envelope);
       check(value.revision===0?value.envelope===null:
-        shared?frame.version===SHARED_VERSION&&frame.sessionId===SHARED_ID:
-          frame.version===VERSION&&frame.tabId===tabId,'session identity mismatch');
+        frame.version===SHARED_VERSION&&frame.sessionId===SHARED_ID,'session identity mismatch');
       return value.revision===0?{revision:0,envelope:null}:
         {revision:value.revision,envelope:normalize(value.envelope)};
     }
@@ -295,7 +293,7 @@
           'invalid migration candidate');
         const current=checkedDocument(await working.read(),candidate.document.revision);
         guard(true);
-        const envelope=select(result.saved.envelope||(shared?emptyShared():empty(tabId)),
+        const envelope=select(result.saved.envelope||emptyShared(),
           candidate.workspace,candidate.document);
         const saved=await writeSession(envelope,result.saved.revision);
         activate(saved,current);
@@ -384,9 +382,7 @@
   // to the last acknowledged document (including during a draft write).
   function createRecoverableExperimentController(options={}){
     const {lease,sessions,working,isCurrent,coordinate}=options;
-    const shared=sharedLease(lease);
-    check(!shared||typeof coordinate==='function','shared experiment operation coordinator required');
-    const coordinated=action=>shared?coordinate(action):action();
+    check(typeof coordinate==='function','shared experiment operation coordinator required');
     check(working&&['readRecovery','stageRecovery','retireRecovery'].every(
       name=>typeof working[name]==='function'),'working recovery adapter required');
     const core=createExperimentController(options);
@@ -414,7 +410,7 @@
     function checkedDraft(value){
       if(value===null)return null;
       check(value&&value.kind==='experiment'&&value.documentId===working.id&&
-        value.id===(shared?'shared-experiment-recovery':'recovery-'+lease.tabId)&&value.experiment&&
+        value.id==='shared-experiment-recovery'&&value.experiment&&
         typeof value.revision==='string'&&typeof value.baseRevision==='string',
         'working recovery identity mismatch');
       token(value.revision,'draft revision');token(value.baseRevision,'draft base revision');
@@ -433,16 +429,15 @@
     }
     function startPump(){
       if(pump||retiring||commitDone||checkpointError||!latest||latest.generation===durableGeneration)return;
-      // Legacy preview may stage concurrently with document CAS. Shared
-      // saves defer later edits until the new base is acknowledged.
+      // Saves defer later edits until the new base is acknowledged.
       // Coalesce edits that arrived while the prior checkpoint was in flight.
       pump=(async()=>{
         while(latest&&latest.generation!==durableGeneration){
           guard(true);
           const job=latest,base=core.state().bound;
           check(base,'acknowledged document required for recovery');
-          const saved=await coordinated(async()=>{
-            if(shared)await verifySharedCurrent();
+          const saved=await coordinate(async()=>{
+            await verifySharedCurrent();
             return checkedDraft(await working.stageRecovery(job.experiment,base.revision,
               draft?draft.revision:null));
           });
@@ -516,7 +511,7 @@
       check(!busy,'recovery controller operation pending');busy=true;
       try{
         if(explicitIntent)await core.open({explicitIntent:true});
-        else await coordinated(async()=>{
+        else await coordinate(async()=>{
           await core.open();
           await inspectDraft();
         });
@@ -528,7 +523,7 @@
       check(!busy&&!checkpointError&&!offer,'resolve recovery before accepting head');
       busy=true;
       try{
-        await coordinated(async()=>{
+        await coordinate(async()=>{
           guard(true);
           const current=checkedDraft(await working.readRecovery());guard();
           check(same(current,draft),'working recovery changed; evidence retained');
@@ -542,7 +537,7 @@
         'explicit current draft offer required');
       busy=true;
       try{
-        return await coordinated(async()=>{
+        return await coordinate(async()=>{
         guard(true);
         const current=core.state(),saved=await sessions.read();guard();
         check(same(saved,current.row),'draft session changed; evidence retained');
@@ -568,9 +563,9 @@
         await flushCheckpoint();
         const job=latest,savedDraft=draft;
         check(job&&savedDraft&&job.generation===durableGeneration,'draft acknowledgement required');
-        if(shared)commitDone=new Promise(resolve=>{finishCommit=resolve;});
-        await coordinated(async()=>{
-        if(shared)await verifySharedCurrent();
+        commitDone=new Promise(resolve=>{finishCommit=resolve;});
+        await coordinate(async()=>{
+        await verifySharedCurrent();
         const before=core.state().bound;
         // Legacy migration may preserve a different JSON property order.
         // The existing core still gets an exact no-op snapshot in that case.
@@ -579,7 +574,7 @@
         guard(true);
         // A newer input can arrive during shared preflight, before the
         // core captures its save token. Keep it dirty even in that case.
-        if(shared&&latest!==job&&['clean','committed'].includes(core.state().status))
+        if(latest!==job&&['clean','committed'].includes(core.state().status))
           core.markDirty();
         // A later edit may already be durable or still in flight. Never
         // retire any draft on behalf of this older document completion.
@@ -592,11 +587,11 @@
         }
         check(!checkpointError,checkpointError||'working recovery failed');
         });
-      }catch(error){if(shared||core.state().status!=='failed')fail(error);throw error;}
+      }catch(error){fail(error);throw error;}
       finally{
         if(commitDone){const done=finishCommit;commitDone=null;finishCommit=null;done();}
         busy=false;
-        if(shared)startPump();
+        startPump();
       }
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,recoveryOffer,

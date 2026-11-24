@@ -143,15 +143,15 @@ test('recovery pointer is retired only on acknowledged replacement',async()=>{
   assert.equal(m.state().session.documents.experiment.recovery,null);
 });
 
-function controllerFixture({existing=true,shared=false}={}){
-  const tabId='tab-a',id=shared?'shared-experiment':'working-'+tabId;
+function controllerFixture({existing=true}={}){
+  const id='shared-experiment';
   const make=(revision,value)=>({kind:'experiment',id,revision,experiment:{value}});
   const revisions=new Map([['r1',make('r1',1)]]);
   let latest='r1',current=existing?{revision:1,
-    envelope:contract.select(shared?contract.emptyShared():contract.empty(tabId),'scene',{id,revision:'r1',recovery:null})}:
+    envelope:contract.select(contract.emptyShared(),'scene',{id,revision:'r1',recovery:null})}:
     {revision:0,envelope:null};
   const faults={session:null,domain:null,valid:true,reads:0,prepares:0};
-  const lease={...(shared?{sessionId:'shared'}:{tabId}),check(){if(!faults.valid)throw Error('lease lost');}};
+  const lease={sessionId:'shared',check(){if(!faults.valid)throw Error('lease lost');}};
   const sessions={async read(){faults.reads++;return current;},
     async write(envelope,expected){
       if(current.revision!==expected)throw Error('foreign session CAS');
@@ -177,6 +177,14 @@ function controllerFixture({existing=true,shared=false}={}){
     }});
   return {makeController,faults,working,sessions,lease,row:()=>current};
 }
+test('controllers reject obsolete tab capabilities before reading private state',()=>{
+  const f=controllerFixture(),options={lease:f.lease,sessions:f.sessions,working:f.working,
+    prepare:async()=>{throw Error('unexpected migration');},isCurrent:()=>true};
+  assert.throws(()=>contract.createExperimentController({...options,lease:{tabId:'old',check(){}}}),/shared document lifetime required/);
+  assert.throws(()=>contract.createExperimentController({...options,working:{...f.working,id:'working-old'}}),/working-copy identity mismatch/);
+  assert.throws(()=>contract.createRecoverableExperimentController(options),/coordinator required/);
+  assert.equal(f.faults.reads,0);
+});
 test('controller binds only verified migration and external intent skips private reads',async()=>{
   const f=controllerFixture({existing:false}),external=f.makeController();
   await external.open({explicitIntent:true});
@@ -265,8 +273,8 @@ test('controller verifies an unchanged edit without creating a revision',async()
 });
 
 
-function recoverableFixture({shared=false,existing=true}={}){
-  const f=controllerFixture({shared,existing}),{working,sessions,lease}=f;
+function recoverableFixture({existing=true}={}){
+  const f=controllerFixture({existing}),{working,sessions,lease}=f;
   let tail=Promise.resolve();
   const coordinate=contract.sharedExperimentCoordinator({request(name,options,action){
     assert.equal(name,'curvature-modern-shared-experiment-operation');
@@ -282,8 +290,8 @@ function recoverableFixture({shared=false,existing=true}={}){
     faults.staged.push(experiment.value);
     if(faults.stage)await faults.stage(experiment);
     assert.equal(expected,draft?draft.revision:null);
-    if(shared)assert.equal((await working.read()).revision,base,'shared draft must use HEAD');
-    draft={kind:'experiment',id:shared?'shared-experiment-recovery':'recovery-'+lease.tabId,documentId:working.id,
+    assert.equal((await working.read()).revision,base,'shared draft must use HEAD');
+    draft={kind:'experiment',id:'shared-experiment-recovery',documentId:working.id,
       revision:'draft-'+(++number),baseRevision:base,experiment:copy(experiment)};
     return copy(draft);
   };
@@ -294,7 +302,7 @@ function recoverableFixture({shared=false,existing=true}={}){
     faults.retired.push(expected);draft=null;return true;
   };
   const make=()=>contract.createRecoverableExperimentController({lease,sessions,working,
-    ...(shared?{coordinate}:{}),isCurrent:()=>f.faults.valid,prepare:async()=>{
+    coordinate,isCurrent:()=>f.faults.valid,prepare:async()=>{
       if(existing)throw Error('unexpected migration');
       return {status:'verified',workspace:'scene',
         document:{id:working.id,revision:'r1',recovery:null}};
@@ -333,8 +341,13 @@ test('recoverable controller stages before CAS and preserves later edits during 
     return original(...args);
   };
   c.markDirty({value:2});const saving=c.save();await entered.promise;
-  c.markDirty({value:3});await c.flushCheckpoint();
-  const later=f.draft();gate.resolve();await saving;
+  c.markDirty({value:3});
+  assert.equal(c.state().checkpoint,'pending');
+  assert.equal(f.draft().experiment.value,2);
+  gate.resolve();await saving;await c.flushCheckpoint();
+  const later=f.draft();
+  assert.equal(later.baseRevision,'r2');
+  assert.equal(later.experiment.value,3);
   assert.equal(c.state().status,'dirty');
   assert.equal(f.row().envelope.documents.experiment.revision,'r2');
   assert.deepEqual(f.draft(),later);assert.deepEqual(f.recovery.retired,[]);
@@ -370,18 +383,21 @@ test('recoverable controller retains draft after domain failure and reconciles d
   f.faults.session=null;await retry.acceptHead(retry.recoveryOffer());
   assert.equal(retry.state().status,'clean');assert.equal(f.draft(),null);
 });
-test('recoverable controller does not erase newer draft when acknowledging divergent head',async()=>{
+test('recoverable controller retains newer in-memory input when session CAS fails',async()=>{
   const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
   const original=f.working.write;
   f.working.write=async(...args)=>{const receipt=await original(...args);
-    c.markDirty({value:3});await c.flushCheckpoint();return receipt;};
+    c.markDirty({value:3});return receipt;};
   f.faults.session='before';await assert.rejects(c.save(),/session failure/);
+  assert.deepEqual(c.state().latestInput,{value:3});
+  assert.equal(f.draft().experiment.value,2);
   const reopened=f.make();await reopened.open();
   assert.equal(reopened.draftOffer(),null);
   f.faults.session=null;await reopened.acceptHead(reopened.recoveryOffer());
-  assert.equal(reopened.state().status,'recovering');
+  assert.equal(reopened.state().status,'clean');
   assert.equal(reopened.state().bound.experiment.value,2);
-  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:3});
+  assert.equal(f.draft(),null);
+  assert.deepEqual(c.state().latestInput,{value:3});
 });
 test('recoverable controller fails closed on checkpoint failure, retains input and external priority',async()=>{
   const f=recoverableFixture(),external=f.make();await external.open({explicitIntent:true});
@@ -428,7 +444,7 @@ test('shared document envelope uses fixed identity and retains independent domai
 });
 
 test('shared recovery controller coordinates checkpoint, commit and later edits without a tab ID',async()=>{
-  const f=recoverableFixture({shared:true,existing:false}),a=f.make(),b=f.make();
+  const f=recoverableFixture({existing:false}),a=f.make(),b=f.make();
   await a.open();await b.open();
   assert.equal(f.row().envelope.sessionId,'shared');
   const gate=deferredRecovery(),entered=deferredRecovery(),write=f.working.write;
@@ -454,7 +470,7 @@ test('shared recovery controller coordinates checkpoint, commit and later edits 
   assert.deepEqual(fresh.state().bound.experiment,{value:3});
 });
 test('shared controller rejects stale draft owner even before document revision advances',async()=>{
-  const f=recoverableFixture({shared:true}),a=f.make(),b=f.make();
+  const f=recoverableFixture(),a=f.make(),b=f.make();
   await a.open();await b.open();
   a.markDirty({value:2});await a.flushCheckpoint();
   b.markDirty({value:3});await assert.rejects(b.flushCheckpoint(),/shared recovery changed/);
@@ -464,7 +480,7 @@ test('shared controller rejects stale draft owner even before document revision 
   assert.equal(f.row().revision,2);
 });
 test('shared controller retains pending input if the session acknowledgement fails',async()=>{
-  const f=recoverableFixture({shared:true}),a=f.make();await a.open();
+  const f=recoverableFixture(),a=f.make();await a.open();
   a.markDirty({value:2});
   const original=f.working.write;
   f.working.write=async(...args)=>{const receipt=await original(...args);a.markDirty({value:3});return receipt;};

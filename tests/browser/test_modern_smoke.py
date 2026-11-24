@@ -10690,6 +10690,12 @@ class ModernBrowserSmoke(unittest.TestCase):
                 coordinate:D.sharedExperimentCoordinator(navigator.locks),
                 prepare:()=>S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
                     codec:C,crypto,explicitIntent:false,isCurrent:()=>true})};
+            for(const make of [D.createExperimentController,D.createRecoverableExperimentController]){
+                let rejected=false;
+                try{make({...options,lease:{tabId:'retired',check(){}}});}
+                catch(error){rejected=error.message.includes('shared document lifetime required');}
+                if(!rejected)throw Error('obsolete tab controller accepted');
+            }
             window.sharedControllerWorking=working;
             window.sharedControllerOptions=options;
             window.sharedController=D.createRecoverableExperimentController(options);
