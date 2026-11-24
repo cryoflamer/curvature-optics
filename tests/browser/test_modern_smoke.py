@@ -11382,12 +11382,12 @@ class ModernBrowserSmoke(unittest.TestCase):
     def test_shared_document_session_preview_shared_ui_layout_across_tabs(self):
         """The document owns active mode; shared registry owns only presentation."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
-        self.page.add_init_script("""() => {
+        self.page.add_init_script("""(() => {
             const key='curvature-modern-application-preferences-v1';
             if(localStorage.getItem(key)===null)localStorage.setItem(key,JSON.stringify({
                 version:1,workspace:{mode:'animation',sceneTab:'Camera',compareTab:'Camera',
                     sections:{'scene.surface.geometry':false,'compare.surface.geometry':true}}}));
-        }""")
+        })()""")
         self.page.goto(url,wait_until='load')
         ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
             CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
@@ -11395,15 +11395,23 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         read="""async () => {
             const store=CurvatureModernUiSessionStore.create(window);
+            const D=CurvatureModernDocumentSession;
+            store.sharedDocumentSessions(D);
+            const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:store.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:D});
+            const durable=await checkpoint.read();
             return {scene:await store.read('workspace',{workspace:'scene'}),
                 compare:await store.read('workspace',{workspace:'compare'}),
                 doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                durableDoc:{revision:durable.revision,envelope:durable.envelope,draft:durable.draft},
                 ui:CurvatureModernApp.getWorkspaceUiRegistryPreview().selection,
                 local:localStorage.getItem(CurvatureModernApplicationPreferences.STORAGE_KEY),
                 tab:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)};
         }"""
         initial=self.page.evaluate(read)
         self.assertEqual(initial['ui']['mode'],'scene')
+        self.assertEqual(json.loads(initial['local'])['workspace']['mode'],'animation')
+        self.assertFalse(json.loads(initial['local'])['workspace']['sections']['scene.surface.geometry'])
         self.assertEqual(initial['scene']['revision'],0)
         self.assertEqual(initial['compare']['revision'],0)
         self.assertIsNone(initial['tab'])
@@ -11413,13 +11421,23 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.wait_for_function(ready,timeout=30000)
             self.page.locator('#ModernSettingsSurface').click()
             self.page.locator('#ModernSceneSurfaceGeometrySection summary').click()
-            self.page.wait_for_function("""async () => {
-                const row=await CurvatureModernUiSessionStore.create(window).read('workspace',{workspace:'scene'});
-                return row.envelope?.values['workspace.section.surface.geometry']?.value===true&&
-                    row.envelope.values['workspace.settingsTab'].value==='Surface';
-            }""",timeout=30000)
+            # Poll inside the async evaluation; do not let a Promise itself
+            # satisfy wait_for_function before its resolved boolean is known.
+            wait_scope="""async ({workspace,value}) => {
+                const store=CurvatureModernUiSessionStore.create(window),end=Date.now()+15000;
+                while(Date.now()<end){
+                    const row=await store.read('workspace',{workspace});
+                    if(row.revision===2&&row.envelope?.values['workspace.section.surface.geometry']?.value===value&&
+                       row.envelope.values['workspace.settingsTab'].value==='Surface')return row;
+                    await new Promise(resolve=>setTimeout(resolve,25));
+                }
+                throw Error('Shared workspace snapshot was not acknowledged: '+workspace);
+            }"""
+            self.page.evaluate(wait_scope,{'workspace':'scene','value':True})
             scene=self.page.evaluate(read)
             self.assertEqual(scene['doc'],initial['doc'],'presentation must not change the physical revision')
+            self.assertEqual(scene['durableDoc'],initial['durableDoc'])
+            self.assertTrue(scene['scene']['envelope']['values']['workspace.section.surface.geometry']['value'])
             self.assertEqual(scene['local'],initial['local'])
             self.assertNotIn('workspace.active',scene['scene']['envelope']['values'])
             # An already open second tab cannot silently overwrite a newer scope.
@@ -11439,20 +11457,24 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.locator('#ModernSettingsSurface').click()
             expect(self.page.locator('#ModernCompareSurfaceGeometrySection')).to_be_visible()
             self.page.locator('#ModernCompareSurfaceGeometrySection summary').click()
-            self.page.wait_for_function("""async () => {
-                const row=await CurvatureModernUiSessionStore.create(window).read('workspace',{workspace:'compare'});
+            self.page.evaluate(wait_scope,{'workspace':'compare','value':False})
+            self.page.wait_for_function("""() => {
                 const doc=CurvatureModernApp.getExperimentSessionPreview().controller;
-                return row.envelope?.values['workspace.section.surface.geometry']?.value===false&&
-                    row.envelope.values['workspace.settingsTab'].value==='Surface'&&
-                    doc.status==='committed'&&doc.row.envelope.workspace==='compare';
+                return doc.status==='committed'&&!doc.busy&&doc.draft===null&&
+                    doc.latestInput===null&&doc.row.envelope.workspace==='compare';
             }""",timeout=30000)
             before=self.page.evaluate(read)
+            self.assertEqual(before['doc']['envelope']['workspace'],'compare')
+            self.assertEqual(before['durableDoc'],{**before['doc'],'draft':None})
+            self.assertFalse(before['compare']['envelope']['values']['workspace.section.surface.geometry']['value'])
             self.assertEqual(before['local'],initial['local'])
             self.assertIsNone(before['tab'])
             other.reload(wait_until='load')
             other.wait_for_function(ready,timeout=30000)
             after=other.evaluate(read)
-            self.assertEqual(after,before,'F5 in another tab must read the same document and UI rows without writing')
+            for key in before:
+                self.assertEqual(after[key],before[key],
+                    'F5 must read the same acknowledged state without writing: '+key)
             self.assertFalse(other.locator('#ModernCompareSurfaceGeometrySection').evaluate('(node)=>node.open'))
             expect(other.locator('#ModernSettingsSurface')).to_have_attribute('aria-selected','true')
             other.locator('#ModernSceneTab').click()
