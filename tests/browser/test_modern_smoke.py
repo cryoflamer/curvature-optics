@@ -11318,7 +11318,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(second['remaining'])
 
     def test_shared_document_session_preview_live_migration_and_reload(self):
-        """Mounted shared session, explicit initial selection, stale page and global F5."""
+        """Mounted atomic shared session, explicit initial selection, stale page and global F5."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11404,7 +11404,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
 
     def test_document_session_preview_live_scene_compare_edits_and_f5(self):
-        """Real UI save/restore without implicit URL or legacy checkpoint writes."""
+        """Real atomic UI save/restore without implicit URL or legacy checkpoint writes."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11446,11 +11446,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             local:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)
         })"""),before)
         self.assertEqual(self.page.url,url)
+        self.assertEqual(self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave;
+            return new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readonly');
+                    const q=tx.objectStore(S.STORE).getAllKeys();
+                    tx.oncomplete=()=>{db.close();resolve(q.result.sort());};};
+            });
+        }"""),['current','shared-checkpoint'])
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
 
     def test_document_session_preview_recovery_ui_preserves_both_revisions(self):
-        """Inject session CAS failure after the real working-copy commit."""
+        """Failed atomic promotion leaves the committed payload and durable draft intact."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11465,8 +11474,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.evaluate("""() => {
             const put=IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put=function(value,...args){
-                if(this.name==='sessions'&&value?.id==='shared-document')
-                    throw Error('simulated document session CAS failure');
+                if(args[0]==='shared-checkpoint'&&value.draft===null)
+                    throw Error('simulated atomic promotion failure');
                 return put.call(this,value,...args);
             };
         }""")
@@ -11476,40 +11485,37 @@ class ModernBrowserSmoke(unittest.TestCase):
             window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",timeout=30000)
         panel=self.page.locator('#ModernDocumentSessionRecovery')
         expect(panel).to_be_visible()
-        expect(panel.get_by_role('alert')).to_contain_text('simulated document session CAS failure')
+        expect(panel.get_by_role('alert')).to_contain_text('simulated atomic promotion failure')
         expect(self.page.locator('#ModernCompareTab')).to_be_disabled()
         with self.page.expect_download() as event:
             self.page.locator('#ModernDocumentSessionDownload').click()
         evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
         self.assertEqual(evidence['controller']['bound'],before['bound'])
         self.assertEqual(evidence['live']['scene']['camera']['Height'],old+7)
-        self.assertEqual(evidence['controller']['head']['experiment']['scene']['camera']['Height'],old+7)
+        self.assertEqual(evidence['controller']['draft']['experiment']['scene']['camera']['Height'],old+7)
         self.page.once('dialog',lambda dialog:dialog.accept())
         self.page.reload(wait_until='load')
         self.page.wait_for_function("""() =>
             window.CurvatureModernApp?.getExperimentSessionPreview().status==='recovering'""",timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
         expect(panel).to_be_visible()
-        expect(self.page.locator('#ModernDocumentSessionAcceptHead')).to_be_visible()
-        expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_be_hidden()
-        self.page.once('dialog',lambda dialog:dialog.dismiss())
-        self.page.locator('#ModernDocumentSessionAcceptHead').click()
+        expect(self.page.locator('#ModernDocumentSessionAcceptHead')).to_be_hidden()
+        restore=self.page.locator('#ModernDocumentSessionRestoreDraft')
+        expect(restore).to_be_visible()
         self.assertEqual(self.page.evaluate(
-            'CurvatureModernApp.getExperimentSessionPreview().controller.row'),before['row'])
-        self.page.once('dialog',lambda dialog:dialog.accept())
-        with self.page.expect_navigation(wait_until='load'):
-            self.page.locator('#ModernDocumentSessionAcceptHead').click()
-        self.page.wait_for_function("""() =>
-            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+            'CurvatureModernApp.getExperimentSessionPreview().controller.bound'),before['bound'])
+        restore.click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
         after=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
-        self.assertEqual(after['row']['revision'],before['row']['revision']+1)
+        self.assertEqual(after['row']['revision'],before['row']['revision']+2)
         self.assertEqual(after['bound']['experiment']['scene']['camera']['Height'],old+7)
         self.assertIsNone(after['draft'])
         expect(panel).to_be_hidden()
         self.assertEqual(self.page.url,url)
 
     def test_document_session_preview_duplicate_tabs_and_explicit_shared_url(self):
-        """Historical preview URL aliases the shared session; copied tab token is ignored."""
+        """Historical preview URL aliases the atomic session; copied tab token is ignored."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11556,7 +11562,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             child.close()
 
     def test_document_session_preview_existing_working_url_does_not_fall_back_on_reload(self):
-        """Both pinned local working entries restore the latest shared state, not the old URL payload."""
+        """Both pinned local working entries restore the latest atomic state, not the old URL payload."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11654,7 +11660,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Unsaved edits recoverable in IndexedDB',timeout=30000)
         staged=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
-        self.assertEqual(staged['row'],before['row'])
+        self.assertEqual(staged['row']['envelope'],before['row']['envelope'])
+        self.assertGreater(staged['row']['revision'],before['row']['revision'])
         self.assertEqual(staged['head'],before['head'])
         self.assertEqual(self.page.url,url)
         self.page.once('dialog',lambda dialog:dialog.accept())
@@ -11679,7 +11686,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Unsaved edits restored from IndexedDB',timeout=30000)
         loaded=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
-        self.assertEqual(loaded['row'],before['row'])
+        self.assertEqual(loaded['row'],staged['row'])
         self.assertEqual(loaded['draft'],staged['draft'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+7)
@@ -11693,7 +11700,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'Document session saved',timeout=30000)
         saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
         self.assertIsNone(saved['draft'])
-        self.assertEqual(saved['row']['revision'],before['row']['revision']+1)
+        self.assertGreater(saved['row']['revision'],staged['row']['revision'])
         self.assertEqual(saved['row']['envelope']['workspace'],'compare')
         self.page.reload(wait_until='load')
         self.page.wait_for_function("""() =>
@@ -11714,11 +11721,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.select_shared_preview_current()
         before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
         self.page.evaluate("""() => {
-            const add=IDBObjectStore.prototype.add;
-            IDBObjectStore.prototype.add=function(value,...args){
-                if(typeof args[0]==='string'&&args[0].startsWith('working-recovery:'))
+            const put=IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put=function(value,...args){
+                if(args[0]==='shared-checkpoint'&&value.draft!==null)
                     throw Error('simulated recovery checkpoint quota');
-                return add.call(this,value,...args);
+                return put.call(this,value,...args);
             };
         }""")
         self.page.locator('#ModernHeight').fill(str(old+7))
@@ -11739,7 +11746,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(evidence['live']['scene']['camera']['Height'],old+7)
 
     def test_document_session_preview_interrupted_migration_retries_selected_source(self):
-        """A failed first shared binding retains the candidate and retries exact source."""
+        """A failed atomic initialization retains the candidate and retries exact source."""
         self.open_modern()
         expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
         old=self.page.evaluate('CurvatureModernApp.getModel().Height')
@@ -11752,18 +11759,18 @@ class ModernBrowserSmoke(unittest.TestCase):
         choice=self.page.locator('#ModernDocumentSessionMigrationChoices button').filter(has_text='Use idb · current')
         expect(choice).to_be_visible(timeout=30000)
         self.page.evaluate("""() => {
-            const put=IDBObjectStore.prototype.put;window.originalSessionPut=put;
-            IDBObjectStore.prototype.put=function(value,...args){
-                if(this.name==='sessions'&&value?.id==='shared-document')
+            const add=IDBObjectStore.prototype.add;window.originalSessionAdd=add;
+            IDBObjectStore.prototype.add=function(value,...args){
+                if(args[0]==='shared-checkpoint')
                     throw Error('simulated shared binding failure');
-                return put.call(this,value,...args);
+                return add.call(this,value,...args);
             };
         }""")
         self.page.once('dialog',lambda dialog:dialog.accept())
         choice.click()
         expect(self.page.locator('#ModernDocumentSessionRecoveryStatus')).to_contain_text(
             'simulated shared binding failure',timeout=30000)
-        self.page.evaluate("() => { IDBObjectStore.prototype.put=window.originalSessionPut; }")
+        self.page.evaluate("() => { IDBObjectStore.prototype.add=window.originalSessionAdd; }")
         self.select_shared_preview_current()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.revision'),1)

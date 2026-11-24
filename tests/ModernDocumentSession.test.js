@@ -493,3 +493,61 @@ test('shared controller retains pending input if the session acknowledgement fai
   const fresh=f.make();await fresh.open();await fresh.acceptHead(fresh.recoveryOffer());
   assert.equal(fresh.state().status,'clean');
 });
+
+function atomicControllerFixture(){
+  const copy=v=>JSON.parse(JSON.stringify(v));
+  const base={display:{mode:'scene'},height:1};
+  let durable={revision:1,envelope:contract.select(contract.emptyShared(),'scene',
+    {id:'shared-experiment',revision:'checkpoint:1',recovery:null}),experiment:base,draft:null,digest:'initial'};
+  let pause=null;
+  function open(){
+    let seen;
+    const checkpoint={
+      async read(){seen=copy(durable);return copy(seen);},
+      async stage(experiment,revision){
+        if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
+        durable={...durable,revision:revision+1,draft:copy(experiment),digest:'stage:'+revision};
+        seen=copy(durable);return copy(seen);
+      },
+      async promote(revision){
+        if(pause)await pause;
+        if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
+        durable={revision:revision+1,envelope:contract.select(durable.envelope,durable.draft.display.mode,
+          {id:'shared-experiment',revision:'checkpoint:'+(revision+1),recovery:null}),
+          experiment:durable.draft,draft:null,digest:'promote:'+revision};
+        seen=copy(durable);return copy(seen);
+      }};
+    return contract.createAtomicExperimentController({lease:{sessionId:'shared',check(){}},checkpoint,
+      prepare:()=>{throw Error('unexpected migration');},isCurrent:()=>true});
+  }
+  return {base,open,hold(){let release;pause=new Promise(resolve=>{release=resolve;});return ()=>{pause=null;release();};}};
+}
+test('atomic controller coalesces later edits during promotion and rejects stale writer',async()=>{
+  const f=atomicControllerFixture(),a=f.open(),b=f.open();
+  await a.open();await b.open();
+  const first={...f.base,height:2},last={...f.base,height:3,display:{mode:'compare'}};
+  a.markDirty(first);await a.flushCheckpoint();
+  const release=f.hold(),pending=a.save();
+  while(a.state().status!=='saving')await Promise.resolve();
+  a.markDirty(last);release();await pending;await a.flushCheckpoint();
+  assert.equal(a.state().status,'dirty');
+  assert.deepEqual(a.state().bound.experiment,first);
+  assert.deepEqual(a.state().draft.experiment,last);
+  await a.save();
+  assert.equal(a.state().status,'committed');assert.equal(a.state().draft,null);
+  assert.deepEqual(a.state().bound.experiment,last);
+  b.markDirty({...f.base,height:9});
+  await assert.rejects(b.flushCheckpoint(),/CAS conflict/);
+  assert.equal(b.state().latestInput.height,9);
+  const c=f.open();await c.open();assert.deepEqual(c.state().bound.experiment,last);
+});
+test('atomic controller explicitly restores a durable draft without changing the committed payload',async()=>{
+  const f=atomicControllerFixture(),a=f.open();await a.open();
+  const edit={...f.base,height:2};a.markDirty(edit);await a.flushCheckpoint();
+  const b=f.open();await b.open();
+  assert.equal(b.state().status,'recovering');
+  assert.deepEqual(b.state().bound.experiment,f.base);
+  const offer=b.draftOffer();assert.deepEqual(await b.loadDraft(offer),edit);
+  assert.equal(b.state().status,'dirty');await b.save();
+  assert.deepEqual(b.state().bound.experiment,edit);assert.equal(b.state().draft,null);
+});

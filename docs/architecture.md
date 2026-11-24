@@ -612,9 +612,16 @@ transaction; localStorage is checked synchronously before put and on readback.
 There is no cross-storage transaction for localStorage; stop old ordinary
 writers before migration. A bound session must use the separate bound migration.
 
-This primitive is not yet the live preview authority. The existing preview
-continues to use its old two-store protocol until controller replacement.
-Old keys and backups are not modified; the new key is included by raw backup inventory.
+Both document-session preview route aliases now mount
+`createAtomicExperimentController()`. The controller coalesces edits into
+one durable draft, promotes it atomically, and queues later edits against
+the newly acknowledged row. Reload reads the atomic row first and offers
+its draft explicitly. There is no live divergent HEAD to reconcile.
+Old bound sessions and unbound source inventories require an explicit
+migration selection; an empty profile still requires an ordinary saved
+experiment. Explicit URL/import startup bypasses the preview as before.
+Ordinary Modern is unchanged pending acceptance. Old keys and backups
+are not modified; the new key is included by raw backup inventory.
 
 ### Editable Scene/Compare revision adapter
 

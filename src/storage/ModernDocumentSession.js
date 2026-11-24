@@ -597,7 +597,102 @@
     return Object.freeze({open,markDirty,flushCheckpoint,save,recoveryOffer,
       acceptHead,draftOffer,loadDraft,state});
   }
+  // Live atomic checkpoint controller. One CAS baseline for both committed
+  // and draft payloads; later edits remain in memory during promotion.
+  function createAtomicExperimentController({lease,checkpoint,prepare,isCurrent}={}){
+    check(lease&&lease.sessionId===SHARED_ID&&!('tabId' in lease)&&
+      checkpoint&&typeof prepare==='function'&&typeof isCurrent==='function',
+      'atomic experiment controller dependencies required');
+    const clone=v=>JSON.parse(JSON.stringify(v));
+    const guard=(write=false)=>{check(isCurrent()===true,'stale controller generation');lease.check(write);};
+    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false;
+    function fail(e){error=String(e&&e.message||e);status='failed';}
+    function bound(){
+      return row?{kind:'experiment',id:'shared-experiment',
+        revision:row.envelope.documents.experiment.revision,experiment:row.experiment}:null;
+    }
+    function draft(){
+      return row&&row.draft!==null?{kind:'experiment',documentId:'shared-experiment',
+        id:'shared-experiment-recovery',revision:'checkpoint:'+row.revision,
+        baseRevision:bound().revision,experiment:row.draft}:null;
+    }
+    function state(){
+      return clone({status,busy,error,row:row?{revision:row.revision,envelope:row.envelope}:null,
+        bound:bound(),head:bound(),draft:draft(),draftOffer:offer,
+        checkpoint:error?'failed':latest&&latest!==staged?'pending':draft()?'durable':'none',
+        latestInput:latest?latest.experiment:null});
+    }
+    function startPump(){
+      if(pump||promoting||error||offer||!latest||latest===staged)return;
+      pump=(async()=>{
+        while(latest&&latest!==staged){
+          guard(true);
+          const job=latest;
+          row=await checkpoint.stage(job.experiment,row.revision);guard(true);
+          staged=job;
+        }
+      })().catch(fail).finally(()=>{pump=null;startPump();});
+    }
+    async function flushCheckpoint(){
+      startPump();while(pump)await pump;
+      guard();check(!error,error||'checkpoint failed');
+      check(!latest||latest===staged,'checkpoint not acknowledged');
+      return draft()?clone(draft()):null;
+    }
+    async function open({explicitIntent=false}={}){
+      check(status==='idle'&&!busy,'controller already opened');
+      busy=true;
+      try{
+        guard();
+        if(explicitIntent){status='external';return;}
+        row=await checkpoint.read();guard();
+        if(!row){row=await prepare();guard();}
+        if(!row){status='empty';return;}
+        if(row.draft!==null){
+          offer={revision:row.revision,digest:row.digest};
+          status='recovering';
+        }else status='clean';
+      }catch(e){fail(e);throw e;}finally{busy=false;}
+    }
+    function markDirty(experiment){
+      guard(true);
+      check(row&&!offer&&!error&&['clean','committed','dirty','saving'].includes(status),
+        'resolve session recovery before editing');
+      latest={experiment:clone(experiment)};
+      if(!promoting)status='dirty';
+      startPump();return state();
+    }
+    function draftOffer(){return !error&&offer?clone(offer):null;}
+    async function loadDraft(selection){
+      check(!busy&&!error&&offer&&same(selection,offer),'explicit current draft offer required');
+      busy=true;
+      try{
+        guard(true);
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'draft offer changed; evidence retained');
+        latest=staged={experiment:clone(row.draft)};
+        offer=null;status='dirty';return clone(latest.experiment);
+      }catch(e){fail(e);throw e;}finally{busy=false;}
+    }
+    async function save(){
+      check(!busy&&!error&&!offer&&status==='dirty'&&latest,'dirty experiment required');
+      busy=true;
+      try{
+        do{await flushCheckpoint();}while(latest!==staged);
+        const job=latest;
+        check(job&&row.draft!==null,'draft acknowledgement required');
+        promoting=true;status='saving';
+        row=await checkpoint.promote(row.revision);guard(true);
+        staged=null;
+        if(latest===job){latest=null;status='committed';}
+        else status='dirty';
+      }catch(e){fail(e);throw e;}
+      finally{promoting=false;busy=false;startPump();}
+    }
+    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,
+      recoveryOffer:()=>null,state});
+  }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,createSaveTracker,createExperimentController,createRecoverableExperimentController,
-    sharedExperimentCoordinator});
+    sharedExperimentCoordinator,createAtomicExperimentController});
 }));

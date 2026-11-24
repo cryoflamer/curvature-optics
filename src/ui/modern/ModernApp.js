@@ -1644,12 +1644,10 @@
     var panel=newUiEl('ModernDocumentSessionRecovery');
     if(panel)panel.hidden=usable||status==='loading';
     var controller=experimentPreview.controller;
-    var headOffer=status==='recovering'&&controller&&controller.recoveryOffer();
     var draftOffer=status==='recovering'&&controller&&controller.draftOffer();
     var message=newUiEl('ModernDocumentSessionRecoveryStatus');
     if(message)modernStatus(message,experimentPreview.error||
-      (headOffer?'A newer durable revision is available. Explicitly accept it before restoring any remaining unsaved edits.':
-        draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
+      (draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
         'Document session preview is unavailable. Remove document-session='+documentSessionRoute+
           ' to use the unchanged legacy working session.'),'error');
     var choices=newUiEl('ModernDocumentSessionMigrationChoices');
@@ -1661,7 +1659,7 @@
         inventory.candidates.forEach(function(candidate){
           var button=document.createElement('button');
           button.type='button';button.className='modern-ghost-button';
-          button.textContent='Use '+candidate.selection.source+' · '+candidate.selection.key+
+          button.textContent=(candidate.label||'Use '+candidate.selection.source+' · '+candidate.selection.key)+
             ' · '+candidate.workspace+' · H='+candidate.experiment.scene.camera.Height+' m';
           button.disabled=experimentPreview.recoveryAction;
           button.addEventListener('click',function(){selectSharedMigration(candidate.selection);});
@@ -1670,7 +1668,7 @@
       }
     }
     var accept=newUiEl('ModernDocumentSessionAcceptHead');
-    if(accept){accept.hidden=!headOffer;accept.disabled=experimentPreview.recoveryAction;}
+    if(accept)accept.hidden=true;
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction;}
     var download=newUiEl('ModernDocumentSessionDownload');
@@ -1733,17 +1731,31 @@
     var ui=store.create(root),sessions=ui.sharedDocumentSessions(api),
       lease=ui.captureSharedDocumentLifetime(),
       coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
-    var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
+    var checkpoint=sessionAutosave.openSharedCheckpoint(root.indexedDB,
+      {lease:lease,codec:experiments,crypto:root.crypto,contract:api});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
-    var controller=api.createRecoverableExperimentController({lease:lease,
-      sessions:sessions,working:working,isCurrent:current,coordinate:coordinate,
+    var controller=api.createAtomicExperimentController({lease:lease,checkpoint:checkpoint,isCurrent:current,
       prepare:async function(){
-        var storage=preferencesStorage(),inventory=await working.inspectMigration(storage);
+        var storage=preferencesStorage(),opts={sessions:sessions,storage:storage,coordinate:coordinate,isCurrent:current};
+        var old=await sessions.read(),inventory;
+        if(old.envelope&&old.envelope.documents.experiment){
+          var view=await checkpoint.inspectLegacy(opts);
+          inventory={candidates:[],issues:[],legacy:view};
+          view.choices.forEach(function(choice){
+            var value=choice.revision===view.bound.revision?view.bound:view.head;
+            choice.draftModes.forEach(function(draft){
+              inventory.candidates.push({selection:{digest:view.digest,revision:choice.revision,draft:draft},
+                label:'Use '+(choice.revision===view.bound.revision?'acknowledged revision':'durable HEAD')+
+                  ' · draft: '+draft,workspace:value.experiment.display.mode,experiment:value.experiment});
+            });
+          });
+        }else inventory=await checkpoint.inspectSources(opts);
         inventory.metadata=await sessions.inspectLegacyDocuments();
         experimentPreview.migration=inventory;
-        if(selection)return working.prepareSelectedMigration(selection,{storage:storage,isCurrent:current});
+        if(selection)return old.envelope&&old.envelope.documents.experiment?
+          checkpoint.migrateLegacy(selection,opts):checkpoint.migrateSource(selection,opts);
         if(!inventory.candidates.length)throw Error('No verified migration source. Save an experiment in ordinary Modern first or recover from backup.');
-        throw Error('Shared session setup: choose a verified source after checking your local backup. Old records remain unchanged.'+
+        throw Error('Shared session setup: choose a verified source after checking your local backup. Close other old Modern tabs. Old records remain unchanged.'+
           (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
       }});
     experimentPreview.controller=controller;
@@ -1754,7 +1766,7 @@
   function selectSharedMigration(selection){
     if(!experimentPreview.migration||
        experimentPreview.recoveryAction||experimentPreview.status!=='failed')return;
-    if(!root.confirm('Use this exact verified experiment for the shared session? Confirm you have a verified local backup or are using a disposable test profile. Old records will be retained.'))return;
+    if(!root.confirm('Use this exact verified experiment for the shared session? Confirm you have a verified local backup or are using a disposable test profile, and have closed other old Modern tabs. Old records will be retained.'))return;
     experimentPreview.recoveryAction=true;previewControls();
     openExperimentPreview(selection).then(function(){
       if(experimentPreview.status!=='suspended')root.location.reload();
@@ -1779,21 +1791,6 @@
         document.body.appendChild(link);link.click();link.remove();
         root.setTimeout(function(){root.URL.revokeObjectURL(uri);},1000);
       }catch(error){persistenceStatus('Recovery export failed: '+error.message,true);}
-    });
-    var accept=newUiEl('ModernDocumentSessionAcceptHead');
-    if(accept)accept.addEventListener('click',function(){
-      var c=experimentPreview.controller,offer=c&&c.recoveryOffer();
-      if(experimentPreview.status!=='recovering'||!offer)return;
-      if(!root.confirm('Accept durable revision '+offer.revision+
-        '? The previously acknowledged revision remains stored.'))return;
-      if(experimentPreview.recoveryAction)return;
-      experimentPreview.recoveryAction=true;previewControls();
-      c.acceptHead(offer).then(function(){
-        if(experimentPreview.status!=='suspended')root.location.reload();
-      }).catch(function(error){
-        experimentPreview.recoveryAction=false;
-        if(experimentPreview.status!=='suspended')previewFailure(error);
-      });
     });
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore)restore.addEventListener('click',function(){
