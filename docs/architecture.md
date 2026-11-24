@@ -771,8 +771,13 @@ replace the durable Scene/Compare pointer. Opening a verified project
 commits selection, and leaving Calibration is guarded by acknowledged
 project persistence. Viewer visibility and hydration are not edits. The
 ordinary route and historical Web Storage evidence remain unchanged.
-Rename, Delete, Apply, legacy adoption, Image Library navigation and
-mounted Animation are not enabled by this contract.
+The Calibration presentation scope is initialized from verified legacy
+preferences once and subsequently restored from its own shared IndexedDB
+row. Active project Rename uses the same captured save/receipt path as
+editor changes; later pending snapshots preserve captured metadata.
+Inactive Rename remains guarded until the project is opened. Apply,
+legacy adoption, Image Library navigation and mounted Animation are not
+enabled by this contract.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
@@ -793,3 +798,25 @@ Retirement requires a verified pointer and exact domain readback. Unknown
 or conflicting evidence fails closed without a repeated project write.
 This is a two-database recovery protocol, not a cross-database atomic
 transaction.
+
+### Shared Calibration project removal
+
+Mounted Calibration selection, save/acknowledgement, receipt recovery and
+Delete participate in the same exclusive origin-wide operation Web Lock.
+Delete checks the current shared checkpoint and project revision and
+rejects an unresolved domain receipt. If the target is the selected
+Calibration project, the shared checkpoint first clears only that
+document reference and returns to the acknowledged physical workspace.
+The physical experiment and other document slots are preserved. After
+CAS and readback of the detached checkpoint, the domain transaction
+checks the exact project revision and absence of an outstanding receipt
+and deletes its record and summary together. Deleting an unrelated
+project does not rewrite the shared checkpoint. Photo originals and
+archived results are independent and are not deleted. An interruption
+after detachment may leave the original project in the library; it does
+not authorize automatic replacement or a dangling pointer. Reload
+restores the physical workspace, and a retained project can be opened
+explicitly. A stale mounted writer must revalidate its shared base before
+a domain write; it cannot silently recreate the selection. This
+coordination applies to the combined shared preview, not concurrent
+legacy-route editors, which must remain closed during migration.
