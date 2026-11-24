@@ -10481,12 +10481,35 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
 
+    def install_historical_shared_import_fixture(self):
+        """Seed the retired import format directly; no production migration writer."""
+        self.page.evaluate("""() => {
+            window.seedHistoricalSharedImport=async candidate=>{
+                const S=CurvatureModernSessionAutosave;
+                const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+                    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+                const experiment=structuredClone(candidate.experiment),id='shared-experiment';
+                const revision='sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest(
+                    'SHA-256',new TextEncoder().encode(canonical(experiment)))),x=>x.toString(16).padStart(2,'0')).join('');
+                const row={format:'curvature-modern-working-import',version:1,id,revision,experiment,origin:candidate.selection};
+                await new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                    req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readwrite');
+                        tx.objectStore(S.STORE).add(row,'working-copy:'+id);
+                        tx.oncomplete=()=>{db.close();resolve();};
+                        tx.onabort=()=>{db.close();reject(tx.error);};};
+                });
+                return {document:{id,revision,recovery:null},workspace:experiment.display.mode};
+            };
+        }""")
+
     def test_working_copy_migration_verified_idempotent_and_f5(self):
-        """Copy a real Scene/Compare checkpoint without mounting a new reader."""
+        """Read a historical import fixture with exact asymmetric physics and F5."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const ui=CurvatureModernUiSessionStore.create(window);
@@ -10504,17 +10527,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const opts={storage:localStorage,isCurrent:()=>true};
-            const selection=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
-            const first=await working.prepareSelectedMigration(selection,opts);
-            const again=await working.prepareSelectedMigration(selection,opts);
+            const candidate=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current');
+            const first=await seedHistoricalSharedImport(candidate);
             const read=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
             const after=await S.read(indexedDB);
-            return {first,again,read,e,stamp,after,
+            return {first,read,e,stamp,after,
                 localSame:raw===localStorage.getItem(C.STORAGE_KEY),
                 urlSame:url===location.href};
         }""")
-        self.assertEqual(result['first']['status'],'verified')
-        self.assertEqual(result['first'],result['again'])
         self.assertEqual(result['first']['workspace'],'compare')
         self.assertIsNotNone(re.fullmatch(r'sha256:[0-9a-f]{64}',
                                              result['first']['document']['revision']))
@@ -10530,11 +10550,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(read,result['read'])
 
     def test_shared_working_copy_migration_cas_and_stale_recovery(self):
-        """Migrate exact selected evidence; share revisions without a tab identity."""
+        """Seed old shared evidence; verify historical revision and recovery contracts."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession;
@@ -10551,9 +10572,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
             const opts={storage:localStorage,isCurrent:()=>true};
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const selection=(await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
-            const candidate=await a.prepareSelectedMigration(selection,opts);
-            const again=await a.prepareSelectedMigration(selection,opts);
+            const source=(await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current');
+            const candidate=await seedHistoricalSharedImport(source);
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const initial=await a.read();await b.read();
             const base=await sessions.read();
@@ -10571,21 +10591,18 @@ class ModernBrowserSmoke(unittest.TestCase):
             const errors=[];
             try{await b.write(stale,initial.revision);}catch(err){errors.push(err.message);}
             try{await b.stageRecovery(stale,initial.revision,null);}catch(err){errors.push(err.message);}
-            try{await a.prepareSelectedMigration(selection,opts);}catch(err){errors.push(err.message);}
-            return {candidate,again,initial,saved,edit,errors,
+            return {candidate,initial,saved,edit,errors,
                 latest:await a.read(),draft:await a.readRecovery(),
                 original:await a.readRevision(initial.revision),
                 legacySame:JSON.stringify(await S.read(indexedDB))===JSON.stringify({version:1,savedAt:stamp,experiment:e}),
                 localSame:raw===localStorage.getItem(C.STORAGE_KEY),urlSame:url===location.href};
         }""")
-        self.assertEqual(result['candidate'],result['again'])
         self.assertEqual(result['candidate']['document']['id'],'shared-experiment')
         self.assertEqual(result['initial'],result['original'])
         self.assertEqual(result['latest']['experiment'],result['edit'])
         self.assertIsNone(result['draft'])
         self.assertIn('revision or envelope conflict',result['errors'][0])
         self.assertIn('base is no longer current',result['errors'][1])
-        self.assertIn('shared HEAD already exists',result['errors'][2])
         self.assertTrue(result['legacySame'])
         self.assertTrue(result['localSame'])
         self.assertTrue(result['urlSame'])
@@ -10655,20 +10672,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             await access('readwrite',store=>{store.add(copy,'working-copy:'+id);store.add(draft,'working-recovery:'+id);});
             const before=await S.readWorkingCopy(indexedDB,id,C,crypto);
             const working=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
-            const inventory=await working.inspectMigration(localStorage);
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto,contract:D});
+            const selectionOpts={sessions,storage:localStorage,isCurrent:()=>true,coordinate:D.sharedExperimentCoordinator(navigator.locks)};
+            const inventory=await checkpoint.inspectSources(selectionOpts);
             const metadata=await sessions.inspectLegacyDocuments();
             const chosen=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+id);
             const raw=localStorage.getItem(C.STORAGE_KEY);
-            const selectionOpts={storage:localStorage,isCurrent:()=>true};
             let refused=false;
-            try{await working.prepareSelectedMigration({...chosen.selection,digest:'wrong'},selectionOpts);}
+            try{await checkpoint.migrateSource({...chosen.selection,digest:'wrong'},selectionOpts);}
             catch(error){refused=/evidence changed/.test(error.message);}
-            const selected=await working.prepareSelectedMigration(chosen.selection,selectionOpts);
-            const retry=await working.prepareSelectedMigration(chosen.selection,selectionOpts);
-            await sessions.read();
-            const row=await sessions.write(D.select(D.emptyShared(),'compare',selected.document),0);
+            const selected=await checkpoint.migrateSource(chosen.selection,selectionOpts);
+            const retry=await checkpoint.read();
+            const row=await sessions.read();
             return {refused,metadata,selected,retry,row,e,
-                value:await working.read(),old:await S.readWorkingCopy(indexedDB,id,C,crypto),before,
+                value:await checkpoint.read(),old:await S.readWorkingCopy(indexedDB,id,C,crypto),before,
                 oldDraft:await access('readonly',store=>store.get('working-recovery:'+id)),draft,
                 unchanged:raw===localStorage.getItem(C.STORAGE_KEY)};
         }""")
@@ -10685,9 +10702,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         restored=self.page.evaluate("""async () => {
             const ui=CurvatureModernUiSessionStore.create(window);
             const row=await ui.sharedDocumentSessions(CurvatureModernDocumentSession).read();
-            const working=CurvatureModernSessionAutosave.openWorkingCopy(indexedDB,{
-                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto});
-            return {row,value:await working.readRevision(row.envelope.documents.experiment.revision)};
+            const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:ui.captureSharedDocumentLifetime(),codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession});
+            return {row,value:await checkpoint.read()};
         }""")
         self.assertEqual(restored['row'],result['row'])
         self.assertEqual(restored['value']['experiment'],result['e'])
@@ -10751,6 +10768,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
             const ui=CurvatureModernUiSessionStore.create(window),sessions=ui.sharedDocumentSessions(D);
@@ -10758,8 +10776,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const storage=localStorage,isCurrent=()=>true;
             const inventory=await working.inspectMigration(storage);
-            const choice=inventory.candidates.find(x=>x.selection.key==='current').selection;
-            const prepared=await working.prepareSelectedMigration(choice,{storage,isCurrent});
+            const choice=inventory.candidates.find(x=>x.selection.key==='current');
+            const prepared=await seedHistoricalSharedImport(choice);
             const empty=await sessions.read();
             const row=await sessions.write(D.select(D.emptyShared(),'compare',prepared.document),empty.revision);
             const bound=await working.read(),edit=structuredClone(bound.experiment);
@@ -10976,39 +10994,40 @@ class ModernBrowserSmoke(unittest.TestCase):
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const ui=CurvatureModernUiSessionStore.create(window);
-            ui.sharedDocumentSessions(CurvatureModernDocumentSession);
+            const D=CurvatureModernDocumentSession,sessions=ui.sharedDocumentSessions(D);
             const lease=ui.captureSharedDocumentLifetime();
             const before=await S.read(indexedDB),e=structuredClone(before.experiment);
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const opts={storage:localStorage,isCurrent:()=>true};
+            const working=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const opts={sessions,storage:localStorage,isCurrent:()=>true,coordinate:D.sharedExperimentCoordinator(navigator.locks)};
             e.scene.camera.Height+=1;
             const raw=JSON.stringify(e);
             localStorage.setItem(C.STORAGE_KEY,raw);
-            const inventory=await working.inspectMigration(localStorage);
+            const inventory=await working.inspectSources(opts);
             const local=inventory.candidates.find(x=>x.selection.source==='local');
             const current=inventory.candidates.find(x=>x.selection.key==='current');
-            const absent=await S.readWorkingCopy(indexedDB,'shared-experiment',C,crypto);
+            const absent=await working.read();
             const preserved=localStorage.getItem(C.STORAGE_KEY)===raw&&
                 JSON.stringify(await S.read(indexedDB))===JSON.stringify(before);
             let conflict,race,existing;
             await S.write(indexedDB,e,before.savedAt+1);
-            try{await working.prepareSelectedMigration(current.selection,opts);}catch(err){conflict=err.message;}
-            const selection=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
+            try{await working.migrateSource(current.selection,opts);}catch(err){conflict=err.message;}
+            const selection=(await working.inspectSources(opts)).candidates.find(x=>x.selection.key==='current').selection;
             // Change the selected source after inventory validation, before the copy transaction.
             let digests=0;
             const next=structuredClone(e);next.scene.camera.Height+=1;
             const racingCrypto={subtle:{async digest(...args){
                 const hash=await crypto.subtle.digest(...args);
-                if(++digests===3)await S.write(indexedDB,next,before.savedAt+2);
+                if(new TextDecoder().decode(args[1]).includes('"format":"curvature-modern-shared-checkpoint"')&&++digests===1)
+                    await S.write(indexedDB,next,before.savedAt+2);
                 return hash;
             }}};
-            const racing=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto:racingCrypto});
-            try{await racing.prepareSelectedMigration(selection,opts);}catch(err){race=err.message;}
-            const afterRace=await S.readWorkingCopy(indexedDB,'shared-experiment',C,crypto);
-            const first=await working.prepareSelectedMigration(local.selection,opts);
-            const other=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
-            try{await working.prepareSelectedMigration(other,opts);}catch(err){existing=err.message;}
-            const saved=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
+            const racing=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto:racingCrypto,contract:D});
+            try{await racing.migrateSource(selection,opts);}catch(err){race=err.message;}
+            const afterRace=await working.read();
+            const first=await working.migrateSource(local.selection,opts);
+            const other=(await working.inspectSources(opts)).candidates.find(x=>x.selection.key==='current').selection;
+            try{await working.migrateSource(other,opts);}catch(err){existing=err.message;}
+            const saved=await working.read();
             return {local:local.experiment,current:current.experiment,conflict,race,existing,
                 absent,preserved,afterRace,first,saved,e,digests,
                 unchanged:localStorage.getItem(C.STORAGE_KEY)===raw&&
@@ -11018,11 +11037,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIn('evidence changed',result['conflict'])
         self.assertTrue(result['preserved'])
         self.assertIsNone(result['absent'])
-        self.assertIn('selected migration evidence changed',result['race'])
-        self.assertEqual(result['digests'],3)
+        self.assertIn('evidence changed',result['race'])
+        self.assertGreaterEqual(result['digests'],1)
         self.assertIsNone(result['afterRace'])
-        self.assertIn('existing shared migration differs',result['existing'])
-        self.assertEqual(result['saved']['revision'],result['first']['document']['revision'])
+        self.assertIn('already initialized',result['existing'])
+        self.assertEqual(result['saved']['revision'],result['first']['revision'])
         self.assertEqual(result['saved']['experiment'],result['e'])
         self.assertTrue(result['unchanged'])
 
@@ -11034,13 +11053,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        self.install_historical_shared_import_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
             const doc=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const legacy=await S.read(indexedDB),raw=localStorage.getItem(C.STORAGE_KEY);
             const migration=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const candidate=await migration.prepareSelectedMigration((await migration.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
+            const candidate=await seedHistoricalSharedImport((await migration.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
             const base=await doc.read();
             const bound=await doc.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
@@ -11105,13 +11125,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
         first=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const ui=CurvatureModernUiSessionStore.create(window);
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            await a.prepareSelectedMigration((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
+            await seedHistoricalSharedImport((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
             const initial=await a.read(),edit=structuredClone(initial.experiment);
             edit.scene.camera.Height+=1;
             const draft=await a.stageRecovery(edit,initial.revision,null);
@@ -11153,13 +11174,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
+        self.install_historical_shared_import_fixture()
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const ui=CurvatureModernUiSessionStore.create(window);
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            await a.prepareSelectedMigration((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
+            await seedHistoricalSharedImport((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current'));
             const initial=await a.read(),edit=structuredClone(initial.experiment);
             edit.scene.camera.Height+=1;
             const open=indexedDB.open.bind(indexedDB);let calls=0,failed,blind,stale;

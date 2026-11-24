@@ -858,70 +858,8 @@
         return {candidates:result.candidates.map(({selection,workspace,experiment})=>
           ({selection,workspace,experiment})),issues:result.issues};
       }
-      async function prepareSelectedMigration(selection,{storage,isCurrent}={}){
-        ensure(!busy&&!recoveryBusy&&typeof isCurrent==='function',
-          'shared migration selection and generation guard required');
-        const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale migration generation');};
-        guard();busy=true;baseline=null;
-        try{
-          const {candidates}=await migrationCandidates(storage);guard();
-          const selected=candidates.find(x=>canonical(x.selection)===canonical(selection));
-          ensure(selected,'selected migration evidence changed or is invalid');
-          const raw=canonical(selected.experiment);
-          const row={format:IMPORT_FORMAT,version:1,id,revision:await digest(raw,crypto),
-            experiment:JSON.parse(raw),origin:selected.selection};
-          guard();
-          let failure;
-          try{
-            await transaction(indexedDB,store=>{
-              const fail=error=>{failure=error;try{store.transaction.abort();}catch(ignore){}};
-              function checkedGet(key,accept){
-                const req=store.get(key);
-                req.onsuccess=()=>{try{guard();accept(req.result);}catch(error){fail(error);}};
-              }
-              function checkLocal(){
-                if(selected.selection.source==='local')
-                  ensure(canonical(localEvidence(storage,codec))===canonical(selected.raw),
-                    'selected local migration evidence changed');
-              }
-              function destination(){
-                checkLocal();
-                checkedGet(headKey,head=>{
-                  ensure(head===undefined,'shared HEAD already exists; evidence retained');
-                  checkedGet(recoveryKey,draft=>{
-                    ensure(draft===undefined,'shared recovery already exists; evidence retained');
-                    checkedGet(baseKey,before=>{
-                      checkLocal();
-                      if(before===undefined)store.add(row,baseKey);
-                      else ensure(canonical(before)===canonical(row),
-                        'existing shared migration differs; evidence retained');
-                    });
-                  });
-                });
-              }
-              if(selected.selection.source==='local')destination();
-              else checkedGet(selected.selection.key,value=>{
-                ensure(canonical(value)===canonical(selected.raw),'selected migration evidence changed');
-                if(selected.base)checkedGet(selected.base.key,base=>{
-                  ensure(canonical(base)===canonical(selected.base.row),'selected recovery base changed');
-                  destination();
-                });else destination();
-              });
-              return null;
-            },lease);
-          }catch(error){throw failure||error;}
-          const saved=await snapshot(),verified=await verify(saved);guard();
-          ensure(saved.head===undefined&&canonical(saved.row)===canonical(row)&&
-            canonical(verified.experiment)===raw,'selected migration readback conflict');
-          const after=await migrationCandidates(storage);guard();
-          ensure(after.candidates.some(x=>canonical(x.selection)===canonical(selection)),
-            'selected migration evidence changed after copy');
-          return {status:'verified',workspace:verified.experiment.display.mode,
-            document:{id,revision:verified.revision,recovery:null}};
-        }finally{busy=false;}
-      }
       return Object.freeze({id,read,readRevision,write,
-        inspectMigration,prepareSelectedMigration,readMigrationEvidence,readMigrationSources,
+        inspectMigration,readMigrationEvidence,readMigrationSources,
         readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,

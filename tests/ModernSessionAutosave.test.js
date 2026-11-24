@@ -161,12 +161,16 @@ test('retired implicit migration is absent and local-only selection is explicit'
   assert.equal(inventory.candidates.length,1);
   assert.equal(inventory.candidates[0].selection.source,'local');
   assert.equal(db.rows.size,0);
-  const selection=inventory.candidates[0].selection;
-  await assert.rejects(working.prepareSelectedMigration(selection,{storage,isCurrent:()=>false}),/stale migration generation/);
-  await assert.rejects(working.prepareSelectedMigration(selection,{storage:empty,isCurrent:()=>true}),/evidence changed/);
+  assert.equal(working.prepareSelectedMigration,undefined);
+  const contract=require('../src/storage/ModernDocumentSession');
+  const checkpoint=adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
+  const opts={sessions:{read:async()=>({revision:0,envelope:null})},storage,coordinate:f=>f(),isCurrent:()=>true};
+  const selected=(await checkpoint.inspectSources(opts)).candidates[0].selection;
+  await assert.rejects(checkpoint.migrateSource(selected,{...opts,isCurrent:()=>false}),/stale migration generation/);
+  await assert.rejects(checkpoint.migrateSource(selected,{...opts,storage:empty}),/evidence changed/);
   assert.equal(db.rows.size,0);
-  await working.prepareSelectedMigration(selection,{storage,isCurrent:()=>true});
-  assert.deepEqual((await working.read()).experiment,experiment);
+  assert.deepEqual((await checkpoint.migrateSource(selected,opts)).experiment,experiment);
+  assert.deepEqual([...db.rows.keys()],['shared-checkpoint']);
   assert.equal(await autosave.read(db),null);
 });
 
@@ -215,6 +219,17 @@ function recoveryMemoryDB(){
     return req;
   }};
 }
+// Test-only historical row constructor; never run a retired import writer.
+async function seedHistoricalImport(db,crypto,candidate){
+  const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+    Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+  const id='shared-experiment',experiment=structuredClone(candidate.experiment);
+  const revision='sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
+    new TextEncoder().encode(canonical(experiment)))),x=>x.toString(16).padStart(2,'0')).join('');
+  db.rows.set('working-copy:'+id,{format:'curvature-modern-working-import',version:1,id,
+    revision,experiment,origin:candidate.selection});
+  return {id,revision,recovery:null};
+}
 async function recoveryFixture(){
   const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
   const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
@@ -228,7 +243,7 @@ async function recoveryFixture(){
   await adapter.write(db,base,100);
   const a=open(),storage={getItem:()=>null};
   const inventory=await a.inspectMigration(storage);
-  await a.prepareSelectedMigration(inventory.candidates[0].selection,{storage,isCurrent:()=>true});
+  await seedHistoricalImport(db,crypto,inventory.candidates[0]);
   const initial=await a.read();
   return {db,open,a,initial,base,lease,lose(){active=false;}};
 }
@@ -301,10 +316,8 @@ test('shared experiment migration, stale writers and recovery retain the origina
   assert.equal(inventory.issues[0].key,'working-recovery:working-old');
   assert.equal(inventory.candidates.length,1);
   assert.equal(db.rows.has('working-copy:shared-experiment'),false);
-  const selection=inventory.candidates[0].selection;
-  const candidate=await a.prepareSelectedMigration(selection,opts);
-  assert.equal(candidate.document.id,'shared-experiment');
-  assert.deepEqual(await a.prepareSelectedMigration(selection,opts),candidate);
+  const document=await seedHistoricalImport(db,crypto,inventory.candidates[0]);
+  assert.equal(document.id,'shared-experiment');
   assert.deepEqual(db.rows.get('working-recovery:working-old'),{legacy:true});
   assert.equal(a.prepareFork,undefined);
   const initial=await a.read();await b.read();
@@ -318,7 +331,7 @@ test('shared experiment migration, stale writers and recovery retain the origina
   assert.deepEqual((await a.read()).experiment,edit);
   assert.deepEqual((await a.readRevision(initial.revision)).experiment,base);
   assert.deepEqual(await adapter.read(db),{version:1,savedAt:100,experiment:base});
-  await assert.rejects(a.prepareSelectedMigration(selection,opts),/shared HEAD already exists/);
+  assert.equal(a.prepareSelectedMigration,undefined);
   assert.deepEqual(db.rows.get('working-recovery:working-old'),{legacy:true});
 });
 
@@ -347,21 +360,21 @@ test('explicit shared migration selects a verified old draft and retains every s
   assert.equal(inventory.issues[0].key,'bad-row');
   const choice=inventory.candidates.find(x=>x.selection.key==='working-recovery:'+id);
   assert.deepEqual(choice.experiment,draft.experiment);
-  const opts={storage,isCurrent:()=>true};
-  await assert.rejects(shared.prepareSelectedMigration({...choice.selection,digest:'wrong'},opts),
-    /evidence changed/);
-  const saved=await shared.prepareSelectedMigration(choice.selection,opts);
-  assert.equal(saved.document.id,'shared-experiment');
-  assert.deepEqual((await shared.read()).experiment,draft.experiment);
-  assert.deepEqual(await shared.prepareSelectedMigration(choice.selection,opts),saved);
-  const local=inventory.candidates.find(x=>x.selection.source==='local');
-  await assert.rejects(shared.prepareSelectedMigration(local.selection,opts),/existing shared migration differs/);
+  const contract=require('../src/storage/ModernDocumentSession');
+  const checkpoint=adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
+  const opts={storage,isCurrent:()=>true,coordinate:f=>f(),sessions:{read:async()=>({revision:0,envelope:null})}};
+  const view=await checkpoint.inspectSources(opts);
+  const selected=view.candidates.find(x=>x.selection.key==='working-recovery:'+id).selection;
+  await assert.rejects(checkpoint.migrateSource({...selected,digest:'wrong'},opts),/evidence changed/);
+  const saved=await checkpoint.migrateSource(selected,opts);
+  assert.deepEqual(saved.experiment,draft.experiment);
+  assert.deepEqual(await checkpoint.read(),saved);
+  await assert.rejects(checkpoint.migrateSource(view.candidates.find(x=>x.selection.source==='local').selection,opts),
+    /already initialized/);
   assert.deepEqual(db.rows.get('working-recovery:'+id),draft);
   assert.deepEqual(db.rows.get('working-copy:'+id),copy);
   assert.deepEqual(db.rows.get('bad-row'),{version:99});
-  await shared.read();
-  await shared.write({...base,height:8},saved.document.revision);
-  await assert.rejects(shared.prepareSelectedMigration(choice.selection,opts),/shared HEAD already exists/);
+  assert.equal(db.rows.has('working-copy:shared-experiment'),false);
 });
 
 function atomicFixture(){
@@ -443,11 +456,10 @@ async function legacyAtomicFixture(){
   const working=adapter.openWorkingCopy(db,{lease,codec,crypto}),storage={getItem:()=>null};
   await adapter.write(db,base,100);
   const inventory=await working.inspectMigration(storage);
-  const prepared=await working.prepareSelectedMigration(inventory.candidates[0].selection,
-    {storage,isCurrent:()=>true});
+  const document=await seedHistoricalImport(db,crypto,inventory.candidates[0]);
   const initial=await working.read();
   const other={id:'animation-project',revision:'4',recovery:null};
-  const envelope=contract.select(contract.select(contract.emptyShared(),'animation',other),'scene',prepared.document);
+  const envelope=contract.select(contract.select(contract.emptyShared(),'animation',other),'scene',document);
   let row={revision:1,envelope};
   const sessions={async read(){return structuredClone(row);}};
   const opts={sessions,coordinate:action=>action(),isCurrent:()=>true};
@@ -567,15 +579,14 @@ test('atomic source migration preserves orphaned shared evidence and refuses a n
   await f.adapter.write(f.db,f.base,100);
   const working=f.adapter.openWorkingCopy(f.db,{lease:f.lease,codec:f.codec,crypto:f.crypto});
   const sources=await working.inspectMigration(f.opts.storage);
-  const prepared=await working.prepareSelectedMigration(sources.candidates[0].selection,
-    {storage:f.opts.storage,isCurrent:()=>true});
+  const document=await seedHistoricalImport(f.db,f.crypto,sources.candidates[0]);
   const bound=await working.read(),edit={...f.base,height:3};
   await working.stageRecovery(edit,bound.revision,null);
   const view=await a.inspectSources(f.opts);
   const selected=view.candidates.find(item=>item.selection.key==='working-recovery:shared-experiment');
   assert.equal(view.candidates.length,3);
   assert.deepEqual(selected.experiment,edit);
-  f.setSession({revision:1,envelope:f.contract.select(f.contract.emptyShared(),'scene',prepared.document)});
+  f.setSession({revision:1,envelope:f.contract.select(f.contract.emptyShared(),'scene',document)});
   await assert.rejects(a.migrateSource(selected.selection,f.opts),/use bound migration/);
   assert.equal(await a.read(),null);
   const other={id:'animation-project',revision:'4',recovery:null};

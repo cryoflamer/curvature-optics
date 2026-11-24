@@ -511,17 +511,16 @@ An explicit user choice identifies the exact source and canonical digest;
 there is no implicit selection by timestamp, tab ID, or agreement between
 checkpoints. Invalid records are reported without changing their bytes.
 
-`prepareSelectedMigration(selection, {storage, isCurrent})` revalidates the
-selection, checks source and destination under the existing coordinated
-writer, and adds a digest-verified `working-copy:shared-experiment` import
-record with provenance. A retry accepts only identical bytes. Conflicting
-source, existing HEAD, draft or changed destination fails closed. A separate
-readback verifies the imported payload; the controller binds it only after
-that succeeds. The old `current` checkpoint, localStorage and historical
-copy/fork/revision/recovery records remain read-only migration evidence for
-the shared preview. Explicit URL/import intent still skips private reads in
-the controller. `readWorkingCopy()` and the historical schema decoders
-remain available for compatibility with existing portable backups.
+The retired intermediate import writer is no longer available. Historical
+`working-copy:shared-experiment` import records retain their provenance
+and are decoded without alteration. `inspectSources()` and
+`migrateSource()` select and write directly to the atomic checkpoint.
+Historical fixtures are seeded explicitly in tests, not by a production
+import writer. The old `current` checkpoint, localStorage and historical
+copy/fork/revision/recovery records remain migration evidence. Explicit
+URL/import intent still skips private reads in the controller.
+`readWorkingCopy()` and the historical schema decoders remain available
+for compatibility with existing portable backups.
 
 ### Atomic shared Scene/Compare checkpoint primitive
 
