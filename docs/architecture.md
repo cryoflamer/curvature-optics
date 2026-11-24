@@ -548,38 +548,26 @@ The shared adapter requires a validated baseline and CAS/readback; pagehide
 invalidates the captured lifetime. Historical tab document and working-copy
 records are read-only migration evidence.
 
-### Read-first Scene/Compare working-copy candidate
+### Explicit Scene/Compare migration
 
-The existing domain owner, `ModernSessionAutosave`, provides an explicit
-`prepareWorkingCopy()` migration primitive and a digest-verified
-`readWorkingCopy()`. It does not mount a new live reader or writer. An
-external URL/import intent skips private reads. Otherwise the caller supplies
-the captured shared document lifetime, explicit generation guard, Web
-Crypto and the existing experiment validator.
+`ModernSessionAutosave.openWorkingCopy()` exposes one migration path:
+`inspectMigration(storage)` inventories verified localStorage and IndexedDB
+sources, including historical working copies, revisions and recovery drafts.
+An explicit user choice identifies the exact source and canonical digest;
+there is no implicit selection by timestamp, tab ID, or agreement between
+checkpoints. Invalid records are reported without changing their bytes.
 
-The first stage copies only a valid durable legacy `current` checkpoint.
-A present localStorage fallback must have exactly the same canonical JSON
-experiment and a matching timestamp (or no timestamp); divergent, malformed,
-local-only or incomplete evidence blocks migration instead of guessing which
-copy to open. Source and destination are checked together inside the existing
-working-session IndexedDB store under its coordinated writer path. The
-candidate is add-only at `working-copy:shared-experiment`, with format/version,
-stable ID, SHA-256 revision of canonical raw experiment JSON, and the original
-checkpoint snapshot (including timestamp). Canonical JSON sorts object keys
-without reordering arrays; the existing validator supplies the same normalized
-experiment for subsequent domain reads. Raw legacy evidence is not rewritten.
-
-A repeated attempt only accepts the exact same source/candidate. A changed
-source or conflicting existing row is not overwritten. A successful
-transaction is followed by a separate digest-checked readback and source
-recheck, then returns a document binding candidate; no session pointer is
-written or activated. The legacy current key, localStorage, History, explicit
-URL and physical behavior stay unchanged. A failed or interrupted migration
-may leave a verified but unbound candidate, which must be reconciled rather
-than deleted. Future editable working-copy CAS, local-only recovery,
-cross-store binding, actual lease/generation integration and consumer switch
-are separate steps. The existing database and store remain compatible with
-the portable backup inventory.
+`prepareSelectedMigration(selection, {storage, isCurrent})` revalidates the
+selection, checks source and destination under the existing coordinated
+writer, and adds a digest-verified `working-copy:shared-experiment` import
+record with provenance. A retry accepts only identical bytes. Conflicting
+source, existing HEAD, draft or changed destination fails closed. A separate
+readback verifies the imported payload; the controller binds it only after
+that succeeds. The old `current` checkpoint, localStorage and historical
+copy/fork/revision/recovery records remain read-only migration evidence for
+the shared preview. Explicit URL/import intent still skips private reads in
+the controller. `readWorkingCopy()` and the historical schema decoders
+remain available for compatibility with existing portable backups.
 
 ### Editable Scene/Compare revision adapter
 

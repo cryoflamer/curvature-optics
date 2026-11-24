@@ -73,10 +73,6 @@
   const SHARED_COPY_ID='shared-experiment';
   const COPY_ID=/^(?:working-[A-Za-z0-9_-]{1,128}|shared-experiment)$/;
   function sharedLease(lease){return lease&&lease.sessionId==='shared'&&!('tabId' in lease);}
-  function migrationKeys(keys,baseKey){
-    ensure(Array.isArray(keys)&&keys.every(key=>key===KEY||key===baseKey),
-      'other working-copy evidence requires explicit migration selection');
-  }
   function ensure(ok,message){if(!ok)throw Error('Working-copy migration: '+message);}
   function canonical(value){
     if(value===null||typeof value==='boolean'||typeof value==='string')
@@ -189,108 +185,6 @@
     }
     function clear(indexedDB){
       return transaction(indexedDB,function(store){store.delete(KEY);return null;});
-    }
-    async function prepareWorkingCopy(indexedDB,{tabId,storage,codec,crypto,
-      explicitIntent,isCurrent,lease}={}){
-      ensure(typeof explicitIntent==='boolean'&&typeof isCurrent==='function',
-        'explicit restore intent and generation guard required');
-      const guard=()=>{
-        ensure(isCurrent()===true,'stale migration generation');
-        if(lease)lease.check(true);
-      };
-      guard();
-      if(explicitIntent)return {status:'external'};
-      ensure(writer,'coordinated working-session writer required');
-      ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
-      ensure(sharedLease(lease)&&tabId===undefined,'shared migration lifetime required');
-      ensure(codec&&typeof codec.validate==='function'&&typeof codec.STORAGE_KEY==='string',
-        'experiment validator required');
-      const id=SHARED_COPY_ID,key=copyKey(id);
-      const local=localEvidence(storage,codec);
-      const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-      guard();migrationKeys(keys,key);
-      const checkpoint=await read(indexedDB);guard();
-      if(!checkpoint){
-        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-        guard();ensure(keys.length===0,'existing working-copy evidence requires explicit recovery');
-        ensure(local.raw===null&&local.stamp===null,
-          'local-only or incomplete checkpoint requires explicit recovery');
-        return {status:'empty'};
-      }
-      const source=validateSource(checkpoint,codec);
-      if(local.raw!==null){
-        let parsed;
-        try{parsed=JSON.parse(local.raw);}catch(error){
-          throw Error('Working-copy migration: corrupt local fallback; evidence preserved');
-        }
-        codec.validate(parsed);
-        ensure(canonical(parsed)===canonical(checkpoint.experiment),
-          'local and IndexedDB checkpoints differ; evidence preserved');
-        ensure(local.stamp===null||Number(local.stamp)===checkpoint.savedAt,
-          'local checkpoint timestamp differs; evidence preserved');
-      }else ensure(local.stamp===null,'incomplete local fallback; evidence preserved');
-      const row={format:COPY_FORMAT,version:1,id,
-        revision:await digest(canonical(checkpoint.experiment),crypto),
-        source:JSON.parse(source.raw)};
-      guard();
-      function verifyLocal(){
-        const now=localEvidence(storage,codec);
-        ensure(now.raw===local.raw&&now.stamp===local.stamp,
-          'local fallback changed during migration');
-      }
-      let failure=null;
-      try{
-        await transaction(indexedDB,store=>{
-          // Read source and destination under one readwrite transaction.
-          // No async digest work inside the IDB callback, and never put over
-          // a candidate; a retry can only acknowledge identical bytes.
-          const output={result:null};
-          function fail(error){
-            failure=error;
-            try{store.transaction.abort();}catch(ignore){}
-          }
-          function copySource(){
-            const req=store.get(KEY);
-            req.onsuccess=()=>{
-            try{
-              guard();verifyLocal();
-              ensure(canonical(req.result)===source.raw,
-                'IndexedDB source changed during migration');
-              const target=store.get(key);
-              target.onsuccess=()=>{
-                try{
-                  guard();verifyLocal();
-                  if(target.result===undefined)store.add(row,key);
-                  else ensure(canonical(target.result)===canonical(row),
-                    'existing working copy differs; evidence preserved');
-                  output.result=true;
-                }catch(error){fail(error);}
-              };
-            }catch(error){fail(error);}
-            };
-          }
-          const keys=store.getAllKeys();
-          keys.onsuccess=()=>{
-            try{guard();migrationKeys(keys.result,key);copySource();}
-            catch(error){fail(error);}
-          };
-          return output;
-        },lease||null);
-      }catch(error){throw failure||error;}
-      // Transaction completion is necessary, not sufficient. Re-read and
-      // hash the durable candidate, then verify that source evidence is still
-      // current. A failed check retains the immutable candidate for review.
-      const saved=await readWorkingCopy(indexedDB,id,codec,crypto);guard();
-      ensure(saved&&saved.revision===row.revision&&
-        saved.sourceSavedAt===checkpoint.savedAt&&
-        canonical(saved.experiment)===canonical(source.normalized),
-        'working-copy readback mismatch');
-      const after=await read(indexedDB);guard();verifyLocal();
-      ensure(canonical(after)===source.raw,'IndexedDB source changed after copy');
-      const finalKeys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
-      guard();verifyLocal();migrationKeys(finalKeys,key);
-      return {status:'verified',workspace:saved.experiment.display.mode,
-        document:{id:saved.id,revision:saved.revision,recovery:null}};
     }
     // Immutable revision rows plus an atomic head pointer. The migration
     // row stays intact and represents revision one, including raw provenance.
@@ -746,7 +640,7 @@
         inspectMigration,prepareSelectedMigration,
         readRecovery,stageRecovery,retireRecovery});
     }
-    return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,
+    return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,
       coordination:writer?'participating-writer':'uncoordinated'});
   }
   const defaultAdapter=makeAdapter(root.navigator&&root.navigator.locks||null);
@@ -765,7 +659,7 @@
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,META_KEY:META_KEY,
     read:defaultAdapter.read,write:defaultAdapter.write,clear:defaultAdapter.clear,
-    prepareWorkingCopy:defaultAdapter.prepareWorkingCopy,readWorkingCopy,
+    readWorkingCopy,
     openWorkingCopy:defaultAdapter.openWorkingCopy,
     coordination:defaultAdapter.coordination,makeAdapter,
     normalize:normalize,newer:newer});

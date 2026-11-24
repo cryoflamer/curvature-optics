@@ -10502,10 +10502,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
             localStorage.setItem(S.META_KEY,String(stamp));
             const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
-            const opts={lease,storage:localStorage,codec:C,crypto,
-                explicitIntent:false,isCurrent:()=>true};
-            const first=await S.prepareWorkingCopy(indexedDB,opts);
-            const again=await S.prepareWorkingCopy(indexedDB,opts);
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const opts={storage:localStorage,isCurrent:()=>true};
+            const selection=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
+            const first=await working.prepareSelectedMigration(selection,opts);
+            const again=await working.prepareSelectedMigration(selection,opts);
             const read=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
             const after=await S.read(indexedDB);
             return {first,again,read,e,stamp,after,
@@ -10529,7 +10530,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(read,result['read'])
 
     def test_shared_working_copy_migration_cas_and_stale_recovery(self):
-        """Migrate only unambiguous evidence; share revisions without a tab identity."""
+        """Migrate exact selected evidence; share revisions without a tab identity."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -10548,11 +10549,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
             localStorage.setItem(S.META_KEY,String(stamp));
             const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
-            const opts={lease,storage:localStorage,codec:C,crypto,
-                explicitIntent:false,isCurrent:()=>true};
-            const candidate=await S.prepareWorkingCopy(indexedDB,opts);
-            const again=await S.prepareWorkingCopy(indexedDB,opts);
+            const opts={storage:localStorage,isCurrent:()=>true};
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const selection=(await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
+            const candidate=await a.prepareSelectedMigration(selection,opts);
+            const again=await a.prepareSelectedMigration(selection,opts);
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const initial=await a.read();await b.read();
             const base=await sessions.read();
@@ -10570,7 +10571,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const errors=[];
             try{await b.write(stale,initial.revision);}catch(err){errors.push(err.message);}
             try{await b.stageRecovery(stale,initial.revision,null);}catch(err){errors.push(err.message);}
-            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){errors.push(err.message);}
+            try{await a.prepareSelectedMigration(selection,opts);}catch(err){errors.push(err.message);}
             return {candidate,again,initial,saved,edit,errors,
                 latest:await a.read(),draft:await a.readRecovery(),
                 original:await a.readRevision(initial.revision),
@@ -10584,7 +10585,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(result['draft'])
         self.assertIn('revision or envelope conflict',result['errors'][0])
         self.assertIn('base is no longer current',result['errors'][1])
-        self.assertIn('explicit migration selection',result['errors'][2])
+        self.assertIn('shared HEAD already exists',result['errors'][2])
         self.assertTrue(result['legacySame'])
         self.assertTrue(result['localSame'])
         self.assertTrue(result['urlSame'])
@@ -10704,8 +10705,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const options={lease,sessions,working,isCurrent:()=>true,
                 coordinate:D.sharedExperimentCoordinator(navigator.locks),
-                prepare:()=>S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
-                    codec:C,crypto,explicitIntent:false,isCurrent:()=>true})};
+                prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})};
             for(const make of [D.createExperimentController,D.createRecoverableExperimentController]){
                 let rejected=false;
                 try{make({...options,lease:{tabId:'retired',check(){}}});}
@@ -10767,7 +10767,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.close()
 
     def test_working_copy_migration_refuses_ambiguous_and_changed_sources(self):
-        """No private read for external intent; no copy over conflicting evidence."""
+        """Ambiguous inventory requires exact choice; reject changed source and destination."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
@@ -10778,52 +10778,52 @@ class ModernBrowserSmoke(unittest.TestCase):
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
             const before=await S.read(indexedDB),e=structuredClone(before.experiment);
-            const opts={lease,storage:localStorage,codec:C,crypto,
-                explicitIntent:false,isCurrent:()=>true};
-            const external=await S.prepareWorkingCopy(null,{
-                explicitIntent:true,isCurrent:()=>true});
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const opts={storage:localStorage,isCurrent:()=>true};
             e.scene.camera.Height+=1;
             const raw=JSON.stringify(e);
             localStorage.setItem(C.STORAGE_KEY,raw);
-            let conflict,race,existing;
-            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){conflict=err.message;}
+            const inventory=await working.inspectMigration(localStorage);
+            const local=inventory.candidates.find(x=>x.selection.source==='local');
+            const current=inventory.candidates.find(x=>x.selection.key==='current');
             const absent=await S.readWorkingCopy(indexedDB,'shared-experiment',C,crypto);
             const preserved=localStorage.getItem(C.STORAGE_KEY)===raw&&
                 JSON.stringify(await S.read(indexedDB))===JSON.stringify(before);
-            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(before.experiment));
-            localStorage.setItem(S.META_KEY,String(before.savedAt));
-            // A second writer changes current while the first hashes its source.
+            let conflict,race,existing;
+            await S.write(indexedDB,e,before.savedAt+1);
+            try{await working.prepareSelectedMigration(current.selection,opts);}catch(err){conflict=err.message;}
+            const selection=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
+            // Change the selected source after inventory validation, before the copy transaction.
+            let digests=0;
+            const next=structuredClone(e);next.scene.camera.Height+=1;
             const racingCrypto={subtle:{async digest(...args){
                 const hash=await crypto.subtle.digest(...args);
-                await S.write(indexedDB,e,before.savedAt+1);
+                if(++digests===3)await S.write(indexedDB,next,before.savedAt+2);
                 return hash;
             }}};
-            try{await S.prepareWorkingCopy(indexedDB,{...opts,crypto:racingCrypto});}
-            catch(err){race=err.message;}
+            const racing=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto:racingCrypto});
+            try{await racing.prepareSelectedMigration(selection,opts);}catch(err){race=err.message;}
             const afterRace=await S.readWorkingCopy(indexedDB,'shared-experiment',C,crypto);
-            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
-            localStorage.setItem(S.META_KEY,String(before.savedAt+1));
-            const first=await S.prepareWorkingCopy(indexedDB,opts);
-            const next=structuredClone(e);next.scene.camera.Height+=1;
-            await S.write(indexedDB,next,before.savedAt+2);
-            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(next));
-            localStorage.setItem(S.META_KEY,String(before.savedAt+2));
-            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){existing=err.message;}
+            const first=await working.prepareSelectedMigration(local.selection,opts);
+            const other=(await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection;
+            try{await working.prepareSelectedMigration(other,opts);}catch(err){existing=err.message;}
             const saved=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
-            return {external,conflict,race,existing,absent,preserved,afterRace,
-                first,saved,e};
+            return {local:local.experiment,current:current.experiment,conflict,race,existing,
+                absent,preserved,afterRace,first,saved,e,digests,
+                unchanged:localStorage.getItem(C.STORAGE_KEY)===raw&&
+                    JSON.stringify((await S.read(indexedDB)).experiment)===JSON.stringify(next)};
         }""")
-        self.assertEqual(result['external'],{'status':'external'})
-        self.assertIn('local and IndexedDB checkpoints differ',result['conflict'])
+        self.assertNotEqual(result['local'],result['current'])
+        self.assertIn('evidence changed',result['conflict'])
         self.assertTrue(result['preserved'])
         self.assertIsNone(result['absent'])
-        self.assertIn('IndexedDB source changed during migration',result['race'])
+        self.assertIn('selected migration evidence changed',result['race'])
+        self.assertEqual(result['digests'],3)
         self.assertIsNone(result['afterRace'])
-        self.assertIn('existing working copy differs',result['existing'])
+        self.assertIn('existing shared migration differs',result['existing'])
         self.assertEqual(result['saved']['revision'],result['first']['document']['revision'])
         self.assertEqual(result['saved']['experiment'],result['e'])
-        self.assertEqual(result['saved']['sourceSavedAt']+1,
-                         self.page.evaluate('async () => (await CurvatureModernSessionAutosave.read(indexedDB)).savedAt'))
+        self.assertTrue(result['unchanged'])
 
 
     def test_working_copy_edit_cas_keeps_acknowledged_revision_after_session_failure(self):
@@ -10838,8 +10838,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
             const doc=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const legacy=await S.read(indexedDB),raw=localStorage.getItem(C.STORAGE_KEY);
-            const candidate=await S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
-                codec:C,crypto,explicitIntent:false,isCurrent:()=>true});
+            const migration=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const candidate=await migration.prepareSelectedMigration((await migration.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
             const base=await doc.read();
             const bound=await doc.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
@@ -10909,9 +10909,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const ui=CurvatureModernUiSessionStore.create(window);
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
-            await S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
-                codec:C,crypto,explicitIntent:false,isCurrent:()=>true});
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            await a.prepareSelectedMigration((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
             const initial=await a.read(),edit=structuredClone(initial.experiment);
             edit.scene.camera.Height+=1;
             const draft=await a.stageRecovery(edit,initial.revision,null);
@@ -10958,9 +10957,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const ui=CurvatureModernUiSessionStore.create(window);
             ui.sharedDocumentSessions(CurvatureModernDocumentSession);
             const lease=ui.captureSharedDocumentLifetime();
-            await S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,codec:C,crypto,
-                explicitIntent:false,isCurrent:()=>true});
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            await a.prepareSelectedMigration((await a.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true});
             const initial=await a.read(),edit=structuredClone(initial.experiment);
             edit.scene.camera.Height+=1;
             const open=indexedDB.open.bind(indexedDB);let calls=0,failed,blind,stale;
@@ -11032,9 +11030,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 sessions:{read:()=>sessions.read(),write:(...args)=>{
                     if(fail)throw Error('simulated session failure');
                     return sessions.write(...args);
-                }},isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
-                    lease,storage:localStorage,codec:C,crypto,
-                    explicitIntent:false,isCurrent:()=>true})});
+                }},isCurrent:()=>true,prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})});
             await controller.open();
             const initial=controller.state(),edit=structuredClone(initial.bound.experiment);
             edit.scene.camera.Height+=1;
@@ -11088,9 +11084,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const c=D.createRecoverableExperimentController({lease,working,sessions,
                 coordinate:D.sharedExperimentCoordinator(navigator.locks),
-                isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
-                    lease,storage:localStorage,codec:C,crypto,
-                    explicitIntent:false,isCurrent:()=>true})});
+                isCurrent:()=>true,prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})});
             await c.open();
             const initial=c.state(),edit=structuredClone(initial.bound.experiment);
             edit.scene.camera.Height+=1;c.markDirty(edit);await c.flushCheckpoint();
