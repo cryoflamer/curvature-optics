@@ -233,3 +233,22 @@ test('document adapter requires a read in the current writable lease and exact t
   assert.deepEqual(ctx.sessionStorage.keys(),[store.TAB_KEY]);
   ctx.leave();
 });
+
+test('domain lease is generation-bound and tracks transactions until pagehide',async()=>{
+  const locks=lockFixture(),ctx=ownedEnv(locks),ui=store.create(ctx);
+  assert.throws(()=>ui.captureDocumentLease(),/ownership lost/);
+  const id=(await ui.claimTab()).tabId,lease=ui.captureDocumentLease();
+  assert.equal(lease.tabId,id);lease.check(true);
+  let aborted=0;
+  const remove=lease.track({abort(){aborted++;}},true);
+  const removed=lease.track({abort(){aborted+=100;}},true);
+  removed();ctx.leave();await Promise.resolve();await Promise.resolve();
+  assert.equal(aborted,1);remove();
+  assert.throws(()=>lease.check(),/ownership lost/);
+  await ui.reclaimTab();
+  const resumed=ui.captureDocumentLease();
+  resumed.check();assert.throws(()=>resumed.check(true),/not validated/);
+  ui.finishResume();resumed.check(true);
+  assert.throws(()=>lease.check(true),/ownership lost/);
+  ctx.leave();
+});

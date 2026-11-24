@@ -229,6 +229,20 @@
         sessionStorage.getItem(TAB_KEY)===lease.id,
         'document session tab ownership lost or not validated');
     }
+    // Domain writers borrow the existing lease, not a second lock. A
+    // capability captures this lease generation and never survives pagehide.
+    function captureDocumentLease(){
+      const lease=owner;verifyDocumentLease(lease,false);
+      return Object.freeze({
+        tabId:lease.id,
+        check(writable=false){verifyDocumentLease(lease,writable);},
+        track(tx,writable=false){
+          verifyDocumentLease(lease,writable);
+          lease.documentTransactions.add(tx);
+          return ()=>lease.documentTransactions.delete(tx);
+        }
+      });
+    }
     async function transact(storeName,mode,action,documentLease=null){
       const db=await connect();
       if(documentLease){
@@ -407,7 +421,7 @@
       documentAdapter={contract,api};return api;
     }
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
-      read,write,stage,readPending,acknowledge,documentSessions});
+      read,write,stage,readPending,acknowledge,documentSessions,captureDocumentLease});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));

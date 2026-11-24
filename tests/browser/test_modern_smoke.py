@@ -10472,5 +10472,142 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result['saved']['sourceSavedAt']+1,
                          self.page.evaluate('async () => (await CurvatureModernSessionAutosave.read(indexedDB)).savedAt'))
 
+
+    def test_working_copy_edit_cas_keeps_acknowledged_revision_after_session_failure(self):
+        """Real domain commit followed by session CAS: old document remains readable."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const legacy=await S.read(indexedDB),raw=localStorage.getItem(C.STORAGE_KEY);
+            const candidate=await S.prepareWorkingCopy(indexedDB,{tabId,storage:localStorage,
+                codec:C,crypto,explicitIntent:false,isCurrent:()=>true});
+            const doc=ui.documentSessions(D),base=await doc.read();
+            const bound=await doc.write(D.select(D.empty(tabId),'compare',candidate.document),base.revision);
+            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const initial=await a.read();await b.read();
+            const edit=structuredClone(initial.experiment);edit.compare.A.atmosphere='vacuum';
+            edit.compare.B.atmosphere='inverse-spherical';edit.scene.camera.Height+=1;
+            const tracker=D.createSaveTracker({session:bound.envelope,sessionRevision:bound.revision});
+            tracker.markDirty();const token=tracker.beginSave();
+            const receipt=await a.write(edit,token.baseRevision);
+            const pending=tracker.acknowledgeDocument(token,receipt);
+            let conflict;
+            try{await b.write(edit,initial.revision);}catch(e){conflict=e.message;}
+            // Do not write the session yet: simulate failure between stores.
+            tracker.fail(token,'simulated session failure');
+            const oldSession=await doc.read(),old=await a.readRevision(initial.revision);
+            const latest=await a.read();
+            const restored=await D.planRestore(oldSession.envelope,{
+                readDocument:(_,id)=>a.readRevision(oldSession.envelope.documents.experiment.revision)});
+            // Explicit reconciliation can acknowledge the already durable revision.
+            const saved=await doc.write(pending.envelope,pending.expectedRevision);
+            const again=await a.write(initial.experiment,receipt.revision);
+            return {initial,receipt,pending,conflict,oldSession,old,latest,restored,
+                saved,again,edit,failed:tracker.state().status,
+                initialStill:await a.readRevision(initial.revision),
+                legacySame:JSON.stringify(legacy)===JSON.stringify(await S.read(indexedDB)),
+                localSame:raw===localStorage.getItem(C.STORAGE_KEY)};
+        }""")
+        self.assertEqual(result['failed'],'failed')
+        self.assertIn('revision or envelope conflict',result['conflict'])
+        self.assertEqual(result['old'],result['initial'])
+        self.assertEqual(result['initialStill'],result['initial'])
+        self.assertEqual(result['latest']['experiment'],result['edit'])
+        self.assertEqual(result['restored']['document']['revision'],result['initial']['revision'])
+        self.assertEqual(result['oldSession']['revision'],1)
+        self.assertEqual(result['saved']['revision'],2)
+        self.assertEqual(result['saved']['envelope']['documents']['experiment']['revision'],
+                         result['receipt']['revision'])
+        self.assertTrue(result['receipt']['revision'].startswith('rev:2:sha256:'))
+        self.assertTrue(result['again']['revision'].startswith('rev:3:sha256:'))
+        self.assertNotEqual(result['again']['revision'],result['initial']['revision'])
+        self.assertTrue(result['legacySame'])
+        self.assertTrue(result['localSame'])
+        self.page.reload(wait_until='load')
+        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
+        reloaded=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            await ui.claimTab();
+            const doc=await ui.documentSessions(D).read();
+            const a=S.openWorkingCopy(indexedDB,{lease:ui.captureDocumentLease(),codec:C,crypto});
+            const bound=doc.envelope.documents.experiment;
+            return {doc,bound:await a.readRevision(bound.revision),head:await a.read()};
+        }""")
+        self.assertEqual(reloaded['doc'],result['saved'])
+        self.assertEqual(reloaded['bound']['revision'],result['receipt']['revision'])
+        self.assertEqual(reloaded['bound']['experiment'],result['edit'])
+        self.assertEqual(reloaded['head']['revision'],result['again']['revision'])
+
+    def test_working_copy_edit_lost_lease_and_lost_readback_preserve_revisions(self):
+        """No acknowledgement after lease loss or a failed post-commit read."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            await S.prepareWorkingCopy(indexedDB,{tabId,storage:localStorage,codec:C,crypto,
+                explicitIntent:false,isCurrent:()=>true});
+            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const initial=await a.read(),edit=structuredClone(initial.experiment);
+            edit.scene.camera.Height+=1;
+            const open=indexedDB.open.bind(indexedDB);let calls=0,failed,blind,stale;
+            try{
+                Object.defineProperty(indexedDB,'open',{configurable:true,value:function(...args){
+                    if(args[0]===S.DATABASE&&++calls===2)throw Error('lost working readback');
+                    return open(...args);
+                }});
+                try{await a.write(edit,initial.revision);}catch(e){failed=e.message;}
+            }finally{Object.defineProperty(indexedDB,'open',{configurable:true,value:open});}
+            try{await a.write(edit,initial.revision);}catch(e){blind=e.message;}
+            const committed=await a.read();
+            const next=structuredClone(edit);next.scene.camera.Height+=1;
+            dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+            await new Promise(resolve=>setTimeout(resolve,0));
+            await ui.reclaimTab();ui.finishResume();
+            try{await a.write(next,committed.revision);}catch(e){stale=e.message;}
+            const fresh=S.openWorkingCopy(indexedDB,{lease:ui.captureDocumentLease(),codec:C,crypto});
+            const after=await fresh.read(),old=await fresh.readRevision(initial.revision);
+            // Abort while the head update has been queued, not merely before
+            // opening the database. Neither the head nor revision may survive.
+            const proto=IDBObjectStore.prototype,put=proto.put;
+            let aborted,interrupted=false;
+            try{
+                proto.put=function(value,...args){
+                    const request=put.call(this,value,...args);
+                    if(typeof args[0]==='string'&&args[0]==='working-head:'+fresh.id){
+                        interrupted=true;
+                        dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+                    }
+                    return request;
+                };
+                try{await fresh.write(next,after.revision);}catch(e){aborted=e.message;}
+            }finally{proto.put=put;}
+            await new Promise(resolve=>setTimeout(resolve,0));
+            await ui.reclaimTab();ui.finishResume();
+            const reopened=S.openWorkingCopy(indexedDB,{lease:ui.captureDocumentLease(),codec:C,crypto});
+            const final=await reopened.read();
+            return {initial,edit,committed,after,old,failed,blind,stale,interrupted,aborted,final};
+        }""")
+        self.assertIn('lost working readback',result['failed'])
+        self.assertIn('read current working copy before write',result['blind'])
+        self.assertIn('ownership lost',result['stale'])
+        self.assertEqual(result['committed']['experiment'],result['edit'])
+        self.assertEqual(result['after'],result['committed'])
+        self.assertEqual(result['old'],result['initial'])
+        self.assertTrue(result['interrupted'])
+        self.assertTrue(result['aborted'])
+        self.assertEqual(result['final'],result['after'])
+
 if __name__ == '__main__':
     unittest.main()

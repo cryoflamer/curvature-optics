@@ -14,11 +14,12 @@
   'use strict';
   var DATABASE='curvature-modern-working-session',STORE='session',KEY='current';
   var META_KEY='curvature-modern-working-session-timestamp-v1';
-  function withStore(indexedDB,mode,perform){
+  function withStore(indexedDB,mode,perform,lease=null){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
-      var request,settled=false,db=null;
-      function rejectOnce(error){if(settled)return;settled=true;if(db)db.close();reject(error);}
+      var request,settled=false,db=null,untrack=null;
+      function cleanup(){if(untrack)untrack();if(db)db.close();}
+      function rejectOnce(error){if(settled)return;settled=true;cleanup();reject(error);}
       try{request=indexedDB.open(DATABASE,1);}catch(error){rejectOnce(error);return;}
       request.onupgradeneeded=function(){
         db=request.result;
@@ -29,14 +30,27 @@
       request.onsuccess=function(){
         if(settled){request.result.close();return;}
         db=request.result;
-        var tx,result=null;
+        var tx,result=null,reportedError=null;
         try{
+          if(lease)lease.check(mode==='readwrite');
           tx=db.transaction(STORE,mode);
+          tx.oncomplete=function(){
+            if(settled)return;
+            try{if(lease)lease.check(mode==='readwrite');}
+            catch(error){rejectOnce(error);return;}
+            settled=true;cleanup();
+            resolve(result&&result.result!==undefined?result.result:null);
+          };
+          // Wait for actual abort before releasing the backup writer lock.
+          tx.onerror=function(){reportedError=reportedError||tx.error||Error('Working-session transaction failed');};
+          tx.onabort=function(){rejectOnce(reportedError||tx.error||Error('Working-session transaction aborted'));};
+          if(lease)untrack=lease.track(tx,mode==='readwrite');
           result=perform(tx.objectStore(STORE));
-        }catch(error){rejectOnce(error);return;}
-        tx.oncomplete=function(){if(settled)return;settled=true;db.close();resolve(result&&result.result!==undefined?result.result:null);};
-        tx.onerror=function(){rejectOnce(tx.error||Error('Working-session transaction failed'));};
-        tx.onabort=function(){rejectOnce(tx.error||Error('Working-session transaction aborted'));};
+        }catch(error){
+          reportedError=error;
+          if(tx){try{tx.abort();}catch(ignore){rejectOnce(error);}}
+          else rejectOnce(error);
+        }
       };
     });
   }
@@ -124,8 +138,8 @@
     if(lockManager&&(!barrier||typeof barrier.create!=='function'))
       throw Error('Working-session backup barrier dependency unavailable');
     const writer=lockManager?barrier.create(lockManager).registerWriter('working.session'):null;
-    function transaction(indexedDB,perform){
-      const action=function(){return withStore(indexedDB,'readwrite',perform);};
+    function transaction(indexedDB,perform,lease=null){
+      const action=function(){return withStore(indexedDB,'readwrite',perform,lease);};
       return writer?writer.commit(action):action();
     }
     function write(indexedDB,experiment,savedAt){
@@ -225,7 +239,154 @@
       return {status:'verified',workspace:saved.experiment.display.mode,
         document:{id:saved.id,revision:saved.revision,recovery:null}};
     }
-    return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,
+    // Immutable revision rows plus an atomic head pointer. The migration
+    // row stays intact and represents revision one, including raw provenance.
+    function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){
+      ensure(writer,'coordinated working-session writer required');
+      ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
+      ensure(lease&&typeof lease.check==='function'&&typeof lease.track==='function',
+        'captured document lease required');
+      lease.check();
+      const id='working-'+lease.tabId,baseKey=copyKey(id);
+      const headKey='working-head:'+id;
+      const REV_FORMAT='curvature-modern-working-revision',HEAD_FORMAT='curvature-modern-working-head';
+      const initial=/^sha256:[0-9a-f]{64}$/;
+      const later=/^rev:([1-9][0-9]*):sha256:[0-9a-f]{64}$/;
+      function sequence(revision){
+        ensure(typeof revision==='string','invalid working revision');
+        if(initial.test(revision))return 1;
+        const match=later.exec(revision),n=match&&Number(match[1]);
+        ensure(Number.isSafeInteger(n)&&n>=2,'invalid working revision');
+        return n;
+      }
+      function revisionKey(revision){
+        return sequence(revision)===1?baseKey:'working-revision:'+id+':'+revision;
+      }
+      function headRevision(head){
+        ensure(head&&Object.keys(head).length===4&&head.format===HEAD_FORMAT&&
+          head.version===1&&head.id===id&&sequence(head.revision)>=2,
+          'invalid working-copy head');
+        return head.revision;
+      }
+      async function decode(row,expected){
+        ensure(row&&row.id===id&&row.version===1,'missing or incompatible working revision');
+        if(row.format===COPY_FORMAT){
+          ensure(Object.keys(row).length===5&&sequence(row.revision)===1,
+            'invalid migration revision');
+          const source=validateSource(row.source,codec);
+          ensure(row.revision===await digest(canonical(row.source.experiment),crypto),
+            'working-copy digest mismatch');
+          if(expected!==undefined)ensure(row.revision===expected,'working revision identity mismatch');
+          return {kind:'experiment',id,revision:row.revision,experiment:source.normalized};
+        }
+        ensure(row.format===REV_FORMAT&&Object.keys(row).length===6&&
+          sequence(row.revision)>=2&&sequence(row.previousRevision)===sequence(row.revision)-1,
+          'invalid edited revision');
+        if(expected!==undefined)ensure(row.revision===expected,'working revision identity mismatch');
+        const raw=canonical(row.experiment),experiment=codec.validate(JSON.parse(raw));
+        ensure(canonical(experiment)===raw,'noncanonical edited experiment');
+        ensure(row.revision==='rev:'+sequence(row.revision)+':'+await digest(raw,crypto),
+          'working revision digest mismatch');
+        return {kind:'experiment',id,revision:row.revision,experiment};
+      }
+      // IDB reads both the head and its target in the same transaction.
+      function readRaw(store,accept,fail){
+        const req=store.get(headKey);
+        req.onsuccess=()=>{
+          try{
+            lease.check();
+            const head=req.result;
+            const rev=head===undefined?undefined:headRevision(head);
+            const item=store.get(rev===undefined?baseKey:revisionKey(rev));
+            item.onsuccess=()=>{
+              try{lease.check();accept({head,row:item.result});}
+              catch(error){fail(error);}
+            };
+          }catch(error){fail(error);}
+        };
+      }
+      async function snapshot(){
+        let failure=null;
+        try{
+          return await withStore(indexedDB,'readonly',store=>{
+            const out={result:null};
+            readRaw(store,v=>{out.result=v;},error=>{
+              failure=error;store.transaction.abort();
+            });
+            return out;
+          },lease);
+        }catch(error){throw failure||error;}
+      }
+      async function verify(raw){
+        ensure(raw&&raw.row!==undefined,'working copy not prepared');
+        const value=await decode(raw.row,raw.head===undefined?undefined:headRevision(raw.head));
+        lease.check();
+        return value;
+      }
+      function rawSignature(raw){
+        return canonical({head:raw.head===undefined?null:raw.head,row:raw.row});
+      }
+      let baseline=null,busy=false;
+      async function read(){
+        ensure(!busy,'working-copy operation pending');
+        busy=true;baseline=null;
+        try{
+          lease.check();
+          const raw=await snapshot(),value=await verify(raw);
+          baseline={signature:rawSignature(raw),value:canonical(value.experiment),revision:value.revision};
+          return value;
+        }finally{busy=false;}
+      }
+      async function readRevision(revision){
+        ensure(!busy,'working-copy operation pending');
+        const key=revisionKey(revision);
+        busy=true;
+        try{
+          lease.check();
+          const row=await withStore(indexedDB,'readonly',store=>store.get(key),lease);
+          const value=await decode(row,revision);lease.check();return value;
+        }finally{busy=false;}
+      }
+      async function write(experiment,expectedRevision){
+        ensure(!busy,'working-copy operation pending');
+        lease.check(true);
+        ensure(baseline&&baseline.revision===expectedRevision,'read current working copy before write');
+        const before=baseline;
+        busy=true;baseline=null;
+        try{
+          const normalized=codec.validate(JSON.parse(canonical(experiment)));
+          const raw=canonical(normalized),n=sequence(expectedRevision)+1;
+          ensure(Number.isSafeInteger(n),'working revision exhausted');
+          ensure(raw!==before.value,'working copy is unchanged');
+          const revision='rev:'+n+':'+await digest(raw,crypto);
+          lease.check(true);
+          const row={format:REV_FORMAT,version:1,id,revision,
+            previousRevision:expectedRevision,experiment:JSON.parse(raw)};
+          const head={format:HEAD_FORMAT,version:1,id,revision};
+          let failure=null;
+          try{
+            await transaction(indexedDB,store=>{
+              const fail=error=>{failure=error;try{store.transaction.abort();}catch(ignore){}};
+              readRaw(store,current=>{
+                lease.check(true);
+                ensure(rawSignature(current)===before.signature,'working-copy revision or envelope conflict');
+                // add, never put, on the immutable revision record.
+                store.add(row,revisionKey(revision));store.put(head,headKey);
+              },fail);
+              return null;
+            },lease);
+          }catch(error){throw failure||error;}
+          const saved=await snapshot(),value=await verify(saved);
+          lease.check(true);
+          ensure(rawSignature(saved)===rawSignature({head,row}),
+            'working-copy post-commit readback conflict');
+          baseline={signature:rawSignature(saved),value:canonical(value.experiment),revision};
+          return Object.freeze({kind:'experiment',id,revision});
+        }finally{busy=false;}
+      }
+      return Object.freeze({id,read,readRevision,write});
+    }
+    return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,
       coordination:writer?'participating-writer':'uncoordinated'});
   }
   const defaultAdapter=makeAdapter(root.navigator&&root.navigator.locks||null);
@@ -245,6 +406,7 @@
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,META_KEY:META_KEY,
     read:defaultAdapter.read,write:defaultAdapter.write,clear:defaultAdapter.clear,
     prepareWorkingCopy:defaultAdapter.prepareWorkingCopy,readWorkingCopy,
+    openWorkingCopy:defaultAdapter.openWorkingCopy,
     coordination:defaultAdapter.coordination,makeAdapter,
     normalize:normalize,newer:newer});
 }));

@@ -476,6 +476,33 @@ cross-store binding, actual lease/generation integration and consumer switch
 are separate steps. The existing database and store remain compatible with
 the portable backup inventory.
 
+### Editable Scene/Compare revision adapter
+
+The explicit `openWorkingCopy(indexedDB,{lease,codec,crypto})` adapter
+borrows the existing tab owner's generation-bound `captureDocumentLease()`.
+The migration row stays immutable. Each edit is a validated, immutable
+`working-revision:<id>:<revision>` row; its revision token contains a
+monotonic sequence and SHA-256 of canonical experiment JSON. Returning to
+identical historical content cannot reuse an earlier revision token. An
+atomic transaction adds that row and updates `working-head:<id>` only after
+comparing the previously read head and payload. No-op edits are rejected.
+The adapter requires an explicit current read before a write and invalidates
+its baseline on an attempted database write. It acknowledges only after
+transaction completion and exact verified head/payload readback.
+
+A captured lease is invalid after pagehide even if the same tab reacquires
+ownership. Domain transactions participate in the existing backup writer
+barrier and are tracked by the tab lease for abort on pagehide. An already
+committed transaction may survive lost acknowledgement; a fresh read and
+reconciliation are mandatory before retry. The explicit `readRevision()`
+reads the exact bound immutable revision even if a later head exists, so
+a failed session CAS does not lose the previously acknowledged document.
+This is not a completed two-database commit protocol: a head ahead of its
+session binding requires explicit reconciliation before editing or activation.
+No revision deletion, garbage collection, live consumer switch, or automatic
+URL rewrite is implemented here. Existing legacy checkpoint, migration
+snapshot, History and independent A/B physics remain untouched.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small
