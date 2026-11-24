@@ -142,11 +142,84 @@
       });
     });
   }
-  function change(db,id,expected,changes,now,forkId=null,lease=null){
+  // One durable receipt in the existing control store, committed in the
+  // same transaction as the project and summary. No schema upgrade or
+  // duplicate document/photo payload is required.
+  const SHARED_SELECTION_KEY='shared-selection-receipt-v1';
+  function exactFields(value,keys){
+    return value&&typeof value==='object'&&!Array.isArray(value)&&
+      Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
+  }
+  function selectionBase(value){
+    if(!exactFields(value,['revision','digest'])||
+       !Number.isSafeInteger(value.revision)||value.revision<1||
+       value.revision>=Number.MAX_SAFE_INTEGER||
+       typeof value.digest!=='string'||!/^sha256:[0-9a-f]{64}$/.test(value.digest))
+      throw RangeError('Invalid shared checkpoint receipt base');
+    return {revision:value.revision,digest:value.digest};
+  }
+  function selectionReference(value){
+    if(!exactFields(value,['id','revision','recovery'])||value.recovery!==null||
+       typeof value.revision!=='string'||!/^rev:[1-9][0-9]*$/.test(value.revision)||
+       !Number.isSafeInteger(Number(value.revision.slice(4))))
+      throw RangeError('Invalid shared Calibration receipt reference');
+    return {id:model.id(value.id),revision:value.revision,recovery:null};
+  }
+  function selectionReceipt(value){
+    if(!exactFields(value,['version','base','previous','current','status'])||value.version!==1)
+      throw RangeError('Invalid shared Calibration receipt');
+    const base=selectionBase(value.base),previous=selectionReference(value.previous),
+      current=selectionReference(value.current),status=value.status;
+    if(!(status==='updated'&&previous.id===current.id&&
+         Number(current.revision.slice(4))===Number(previous.revision.slice(4))+1||
+         status==='forked'&&previous.id!==current.id&&current.revision==='rev:1'))
+      throw RangeError('Invalid shared Calibration receipt transition');
+    return {version:1,base,previous,current,status};
+  }
+  function requireSharedLease(lease){
+    if(!lease||lease.sessionId!=='shared'||typeof lease.check!=='function'||
+       typeof lease.track!=='function'||'tabId' in lease)
+      throw Error('Shared Calibration receipt requires a shared lifetime');
+    lease.check(true);
+  }
+  function readSharedSelectionReceipt(db,lease=null){
+    return openTransaction(db,[CONTROL],'readonly',(tx,read,finish)=>{
+      read(tx.objectStore(CONTROL).get(SHARED_SELECTION_KEY),raw=>
+        finish(raw===undefined?null:selectionReceipt(raw)));
+    },lease);
+  }
+  // Call only after the session controller has verified the exact receipt
+  // acknowledgement. This transaction guards the receipt and domain revision;
+  // it is intentionally not a cross-database transaction.
+  function retireSharedSelectionReceipt(db,expected,lease){
+    requireSharedLease(lease);
+    const receipt=selectionReceipt(expected);
+    return openTransaction(db,[CONTROL,PROJECTS,SUMMARIES],'readwrite',(tx,read,finish)=>{
+      const control=tx.objectStore(CONTROL),records=tx.objectStore(PROJECTS),
+        summaries=tx.objectStore(SUMMARIES);
+      read(control.get(SHARED_SELECTION_KEY),raw=>{
+        if(raw===undefined||JSON.stringify(selectionReceipt(raw))!==JSON.stringify(receipt))
+          throw Error('Shared Calibration receipt changed; evidence retained');
+        read(records.get(receipt.current.id),saved=>{
+          if(saved===undefined)throw Error('Receipt project missing; evidence retained');
+          const project=model.normalize(saved);
+          if('rev:'+project.revision!==receipt.current.revision)
+            throw Error('Receipt project changed; evidence retained');
+          read(summaries.get(project.id),small=>{
+            match(project,small);
+            control.delete(SHARED_SELECTION_KEY);finish(receipt);
+          });
+        });
+      });
+    },lease);
+  }
+  function change(db,id,expected,changes,now,forkId=null,lease=null,receiptBase=null){
     model.id(id);
     if(!Number.isSafeInteger(expected)||expected<1)throw RangeError('Invalid expected project revision');
     if(forkId!==null)model.id(forkId);
-    return stores(db,'readwrite',(records,summaries,read,finish)=>{
+    const base=receiptBase===null?null:selectionBase(receiptBase);
+    if(base)requireSharedLease(lease);
+    const work=(records,summaries,read,finish)=>{
       read(records.get(id),raw=>{
         if(raw===undefined){
           if(forkId===null)throw Error('Calibration project missing; current work was not overwritten');
@@ -187,6 +260,21 @@
           });
         });
       });
+    };
+    if(!base)return stores(db,'readwrite',work,lease);
+    return openTransaction(db,[PROJECTS,SUMMARIES,CONTROL],'readwrite',(tx,read,finish)=>{
+      const control=tx.objectStore(CONTROL);
+      read(control.get(SHARED_SELECTION_KEY),raw=>{
+        if(raw!==undefined)throw Error('Shared Calibration receipt unresolved; evidence retained');
+        work(tx.objectStore(PROJECTS),tx.objectStore(SUMMARIES),read,result=>{
+          const receipt=selectionReceipt({version:1,base,
+            previous:{id,revision:'rev:'+expected,recovery:null},
+            current:{id:result.project.id,revision:'rev:'+result.project.revision,recovery:null},
+            status:result.status});
+          control.add(receipt,SHARED_SELECTION_KEY);
+          finish({...result,selectionReceipt:receipt});
+        });
+      });
     },lease);
   }
   function update(db,id,expected,changes,now=Date.now()){
@@ -194,6 +282,9 @@
   }
   function saveOrFork(db,id,expected,changes,forkId,now=Date.now(),lease=null){
     return change(db,id,expected,changes,now,forkId,lease);
+  }
+  function saveOrForkWithSelectionReceipt(db,id,expected,changes,forkId,now,base,lease){
+    return change(db,id,expected,changes,now,forkId,lease,selectionBase(base));
   }
   function rename(db,id,expected,title,now=Date.now()){
     return update(db,id,expected,{title},now);
@@ -288,5 +379,7 @@
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
-    create,get,list,update,saveOrFork,rename,remove,legacy,migrationMarker,adoptLegacy});
+    create,get,list,update,saveOrFork,rename,remove,legacy,migrationMarker,adoptLegacy,
+    SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
+    retireSharedSelectionReceipt});
 }));

@@ -1303,3 +1303,51 @@ test('shared editor activation uses the exact selected revision and preserves th
   assert.deepEqual(await store.legacy(db),raw);
   await assert.rejects(coordinator.create(env).prepareSelected(ref),/coordinator required/);
 });
+
+test('shared Calibration receipt commits atomically with project and summary, without schema upgrade',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),start=project(A);await store.create(db,start);
+  const lease=sharedCalibrationLease(),base={revision:9,digest:'sha256:'+'a'.repeat(64)};
+  db.failMutation(store.CONTROL,'add');
+  await assert.rejects(store.saveOrForkWithSelectionReceipt(db,A,1,details(start,{title:'New'}),B,200,base,lease),/Injected/);
+  assert.deepEqual(await store.get(db,A),start);
+  assert.equal(await store.readSharedSelectionReceipt(db),null);
+  const saved=await store.saveOrForkWithSelectionReceipt(db,A,1,details(start,{title:'New'}),B,200,base,lease);
+  const expected={version:1,base,previous:{id:A,revision:'rev:1',recovery:null},
+    current:{id:A,revision:'rev:2',recovery:null},status:'updated'};
+  assert.deepEqual(saved.selectionReceipt,expected);
+  assert.deepEqual(await store.readSharedSelectionReceipt(db),expected);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  assert.equal(db.version,2);assert.deepEqual(await store.legacy(db),raw);
+  await assert.rejects(store.saveOrForkWithSelectionReceipt(db,A,2,details(saved.project),B,300,base,lease),/receipt unresolved/);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  await assert.rejects(store.retireSharedSelectionReceipt(db,{...expected,base:{...base,revision:10}},lease),/receipt changed/);
+  assert.deepEqual(await store.readSharedSelectionReceipt(db),expected);
+  await store.retireSharedSelectionReceipt(db,expected,lease);
+  assert.equal(await store.readSharedSelectionReceipt(db),null);
+  assert.deepEqual(await store.get(db,A),saved.project);
+  assert.equal(lease.tracked.size,0);
+});
+test('shared Calibration receipt records a conflict fork and preserves evidence after a remote change',async()=>{
+  const db=memoryIndexedDB(),start=project(A);await store.create(db,start);
+  const remote=await store.rename(db,A,1,'Remote',200);
+  const lease=sharedCalibrationLease(),base={revision:2,digest:'sha256:'+'b'.repeat(64)};
+  const saved=await store.saveOrForkWithSelectionReceipt(db,A,1,details(start,{title:'Local'}),B,300,base,lease);
+  assert.equal(saved.status,'forked');
+  assert.deepEqual(saved.selectionReceipt.previous,{id:A,revision:'rev:1',recovery:null});
+  assert.deepEqual(saved.selectionReceipt.current,{id:B,revision:'rev:1',recovery:null});
+  assert.deepEqual(await store.get(db,A),remote);
+  const changed=await store.rename(db,B,1,'Changed',400);
+  await assert.rejects(store.retireSharedSelectionReceipt(db,saved.selectionReceipt,lease),/Receipt project changed/);
+  assert.deepEqual(await store.readSharedSelectionReceipt(db),saved.selectionReceipt);
+  assert.deepEqual(await store.get(db,B),changed);
+});
+test('shared Calibration receipt rejects invalid base and suspended lifetime before mutation',async()=>{
+  const db=memoryIndexedDB(),start=project(A);await store.create(db,start);
+  const lease=sharedCalibrationLease(),base={revision:2,digest:'sha256:'+'c'.repeat(64)};
+  assert.throws(()=>store.saveOrForkWithSelectionReceipt(db,A,1,details(start),B,200,{...base,digest:'invalid'},lease),/receipt base/);
+  assert.throws(()=>store.saveOrForkWithSelectionReceipt(db,A,1,details(start),B,200,base,null),/shared lifetime/);
+  lease.suspend();
+  assert.throws(()=>store.saveOrForkWithSelectionReceipt(db,A,1,details(start),B,200,base,lease),/Shared page suspended/);
+  assert.equal(await store.readSharedSelectionReceipt(db),null);
+  assert.deepEqual(await store.get(db,A),start);
+});
