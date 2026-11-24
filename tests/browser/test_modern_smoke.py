@@ -11301,6 +11301,83 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(second['after']['bound']['experiment'],first['edit'])
         self.assertIsNone(second['remaining'])
 
+    def test_shared_document_session_preview_empty_profile_and_reload(self):
+        """First preview startup owns a fresh checkpoint, without writing legacy experiment slots."""
+        url=self.base_url+'?document-session=shared'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        expect(self.page.locator('#ModernDocumentSessionMigrationChoices')).to_be_hidden()
+        initial=self.page.evaluate("""() => CurvatureModernApp.getExperimentSessionPreview().controller""")
+        self.assertEqual(initial['row']['revision'],1)
+        self.assertEqual(initial['row']['envelope']['workspace'],'scene')
+        self.assertIsNone(initial['draft'])
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""() => {
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return c?.status==='committed'&&c.row.envelope.workspace==='compare';
+        }""",timeout=30000)
+        saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),saved)
+        self.assertEqual(self.page.url,url)
+        evidence=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave;
+            const keys=await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE);req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{const db=req.result,tx=db.transaction(S.STORE,'readonly');
+                    const op=tx.objectStore(S.STORE).getAllKeys();
+                    tx.oncomplete=()=>{db.close();resolve(op.result);};tx.onabort=()=>{db.close();reject(tx.error);};};
+            });
+            return {keys,local:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY),
+                stamp:localStorage.getItem(S.META_KEY),tab:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)};
+        }""")
+        self.assertEqual(evidence,{'keys':['shared-checkpoint'],'local':None,'stamp':None,'tab':None})
+
+    def test_shared_document_session_preview_corrupt_source_is_not_empty(self):
+        """A corrupt legacy local payload blocks initialization and remains downloadable."""
+        self.page.add_init_script("""() => {
+            if(!sessionStorage.getItem('test-seeded')) {
+                localStorage.setItem('test-unused','unchanged');
+                sessionStorage.setItem('test-seeded','yes');
+            }
+        }""")
+        # Seed the exact experiment storage key without visiting ordinary Modern.
+        self.page.goto(self.base_url+'?document-session=shared',wait_until='commit')
+        # Use a separate fresh context for the actual historical fixture below.
+        self.page.wait_for_function("() => window.CurvatureModernExperimentState",timeout=30000)
+        key=self.page.evaluate('CurvatureModernExperimentState.STORAGE_KEY')
+        other=self.browser.new_context()
+        try:
+            page=other.new_page()
+            page.add_init_script("localStorage.setItem("+json.dumps(key)+",'invalid-json')")
+            page.goto(self.base_url+'?document-session=shared',wait_until='load')
+            page.wait_for_function("""() =>
+                window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+            expect(page.locator('#ModernDocumentSessionDownload')).to_be_visible()
+            expect(page.locator('#ModernSceneTab')).to_be_disabled()
+            evidence=page.evaluate("""async () => {
+                const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+                ui.sharedDocumentSessions(D);
+                const S=CurvatureModernSessionAutosave;
+                const c=S.openSharedCheckpoint(indexedDB,{lease:ui.captureSharedDocumentLifetime(),
+                    codec:CurvatureModernExperimentState,crypto,contract:D});
+                return {row:await c.read(),raw:localStorage.getItem(CurvatureModernExperimentState.STORAGE_KEY)};
+            }""")
+            self.assertEqual(evidence,{'row':None,'raw':'invalid-json'})
+        finally:
+            other.close()
+
     def test_shared_document_session_preview_live_migration_and_reload(self):
         """Mounted atomic shared session, explicit initial selection, stale page and global F5."""
         self.open_modern()

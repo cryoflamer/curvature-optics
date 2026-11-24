@@ -551,7 +551,7 @@ function unboundAtomicFixture(){
   const f=atomicFixture(),local=new Map();
   let row={revision:0,envelope:null};
   const storage={getItem:key=>local.has(key)?local.get(key):null};
-  const opts={sessions:{async read(){return structuredClone(row);}},storage,
+  const opts={sessions:{async read(){return structuredClone(row);},async inspectLegacyDocuments(){return [];}},storage,
     coordinate:action=>action(),isCurrent:()=>true};
   return {...f,local,opts,setSession(value){row=value;}};
 }
@@ -622,6 +622,53 @@ test('atomic source migration detects local or IDB source changes during destina
     const a=f.adapter.openSharedCheckpoint(f.db,{lease:f.lease,codec:f.codec,crypto,contract:f.contract});
     await assert.rejects(a.migrateSource(view.candidates.find(item=>item.selection.source===source).selection,f.opts),
       /evidence changed/);
+    assert.equal(injected,true);
+    assert.equal(f.db.rows.has('shared-checkpoint'),false);
+  }
+});
+
+test('empty shared checkpoint initializes default exactly once without legacy writes',async()=>{
+  const f=unboundAtomicFixture(),a=f.open();
+  const saved=await a.initializeEmpty(f.base,f.opts);
+  assert.equal(saved.revision,1);
+  assert.equal(saved.draft,null);
+  assert.deepEqual(saved.experiment,f.base);
+  assert.deepEqual([...f.db.rows.keys()],['shared-checkpoint']);
+  assert.equal(f.local.size,0);
+  assert.deepEqual(await f.open().read(),saved);
+  await assert.rejects(f.open().initializeEmpty({...f.base,height:5},f.opts),/already initialized/);
+  assert.deepEqual(await f.open().read(),saved);
+});
+test('empty shared initialization refuses historical and malformed evidence',async()=>{
+  for(const kind of ['local','stamp','idb','corrupt','metadata','session']){
+    const f=unboundAtomicFixture();
+    if(kind==='local')f.local.set(f.codec.STORAGE_KEY,JSON.stringify(f.base));
+    if(kind==='stamp')f.local.set(autosave.META_KEY,'100');
+    if(kind==='idb')await f.adapter.write(f.db,f.base,100);
+    if(kind==='corrupt')f.db.rows.set('unknown',{version:99});
+    if(kind==='metadata')f.opts.sessions.inspectLegacyDocuments=async()=>[{status:'invalid'}];
+    if(kind==='session')f.setSession({revision:1,envelope:f.contract.emptyShared()});
+    const before=structuredClone([...f.db.rows.entries()]);
+    await assert.rejects(f.open().initializeEmpty(f.base,f.opts),/historical/);
+    assert.deepEqual([...f.db.rows.entries()],before);
+  }
+});
+test('empty shared initialization refuses new evidence during hashing and stale generation',async()=>{
+  for(const kind of ['idb','local','generation']){
+    const f=unboundAtomicFixture();
+    let injected=false,live=true;
+    const crypto={subtle:{async digest(name,bytes){
+      const result=await f.crypto.subtle.digest(name,bytes);
+      if(!injected&&String.fromCharCode(...bytes).includes('"format":"curvature-modern-shared-checkpoint"')){
+        injected=true;
+        if(kind==='idb')await f.adapter.write(f.db,{...f.base,height:9},100);
+        if(kind==='local')f.local.set(f.codec.STORAGE_KEY,JSON.stringify(f.base));
+        if(kind==='generation')live=false;
+      }
+      return result;
+    }}};
+    const a=f.adapter.openSharedCheckpoint(f.db,{lease:f.lease,codec:f.codec,crypto,contract:f.contract});
+    await assert.rejects(a.initializeEmpty(f.base,{...f.opts,isCurrent:()=>live}),/historical|stale initialization/);
     assert.equal(injected,true);
     assert.equal(f.db.rows.has('shared-checkpoint'),false);
   }

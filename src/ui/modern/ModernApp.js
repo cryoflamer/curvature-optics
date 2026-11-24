@@ -1754,7 +1754,11 @@
         experimentPreview.migration=inventory;
         if(selection)return old.envelope&&old.envelope.documents.experiment?
           checkpoint.migrateLegacy(selection,opts):checkpoint.migrateSource(selection,opts);
-        if(!inventory.candidates.length)throw Error('No verified migration source. Save an experiment in ordinary Modern first or recover from backup.');
+        if(!inventory.candidates.length){
+          if(old.revision===0&&!inventory.issues.length&&!inventory.metadata.length)
+            return checkpoint.initializeEmpty(experiments.validate(experimentSnapshot()),opts);
+          throw Error('No verified migration source. Historical evidence remains unchanged; recover from backup.');
+        }
         throw Error('Shared session setup: choose a verified source after checking your local backup. Close other old Modern tabs. Old records remain unchanged.'+
           (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
       }});
@@ -9340,7 +9344,7 @@
       }).then(function(preview){
         if(experimentPreview.status==='suspended')return;
         experimentPreview.status=preview.status;
-        if(preview.status==='empty')experimentPreview.error='No verified legacy checkpoint. Open ordinary Modern and save an experiment first.';
+        if(preview.status==='empty')experimentPreview.error='No verified document checkpoint. Reload or recover from backup.';
         if(preview.status==='recovering')persistenceStatus('Document session recovery required',true);
         finishStartup(null,null,preview);
       }).catch(function(error){

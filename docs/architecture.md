@@ -566,8 +566,12 @@ one durable draft, promotes it atomically, and queues later edits against
 the newly acknowledged row. Reload reads the atomic row first and offers
 its draft explicitly. There is no live divergent HEAD to reconcile.
 Old bound sessions and unbound source inventories require an explicit
-migration selection; an empty profile still requires an ordinary saved
-experiment. Explicit URL/import startup bypasses the preview as before.
+migration selection. A clean experiment profile initializes revision one
+from the current default scene without an intermediate legacy write. Existing
+or invalid working evidence or historical document metadata blocks automatic
+initialization. Absence of working-store keys is checked inside the destination
+transaction; local evidence and the page generation are checked through readback.
+Explicit URL/import startup bypasses the preview as before.
 Ordinary Modern is unchanged pending acceptance. Old keys and backups
 are not modified; the new key is included by raw backup inventory.
 

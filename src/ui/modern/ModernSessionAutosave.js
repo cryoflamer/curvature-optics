@@ -253,7 +253,7 @@
       }
       // The entire row, including the last observed draft, is the CAS
       // baseline. Revision tokens are never reused, even on reverted edits.
-      async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true)){
+      async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true),requireEmpty=false){
         ensure(!busy,'shared checkpoint operation pending');
         lease.check(true);
         ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
@@ -292,7 +292,13 @@
                       }catch(error){failure=error;store.transaction.abort();}
                     };
                   }
-                  verifySource(0);
+                  if(requireEmpty){
+                    const keys=store.getAllKeys();
+                    keys.onsuccess=()=>{
+                      try{guard();ensure(keys.result.length===0,'historical working evidence appeared during initialization');verifySource(0);}
+                      catch(error){failure=error;store.transaction.abort();}
+                    };
+                  }else verifySource(0);
                 }catch(error){failure=error;store.transaction.abort();}
               };
               return null;
@@ -403,6 +409,33 @@
           selection:{...item.selection,sessionDigest}}));
         return {frame,candidates,issues:inventory.issues};
       }
+      // Fresh initialization is distinct from migration. Never treat an
+      // invalid source or detached historical metadata as an empty profile.
+      async function initializeEmpty(experiment,{sessions,storage,coordinate,isCurrent}={}){
+        ensure(typeof coordinate==='function'&&typeof isCurrent==='function'&&
+          sessions&&typeof sessions.inspectLegacyDocuments==='function',
+          'empty initialization dependencies required');
+        const value=normalizeExperiment(experiment);
+        return coordinate(async()=>{
+          const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale initialization generation');};
+          const verifyLocal=()=>{
+            guard();
+            const local=localEvidence(storage,codec);
+            ensure(local.raw===null&&local.stamp===null,'historical local evidence exists');
+          };
+          verifyLocal();
+          const plan=await sourcePlan(sessions,storage);
+          ensure(plan.candidates.length===0&&plan.issues.length===0,
+            'historical working evidence exists; select migration or recover from backup');
+          ensure((await sessions.read()).revision===0&&
+            (await sessions.inspectLegacyDocuments()).length===0,
+            'historical document metadata exists; recover from backup');
+          const current=await read();verifyLocal();
+          ensure(current===null,'shared checkpoint already initialized; evidence retained');
+          return mutate(0,(_,revision)=>({envelope:envelopeFor(contract.emptyShared(),value,revision),
+            experiment:value,draft:null}),[],verifyLocal,true);
+        });
+      }
       async function inspectSources({sessions,storage,coordinate}={}){
         ensure(typeof coordinate==='function','shared migration coordinator required');
         return coordinate(async()=>{
@@ -443,7 +476,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,stage,promote,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){
