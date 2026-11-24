@@ -10796,6 +10796,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             return c&&c.status==='committed'&&c.row.envelope.workspace==='compare';
         }""",timeout=30000)
         saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.draft'))
         self.assertEqual(self.page.url,url)
         self.page.reload(wait_until='load')
         self.page.wait_for_function("""() =>
@@ -10855,6 +10856,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
         expect(panel).to_be_visible()
         expect(self.page.locator('#ModernDocumentSessionAcceptHead')).to_be_visible()
+        expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_be_hidden()
         self.page.once('dialog',lambda dialog:dialog.dismiss())
         self.page.locator('#ModernDocumentSessionAcceptHead').click()
         self.assertEqual(self.page.evaluate(
@@ -10866,6 +10868,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         after=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
         self.assertEqual(after['row']['revision'],before['row']['revision']+1)
         self.assertEqual(after['bound']['experiment']['scene']['camera']['Height'],old+7)
+        self.assertIsNone(after['draft'])
         expect(panel).to_be_hidden()
         self.assertEqual(self.page.url,url)
 
@@ -10897,6 +10900,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
             copied=child.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
             self.assertNotEqual(copied['bound']['id'],parent['bound']['id'])
+            self.assertIsNone(copied['draft'])
             self.assertEqual(copied['bound']['experiment'],parent['bound']['experiment'])
             self.assertEqual(copied['bound']['experiment']['scene']['camera']['Height'],old+5)
             child.locator('#ModernHeight').fill(str(old+9))
@@ -10929,6 +10933,121 @@ class ModernBrowserSmoke(unittest.TestCase):
             'CurvatureModernApp.getExperimentSessionPreview().controller.row'),parent['row'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+5)
 
+
+    def test_document_session_preview_durable_unsaved_draft_f5_and_workspace_restore(self):
+        """Hold normal debounce while real early checkpoint commits; restore the draft explicitly."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        url=self.base_url+'?document-session=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        # Hold only the ordinary 550ms autosave timer, not the recovery I/O.
+        self.page.evaluate("""() => {
+            const timer=window.setTimeout.bind(window);
+            window.setTimeout=(fn,ms,...args)=>timer(fn,ms===550?60000:ms,...args);
+        }""")
+        self.page.locator('#ModernHeight').fill(str(old+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""height => {
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return c.checkpoint==='durable'&&c.draft?.experiment.display.mode==='compare'&&
+                c.draft.experiment.scene.camera.Height===height;
+        }""",arg=old+7,timeout=30000)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Unsaved edits recoverable in IndexedDB',timeout=30000)
+        staged=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(staged['row'],before['row'])
+        self.assertEqual(staged['head'],before['head'])
+        self.assertEqual(self.page.url,url)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='recovering'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'scene')
+        expect(self.page.locator('#ModernDocumentSessionAcceptHead')).to_be_hidden()
+        restore=self.page.locator('#ModernDocumentSessionRestoreDraft')
+        expect(restore).to_be_visible()
+        expect(self.page.locator('#ModernCompareTab')).to_be_disabled()
+        # The same existing recovery panel must remain usable on a narrow screen.
+        self.page.set_viewport_size({'width':480,'height':800})
+        expect(restore).to_be_visible()
+        self.assertEqual(restore.evaluate("(e)=>getComputedStyle(e).borderRadius"),'7px')
+        self.page.evaluate("""() => {
+            const timer=window.setTimeout.bind(window);window.restoreRecoveryTimer=timer;
+            window.setTimeout=(fn,ms,...args)=>timer(fn,ms===550?60000:ms,...args);
+        }""")
+        restore.click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Unsaved edits restored from IndexedDB',timeout=30000)
+        loaded=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(loaded['row'],before['row'])
+        self.assertEqual(loaded['draft'],staged['draft'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+7)
+        expect(restore).to_be_hidden()
+        # Resume normal debounce by making a new edit after restoring the timer.
+        self.page.evaluate("window.setTimeout=window.restoreRecoveryTimer")
+        self.page.set_viewport_size({'width':1280,'height':900})
+        self.page.locator('#ModernHeight').fill(str(old+8))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        saved=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertIsNone(saved['draft'])
+        self.assertEqual(saved['row']['revision'],before['row']['revision']+1)
+        self.assertEqual(saved['row']['envelope']['workspace'],'compare')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+8)
+        self.assertEqual(self.page.url,url)
+
+    def test_document_session_preview_checkpoint_failure_blocks_normal_commit(self):
+        """Failed early draft write is visible before normal save and input remains exportable."""
+        self.open_modern()
+        expect(self.page.locator('#ModernSceneTab')).to_be_enabled()
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(old+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        self.page.goto(self.base_url+'?document-session=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'""",timeout=30000)
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.page.evaluate("""() => {
+            const add=IDBObjectStore.prototype.add;
+            IDBObjectStore.prototype.add=function(value,...args){
+                if(typeof args[0]==='string'&&args[0].startsWith('working-recovery:'))
+                    throw Error('simulated recovery checkpoint quota');
+                return add.call(this,value,...args);
+            };
+        }""")
+        self.page.locator('#ModernHeight').fill(str(old+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+        expect(self.page.locator('#ModernDocumentSessionRecoveryStatus')).to_contain_text(
+            'simulated recovery checkpoint quota')
+        expect(self.page.locator('#ModernCompareTab')).to_be_disabled()
+        failed=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.assertEqual(failed['row'],before['row'])
+        self.assertEqual(failed['head'],before['head'])
+        self.assertEqual(failed['latestInput']['scene']['camera']['Height'],old+7)
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernDocumentSessionDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['controller']['latestInput']['scene']['camera']['Height'],old+7)
+        self.assertEqual(evidence['live']['scene']['camera']['Height'],old+7)
 
     def test_document_session_preview_interrupted_duplicate_uses_pinned_parent_revision(self):
         """Child binding fails; parent advances; child F5 retries the exact fork."""

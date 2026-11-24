@@ -541,8 +541,15 @@ head. Confirming it CASes the session then reloads. A diagnostic JSON export
 contains the two verified revisions and the in-memory experiment, not photo
 bytes or a complete portable backup. No destructive recovery.
 
-The normal debounced physical save path calls the controller instead of
+Each physical edit snapshots the experiment immediately for the recovery
+controller, and the normal debounced save calls the controller instead of
 writing the legacy working checkpoint or publishing an automatic URL.
+The status distinguishes a pending checkpoint, a verified recoverable
+draft, and an acknowledged document. The recovery panel has separate
+actions for accepting divergent HEAD and restoring unsaved edits. A draft
+is loaded explicitly, with autosave disabled during physical and workspace
+hydration; afterwards normal debounce commits it. The diagnostic export
+includes the latest in-memory input and verified draft when available.
 The selected Scene/Compare mode is included in the session acknowledgement.
 A no-op edit verifies both stores without allocating a new revision.
 A failed write leaves the preview blocked, retaining live data and old
@@ -551,7 +558,9 @@ reloading with unacknowledged edits requests the browser's unload warning;
 the warning listener is installed only while a save or unsaved edit is pending
 and performs no write. It is removed after acknowledgement. Explicit Copy
 experiment URL removes the private document-session preview flag.
-Uncommitted edits are not crash-durable. Native BFCache return requires
+Only an acknowledged recovery checkpoint (or committed document) is
+durable; an edit still in memory or an interrupted checkpoint transaction
+is not guaranteed recoverable. Native BFCache return requires
 reload, not stale lease reuse. Existing local UI preferences and unrelated
 legacy startup modules remain; this is not yet final ID-only persistence.
 
@@ -579,7 +588,7 @@ then binds the verified child. Fork origins and immutable revisions remain
 retained; cleanup and orphan handling are future work. Ordinary UI-only
 tab claims remain independent of this document-fork contract.
 
-### Working-copy recovery checkpoint adapter (not mounted)
+### Working-copy recovery checkpoint adapter
 
 The existing working-session database has a disjoint
 `working-recovery:<working-copy-id>` record. It contains the validated
@@ -606,13 +615,10 @@ before invoking retirement; a domain adapter cannot prove that separate
 database's transaction. A draft left after interrupted retirement is
 recoverable evidence. Parent forks still copy only acknowledged documents.
 
-This is the storage foundation: the live preview does not yet stage drafts
-on edit, offer draft recovery, reconcile a divergent head, or retire drafts
-after session acknowledgement. Memory-only input and interrupted IndexedDB
-writes are not guaranteed durable. Those lifecycle and UI behaviors require
-separate integration and acceptance.
+The live preview uses this adapter via the recovery-aware controller.
+Memory-only input and interrupted IndexedDB writes are not guaranteed durable.
 
-### Recovery-aware experiment controller (headless opt-in)
+### Recovery-aware experiment controller (opt-in)
 
 The recovery-aware controller composes the existing experiment controller,
 rather than replacing its domain/session CAS. `markDirty(experiment)`
@@ -639,10 +645,10 @@ the same document; it is never silently promoted or inherited by a fork.
 Loading a draft updates only the controller's in-memory dirty state; the
 caller activates its returned payload and separately requests save.
 
-The API is explicitly opt-in and currently not mounted in ModernApp.
-A pending checkpoint is not crash-durable until acknowledgement; a failed
-checkpoint requires reload/export or a future explicit retry UX. No Web
-Storage changes or new URL behavior are introduced.
+ModernApp mounts this API only on the explicit document-session preview
+route. A pending checkpoint is not crash-durable until acknowledgement;
+a failed checkpoint requires reload/export or a future explicit retry UX.
+No Web Storage changes or new URL behavior are introduced.
 
 ## One-user rollback drill
 

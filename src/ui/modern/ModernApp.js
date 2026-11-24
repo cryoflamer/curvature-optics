@@ -705,7 +705,7 @@
   var documentSessionPreviewRequested=typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('document-session')==='preview';
-  var experimentPreview={status:'disabled',controller:null,live:false,error:null};
+  var experimentPreview={status:'disabled',controller:null,live:false,error:null,recoveryAction:false};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -1642,38 +1642,67 @@
     });
     var panel=newUiEl('ModernDocumentSessionRecovery');
     if(panel)panel.hidden=usable||status==='loading';
+    var controller=experimentPreview.controller;
+    var headOffer=status==='recovering'&&controller&&controller.recoveryOffer();
+    var draftOffer=status==='recovering'&&controller&&controller.draftOffer();
     var message=newUiEl('ModernDocumentSessionRecoveryStatus');
     if(message)modernStatus(message,experimentPreview.error||
-      (status==='recovering'?'A newer durable revision is available. Review and explicitly accept it, or retain the acknowledged revision.':
+      (headOffer?'A newer durable revision is available. Explicitly accept it before restoring any remaining unsaved edits.':
+        draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
         'Document session preview is unavailable. Remove document-session=preview to use the unchanged legacy working session.'),'error');
     var accept=newUiEl('ModernDocumentSessionAcceptHead');
-    if(accept)accept.hidden=status!=='recovering';
+    if(accept){accept.hidden=!headOffer;accept.disabled=experimentPreview.recoveryAction;}
+    var restore=newUiEl('ModernDocumentSessionRestoreDraft');
+    if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction;}
     var download=newUiEl('ModernDocumentSessionDownload');
-    if(download)download.hidden=!experimentPreview.controller;
+    if(download){download.hidden=!controller;download.disabled=experimentPreview.recoveryAction;}
   }
   function previewFailure(error){
     experimentPreview.status='failed';
+    if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
     experimentPreview.error=String(error&&error.message||error);
     persistenceStatus('Document session not saved: '+experimentPreview.error,true);
     syncPreviewUnloadWarning();previewControls();
   }
-  function savePreviewExperiment(current){
+  function observePreviewCheckpoint(){
+    var c=experimentPreview.controller;
+    if(!c||experimentPreview.status==='suspended'||experimentPreview.status==='failed')return;
+    // During save, the controller owns checkpoint/retirement serialization.
+    // In particular, do not ask for a flush while retirement is in progress.
+    if(c.state().busy)return;
+    c.flushCheckpoint().then(function(){
+      if(experimentPreview.status==='suspended'||experimentPreview.status==='failed')return;
+      var view=c.state();
+      if(view.busy||view.status!=='dirty')return;
+      persistenceStatus(view.checkpoint==='durable'?
+        'Unsaved edits recoverable in IndexedDB':'Saving recovery checkpoint…');
+      syncPreviewUnloadWarning();
+    }).catch(function(error){
+      if(experimentPreview.status!=='suspended'&&experimentPreview.status!=='failed')previewFailure(error);
+    });
+  }
+  function savePreviewExperiment(){
     var c=experimentPreview.controller;
     if(!c||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
-    if(c.state().busy)return;
+    var before=c.state();
+    if(before.busy)return;
+    if(before.status==='failed'){previewFailure(Error(before.error));return;}
+    if(before.status!=='dirty')return;
     persistence.dirty=false;
     experimentPreview.status='saving';syncPreviewUnloadWarning();
     persistenceStatus('Saving document session…');
-    c.save(experiments.validate(current)).then(function(){
-      if(experimentPreview.status==='suspended')return;
-      experimentPreview.status=c.state().status;
-      persistenceStatus(experimentPreview.status==='dirty'?
-        'Document session has unsaved changes':'Document session saved');
-      if(experimentPreview.status==='dirty'){
+    c.save().then(function(){
+      if(experimentPreview.status==='suspended'||experimentPreview.status==='failed')return;
+      var view=c.state();
+      experimentPreview.status=view.status;
+      if(view.status==='dirty'){
         persistence.dirty=true;
+        persistenceStatus(view.checkpoint==='durable'?
+          'Unsaved edits recoverable in IndexedDB':'Saving recovery checkpoint…');
+        observePreviewCheckpoint();
         if(persistence.timer===null)
           persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment(false);},550);
-      }
+      }else persistenceStatus('Document session saved');
       syncPreviewUnloadWarning();
     }).catch(function(error){persistence.dirty=true;
       if(experimentPreview.status!=='suspended')previewFailure(error);
@@ -1686,7 +1715,7 @@
     var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
     var sessions=ui.documentSessions(api);
-    var controller=api.createExperimentController({lease:lease,
+    var controller=api.createRecoverableExperimentController({lease:lease,
       sessions:sessions,working:working,isCurrent:current,
       prepare:async function(){
         var source=await sessions.readForkSource();
@@ -1722,9 +1751,43 @@
       if(experimentPreview.status!=='recovering'||!offer)return;
       if(!root.confirm('Accept durable revision '+offer.revision+
         '? The previously acknowledged revision remains stored.'))return;
-      accept.disabled=true;
-      c.acceptHead(offer).then(function(){root.location.reload();})
-        .catch(function(error){previewFailure(error);});
+      if(experimentPreview.recoveryAction)return;
+      experimentPreview.recoveryAction=true;previewControls();
+      c.acceptHead(offer).then(function(){
+        if(experimentPreview.status!=='suspended')root.location.reload();
+      }).catch(function(error){
+        experimentPreview.recoveryAction=false;
+        if(experimentPreview.status!=='suspended')previewFailure(error);
+      });
+    });
+    var restore=newUiEl('ModernDocumentSessionRestoreDraft');
+    if(restore)restore.addEventListener('click',function(){
+      var c=experimentPreview.controller,offer=c&&c.draftOffer();
+      if(experimentPreview.status!=='recovering'||!offer||experimentPreview.recoveryAction)return;
+      experimentPreview.recoveryAction=true;previewControls();
+      c.loadDraft(offer).then(function(data){
+        if(experimentPreview.status==='suspended')return;
+        // The verified snapshot is the controller's dirty input. Hydration
+        // must not stage a second snapshot or write legacy preferences/URLs.
+        var ready=persistence.ready;
+        persistence.ready=false;
+        try{
+          applyExperiment(data);syncNumericInputs();syncCompareEditor();
+          if(setMode(data.display.mode,false)===false)throw Error('Cannot activate recovered workspace');
+        }finally{persistence.ready=ready;}
+        experimentPreview.recoveryAction=false;
+        experimentPreview.status=c.state().status;
+        experimentPreview.error=null;
+        persistence.dirty=true;
+        updateSnapshotSaveAction();refreshCalibrationApplicability();
+        previewControls();syncPreviewUnloadWarning();
+        persistenceStatus('Unsaved edits restored from IndexedDB');
+        if(persistence.timer!==null)clearTimeout(persistence.timer);
+        persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment(false);},550);
+      }).catch(function(error){
+        experimentPreview.recoveryAction=false;
+        if(experimentPreview.status!=='suspended')previewFailure(error);
+      });
     });
     root.addEventListener('pagehide',function(){
       if(!experimentPreview.live)return;
@@ -1739,10 +1802,10 @@
   function storeExperiment(publishUrl){
     if(keyframeEditSession)return; // Temporary frame must never become working experiment.
     if(!persistence.ready||!persistence.dirty||!experiments||!root.location)return;
+    if(experimentPreview.live){savePreviewExperiment();return;}
     var current;
     try{current=experimentSnapshot();}
     catch(error){persistenceStatus('Cannot save working session: '+error.message,true);return;}
-    if(experimentPreview.live){savePreviewExperiment(current);return;}
     var errors=[],saved=false,localSaved=false,idbPending=false;
     var timestamp=Math.max(Date.now(),persistence.latestTimestamp+1);
     persistence.latestTimestamp=timestamp;
@@ -1818,10 +1881,12 @@
     if(experimentPreview.live){
       if(!experimentPreview.controller||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
       try{
-        experimentPreview.controller.markDirty();
-        experimentPreview.status=experimentPreview.controller.state().status;
-        persistenceStatus('Document session has unsaved changes');
-        syncPreviewUnloadWarning();
+        experimentPreview.controller.markDirty(experiments.validate(experimentSnapshot()));
+        var view=experimentPreview.controller.state();
+        experimentPreview.status=view.busy?'saving':view.status;
+        persistenceStatus(view.checkpoint==='durable'?
+          'Unsaved edits recoverable in IndexedDB':'Saving recovery checkpoint…');
+        syncPreviewUnloadWarning();observePreviewCheckpoint();
       }catch(error){previewFailure(error);return;}
     }
     if(persistence.timer!==null)clearTimeout(persistence.timer);
