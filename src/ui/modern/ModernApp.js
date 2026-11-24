@@ -702,10 +702,12 @@
   var workspaceUiRegistryPreview={status:'disabled',bridge:null,error:null};
   var workspaceSectionEditGeneration=0,workspaceTabEditGeneration=0;
   var workspaceViewEditGeneration={animation:0,calibration:0};
-  var documentSessionPreviewRequested=typeof URLSearchParams==='function'&&
-    new URLSearchParams(root.location&&root.location.search||'')
-      .get('document-session')==='preview';
-  var experimentPreview={status:'disabled',controller:null,live:false,error:null,recoveryAction:false};
+  var documentSessionRoute=typeof URLSearchParams==='function'&&
+    new URLSearchParams(root.location&&root.location.search||'').get('document-session');
+  var sharedSessionPreviewRequested=documentSessionRoute==='shared';
+  var documentSessionPreviewRequested=sharedSessionPreviewRequested||documentSessionRoute==='preview';
+  var experimentPreview={status:'disabled',controller:null,live:false,error:null,recoveryAction:false,
+    migration:null};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -1649,7 +1651,25 @@
     if(message)modernStatus(message,experimentPreview.error||
       (headOffer?'A newer durable revision is available. Explicitly accept it before restoring any remaining unsaved edits.':
         draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
-        'Document session preview is unavailable. Remove document-session=preview to use the unchanged legacy working session.'),'error');
+        'Document session preview is unavailable. Remove document-session='+documentSessionRoute+
+          ' to use the unchanged legacy working session.'),'error');
+    var choices=newUiEl('ModernDocumentSessionMigrationChoices');
+    if(choices){
+      choices.replaceChildren();
+      var inventory=experimentPreview.migration;
+      choices.hidden=!inventory||usable||status==='loading';
+      if(inventory&&!choices.hidden){
+        inventory.candidates.forEach(function(candidate){
+          var button=document.createElement('button');
+          button.type='button';button.className='modern-ghost-button';
+          button.textContent='Use '+candidate.selection.source+' · '+candidate.selection.key+
+            ' · '+candidate.workspace+' · H='+candidate.experiment.scene.camera.Height+' m';
+          button.disabled=experimentPreview.recoveryAction;
+          button.addEventListener('click',function(){selectSharedMigration(candidate.selection);});
+          choices.appendChild(button);
+        });
+      }
+    }
     var accept=newUiEl('ModernDocumentSessionAcceptHead');
     if(accept){accept.hidden=!headOffer;accept.disabled=experimentPreview.recoveryAction;}
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
@@ -1708,16 +1728,32 @@
       if(experimentPreview.status!=='suspended')previewFailure(error);
     });
   }
-  async function openExperimentPreview(){
+  async function openExperimentPreview(selection){
     var api=root.CurvatureModernDocumentSession,store=root.CurvatureModernUiSessionStore;
     if(!api||!store||!sessionAutosave||!root.indexedDB)throw Error('Document session dependencies unavailable');
-    var ui=store.create(root),claim=await ui.claimTab({documentFork:true}),lease=ui.captureDocumentLease();
+    var ui=store.create(root),claim,lease,sessions,coordinate;
+    if(sharedSessionPreviewRequested){
+      sessions=ui.sharedDocumentSessions(api);lease=ui.captureSharedDocumentLifetime();
+      coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
+    }else{
+      claim=await ui.claimTab({documentFork:true});lease=ui.captureDocumentLease();
+      sessions=ui.documentSessions(api);
+    }
     var working=sessionAutosave.openWorkingCopy(root.indexedDB,{lease:lease,codec:experiments,crypto:root.crypto});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
-    var sessions=ui.documentSessions(api);
     var controller=api.createRecoverableExperimentController({lease:lease,
-      sessions:sessions,working:working,isCurrent:current,
+      sessions:sessions,working:working,isCurrent:current,coordinate:coordinate,
       prepare:async function(){
+        if(sharedSessionPreviewRequested){
+          var storage=preferencesStorage();
+          var inventory=await working.inspectMigration(storage);
+          inventory.metadata=await sessions.inspectLegacyDocuments();
+          experimentPreview.migration=inventory;
+          if(selection)return working.prepareSelectedMigration(selection,{storage:storage,isCurrent:current});
+          if(!inventory.candidates.length)throw Error('No verified migration source. Save an experiment in ordinary Modern first or recover from backup.');
+          throw Error('Shared session setup: choose a verified source after checking your local backup. Old records remain unchanged.'+
+            (inventory.issues.length?' Invalid records: '+inventory.issues.length+'. Download evidence for details.':''));
+        }
         var source=await sessions.readForkSource();
         if(source)return working.prepareFork(source,current);
         if(claim.forkedFrom)throw Error('Missing durable fork origin; legacy fallback refused');
@@ -1727,7 +1763,20 @@
       }});
     experimentPreview.controller=controller;
     await controller.open();
+    experimentPreview.migration=null;
     return controller.state();
+  }
+  function selectSharedMigration(selection){
+    if(!sharedSessionPreviewRequested||!experimentPreview.migration||
+       experimentPreview.recoveryAction||experimentPreview.status!=='failed')return;
+    if(!root.confirm('Use this exact verified experiment for the shared session? Confirm you have a verified local backup or are using a disposable test profile. Old records will be retained.'))return;
+    experimentPreview.recoveryAction=true;previewControls();
+    openExperimentPreview(selection).then(function(){
+      if(experimentPreview.status!=='suspended')root.location.reload();
+    }).catch(function(error){
+      experimentPreview.recoveryAction=false;
+      if(experimentPreview.status!=='suspended')previewFailure(error);
+    });
   }
   function bindExperimentPreview(){
     if(!documentSessionPreviewRequested)return;
@@ -1737,7 +1786,8 @@
         var c=experimentPreview.controller;
         if(!c)return;
         var evidence={format:'curvature-experiment-session-recovery',version:1,
-          controller:c.state(),live:persistence.ready?experimentSnapshot():null};
+          controller:c.state(),migration:experimentPreview.migration,
+          live:persistence.ready?experimentSnapshot():null};
         var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
           {type:'application/json'})),link=document.createElement('a');
         link.href=uri;link.download='curvature-experiment-recovery.json';
@@ -6322,7 +6372,7 @@
     try{
       var url=new URL(root.location.href);
       if(url.searchParams.getAll('document-session').length!==1||
-         url.searchParams.get('document-session')!=='preview')return false;
+         url.searchParams.get('document-session')!==documentSessionRoute)return false;
       url.searchParams.delete('document-session');
       return experiments.isWorkingExperimentUrl(url.href,preferencesStorage());
     }catch(error){return false;}
@@ -9478,6 +9528,9 @@
     },
     getExperimentSessionPreview:function(){
       return {status:experimentPreview.status,error:experimentPreview.error,
+        ...(sharedSessionPreviewRequested?{route:documentSessionRoute,migration:experimentPreview.migration?
+          {candidates:experimentPreview.migration.candidates.map(function(c){return {selection:c.selection,workspace:c.workspace};}),
+            issues:experimentPreview.migration.issues}:null}:{}),
         controller:experimentPreview.controller&&experimentPreview.controller.state()};
     },
     getWorkspaceUiRegistryPreview:function(){

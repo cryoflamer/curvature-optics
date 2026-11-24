@@ -217,8 +217,20 @@ The shared metadata adapter separately exposes
 validation is not domain verification or authorization to activate.
 These diagnostic APIs do not change startup or bind the shared session;
 the caller must still CAS the verified selection. Separate databases
-are not a single atomic inventory. The live migration selection UI and
-shared consumer remain unmounted. The old v1 format and `document:<tabId>` keys remain readable and
+are not a single atomic inventory. The opt-in live consumer is `CurvatureModern.html?document-session=shared`.
+Normal Modern and the historical `document-session=preview` remain
+unchanged. First open with no bound experiment shows verified migration
+sources in the existing recovery panel; an explicit selection and
+confirmation of backup/test-profile use are required. The confirmation
+is not proof of a verified backup. A successful selection writes the
+shared binding and reloads; later F5 restores the acknowledged global
+workspace and experiment. Stale edits fail visibly and the evidence
+download retains the rejected in-memory input. Explicit public URLs
+and other existing route intents bypass the preview; Copy Experiment URL
+strips the opt-in parameter. Reset, History and auxiliary workspaces
+remain unavailable in this limited preview. Use a disposable profile or
+a verified portable backup before testing populated data. No automatic
+migration or default startup switch is authorized until acceptance. The old v1 format and `document:<tabId>` keys remain readable and
 unchanged; a separate key avoids collisions with historical tab IDs.
 
 Old per-tab preview rows, fork provenance, pending
