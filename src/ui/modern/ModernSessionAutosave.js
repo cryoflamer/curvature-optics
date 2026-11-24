@@ -364,6 +364,27 @@
             experiment:before.experiment,draft:null};
         },[],guard,false,verify);
       }
+      // Prove the exact pre-write checkpoint even after a process restart.
+      // The selection transition changes only revision and envelope; reversing
+      // it must reproduce the recorded SHA-256, including all other slots and
+      // physical payload. A matching current project ID alone is insufficient.
+      async function proveSelectionReceipt(row,mode,previous,current,base){
+        lease.check();
+        ensure(base&&Number.isSafeInteger(base.revision)&&base.revision>=1&&
+          /^sha256:[0-9a-f]{64}$/.test(base.digest),'invalid selection receipt base');
+        if(!row||row.draft!==null||row.envelope.workspace!==mode||
+           !['calibration','animation'].includes(mode))return null;
+        await decode({present:true,row});lease.check();
+        const selected=row.envelope.documents[mode];
+        if(row.revision===base.revision&&row.digest===base.digest&&
+           canonical(selected)===canonical(previous))return 'pending';
+        if(row.revision!==base.revision+1||canonical(selected)!==canonical(current))return null;
+        const {digest:ignored,...data}=row;
+        const reconstructed={...data,revision:base.revision,
+          envelope:contract.select(row.envelope,mode,previous)};
+        const checksum=await digest(canonical(reconstructed),crypto);lease.check();
+        return checksum===base.digest?'committed':null;
+      }
       // The previous live controller uses this same operation lock for all
       // cross-store writes. Old sessions must not be edited outside it while
       // migrating. The working-store evidence is also compared atomically.
@@ -510,7 +531,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){

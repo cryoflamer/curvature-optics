@@ -11880,6 +11880,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(outcome['result']['bound'],outcome['before']['bound'])
         self.assertEqual(outcome['calls'],3)
 
+
+    def test_shared_calibration_durable_receipt_recovers_after_reload(self):
+        """A fresh page proves both uncommitted and committed pointers without a domain rewrite."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        data=self.soundly_calibration_experiment()
+        for committed in [False,True]:
+            with self.subTest(committed=committed):
+                seeded=self.page.evaluate("""async ({data,committed}) => {
+                    const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
+                        P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
+                    const lease=U.captureSharedDocumentLifetime();
+                    const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                        lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+                    const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
+                        prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
+                    await c.open();
+                    const project=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+                    await c.selectWorkspace('calibration',P.projectReference(project));
+                    const base=await c.captureSelectionBase('calibration',P.projectReference(project));
+                    const changes={title:'Durable reload',photo:project.photo,checkpoint:project.checkpoint,
+                        overview:project.overview,resultIds:project.resultIds};
+                    const saved=await S.saveOrForkWithSelectionReceipt(indexedDB,project.id,project.revision,
+                        changes,CurvatureModernCalibrationProject.createId(crypto),Date.now(),base,lease);
+                    if(committed)await c.acknowledgeDocumentRevision('calibration',saved.selectionReceipt);
+                    return {saved,before:await make().read()};
+                }""",{"data":data,"committed":committed})
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+                restored=self.page.evaluate("""async () => {
+                    const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
+                        P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
+                    const lease=U.captureSharedDocumentLifetime();
+                    const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                        lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+                    const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
+                        prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window),
+                        selectionRecovery:P.sharedSelectionRecovery(window,lease)});
+                    await c.open();const offer=c.state(),before=await make().read();
+                    const result=await c.recoverDocumentSelection(offer.selectionRecovery);
+                    const after=await make().read(),project=await S.get(indexedDB,offer.selectionRecovery.current.id);
+                    return {offer,before,result,after,project,receipt:await S.readSharedSelectionReceipt(indexedDB),
+                        legacy:await S.legacy(indexedDB)};
+                }""")
+                self.assertEqual(restored['offer']['status'],'recovering-selection')
+                self.assertEqual(restored['before'],seeded['before'])
+                self.assertEqual(restored['project'],seeded['saved']['project'])
+                self.assertEqual(restored['after']['revision'],seeded['before']['revision']+(0 if committed else 1))
+                if committed:
+                    self.assertEqual(restored['after'],seeded['before'])
+                self.assertEqual(restored['result']['status'],'committed')
+                self.assertIsNone(restored['receipt'])
+                self.assertIsNone(restored['legacy'])
+                self.assertEqual(restored['after']['experiment'],seeded['before']['experiment'])
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()

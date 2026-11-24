@@ -94,10 +94,18 @@ function atomicControllerFixture({canonicalBindings=false}={}){
   let durable={revision:1,envelope:contract.select(contract.emptyShared(),'scene',
     {id:'shared-experiment',revision:'checkpoint:1',recovery:null}),experiment:base,draft:null,digest:'initial'};
   let pause=null,fault=null,reads=0;
-  function open({lease={sessionId:'shared',check(){}},prepare=()=>{throw Error('unexpected migration');},isCurrent=()=>true,readDocument,readRecovery}={}){
+  function open({lease={sessionId:'shared',check(){}},prepare=()=>{throw Error('unexpected migration');},isCurrent=()=>true,readDocument,readRecovery,selectionRecovery}={}){
     let seen;
     const checkpoint={
       async read(){reads++;seen=copy(durable);return copy(seen);},
+      async proveSelectionReceipt(row,kind,previous,current,base){
+        if(!row||row.draft!==null||row.envelope.workspace!==kind)return null;
+        const ref=contract.normalize(row.envelope).documents[kind];
+        if(row.revision===base.revision&&row.digest===base.digest&&JSON.stringify(ref)===JSON.stringify(previous))return 'pending';
+        if(row.revision===base.revision+1&&row.digest==='select:'+base.revision&&
+           base.digest==='select:'+(base.revision-1)&&JSON.stringify(ref)===JSON.stringify(current))return 'committed';
+        return null;
+      },
       async stage(experiment,revision){
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
         if(fault==='stage')throw Error('stage failure');
@@ -130,7 +138,7 @@ function atomicControllerFixture({canonicalBindings=false}={}){
         if(fault==='after')throw Error('lost acknowledgement');
         seen=copy(durable);return copy(seen);
       }};
-    return contract.createAtomicExperimentController({lease,checkpoint,prepare,isCurrent,readDocument,readRecovery});
+    return contract.createAtomicExperimentController({lease,checkpoint,prepare,isCurrent,readDocument,readRecovery,selectionRecovery});
   }
   return {base,open,reads:()=>reads,fault(value){fault=value;},hold(){let release;pause=new Promise(resolve=>{release=resolve;});return ()=>{pause=null;release();};}};
 }
@@ -333,4 +341,43 @@ test('auxiliary durable receipt captures exact checkpoint base and refuses stale
   const b=f.open({readDocument});await b.open();
   await a.selectWorkspace('scene');
   await assert.rejects(b.captureSelectionBase('calibration',current),/CAS conflict/);
+});
+
+test('fresh controller offers durable receipt before attempting stale domain restore',async()=>{
+  for(const committed of [false,true]){
+    const f=atomicControllerFixture({canonicalBindings:true});let revision='rev:1',retired=0;
+    const readDocument=async(kind,id)=>({kind,id,revision});
+    const a=f.open({readDocument});await a.open();
+    const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+    await a.selectWorkspace('calibration',previous);
+    const base=await a.captureSelectionBase('calibration',previous);revision='rev:2';
+    let receipt={version:1,base,previous,current,status:'updated'};
+    if(committed)await a.acknowledgeDocumentRevision('calibration',receipt);
+    const selectionRecovery={kind:'calibration',read:async()=>receipt,retire:async()=>{retired++;receipt=null;}};
+    const fresh=f.open({readDocument,selectionRecovery});await fresh.open();
+    assert.equal(fresh.state().status,'recovering-selection');
+    assert.throws(()=>fresh.markDirty(f.base),/resolve session recovery/);
+    await assert.rejects(fresh.recoverDocumentSelection({...receipt,status:'wrong'}),/explicit current/);
+    const result=await fresh.recoverDocumentSelection(fresh.state().selectionRecovery);
+    assert.equal(result.row.revision,3);assert.equal(result.status,'committed');
+    assert.equal(retired,1);assert.equal(result.selectionRecovery,null);
+    assert.deepEqual(result.bound.experiment,f.base);
+  }
+});
+test('fresh receipt recovery rejects competing selection and changed receipt without retirement',async()=>{
+  const f=atomicControllerFixture();let revision='rev:1',retired=0;
+  const readDocument=async(kind,id)=>({kind,id,revision});
+  const a=f.open({readDocument});await a.open();
+  const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+  await a.selectWorkspace('calibration',previous);
+  const base=await a.captureSelectionBase('calibration',previous);
+  let receipt={version:1,base,previous,current,status:'updated'};
+  const selectionRecovery={kind:'calibration',read:async()=>receipt,retire:async()=>{retired++;}};
+  const b=f.open({readDocument,selectionRecovery});await b.open();
+  const offer=b.state().selectionRecovery;
+  receipt={...receipt,base:{...base,digest:'other'}};
+  await assert.rejects(b.recoverDocumentSelection(offer),/receipt changed/);
+  receipt=offer;await a.selectWorkspace('scene');revision='rev:2';
+  await assert.rejects(b.recoverDocumentSelection(offer),/CAS conflict/);
+  assert.equal(retired,0);assert.deepEqual(b.state().selectionRecovery,offer);
 });
