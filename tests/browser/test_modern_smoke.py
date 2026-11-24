@@ -12146,7 +12146,22 @@ class ModernBrowserSmoke(unittest.TestCase):
             return s.status==='failed'||s.controller.row.envelope.workspace==='calibration'&&
                 e?.projectId===id&&!e.pending&&!e.unsaved;
         }""",arg=project['id'],timeout=30000)
+        # Exercise the deletion barrier with an explicitly edited and
+        # acknowledged project, rather than a just-mounted imported draft.
+        self.page.locator('[data-calibration-stage="calibration"]').click()
+        self.page.wait_for_function("""id => {
+            const app=CurvatureModernApp,s=app.getExperimentSessionPreview();
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return e?.error||s.status==='failed'||e?.projectId===id&&e.revision>1&&
+                !e.pending&&!e.unsaved&&!e.selectionPending&&
+                s.controller.row.envelope.documents.calibration.revision==='rev:'+e.revision;
+        }""",arg=project['id'],timeout=30000)
+        self.assertIsNone(self.page.evaluate(
+            'CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus().error'))
         before=self.page.evaluate(read,project['id'])
+        self.assertEqual(before['project']['revision'],project['revision']+1)
+        self.assertEqual(before['project']['checkpoint']['payload']['draft']['stage'],'calibration')
+        self.assertIsNone(before['receipt'])
         self.assertEqual(before['row']['envelope']['workspace'],'calibration')
         self.assertIsNotNone(before['photo'])
         panel=self.page.locator('#ModernCalibrationProjectsPanel')
@@ -12154,7 +12169,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.locator('#ModernCalibrationProjectsToggle').click()
         self.page.evaluate("""() => {
             const original=window.CurvatureModernCalibrationProjectStore;
-            window.CurvatureModernCalibrationProjectStore={...original,async removeShared(){
+            window.CurvatureModernCalibrationProjectStore={...original,async removeShared(db,id,revision){
+                // Record the exact durable data at the destructive boundary.
+                window.interruptedCalibrationRemoval={
+                    project:await original.get(db,id),
+                    receipt:await original.readSharedSelectionReceipt(db),
+                    revision,
+                    row:CurvatureModernApp.getExperimentSessionPreview().controller.row
+                };
                 throw Error('Injected failure after acknowledged detach');
             }};
         }""")
@@ -12162,7 +12184,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('[data-calibration-project-delete="'+project['id']+'"]').click()
         self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().status==='failed'""",timeout=30000)
         self.assertIn('Injected failure',self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().error'))
+        boundary=self.page.evaluate('window.interruptedCalibrationRemoval')
+        self.assertEqual(boundary['project'],before['project'])
+        self.assertEqual(boundary['revision'],before['project']['revision'])
+        self.assertIsNone(boundary['receipt'])
+        self.assertIsNone(boundary['row']['envelope']['documents']['calibration'])
         after=self.page.evaluate(read,project['id'])
+        self.assertEqual(after['row'],boundary['row'])
+        self.assertEqual(after['project'],boundary['project'])
         self.assertEqual(after['project'],before['project'])
         self.assertEqual(after['photo'],before['photo'])
         self.assertIsNone(after['receipt'])
