@@ -214,30 +214,6 @@ test('BFCache collision fails closed without ever forking or changing the origin
   assert.equal(locks.held.size,0);
 });
 
-test('document adapter is dormant and unclaimed operations never open IndexedDB',async()=>{
-  const state=env(),ui=store.create(state.result),doc=ui.documentSessions(documents);
-  assert.equal(ui.documentSessions(documents),doc);
-  await assert.rejects(doc.read(),/document session tab ownership/);
-  await assert.rejects(doc.write(documents.empty('tab-a'),0),/document session tab ownership/);
-  assert.equal(state.opened,0);
-  assert.deepEqual(state.result.sessionStorage.keys(),[]);
-  assert.throws(()=>ui.documentSessions({}),/document session contract required/);
-});
-test('document adapter requires a read in the current writable lease and exact tab identity',async()=>{
-  const locks=lockFixture(),ctx=ownedEnv(locks),ui=store.create(ctx);
-  const id=(await ui.claimTab()).tabId,doc=ui.documentSessions(documents);
-  await assert.rejects(doc.write(documents.empty('other'),0),/tab identity mismatch/);
-  await assert.rejects(doc.write(documents.empty(id),0),/read current document session/);
-  ctx.leave();await Promise.resolve();await Promise.resolve();
-  await assert.rejects(doc.read(),/document session tab ownership/);
-  await ui.reclaimTab();
-  await assert.rejects(doc.write(documents.empty(id),0),/not validated/);
-  ui.finishResume();
-  await assert.rejects(doc.write(documents.empty(id),0),/read current document session/);
-  assert.deepEqual(ctx.sessionStorage.keys(),[store.TAB_KEY]);
-  ctx.leave();
-});
-
 test('domain lease is generation-bound and tracks transactions until pagehide',async()=>{
   const locks=lockFixture(),ctx=ownedEnv(locks),ui=store.create(ctx);
   assert.throws(()=>ui.captureDocumentLease(),/ownership lost/);
@@ -266,10 +242,19 @@ test('shared document adapter needs no tab dependencies and suspends on pagehide
     addEventListener(name,fn){if(name==='pagehide')leave=fn;}};
   const ui=store.create(env),doc=ui.sharedDocumentSessions(documents);
   assert.equal(ui.sharedDocumentSessions(documents),doc);
+  assert.equal(ui.documentSessions,undefined);
   assert.equal(doc.readForkSource,undefined);
+  assert.throws(()=>ui.sharedDocumentSessions({}),/document session contract required/);
+  const lease=ui.captureSharedDocumentLifetime();
+  let aborted=0;
+  const stop=lease.track({abort(){aborted++;}},true);
+  const removed=lease.track({abort(){aborted+=100;}},true);
+  removed();
   await assert.rejects(doc.write(documents.empty('tab-a'),0),/shared document session identity mismatch/);
   await assert.rejects(doc.write(documents.emptyShared(),0),/read current document session/);
   leave();
+  assert.equal(aborted,1);stop();
+  assert.throws(()=>lease.check(),/page suspended/);
   await assert.rejects(doc.read(),/page suspended/);
   await assert.rejects(doc.write(documents.emptyShared(),0),/page suspended/);
   assert.equal(opened,0);

@@ -539,33 +539,14 @@ storage authority. The existing opt-in UI journal is temporary and does not
 satisfy the final ID-only sessionStorage requirement.
 Focused tests: [ModernDocumentSession.test.js](../tests/ModernDocumentSession.test.js).
 
-### Explicit document-session row adapter
+### Document-session row adapter
 
-`ModernUiSessionStore.create(env).documentSessions(ModernDocumentSession)`
-reuses the exclusive tab lease and IndexedDB database
-`curvature-modern-ui-state` (version 1), object store `sessions`.
-The key `document:<tabId>` is disjoint from UI rows. Construction does not
-open IndexedDB or write Web Storage. An explicit owned read can initialize
-the existing database if absent; a missing document row yields revision
-zero and null, not an inherited binding. A duplicate's new identity has
-an independent empty document session. No automatic document fork is implied.
-
-Writing requires a writable lease, exact tab ID and validated read within
-that lease. Reading during resume is allowed; writing requires completion
-of lifecycle validation and reconciliation of the newly read row.
-The write transaction checks the previous revision and normalized envelope,
-validates the stored schema and increments the revision only on successful
-CAS. A separate post-commit readback must match the written row before an
-acknowledgement is returned. Failed or ambiguous database operations
-invalidate the read baseline and require explicit reconciliation. Loss of
-ownership aborts pending document transactions where possible and rejects
-late receipts; an already committed transaction cannot be undone.
-
-The adapter adds no Web Storage keys, document payloads or live Modern
-navigation owner. It is exercised explicitly by tests; no HTML mounting,
-domain migration, automatic recovery or deletion API is provided. The
-existing portable backup inventories present databases and stores, so the
-row remains within that inventory; this is not an atomic multi-DB backup.
+The only metadata writer is `sharedDocumentSessions(contract)`, using
+`sessions/shared-document`. Historical `document:<tabId>` and fork rows
+are read by `inspectLegacyDocuments()`, never written by the application.
+The shared adapter requires a validated baseline and CAS/readback; pagehide
+invalidates the captured lifetime. Old domain test fixtures still use the
+historical working-copy capability until that writer is retired.
 
 ### Read-first Scene/Compare working-copy candidate
 

@@ -10243,16 +10243,16 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
     def test_document_session_adapter_cas_readback_and_lease_revalidation(self):
-        """Explicit headless adapter, real IndexedDB, no Modern consumer yet."""
+        """Shared metadata CAS and pagehide invalidate the old capability."""
         self.open_modern()
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         result=self.page.evaluate("""async () => {
             const C=CurvatureModernDocumentSession;
             const ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            const doc=ui.sharedDocumentSessions(C);
             const keys=Object.keys(sessionStorage).sort();
             const base=await doc.read();
-            const selected=C.select(C.empty(tabId),'compare',
+            const selected=C.select(C.emptyShared(),'compare',
                 {id:'experiment-a',revision:'digest:a',recovery:null});
             const saved=await doc.write(selected,base.revision);
             const keysUnchanged=JSON.stringify(keys)===JSON.stringify(Object.keys(sessionStorage).sort());
@@ -10263,7 +10263,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 req.onerror=()=>reject(req.error);
                 req.onsuccess=()=>{
                     const db=req.result,tx=db.transaction('sessions','readwrite');
-                    tx.objectStore('sessions').put({id:'document:'+tabId,version:1,revision:2,
+                    tx.objectStore('sessions').put({id:'shared-document',version:1,revision:2,
                         envelope:C.select(selected,'calibration',
                             {id:'cal-a',revision:'rev:1',recovery:null})});
                     tx.oncomplete=()=>{db.close();resolve();};
@@ -10274,33 +10274,30 @@ class ModernBrowserSmoke(unittest.TestCase):
             const foreign=await doc.read();
             dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
             await new Promise(resolve=>setTimeout(resolve,0));
-            await ui.reclaimTab();
             try{await doc.write(selected,2);}catch(e){errors.push(e.message);}
-            ui.finishResume();
-            try{await doc.write(selected,2);}catch(e){errors.push(e.message);}
-            const confirmed=await doc.read();
-            const next=await doc.write(C.select(confirmed.envelope,'compare'),2);
-            return {tabId,base,saved,errors,foreign,next,keysUnchanged};
+            try{await doc.read();}catch(e){errors.push(e.message);}
+            return {base,saved,errors,foreign,keysUnchanged};
         }""")
         self.assertEqual(result['base'],{'revision':0,'envelope':None})
         self.assertEqual(result['saved']['revision'],1)
         self.assertEqual(result['saved']['envelope']['documents']['experiment']['id'],'experiment-a')
         self.assertIn('read current document session',result['errors'][0])
         self.assertIn('revision or envelope conflict',result['errors'][1])
-        self.assertIn('ownership lost or not validated',result['errors'][2])
-        self.assertIn('read current document session',result['errors'][3])
+        self.assertIn('page suspended',result['errors'][2])
+        self.assertIn('page suspended',result['errors'][3])
         self.assertEqual(result['foreign']['revision'],2)
         self.assertEqual(result['foreign']['envelope']['documents']['calibration']['id'],'cal-a')
-        self.assertEqual(result['next']['revision'],3)
         self.assertTrue(result['keysUnchanged'])
         self.page.reload(wait_until='load')
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         restored=self.page.evaluate("""async () => {
             const ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab();
-            return {tabId,row:await ui.documentSessions(CurvatureModernDocumentSession).read()};
+            const doc=ui.sharedDocumentSessions(CurvatureModernDocumentSession);
+            const row=await doc.read();
+            return {row,next:await doc.write(CurvatureModernDocumentSession.select(row.envelope,'compare'),row.revision)};
         }""")
-        self.assertEqual(restored,{'tabId':result['tabId'],'row':result['next']})
+        self.assertEqual(restored['row'],result['foreign'])
+        self.assertEqual(restored['next']['revision'],3)
 
     def test_shared_document_session_cas_reload_and_legacy_preservation(self):
         """One fixed document session, no tab token, stale writes fail, legacy rows survive."""
@@ -10380,40 +10377,36 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.close()
 
     def test_document_session_adapter_duplicate_and_invalid_row_preservation(self):
-        """A copied tab cannot inherit a document; invalid rows remain untouched."""
+        """Copied tab tokens cannot create document rows; invalid shared rows remain untouched."""
         self.open_modern()
         self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         parent=self.page.evaluate("""async () => {
             const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            const doc=ui.sharedDocumentSessions(C);
             await doc.read();
-            const row=await doc.write(C.select(C.empty(tabId),'animation',
+            const row=await doc.write(C.select(C.emptyShared(),'animation',
                 {id:'draft-parent',revision:'digest:parent',recovery:null}),0);
             window.__documentSession=doc;
-            return {tabId,row};
+            return row;
         }""")
         child=self.context.new_page()
         child.add_init_script("sessionStorage.setItem("+
             json.dumps('curvature-modern-ui-tab-id-v1')+","+
-            json.dumps(parent['tabId'])+");")
+            json.dumps('old-tab')+");")
         child.goto(self.base_url,wait_until='load')
         child.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         copied=child.evaluate("""async () => {
             const C=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const claim=await ui.claimTab(),doc=ui.documentSessions(C);
-            const before=await doc.read();
-            const after=await doc.write(C.empty(claim.tabId),0);
-            return {claim,before,after};
+            const doc=ui.sharedDocumentSessions(C);
+            return {before:await doc.read(),token:sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY),
+                legacy:await doc.inspectLegacyDocuments()};
         }""")
-        self.assertNotEqual(copied['claim']['tabId'],parent['tabId'])
-        self.assertEqual(copied['claim']['forkedFrom'],parent['tabId'])
-        self.assertEqual(copied['before'],{'revision':0,'envelope':None})
-        self.assertEqual(copied['after']['revision'],1)
-        self.assertEqual(self.page.evaluate("() => window.__documentSession.read()"),parent['row'])
+        self.assertEqual(copied,{'before':parent,'token':'old-tab','legacy':[]})
+        self.assertEqual(self.page.evaluate("() => window.__documentSession.read()"),parent)
         child.close()
-        result=self.page.evaluate("""async ({tabId,row}) => {
+        result=self.page.evaluate("""async (row) => {
             const doc=window.__documentSession,C=CurvatureModernDocumentSession;
-            const raw={id:'document:'+tabId,version:1,revision:1,
+            const raw={id:'shared-document',version:1,revision:1,
                 envelope:{...row.envelope,version:99}};
             async function access(write){
                 return new Promise((resolve,reject)=>{
@@ -10430,7 +10423,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             }
             await access(true);
             let writeError,readError;
-            try{await doc.write(C.empty(tabId),1);}catch(e){writeError=e.message;}
+            try{await doc.write(C.emptyShared(),1);}catch(e){writeError=e.message;}
             try{await doc.read();}catch(e){readError=e.message;}
             return {writeError,readError,unchanged:JSON.stringify(await access(false))===JSON.stringify(raw)};
         }""",parent)
@@ -10447,9 +10440,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         result=self.page.evaluate("""async () => {
             const C=CurvatureModernDocumentSession;
             const ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),doc=ui.documentSessions(C);
+            const doc=ui.sharedDocumentSessions(C);
             const initial=await doc.read();
-            const next=C.select(C.empty(tabId),'scene',
+            const next=C.select(C.emptyShared(),'scene',
                 {id:'work-a',revision:'digest:a',recovery:null});
             const proto=IDBObjectStore.prototype,put=proto.put;
             const open=indexedDB.open.bind(indexedDB);
@@ -10457,7 +10450,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             try{
                 proto.put=function(value,...args){
                     const request=put.call(this,value,...args);
-                    if(value.id==='document:'+tabId)this.transaction.abort();
+                    if(value.id==='shared-document')this.transaction.abort();
                     return request;
                 };
                 try{await doc.write(next,0);}catch(e){aborted=e.message;}
@@ -10622,8 +10615,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             const opts={tabId,lease,storage:localStorage,codec:C,crypto,
                 explicitIntent:false,isCurrent:()=>true};
             const candidate=await S.prepareWorkingCopy(indexedDB,opts);
-            const legacy=ui.documentSessions(D);await legacy.read();
-            const parent=await legacy.write(D.select(D.empty(tabId),'compare',candidate.document),0);
+            const sessions=ui.sharedDocumentSessions(D);
+            await sessions.read();
+            const parent={id:'document:'+tabId,version:1,revision:1,
+                envelope:D.select(D.empty(tabId),'compare',candidate.document)};
             await new Promise((resolve,reject)=>{
                 const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE);
                 req.onerror=()=>reject(req.error);
@@ -10631,9 +10626,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                     const db=req.result,tx=db.transaction('sessions','readwrite');
                     tx.oncomplete=()=>{db.close();resolve();};
                     tx.onabort=()=>{db.close();reject(tx.error);};
-                    tx.objectStore('sessions').add({id:'document-fork:historical-child',
-                        version:1,parentTabId:tabId,source:{id:'document:'+tabId,
-                            version:1,revision:parent.revision,envelope:parent.envelope}});
+                    const store=tx.objectStore('sessions');
+                    store.add(parent);
+                    store.add({id:'document-fork:historical-child',
+                        version:1,parentTabId:tabId,source:parent});
                 };
             });
             const old=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
@@ -10641,7 +10637,6 @@ class ModernBrowserSmoke(unittest.TestCase):
             e.scene.camera.Height+=5;e.compare.A.atmosphere='vacuum';
             e.compare.B.atmosphere='inverse-spherical';
             const draft=await old.stageRecovery(e,before.revision,null);
-            const sessions=ui.sharedDocumentSessions(D);
             const working=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
             const inventory=await working.inspectMigration(localStorage);
             const metadata=await sessions.inspectLegacyDocuments();
@@ -10818,12 +10813,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         result=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const doc=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const legacy=await S.read(indexedDB),raw=localStorage.getItem(C.STORAGE_KEY);
-            const candidate=await S.prepareWorkingCopy(indexedDB,{tabId,storage:localStorage,
+            const candidate=await S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
                 codec:C,crypto,explicitIntent:false,isCurrent:()=>true});
-            const doc=ui.documentSessions(D),base=await doc.read();
-            const bound=await doc.write(D.select(D.empty(tabId),'compare',candidate.document),base.revision);
+            const base=await doc.read();
+            const bound=await doc.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
             const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const initial=await a.read();await b.read();
@@ -10870,9 +10865,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         reloaded=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            await ui.claimTab();
-            const doc=await ui.documentSessions(D).read();
-            const a=S.openWorkingCopy(indexedDB,{lease:ui.captureDocumentLease(),codec:C,crypto});
+            const doc=await ui.sharedDocumentSessions(D).read();
+            const a=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
             const bound=doc.envelope.documents.experiment;
             return {doc,bound:await a.readRevision(bound.revision),head:await a.read()};
         }""")
@@ -11002,8 +10996,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         first=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
-            const sessions=ui.documentSessions(D);
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const legacy=await S.read(indexedDB),local=localStorage.getItem(C.STORAGE_KEY);
             let fail=false;
@@ -11012,7 +11005,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                     if(fail)throw Error('simulated session failure');
                     return sessions.write(...args);
                 }},isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
-                    tabId,lease,storage:localStorage,codec:C,crypto,
+                    lease,storage:localStorage,codec:C,crypto,
                     explicitIntent:false,isCurrent:()=>true})});
             await controller.open();
             const initial=controller.state(),edit=structuredClone(initial.bound.experiment);
@@ -11038,8 +11031,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         after=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            await ui.claimTab();
-            const lease=ui.captureDocumentLease(),sessions=ui.documentSessions(D);
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const c=D.createExperimentController({lease,sessions,working,isCurrent:()=>true,
                 prepare:()=>{throw Error('must not migrate again');}});
@@ -11064,12 +11056,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         first=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const sessions=ui.documentSessions(D);
             const c=D.createRecoverableExperimentController({lease,working,sessions,
+                coordinate:D.sharedExperimentCoordinator(navigator.locks),
                 isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
-                    tabId,lease,storage:localStorage,codec:C,crypto,
+                    lease,storage:localStorage,codec:C,crypto,
                     explicitIntent:false,isCurrent:()=>true})});
             await c.open();
             const initial=c.state(),edit=structuredClone(initial.bound.experiment);
@@ -11083,10 +11075,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         second=self.page.evaluate("""async () => {
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
             const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            await ui.claimTab();const lease=ui.captureDocumentLease();
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
             const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const sessions=ui.documentSessions(D);
             const c=D.createRecoverableExperimentController({lease,working,sessions,
+                coordinate:D.sharedExperimentCoordinator(navigator.locks),
                 isCurrent:()=>true,prepare:()=>{throw Error('must not migrate again');}});
             await c.open();const before=c.state();
             const loaded=await c.loadDraft(c.draftOffer());const dirty=c.state();
