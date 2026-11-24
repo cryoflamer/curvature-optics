@@ -143,15 +143,15 @@ test('recovery pointer is retired only on acknowledged replacement',async()=>{
   assert.equal(m.state().session.documents.experiment.recovery,null);
 });
 
-function controllerFixture({existing=true}={}){
-  const tabId='tab-a',id='working-'+tabId;
+function controllerFixture({existing=true,shared=false}={}){
+  const tabId='tab-a',id=shared?'shared-experiment':'working-'+tabId;
   const make=(revision,value)=>({kind:'experiment',id,revision,experiment:{value}});
   const revisions=new Map([['r1',make('r1',1)]]);
   let latest='r1',current=existing?{revision:1,
-    envelope:contract.select(contract.empty(tabId),'scene',{id,revision:'r1',recovery:null})}:
+    envelope:contract.select(shared?contract.emptyShared():contract.empty(tabId),'scene',{id,revision:'r1',recovery:null})}:
     {revision:0,envelope:null};
   const faults={session:null,domain:null,valid:true,reads:0,prepares:0};
-  const lease={tabId,check(){if(!faults.valid)throw Error('lease lost');}};
+  const lease={...(shared?{sessionId:'shared'}:{tabId}),check(){if(!faults.valid)throw Error('lease lost');}};
   const sessions={async read(){faults.reads++;return current;},
     async write(envelope,expected){
       if(current.revision!==expected)throw Error('foreign session CAS');
@@ -265,8 +265,15 @@ test('controller verifies an unchanged edit without creating a revision',async()
 });
 
 
-function recoverableFixture(){
-  const f=controllerFixture(),{working,sessions,lease}=f;
+function recoverableFixture({shared=false,existing=true}={}){
+  const f=controllerFixture({shared,existing}),{working,sessions,lease}=f;
+  let tail=Promise.resolve();
+  const coordinate=contract.sharedExperimentCoordinator({request(name,options,action){
+    assert.equal(name,'curvature-modern-shared-experiment-operation');
+    assert.equal(options.mode,'exclusive');
+    const result=tail.then(()=>action({mode:'exclusive'}));
+    tail=result.catch(()=>{});return result;
+  }});
   const copy=v=>JSON.parse(JSON.stringify(v));
   let draft=null,number=0;
   const faults={stage:null,retire:null,staged:[],retired:[],reads:0};
@@ -275,7 +282,8 @@ function recoverableFixture(){
     faults.staged.push(experiment.value);
     if(faults.stage)await faults.stage(experiment);
     assert.equal(expected,draft?draft.revision:null);
-    draft={kind:'experiment',id:'recovery-'+lease.tabId,documentId:working.id,
+    if(shared)assert.equal((await working.read()).revision,base,'shared draft must use HEAD');
+    draft={kind:'experiment',id:shared?'shared-experiment-recovery':'recovery-'+lease.tabId,documentId:working.id,
       revision:'draft-'+(++number),baseRevision:base,experiment:copy(experiment)};
     return copy(draft);
   };
@@ -286,7 +294,11 @@ function recoverableFixture(){
     faults.retired.push(expected);draft=null;return true;
   };
   const make=()=>contract.createRecoverableExperimentController({lease,sessions,working,
-    isCurrent:()=>f.faults.valid,prepare:async()=>{throw Error('unexpected migration');}});
+    ...(shared?{coordinate}:{}),isCurrent:()=>f.faults.valid,prepare:async()=>{
+      if(existing)throw Error('unexpected migration');
+      return {status:'verified',workspace:'scene',
+        document:{id:working.id,revision:'r1',recovery:null}};
+    }});
   return {...f,make,recovery:faults,draft:()=>copy(draft)};
 }
 function deferredRecovery(){
@@ -413,4 +425,55 @@ test('shared document envelope uses fixed identity and retains independent domai
   assert.equal(pending.envelope.sessionId,'shared');
   assert.equal(m.acknowledgeSession(token,{revision:5,envelope:pending.envelope}),true);
   assert.equal(m.state().session.documents.experiment.revision,'r3');
+});
+
+test('shared recovery controller coordinates checkpoint, commit and later edits without a tab ID',async()=>{
+  const f=recoverableFixture({shared:true,existing:false}),a=f.make(),b=f.make();
+  await a.open();await b.open();
+  assert.equal(f.row().envelope.sessionId,'shared');
+  const gate=deferredRecovery(),entered=deferredRecovery(),write=f.working.write;
+  f.working.write=async(...args)=>{
+    const result=await write(...args);entered.resolve();await gate.promise;return result;
+  };
+  a.markDirty({value:2});const saving=a.save();await entered.promise;
+  a.markDirty({value:3});
+  assert.equal(a.state().checkpoint,'pending');
+  assert.equal(f.draft().experiment.value,2);
+  gate.resolve();await saving;await a.flushCheckpoint();
+  assert.equal(a.state().status,'dirty');
+  assert.equal(f.draft().baseRevision,'r2');
+  assert.equal(f.draft().experiment.value,3);
+  b.markDirty({value:9});
+  await assert.rejects(b.flushCheckpoint(),/shared session changed/);
+  assert.deepEqual(b.state().latestInput,{value:9});
+  assert.equal(f.draft().experiment.value,3);
+  await a.save();
+  assert.equal(f.row().revision,3);
+  assert.equal(f.draft(),null);
+  const fresh=f.make();await fresh.open();
+  assert.deepEqual(fresh.state().bound.experiment,{value:3});
+});
+test('shared controller rejects stale draft owner even before document revision advances',async()=>{
+  const f=recoverableFixture({shared:true}),a=f.make(),b=f.make();
+  await a.open();await b.open();
+  a.markDirty({value:2});await a.flushCheckpoint();
+  b.markDirty({value:3});await assert.rejects(b.flushCheckpoint(),/shared recovery changed/);
+  assert.deepEqual(b.state().latestInput,{value:3});
+  assert.equal(f.draft().experiment.value,2);
+  await a.save();
+  assert.equal(f.row().revision,2);
+});
+test('shared controller retains pending input if the session acknowledgement fails',async()=>{
+  const f=recoverableFixture({shared:true}),a=f.make();await a.open();
+  a.markDirty({value:2});
+  const original=f.working.write;
+  f.working.write=async(...args)=>{const receipt=await original(...args);a.markDirty({value:3});return receipt;};
+  f.faults.session='before';
+  await assert.rejects(a.save(),/session failure/);
+  assert.deepEqual(a.state().latestInput,{value:3});
+  assert.equal(f.draft().experiment.value,2);
+  assert.equal(f.row().revision,1);
+  f.faults.session=null;
+  const fresh=f.make();await fresh.open();await fresh.acceptHead(fresh.recoveryOffer());
+  assert.equal(fresh.state().status,'clean');
 });

@@ -10609,6 +10609,75 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def test_shared_experiment_controller_serializes_save_and_later_edits(self):
+        """Actual IndexedDB/locks: shared save, later input, stale second page and F5."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        init="""async () => {
+            const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
+            const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const options={lease,sessions,working,isCurrent:()=>true,
+                coordinate:D.sharedExperimentCoordinator(navigator.locks),
+                prepare:()=>S.prepareWorkingCopy(indexedDB,{lease,storage:localStorage,
+                    codec:C,crypto,explicitIntent:false,isCurrent:()=>true})};
+            window.sharedControllerWorking=working;
+            window.sharedControllerOptions=options;
+            window.sharedController=D.createRecoverableExperimentController(options);
+            await sharedController.open();
+            return sharedController.state();
+        }"""
+        other=self.context.new_page()
+        try:
+            first=self.page.evaluate(init)
+            self.assertEqual(first['status'],'clean')
+            other.goto(self.base_url,wait_until='load')
+            second=other.evaluate(init)
+            self.assertEqual(first['bound'],second['bound'])
+            edited=self.page.evaluate("""async () => {
+                const D=CurvatureModernDocumentSession,working=sharedControllerWorking;
+                let entered,release;
+                const started=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
+                const delayed={...working,async write(...args){
+                    const receipt=await working.write(...args);entered();await gate;return receipt;
+                }};
+                const c=D.createRecoverableExperimentController({...sharedControllerOptions,working:delayed});
+                await c.open();
+                const a=structuredClone(c.state().bound.experiment);
+                a.scene.camera.Height+=1;
+                const b=structuredClone(a);b.scene.camera.Height+=1;
+                c.markDirty(a);const saving=c.save();await started;
+                c.markDirty(b);const during=c.state();
+                release();await saving;await c.flushCheckpoint();
+                const after=c.state();
+                await c.save();return {during,after,final:c.state(),a,b};
+            }""")
+            self.assertEqual(edited['during']['checkpoint'],'pending')
+            self.assertEqual(edited['after']['status'],'dirty')
+            self.assertEqual(edited['after']['draft']['baseRevision'],
+                             edited['after']['bound']['revision'])
+            self.assertEqual(edited['after']['draft']['experiment'],edited['b'])
+            self.assertEqual(edited['final']['status'],'committed')
+            self.assertEqual(edited['final']['bound']['experiment'],edited['b'])
+            conflict=other.evaluate("""async () => {
+                const c=sharedController,e=structuredClone(c.state().bound.experiment);
+                e.scene.camera.Height+=3;c.markDirty(e);
+                try{await c.flushCheckpoint();}catch(error){return {error:error.message,state:c.state(),e};}
+                return null;
+            }""")
+            self.assertIn('shared session changed',conflict['error'])
+            self.assertEqual(conflict['state']['latestInput'],conflict['e'])
+            other.reload(wait_until='load')
+            restored=other.evaluate(init)
+            self.assertEqual(restored['bound'],edited['final']['bound'])
+            self.assertEqual(restored['row'],edited['final']['row'])
+            self.assertIsNone(restored['draft'])
+        finally:
+            other.close()
+
     def test_working_copy_migration_refuses_ambiguous_and_changed_sources(self):
         """No private read for external intent; no copy over conflicting evidence."""
         self.open_modern()

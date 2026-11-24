@@ -186,9 +186,21 @@ IndexedDB/localStorage evidence, with source/destination checks before,
 during and after copy. Any other key in the working-session store
 (including prior preview copies, orphan recovery, or edited shared HEAD)
 blocks automatic initial migration; evidence remains intact. An identical
-initial retry is allowed. Explicit recovery selection of divergent old
-records, metadata inventory and cross-database write coordination remain
-necessary before mounting a shared consumer. This is not yet activation
+initial retry is allowed. The recovery-aware experiment controller accepts the shared lifetime and
+fixed identities, using the same save tracker and recovery offers.
+`sharedExperimentCoordinator(navigator.locks)` takes one origin-wide
+exclusive **operation** lock for open/reconciliation, individual draft
+checkpoints, and the document/session save including retirement. It is
+released after the operation, not held for the lifetime of a tab.
+The controller rereads and compares exact session, HEAD and recovery
+before staging or saving, without adopting newer foreign state. Later
+local input during a save stays pending in memory until the new base is
+acknowledged, then is staged against that base. A failure preserves the
+latest input and existing durable evidence. This coordinates cooperating
+shared controllers, not direct diagnostic or legacy writes; the CAS
+guards still apply. Missing Web Locks blocks shared controller creation.
+Explicit recovery selection of divergent old records and metadata
+inventory remain necessary before mounting a shared consumer. This is not yet activation
 of the shared writer in Modern. The old v1 format and `document:<tabId>` keys remain readable and
 unchanged; a separate key avoids collisions with historical tab IDs.
 
