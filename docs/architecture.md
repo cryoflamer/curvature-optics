@@ -331,6 +331,12 @@ overwrite. `Download UI recovery JSON` is a **diagnostic evidence export**:
 it contains the preview error/status, current opaque UI tab ID, raw pending UI
 journal entries (preserving corrupt bytes), and the readable UI-only IndexedDB
 envelopes/revisions for that tab; unreadable durable scopes carry read errors.
+If a startup journal is malformed, stale against a newer committed revision,
+or uses a future key version, the same banner is shown before activating the
+preview. It offers evidence export but no unsafe Retry; old preferences remain
+usable. The export leaves journal strings and committed rows untouched.
+If Web Storage access or an individual read fails, export includes
+`storageErrors` and still collects every other readable UI-only record.
 It never includes experiment geometry, photograph bytes or Animation/Calibration
 project payloads; it is not an import command or an automatic merge.
 No recovery bar or new store appears on the normal Modern route. User acceptance

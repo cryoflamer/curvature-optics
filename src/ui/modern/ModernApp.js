@@ -1004,7 +1004,7 @@
     // A collision cannot be safely retried; export and resolve it separately.
     if(retry)retry.disabled=uiRegistryRecoveryBusy||trial.status!=='ready'||
       !errors.length||errors.some(function(item){
-        return /conflict|unsupported|staging failed/i.test(item.message);
+        return /conflict|unsupported|corrupt|staging failed/i.test(item.message);
       });
     var download=newUiEl('ModernUiRegistryDownload');
     if(download)download.disabled=uiRegistryRecoveryBusy;
@@ -1017,22 +1017,39 @@
     var evidence={format:'curvature-modern-ui-recovery-evidence',version:1,
       capturedAt:new Date().toISOString(),
       preview:{status:trial.status,error:trial.error,errors:errors},
-      tabId:null,pending:[],durable:[]};
+      tabId:null,pending:[],durable:[],storageErrors:[]};
     // Preserve RAW pending bytes, including unreadable records. Never clear
     // corrupt or foreign state merely because export cannot parse it.
-    var storage=root.sessionStorage,prefix='curvature-modern-ui-pending-v1:';
-    if(storage){
-      for(var i=0;i<storage.length;i++){
-        var key=storage.key(i);
-        if(key&&key.indexOf(prefix)===0)
-          evidence.pending.push({key:key,raw:storage.getItem(key)});
-      }
+    // Access itself can throw (privacy settings, disabled storage). Preserve
+    // every piece of evidence that IS readable instead of rejecting export.
+    var storage=null,id=null,prefix='curvature-modern-ui-pending-v1:';
+    function storageError(operation,error){
+      evidence.storageErrors.push({operation:operation,
+        message:String(error&&error.message||error)});
     }
-    var id=storage&&storage.getItem('curvature-modern-ui-tab-id-v1');
+    try{storage=root.sessionStorage;}
+    catch(error){storageError('sessionStorage access',error);}
+    if(storage){
+      try{id=storage.getItem('curvature-modern-ui-tab-id-v1');}
+      catch(error){storageError('tab ID read',error);}
+      try{
+        for(var i=0;i<storage.length;i++){
+          var key=storage.key(i);
+          if(key&&key.indexOf(prefix)===0){
+            try{evidence.pending.push({key:key,raw:storage.getItem(key)});}
+            catch(error){storageError('pending UI read: '+key,error);}
+          }
+        }
+      }catch(error){storageError('pending UI enumeration',error);}
+    }
     if(id)evidence.tabId=id;
     var storeApi=root.CurvatureModernUiSessionStore;
+    var store=null;
     if(id&&storeApi&&typeof storeApi.create==='function'){
-      var store=storeApi.create(root);
+      try{store=storeApi.create(root);}
+      catch(error){storageError('UI Session Store initialization',error);}
+    }
+    if(store){
       var scopes=[{scope:'per-tab',context:{tabId:id}}];
       ['scene','compare','animation','calibration'].forEach(function(workspace){
         scopes.push({scope:'per-tab-and-workspace',context:{tabId:id,workspace:workspace}});
@@ -1160,7 +1177,7 @@
       if(result.warnings.length){
         var warning='Unsupported UI Registry values: '+result.warnings.join(', ');
         workspaceUiRegistryPreview={status:'incompatible',bridge:null,error:warning};
-        preferencesStatus(warning,true);
+        preferencesStatus('UI Registry preview unavailable: '+warning,true);
         return;
       }
       // A panel edited during async restore is authoritative; do not

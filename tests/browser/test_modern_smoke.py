@@ -9304,6 +9304,17 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(
             "CurvatureModernApp.getWorkspaceUiRegistryPreview().sections"),[],
             'incompatible preview must not expose any active registry binding')
+        bar=self.page.locator('#ModernUiRegistryRecovery')
+        expect(bar).to_be_visible()
+        expect(bar.get_by_role('alert')).to_contain_text('Unsupported UI Registry values')
+        expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernUiRegistryDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['preview']['status'],'incompatible')
+        saved=next(row for row in evidence['durable'] if row['workspace']=='scene')
+        self.assertEqual(saved['revision'],1)
+        self.assertEqual(saved['envelope'],json.loads(before))
         nav=self.page.locator('details[data-workspace-section="camera.navigation"]')
         old_value=nav.evaluate('(node)=>node.open')
         nav.locator('summary').click()
@@ -10088,6 +10099,104 @@ class ModernBrowserSmoke(unittest.TestCase):
                 {tabId:s.tabId(),workspace:'scene'});
             return row.envelope?.values?.['workspace.settingsTab']?.value==='Display';
         }""",timeout=30000)
+
+
+    def test_workspace_registry_preview_startup_preserves_invalid_pending_journals(self):
+        """Malformed, stale and future-version intent must not be replayed
+        or erased by startup or by a diagnostic evidence download."""
+        self.open_modern()
+        seed=self.page.evaluate("""async () => {
+            const s=CurvatureModernUiSessionStore.create(window);
+            const id=s.tabId(),ctx={tabId:id,workspace:'scene'};
+            const frame={format:'curvature-modern-ui-state',version:1,
+                scope:'per-tab-and-workspace',
+                values:{'workspace.settingsTab':{version:1,value:'Objects'}}};
+            await s.write('per-tab-and-workspace',ctx,frame,0);
+            const key='curvature-modern-ui-pending-v1:workspace:'+id+':scene';
+            const stale={format:frame.format,version:1,
+                target:'workspace:'+id+':scene',scope:frame.scope,
+                expectedRevision:0,envelope:structuredClone(frame)};
+            stale.envelope.values['workspace.settingsTab'].value='Display';
+            const future=structuredClone(stale);
+            future.expectedRevision=1;
+            future.envelope.values['workspace.settingsTab'].version=99;
+            return {id,key,frame,cases:[
+                {raw:'  {invalid JSON: \\u2603',status:'error',message:'corrupt pending UI write'},
+                {raw:JSON.stringify(stale,null,2),status:'error',message:'pending UI revision conflict'},
+                {raw:JSON.stringify(future,null,2),status:'incompatible',message:'Unsupported UI Registry values'}
+            ]};
+        }""")
+        for case in seed['cases']:
+            with self.subTest(case=case['message']):
+                self.page.goto(self.base_url,wait_until='load')
+                self.page.evaluate("""({key,raw})=>sessionStorage.setItem(key,raw)""",
+                                   {'key':seed['key'],'raw':case['raw']})
+                self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+                self.page.wait_for_function("""status =>
+                    CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status===status""",
+                    arg=case['status'],timeout=30000)
+                bar=self.page.locator('#ModernUiRegistryRecovery')
+                expect(bar).to_be_visible()
+                expect(bar.get_by_role('alert')).to_contain_text(case['message'])
+                expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+                with self.page.expect_download() as event:
+                    self.page.locator('#ModernUiRegistryDownload').click()
+                evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+                self.assertEqual(evidence['preview']['status'],case['status'])
+                self.assertEqual(evidence['tabId'],seed['id'])
+                self.assertIn({'key':seed['key'],'raw':case['raw']},evidence['pending'])
+                saved=next(row for row in evidence['durable'] if row['workspace']=='scene')
+                self.assertEqual(saved['revision'],1)
+                self.assertEqual(saved['envelope'],seed['frame'])
+                after=self.page.evaluate("""async ({key,id}) => {
+                    const s=CurvatureModernUiSessionStore.create(window);
+                    return {raw:sessionStorage.getItem(key),
+                        row:await s.read('per-tab-and-workspace',
+                            {tabId:id,workspace:'scene'})};
+                }""",{'key':seed['key'],'id':seed['id']})
+                self.assertEqual(after,{'raw':case['raw'],
+                    'row':{'revision':1,'envelope':seed['frame']}})
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],
+                         self.console)
+
+    def test_workspace_registry_preview_recovery_export_survives_unreadable_journal(self):
+        """A failure to read one Web Storage entry must not prevent export
+        of other available UI recovery evidence or the durable envelope."""
+        self.open_modern()
+        self.page.goto(self.base_url+'?ui-state-registry=preview',wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp?.getWorkspaceUiRegistryPreview?.().status==='ready'""",
+            timeout=30000)
+        self.page.evaluate("""() => {
+            const id=CurvatureModernUiSessionStore.create(window).tabId();
+            const key='curvature-modern-ui-pending-v1:workspace:'+id+':scene';
+            sessionStorage.setItem(key,'corrupt journal');
+            // A user edit trips the corrupt-intent guard and exposes recovery.
+            document.getElementById('ModernSettingsObjects').click();
+        }""")
+        bar=self.page.locator('#ModernUiRegistryRecovery')
+        expect(bar).to_be_visible(timeout=30000)
+        expect(self.page.locator('#ModernUiRegistryRetry')).to_be_disabled()
+        self.page.evaluate("""() => {
+            const id=CurvatureModernUiSessionStore.create(window).tabId();
+            const key='curvature-modern-ui-pending-v1:workspace:'+id+':scene';
+            const get=Storage.prototype.getItem;
+            Storage.prototype.getItem=function(name){
+                if(this===sessionStorage&&name===key)
+                    throw Error('simulated journal read denied');
+                return get.call(this,name);
+            };
+        }""")
+        with self.page.expect_download() as event:
+            self.page.locator('#ModernUiRegistryDownload').click()
+        evidence=json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
+        self.assertTrue(any('simulated journal read denied' in row['message']
+                            for row in evidence['storageErrors']))
+        self.assertTrue(evidence['tabId'])
+        saved=next(row for row in evidence['durable'] if row['workspace']=='scene')
+        self.assertEqual(saved['revision'],0)
+        self.assertIsNone(saved['envelope'])
+        expect(bar).to_be_visible()
 
 if __name__ == '__main__':
     unittest.main()
