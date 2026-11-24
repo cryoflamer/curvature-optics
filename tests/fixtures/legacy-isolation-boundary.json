@@ -2926,6 +2926,7 @@
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
         "tests/ModernDocumentSession.test.js",
+        "tests/ModernSessionAutosave.test.js",
         "tests/ModernUiSessionStore.test.js"
       ],
       "commonJsToolCallers": []
