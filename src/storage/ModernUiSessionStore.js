@@ -33,7 +33,7 @@
     // tab inherits sessionStorage, so its token alone is not proof of identity.
     let claimPromise=null,resumePromise=null,owner=null,forkedFrom=null;
     let lifecycleAttached=false,claimEpoch=0;
-    let sharedDocumentAdapter=null,sharedDocumentLifetime=null;
+    let sharedDocumentAdapter=null,sharedDocumentLifetime=null,sharedPageLifetime=null;
     const SHARED_DOCUMENT_KEY='shared-document';
     function tabId(){
       requireTabDependencies();
@@ -245,9 +245,22 @@
         };
       });
     }
+    // A shared workspace and document adapter in this page use the same
+    // transient lifetime, not a persisted identity or a cross-tab lock.
+    function sharedPageLease(){
+      if(!sharedPageLifetime){
+        const lease=sharedPageLifetime={id:'shared',active:true,documentTransactions:new Set()};
+        if(typeof env.addEventListener==='function')env.addEventListener('pagehide',()=>{
+          lease.active=false;
+          for(const tx of lease.documentTransactions){try{tx.abort();}catch(ignore){}}
+        });
+      }
+      verifyDocumentLease(sharedPageLifetime);
+      return sharedPageLifetime;
+    }
     function verifyDocumentLease(lease){
-      check(lease&&lease===sharedDocumentLifetime&&lease.active,
-        'shared document page suspended; reload before accessing session');
+      check(lease&&lease===sharedPageLifetime&&lease.active,
+        'shared page suspended; reload before accessing session');
     }
     function captureSharedDocumentLifetime(){
       const lease=sharedDocumentLifetime;verifyDocumentLease(lease,false);
@@ -302,6 +315,7 @@
     }
     async function read(scope,context){
       const target=address(scope,context);
+      const lifetime=sharedScope(scope)?sharedPageLease():null;
       return transact(target.store,'readonly',(store,reply)=>{
         function accept(value,id,inherited){
           if(!value){reply.result({revision:0,envelope:null});return;}
@@ -326,7 +340,7 @@
           const source=store.get(inherited.id);
           source.onsuccess=()=>accept(source.result,inherited.id,true);
         };
-      });
+      },lifetime);
     }
     async function write(scope,context,envelope,expectedRevision){
       check(envelope&&envelope.format===FORMAT&&envelope.version===1&&
@@ -338,7 +352,7 @@
       const target=address(scope,context);
       // Diagnostic adapters may be unclaimed, but a claimed lease can never
       // write after suspension or while a BFCache restore is unvalidated.
-      const lease=owner;
+      const lease=owner,lifetime=sharedScope(scope)?sharedPageLease():null;
       if(!sharedScope(scope)&&(claimPromise||lease))
         check(lease&&lease.active&&lease.writable&&context&&context.tabId===lease.id,
           'tab ownership lost; reload before writing UI state');
@@ -365,7 +379,7 @@
           try{store.put(row);reply.result({revision:row.revision});}
           catch(error){reply.reject(error);}
         };
-      });
+      },lifetime);
       if(scope==='workspace'){
         const verified=await read(scope,context);
         check(verified.revision===saved.revision&&
@@ -385,11 +399,7 @@
       }
       check(contract.SHARED_VERSION===2&&contract.SHARED_ID==='shared'&&
         typeof contract.emptyShared==='function','shared document session contract required');
-      const lease=sharedDocumentLifetime={id:contract.SHARED_ID,active:true,documentTransactions:new Set()};
-      if(typeof env.addEventListener==='function')env.addEventListener('pagehide',()=>{
-        lease.active=false;
-        for(const tx of lease.documentTransactions){try{tx.abort();}catch(ignore){}}
-      });
+      const lease=sharedDocumentLifetime=sharedPageLease();
       const matches=envelope=>envelope.version===contract.SHARED_VERSION&&envelope.sessionId===lease.id;
       function decode(row){
         if(row===undefined)return Object.freeze({revision:0,envelope:null});

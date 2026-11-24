@@ -239,3 +239,28 @@ test('shared document adapter needs no tab dependencies and suspends on pagehide
   await assert.rejects(doc.read(),/page suspended/);
   assert.equal(opened,0);
 });
+
+test('shared UI and document lifetime cancels delayed open and refuses stale reads and writes',async()=>{
+  let leave,req,opened=0,closed=0,transactions=0;
+  const env={indexedDB:{open(){opened++;return req={};}},
+    get sessionStorage(){throw Error('sessionStorage accessed');},
+    addEventListener(name,fn){if(name==='pagehide')leave=fn;}};
+  const ui=store.create(env),ctx={workspace:'scene'};
+  const frame={format:registry.FORMAT,version:1,scope:'workspace',values:{}};
+  const delayed=ui.write('workspace',ctx,frame,0);
+  const doc=ui.sharedDocumentSessions(documents),lease=ui.captureSharedDocumentLifetime();
+  let aborted=0;
+  lease.track({abort(){aborted++;}},true);
+  leave();
+  req.result={close(){closed++;},transaction(){transactions++;throw Error('stale transaction opened');}};
+  req.onsuccess();
+  await assert.rejects(delayed,/page suspended/);
+  await assert.rejects(ui.read('workspace',ctx),/page suspended/);
+  await assert.rejects(ui.write('workspace',ctx,frame,0),/page suspended/);
+  await assert.rejects(ui.read('global',{}),/page suspended/);
+  await assert.rejects(doc.read(),/page suspended/);
+  assert.equal(aborted,1);
+  assert.equal(opened,1);
+  assert.equal(closed,1);
+  assert.equal(transactions,0);
+});
