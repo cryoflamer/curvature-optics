@@ -10903,20 +10903,19 @@ class ModernBrowserSmoke(unittest.TestCase):
         init="""async () => {
             const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
             const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
-            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const options={lease,sessions,working,isCurrent:()=>true,
-                coordinate:D.sharedExperimentCoordinator(navigator.locks),
-                prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})};
-            for(const make of [D.createExperimentController,D.createRecoverableExperimentController]){
-                let rejected=false;
-                try{make({...options,lease:{tabId:'retired',check(){}}});}
-                catch(error){rejected=error.message.includes('shared document lifetime required');}
-                if(!rejected)throw Error('obsolete tab controller accepted');
-            }
-            window.sharedControllerWorking=working;
+            ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const options={lease,checkpoint,isCurrent:()=>true,prepare:async()=>{
+                const old=await S.read(indexedDB);return checkpoint.initialize(old.experiment);
+            }};
+            let rejected=false;
+            try{D.createAtomicExperimentController({...options,lease:{sessionId:'shared',tabId:'retired',check(){}}});}
+            catch(error){rejected=error.message.includes('dependencies required');}
+            if(!rejected)throw Error('obsolete tab controller accepted');
+            window.sharedControllerCheckpoint=checkpoint;
             window.sharedControllerOptions=options;
-            window.sharedController=D.createRecoverableExperimentController(options);
+            window.sharedController=D.createAtomicExperimentController(options);
             await sharedController.open();
             return sharedController.state();
         }"""
@@ -10928,13 +10927,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             second=other.evaluate(init)
             self.assertEqual(first['bound'],second['bound'])
             edited=self.page.evaluate("""async () => {
-                const D=CurvatureModernDocumentSession,working=sharedControllerWorking;
+                const D=CurvatureModernDocumentSession,checkpoint=sharedControllerCheckpoint;
                 let entered,release;
                 const started=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
-                const delayed={...working,async write(...args){
-                    const receipt=await working.write(...args);entered();await gate;return receipt;
+                const delayed={...checkpoint,async promote(...args){
+                    const receipt=await checkpoint.promote(...args);entered();await gate;return receipt;
                 }};
-                const c=D.createRecoverableExperimentController({...sharedControllerOptions,working:delayed});
+                const c=D.createAtomicExperimentController({...sharedControllerOptions,checkpoint:delayed});
                 await c.open();
                 const a=structuredClone(c.state().bound.experiment);
                 a.scene.camera.Height+=1;
@@ -10958,7 +10957,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 try{await c.flushCheckpoint();}catch(error){return {error:error.message,state:c.state(),e};}
                 return null;
             }""")
-            self.assertIn('shared session changed',conflict['error'])
+            self.assertIn('CAS conflict',conflict['error'])
             self.assertEqual(conflict['state']['latestInput'],conflict['e'])
             other.reload(wait_until='load')
             restored=other.evaluate(init)
@@ -11215,104 +11214,96 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
     def test_experiment_controller_owned_save_and_explicit_recovery_after_f5(self):
-        """Explicit controller uses both real owned stores; no live UI activation."""
+        """Atomic promotion acknowledgement lost after actual commit; F5 restores committed state."""
         self.open_modern()
         self.page.locator('#ModernCompareTab').click()
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
             'Working session saved',timeout=30000)
-        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
         first=self.page.evaluate("""async () => {
-            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
-            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
+            const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const options={lease,checkpoint,isCurrent:()=>true,prepare:async()=>{
+                const old=await S.read(indexedDB);return checkpoint.initialize(old.experiment);
+            }};
             const legacy=await S.read(indexedDB),local=localStorage.getItem(C.STORAGE_KEY);
-            let fail=false;
-            const controller=D.createExperimentController({lease,working,
-                sessions:{read:()=>sessions.read(),write:(...args)=>{
-                    if(fail)throw Error('simulated session failure');
-                    return sessions.write(...args);
-                }},isCurrent:()=>true,prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})});
-            await controller.open();
-            const initial=controller.state(),edit=structuredClone(initial.bound.experiment);
-            edit.scene.camera.Height+=1;
-            controller.markDirty();await controller.save(edit);
-            const committed=controller.state(),next=structuredClone(edit);
-            next.scene.camera.Height+=1;controller.markDirty();fail=true;
-            let error;
-            try{await controller.save(next);}catch(e){error=e.message;}
-            const failed=controller.state();
-            return {initial,committed,failed,error,next,
-                unchanged:JSON.stringify(await S.read(indexedDB))===JSON.stringify(legacy)&&
-                    localStorage.getItem(C.STORAGE_KEY)===local};
-        }""")
-        self.assertEqual(first['initial']['status'],'clean')
-        self.assertEqual(first['committed']['status'],'committed')
-        self.assertEqual(first['committed']['row']['revision'],2)
-        self.assertEqual(first['failed']['status'],'failed')
-        self.assertIn('simulated session failure',first['error'])
-        self.assertTrue(first['unchanged'])
-        self.page.reload(wait_until='load')
-        self.page.add_script_tag(url='/src/storage/ModernDocumentSession.js')
-        after=self.page.evaluate("""async () => {
-            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
-            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const c=D.createExperimentController({lease,sessions,working,isCurrent:()=>true,
-                prepare:()=>{throw Error('must not migrate again');}});
-            await c.open();
-            const before=c.state(),offer=c.recoveryOffer();
-            await c.acceptHead(offer);
-            return {before,offer,after:c.state()};
-        }""")
-        self.assertEqual(after['before']['status'],'recovering')
-        self.assertEqual(after['before']['bound'],first['committed']['bound'])
-        self.assertEqual(after['before']['head']['experiment'],first['next'])
-        self.assertEqual(after['after']['status'],'clean')
-        self.assertEqual(after['after']['row']['revision'],3)
-        self.assertEqual(after['after']['bound'],after['before']['head'])
-
-    def test_recoverable_experiment_controller_stages_and_restores_draft_after_f5(self):
-        """Real recovery checkpoints stay independent of acknowledged document/session CAS."""
-        self.open_modern()
-        self.page.locator('#ModernCompareTab').click()
-        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
-            'Working session saved',timeout=30000)
-        first=self.page.evaluate("""async () => {
-            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
-            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const c=D.createRecoverableExperimentController({lease,working,sessions,
-                coordinate:D.sharedExperimentCoordinator(navigator.locks),
-                isCurrent:()=>true,prepare:async()=>working.prepareSelectedMigration((await working.inspectMigration(localStorage)).candidates.find(x=>x.selection.key==='current').selection,{storage:localStorage,isCurrent:()=>true})});
+            const c=D.createAtomicExperimentController({...options,checkpoint:{...checkpoint,async promote(...args){
+                await checkpoint.promote(...args);throw Error('simulated lost acknowledgement');
+            }}});
             await c.open();
             const initial=c.state(),edit=structuredClone(initial.bound.experiment);
             edit.scene.camera.Height+=1;c.markDirty(edit);await c.flushCheckpoint();
-            return {initial,edit,staged:c.state(),head:await working.read()};
+            let error;try{await c.save();}catch(e){error=e.message;}
+            return {initial,edit,failed:c.state(),error,
+                unchanged:JSON.stringify(await S.read(indexedDB))===JSON.stringify(legacy)&&
+                    localStorage.getItem(C.STORAGE_KEY)===local};
+        }""")
+        self.assertIn('lost acknowledgement',first['error'])
+        self.assertEqual(first['failed']['bound'],first['initial']['bound'])
+        self.assertEqual(first['failed']['latestInput'],first['edit'])
+        self.assertTrue(first['unchanged'])
+        self.page.reload(wait_until='load')
+        after=self.page.evaluate("""async () => {
+            const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
+            const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const options={lease,checkpoint,isCurrent:()=>true,prepare:async()=>{
+                const old=await S.read(indexedDB);return checkpoint.initialize(old.experiment);
+            }};
+            const c=D.createAtomicExperimentController({...options,prepare:()=>{throw Error('must not migrate again');}});
+            await c.open();return c.state();
+        }""")
+        self.assertEqual(after['status'],'clean')
+        self.assertEqual(after['bound']['experiment'],first['edit'])
+        self.assertIsNone(after['draft'])
+        self.assertEqual(after['row']['revision'],3)
+
+    def test_recoverable_experiment_controller_stages_and_restores_draft_after_f5(self):
+        """Atomic recovery remains distinct from committed payload until explicit restore."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        first=self.page.evaluate("""async () => {
+            const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
+            const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const options={lease,checkpoint,isCurrent:()=>true,prepare:async()=>{
+                const old=await S.read(indexedDB);return checkpoint.initialize(old.experiment);
+            }};
+            const c=D.createAtomicExperimentController(options);await c.open();
+            const initial=c.state(),edit=structuredClone(initial.bound.experiment);
+            edit.scene.camera.Height+=1;c.markDirty(edit);await c.flushCheckpoint();
+            return {initial,edit,staged:c.state()};
         }""")
         self.assertEqual(first['staged']['checkpoint'],'durable')
-        self.assertEqual(first['staged']['row'],first['initial']['row'])
-        self.assertEqual(first['head'],first['initial']['bound'])
+        self.assertEqual(first['staged']['bound'],first['initial']['bound'])
+        self.assertEqual(first['staged']['row']['revision'],2)
         self.page.reload(wait_until='load')
         second=self.page.evaluate("""async () => {
-            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
-            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
-            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
-            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
-            const c=D.createRecoverableExperimentController({lease,working,sessions,
-                coordinate:D.sharedExperimentCoordinator(navigator.locks),
-                isCurrent:()=>true,prepare:()=>{throw Error('must not migrate again');}});
+            const D=CurvatureModernDocumentSession,S=CurvatureModernSessionAutosave;
+            const C=CurvatureModernExperimentState,ui=CurvatureModernUiSessionStore.create(window);
+            ui.sharedDocumentSessions(D);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            const options={lease,checkpoint,isCurrent:()=>true,prepare:async()=>{
+                const old=await S.read(indexedDB);return checkpoint.initialize(old.experiment);
+            }};
+            const c=D.createAtomicExperimentController({...options,prepare:()=>{throw Error('must not migrate again');}});
             await c.open();const before=c.state();
             const loaded=await c.loadDraft(c.draftOffer());const dirty=c.state();
-            await c.save();return {before,loaded,dirty,after:c.state(),remaining:await working.readRecovery()};
+            await c.save();return {before,loaded,dirty,after:c.state(),remaining:(await checkpoint.read()).draft};
         }""")
         self.assertEqual(second['before']['status'],'recovering')
         self.assertEqual(second['before']['bound'],first['initial']['bound'])
         self.assertEqual(second['loaded'],first['edit'])
-        self.assertEqual(second['dirty']['status'],'dirty')
-        self.assertEqual(second['dirty']['row'],first['initial']['row'])
+        self.assertEqual(second['dirty']['row'],first['staged']['row'])
         self.assertEqual(second['after']['status'],'committed')
         self.assertEqual(second['after']['bound']['experiment'],first['edit'])
         self.assertIsNone(second['remaining'])

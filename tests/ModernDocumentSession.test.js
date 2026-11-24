@@ -143,121 +143,6 @@ test('recovery pointer is retired only on acknowledged replacement',async()=>{
   assert.equal(m.state().session.documents.experiment.recovery,null);
 });
 
-function controllerFixture({existing=true}={}){
-  const id='shared-experiment';
-  const make=(revision,value)=>({kind:'experiment',id,revision,experiment:{value}});
-  const revisions=new Map([['r1',make('r1',1)]]);
-  let latest='r1',current=existing?{revision:1,
-    envelope:contract.select(contract.emptyShared(),'scene',{id,revision:'r1',recovery:null})}:
-    {revision:0,envelope:null};
-  const faults={session:null,domain:null,valid:true,reads:0,prepares:0};
-  const lease={sessionId:'shared',check(){if(!faults.valid)throw Error('lease lost');}};
-  const sessions={async read(){faults.reads++;return current;},
-    async write(envelope,expected){
-      if(current.revision!==expected)throw Error('foreign session CAS');
-      if(faults.session==='before')throw Error('session failure');
-      current={revision:expected+1,envelope};
-      if(faults.session==='after')throw Error('lost session acknowledgement');
-      return current;
-    }};
-  const working={id,async read(){return revisions.get(latest);},
-    async readRevision(rev){return revisions.get(rev);},
-    async write(experiment,expected){
-      if(latest!==expected)throw Error('foreign domain CAS');
-      if(faults.domain==='before')throw Error('domain failure');
-      const revision='r'+(revisions.size+1);
-      revisions.set(revision,make(revision,experiment.value));latest=revision;
-      if(faults.domain==='after')throw Error('lost domain acknowledgement');
-      return {kind:'experiment',id,revision};
-    }};
-  const makeController=()=>contract.createExperimentController({lease,sessions,working,
-    isCurrent:()=>faults.valid,prepare:async()=>{
-      faults.prepares++;return {status:'verified',workspace:'scene',
-        document:{id,revision:'r1',recovery:null}};
-    }});
-  return {makeController,faults,working,sessions,lease,row:()=>current};
-}
-test('controllers reject obsolete tab capabilities before reading private state',()=>{
-  const f=controllerFixture(),options={lease:f.lease,sessions:f.sessions,working:f.working,
-    prepare:async()=>{throw Error('unexpected migration');},isCurrent:()=>true};
-  assert.throws(()=>contract.createExperimentController({...options,lease:{tabId:'old',check(){}}}),/shared document lifetime required/);
-  assert.throws(()=>contract.createExperimentController({...options,working:{...f.working,id:'working-old'}}),/working-copy identity mismatch/);
-  assert.throws(()=>contract.createRecoverableExperimentController(options),/coordinator required/);
-  assert.equal(f.faults.reads,0);
-});
-test('controller binds only verified migration and external intent skips private reads',async()=>{
-  const f=controllerFixture({existing:false}),external=f.makeController();
-  await external.open({explicitIntent:true});
-  assert.equal(external.state().status,'external');assert.equal(f.faults.reads,0);
-  const c=f.makeController();await c.open();
-  assert.equal(c.state().status,'clean');assert.equal(f.row().revision,1);
-  assert.equal(f.faults.prepares,1);
-});
-test('controller saves document then session and restores exact acknowledged revision',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  await c.save({value:2});assert.equal(c.state().status,'committed');
-  assert.equal(f.row().envelope.documents.experiment.revision,'r2');
-  const reopened=f.makeController();await reopened.open();
-  assert.equal(reopened.state().bound.experiment.value,2);
-});
-test('controller requires explicit offer to advance a diverged session after reload',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  f.faults.session='before';await assert.rejects(c.save({value:2}),/session failure/);
-  assert.equal(f.row().revision,1);
-  const reopened=f.makeController();await reopened.open();
-  assert.equal(reopened.state().status,'recovering');
-  assert.equal(reopened.state().bound.experiment.value,1);
-  assert.equal(reopened.state().head.experiment.value,2);
-  assert.throws(()=>reopened.markDirty(),/resolve session recovery/);
-  await assert.rejects(reopened.acceptHead({revision:'r2'}),/explicit current/);
-  f.faults.session=null;await reopened.acceptHead(reopened.recoveryOffer());
-  assert.equal(reopened.state().status,'clean');assert.equal(f.row().revision,2);
-});
-test('controller read-first recovery accepts exact lost session acknowledgement',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  f.faults.session='after';await assert.rejects(c.save({value:2}),/lost session/);
-  f.faults.session=null;await c.recover();
-  assert.equal(c.state().status,'clean');assert.equal(f.row().revision,2);
-});
-test('controller retains failure if domain did not commit, and offers lost domain commit',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  f.faults.domain='before';await assert.rejects(c.save({value:2}),/domain failure/);
-  await assert.rejects(c.recover(),/retain unsaved input/);
-  assert.equal(c.state().status,'failed');
-  const g=controllerFixture(),d=g.makeController();await d.open();d.markDirty();
-  g.faults.domain='after';await assert.rejects(d.save({value:2}),/lost domain/);
-  await d.recover();assert.equal(d.state().status,'recovering');
-  assert.equal(d.recoveryOffer().revision,'r2');
-});
-test('recovery offer fails closed if head changes before explicit acceptance',async()=>{
-  const f=controllerFixture(),c=f.makeController();await f.working.write({value:2},'r1');
-  await c.open();const offer=c.recoveryOffer();await f.working.write({value:3},'r2');
-  await assert.rejects(c.acceptHead(offer),/offer changed/);
-  assert.equal(f.row().revision,1);
-});
-
-test('controller does not clear later edits when a save fails',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  const original=f.working.write;
-  f.working.write=async(...args)=>{const receipt=await original(...args);c.markDirty();return receipt;};
-  f.faults.session='before';
-  await assert.rejects(c.save({value:2}),/session failure/);
-  assert.equal(c.state().unsavedAfterAttempt,true);
-  assert.equal(c.state().busy,false);
-  await assert.rejects(c.recover(),/later unsaved edits/);
-  assert.equal(c.state().status,'failed');
-  assert.equal(f.row().revision,1);
-});
-test('controller keeps a later edit dirty after successful acknowledgement',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  const original=f.working.write;
-  f.working.write=async(...args)=>{const receipt=await original(...args);c.markDirty();return receipt;};
-  await c.save({value:2});
-  assert.equal(c.state().status,'dirty');
-  assert.equal(c.state().busy,false);
-  assert.equal(f.row().revision,2);
-});
-
 test('document acknowledgement can select another workspace only for the same document kind',()=>{
   const m=tracker();m.markDirty();const token=m.beginSave();
   assert.throws(()=>m.acknowledgeDocument(token,receipt(token),'calibration'),/workspace mismatch/);
@@ -266,161 +151,6 @@ test('document acknowledgement can select another workspace only for the same do
   m.acknowledgeSession(token,{revision:5,envelope:p.envelope});
   assert.equal(m.state().session.workspace,'compare');
 });
-test('controller verifies an unchanged edit without creating a revision',async()=>{
-  const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
-  await c.save({value:1});assert.equal(c.state().status,'clean');
-  assert.equal(f.row().revision,1);
-});
-
-
-function recoverableFixture({existing=true}={}){
-  const f=controllerFixture({existing}),{working,sessions,lease}=f;
-  let tail=Promise.resolve();
-  const coordinate=contract.sharedExperimentCoordinator({request(name,options,action){
-    assert.equal(name,'curvature-modern-shared-experiment-operation');
-    assert.equal(options.mode,'exclusive');
-    const result=tail.then(()=>action({mode:'exclusive'}));
-    tail=result.catch(()=>{});return result;
-  }});
-  const copy=v=>JSON.parse(JSON.stringify(v));
-  let draft=null,number=0;
-  const faults={stage:null,retire:null,staged:[],retired:[],reads:0};
-  working.readRecovery=async()=>{faults.reads++;return copy(draft);};
-  working.stageRecovery=async(experiment,base,expected)=>{
-    faults.staged.push(experiment.value);
-    if(faults.stage)await faults.stage(experiment);
-    assert.equal(expected,draft?draft.revision:null);
-    assert.equal((await working.read()).revision,base,'shared draft must use HEAD');
-    draft={kind:'experiment',id:'shared-experiment-recovery',documentId:working.id,
-      revision:'draft-'+(++number),baseRevision:base,experiment:copy(experiment)};
-    return copy(draft);
-  };
-  working.retireRecovery=async(expected,ack)=>{
-    if(faults.retire)await faults.retire();
-    assert.equal(draft.revision,expected);
-    assert.deepEqual((await working.readRevision(ack)).experiment,draft.experiment);
-    faults.retired.push(expected);draft=null;return true;
-  };
-  const make=()=>contract.createRecoverableExperimentController({lease,sessions,working,
-    coordinate,isCurrent:()=>f.faults.valid,prepare:async()=>{
-      if(existing)throw Error('unexpected migration');
-      return {status:'verified',workspace:'scene',
-        document:{id:working.id,revision:'r1',recovery:null}};
-    }});
-  return {...f,make,recovery:faults,draft:()=>copy(draft)};
-}
-function deferredRecovery(){
-  let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};
-}
-test('recoverable controller checkpoints early, coalesces and explicitly restores exact draft',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();
-  const gate=deferredRecovery();f.recovery.stage=()=>gate.promise;
-  const input={value:2};c.markDirty(input);input.value=99;
-  c.markDirty({value:3});c.markDirty({value:4});
-  assert.equal(c.state().checkpoint,'pending');
-  assert.equal(f.row().revision,1);
-  gate.resolve();await c.flushCheckpoint();
-  assert.deepEqual(f.recovery.staged,[2,4]);
-  assert.equal(c.state().checkpoint,'durable');
-  assert.equal(f.draft().experiment.value,4);
-  const reopened=f.make();await reopened.open();
-  assert.equal(reopened.state().status,'recovering');
-  assert.equal(reopened.state().bound.experiment.value,1);
-  await assert.rejects(reopened.loadDraft({recoveryRevision:'wrong'}),/explicit current/);
-  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:4});
-  assert.equal(reopened.state().status,'dirty');assert.equal(f.row().revision,1);
-  await reopened.save();
-  assert.equal(reopened.state().status,'committed');
-  assert.equal(f.row().revision,2);assert.equal(f.draft(),null);
-});
-test('recoverable controller stages before CAS and preserves later edits during older commit',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();
-  const gate=deferredRecovery(),entered=deferredRecovery(),original=f.working.write;
-  f.working.write=async(...args)=>{
-    assert.equal(f.draft().experiment.value,2);entered.resolve();await gate.promise;
-    return original(...args);
-  };
-  c.markDirty({value:2});const saving=c.save();await entered.promise;
-  c.markDirty({value:3});
-  assert.equal(c.state().checkpoint,'pending');
-  assert.equal(f.draft().experiment.value,2);
-  gate.resolve();await saving;await c.flushCheckpoint();
-  const later=f.draft();
-  assert.equal(later.baseRevision,'r2');
-  assert.equal(later.experiment.value,3);
-  assert.equal(c.state().status,'dirty');
-  assert.equal(f.row().envelope.documents.experiment.revision,'r2');
-  assert.deepEqual(f.draft(),later);assert.deepEqual(f.recovery.retired,[]);
-  const reopened=f.make();await reopened.open();
-  assert.equal(reopened.state().bound.experiment.value,2);
-  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:3});
-});
-test('recoverable controller serializes retirement against an edit arriving during retirement',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();
-  const gate=deferredRecovery(),entered=deferredRecovery();
-  f.recovery.retire=()=>{entered.resolve();return gate.promise;};
-  c.markDirty({value:2});const saving=c.save();await entered.promise;
-  c.markDirty({value:3});
-  assert.equal(c.state().checkpoint,'pending');
-  gate.resolve();await saving;await c.flushCheckpoint();
-  assert.equal(c.state().status,'dirty');
-  assert.equal(f.draft().experiment.value,3);
-  assert.equal(f.draft().baseRevision,'r2');
-  assert.equal(f.recovery.retired.length,1);
-});
-test('recoverable controller retains draft after domain failure and reconciles divergent head first',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
-  f.faults.domain='before';await assert.rejects(c.save(),/domain failure/);
-  assert.equal(f.draft().experiment.value,2);
-  f.faults.domain=null;
-  const reopened=f.make();await reopened.open();
-  await reopened.loadDraft(reopened.draftOffer());
-  f.faults.session='before';await assert.rejects(reopened.save(),/session failure/);
-  assert.equal(f.row().revision,1);
-  const retry=f.make();await retry.open();
-  assert.equal(retry.state().status,'recovering');assert.equal(retry.draftOffer(),null);
-  assert.equal(retry.recoveryOffer().revision,'r2');
-  f.faults.session=null;await retry.acceptHead(retry.recoveryOffer());
-  assert.equal(retry.state().status,'clean');assert.equal(f.draft(),null);
-});
-test('recoverable controller retains newer in-memory input when session CAS fails',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
-  const original=f.working.write;
-  f.working.write=async(...args)=>{const receipt=await original(...args);
-    c.markDirty({value:3});return receipt;};
-  f.faults.session='before';await assert.rejects(c.save(),/session failure/);
-  assert.deepEqual(c.state().latestInput,{value:3});
-  assert.equal(f.draft().experiment.value,2);
-  const reopened=f.make();await reopened.open();
-  assert.equal(reopened.draftOffer(),null);
-  f.faults.session=null;await reopened.acceptHead(reopened.recoveryOffer());
-  assert.equal(reopened.state().status,'clean');
-  assert.equal(reopened.state().bound.experiment.value,2);
-  assert.equal(f.draft(),null);
-  assert.deepEqual(c.state().latestInput,{value:3});
-});
-test('recoverable controller fails closed on checkpoint failure, retains input and external priority',async()=>{
-  const f=recoverableFixture(),external=f.make();await external.open({explicitIntent:true});
-  assert.equal(f.recovery.reads,0);assert.equal(f.faults.reads,0);
-  const c=f.make();await c.open();
-  f.recovery.stage=()=>{throw Error('quota');};c.markDirty({value:2});
-  await assert.rejects(c.flushCheckpoint(),/quota/);
-  assert.equal(c.state().status,'failed');assert.deepEqual(c.state().latestInput,{value:2});
-  await assert.rejects(c.save(),/dirty recoverable/);assert.equal(f.row().revision,1);
-});
-test('recoverable controller retires matching post-CAS draft on F5 and rejects changed offer',async()=>{
-  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
-  f.faults.session='after';await assert.rejects(c.save(),/lost session/);
-  assert.equal(f.row().revision,2);assert.ok(f.draft());
-  f.faults.session=null;const reopened=f.make();await reopened.open();
-  assert.equal(reopened.state().status,'clean');assert.equal(f.draft(),null);
-  reopened.markDirty({value:3});await reopened.flushCheckpoint();
-  const next=f.make();await next.open();const selection=next.draftOffer();
-  await f.working.stageRecovery({value:4},'r2',f.draft().revision);
-  await assert.rejects(next.loadDraft(selection),/offer changed/);
-  assert.equal(f.draft().experiment.value,4);
-});
-
 test('shared document envelope uses fixed identity and retains independent domain slots',async()=>{
   const empty=contract.emptyShared();
   assert.equal(empty.sessionId,'shared');
@@ -443,84 +173,35 @@ test('shared document envelope uses fixed identity and retains independent domai
   assert.equal(m.state().session.documents.experiment.revision,'r3');
 });
 
-test('shared recovery controller coordinates checkpoint, commit and later edits without a tab ID',async()=>{
-  const f=recoverableFixture({existing:false}),a=f.make(),b=f.make();
-  await a.open();await b.open();
-  assert.equal(f.row().envelope.sessionId,'shared');
-  const gate=deferredRecovery(),entered=deferredRecovery(),write=f.working.write;
-  f.working.write=async(...args)=>{
-    const result=await write(...args);entered.resolve();await gate.promise;return result;
-  };
-  a.markDirty({value:2});const saving=a.save();await entered.promise;
-  a.markDirty({value:3});
-  assert.equal(a.state().checkpoint,'pending');
-  assert.equal(f.draft().experiment.value,2);
-  gate.resolve();await saving;await a.flushCheckpoint();
-  assert.equal(a.state().status,'dirty');
-  assert.equal(f.draft().baseRevision,'r2');
-  assert.equal(f.draft().experiment.value,3);
-  b.markDirty({value:9});
-  await assert.rejects(b.flushCheckpoint(),/shared session changed/);
-  assert.deepEqual(b.state().latestInput,{value:9});
-  assert.equal(f.draft().experiment.value,3);
-  await a.save();
-  assert.equal(f.row().revision,3);
-  assert.equal(f.draft(),null);
-  const fresh=f.make();await fresh.open();
-  assert.deepEqual(fresh.state().bound.experiment,{value:3});
-});
-test('shared controller rejects stale draft owner even before document revision advances',async()=>{
-  const f=recoverableFixture(),a=f.make(),b=f.make();
-  await a.open();await b.open();
-  a.markDirty({value:2});await a.flushCheckpoint();
-  b.markDirty({value:3});await assert.rejects(b.flushCheckpoint(),/shared recovery changed/);
-  assert.deepEqual(b.state().latestInput,{value:3});
-  assert.equal(f.draft().experiment.value,2);
-  await a.save();
-  assert.equal(f.row().revision,2);
-});
-test('shared controller retains pending input if the session acknowledgement fails',async()=>{
-  const f=recoverableFixture(),a=f.make();await a.open();
-  a.markDirty({value:2});
-  const original=f.working.write;
-  f.working.write=async(...args)=>{const receipt=await original(...args);a.markDirty({value:3});return receipt;};
-  f.faults.session='before';
-  await assert.rejects(a.save(),/session failure/);
-  assert.deepEqual(a.state().latestInput,{value:3});
-  assert.equal(f.draft().experiment.value,2);
-  assert.equal(f.row().revision,1);
-  f.faults.session=null;
-  const fresh=f.make();await fresh.open();await fresh.acceptHead(fresh.recoveryOffer());
-  assert.equal(fresh.state().status,'clean');
-});
-
 function atomicControllerFixture(){
   const copy=v=>JSON.parse(JSON.stringify(v));
   const base={display:{mode:'scene'},height:1};
   let durable={revision:1,envelope:contract.select(contract.emptyShared(),'scene',
     {id:'shared-experiment',revision:'checkpoint:1',recovery:null}),experiment:base,draft:null,digest:'initial'};
-  let pause=null;
-  function open(){
+  let pause=null,fault=null,reads=0;
+  function open({lease={sessionId:'shared',check(){}},prepare=()=>{throw Error('unexpected migration');},isCurrent=()=>true}={}){
     let seen;
     const checkpoint={
-      async read(){seen=copy(durable);return copy(seen);},
+      async read(){reads++;seen=copy(durable);return copy(seen);},
       async stage(experiment,revision){
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
+        if(fault==='stage')throw Error('stage failure');
         durable={...durable,revision:revision+1,draft:copy(experiment),digest:'stage:'+revision};
         seen=copy(durable);return copy(seen);
       },
       async promote(revision){
         if(pause)await pause;
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
+        if(fault==='before')throw Error('promotion failure');
         durable={revision:revision+1,envelope:contract.select(durable.envelope,durable.draft.display.mode,
           {id:'shared-experiment',revision:'checkpoint:'+(revision+1),recovery:null}),
           experiment:durable.draft,draft:null,digest:'promote:'+revision};
+        if(fault==='after')throw Error('lost acknowledgement');
         seen=copy(durable);return copy(seen);
       }};
-    return contract.createAtomicExperimentController({lease:{sessionId:'shared',check(){}},checkpoint,
-      prepare:()=>{throw Error('unexpected migration');},isCurrent:()=>true});
+    return contract.createAtomicExperimentController({lease,checkpoint,prepare,isCurrent});
   }
-  return {base,open,hold(){let release;pause=new Promise(resolve=>{release=resolve;});return ()=>{pause=null;release();};}};
+  return {base,open,reads:()=>reads,fault(value){fault=value;},hold(){let release;pause=new Promise(resolve=>{release=resolve;});return ()=>{pause=null;release();};}};
 }
 test('atomic controller coalesces later edits during promotion and rejects stale writer',async()=>{
   const f=atomicControllerFixture(),a=f.open(),b=f.open();
@@ -550,4 +231,54 @@ test('atomic controller explicitly restores a durable draft without changing the
   const offer=b.draftOffer();assert.deepEqual(await b.loadDraft(offer),edit);
   assert.equal(b.state().status,'dirty');await b.save();
   assert.deepEqual(b.state().bound.experiment,edit);assert.equal(b.state().draft,null);
+});
+
+test('atomic controller external intent and stale generation do not read private data',async()=>{
+  const f=atomicControllerFixture();
+  const a=f.open();await a.open({explicitIntent:true});
+  assert.equal(a.state().status,'external');assert.equal(f.reads(),0);
+  const b=f.open({isCurrent:()=>false});
+  await assert.rejects(b.open(),/stale controller generation/);
+  assert.equal(f.reads(),0);
+  assert.throws(()=>f.open({lease:{sessionId:'shared',tabId:'old',check(){}}}),/dependencies required/);
+});
+test('atomic controller refuses stale draft writers and obsolete draft offers',async()=>{
+  const f=atomicControllerFixture(),a=f.open(),b=f.open();await a.open();await b.open();
+  a.markDirty({...f.base,height:2});await a.flushCheckpoint();
+  const c=f.open();await c.open();const offer=c.draftOffer();
+  b.markDirty({...f.base,height:9});await assert.rejects(b.flushCheckpoint(),/CAS conflict/);
+  assert.equal(b.state().latestInput.height,9);
+  a.markDirty({...f.base,height:3});await a.flushCheckpoint();
+  await assert.rejects(c.loadDraft(offer),/draft offer changed/);
+  const fresh=f.open();await fresh.open();assert.equal(fresh.state().draft.experiment.height,3);
+  assert.equal(fresh.state().bound.experiment.height,1);
+});
+test('atomic controller failed stage retains input and cannot promote',async()=>{
+  const f=atomicControllerFixture(),a=f.open();await a.open();
+  f.fault('stage');a.markDirty({...f.base,height:2});
+  await assert.rejects(a.flushCheckpoint(),/stage failure/);
+  await assert.rejects(a.save(),/dirty experiment required/);
+  assert.equal(a.state().latestInput.height,2);
+  const b=f.open();await b.open();assert.equal(b.state().status,'clean');
+  assert.equal(b.state().bound.experiment.height,1);
+});
+test('atomic controller failed promotion retains draft and later input; lost ack requires fresh read',async()=>{
+  for(const fault of ['before','after']){
+    const f=atomicControllerFixture(),a=f.open();await a.open();
+    a.markDirty({...f.base,height:2});await a.flushCheckpoint();
+    const release=f.hold(),saving=a.save();
+    while(a.state().status!=='saving')await Promise.resolve();
+    a.markDirty({...f.base,height:3});f.fault(fault);release();
+    await assert.rejects(saving,/promotion failure|lost acknowledgement/);
+    assert.equal(a.state().status,'failed');assert.equal(a.state().latestInput.height,3);
+    assert.equal(a.state().bound.experiment.height,1);assert.equal(a.state().draft.experiment.height,2);
+    f.fault(null);
+    const b=f.open();await b.open();
+    if(fault==='before'){
+      assert.equal(b.state().status,'recovering');assert.equal(b.state().draft.experiment.height,2);
+      await b.loadDraft(b.draftOffer());await b.save();
+    }else assert.equal(b.state().status,'clean');
+    assert.equal(b.state().bound.experiment.height,2);
+    assert.equal(b.state().draft,null);
+  }
 });

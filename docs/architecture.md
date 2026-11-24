@@ -173,66 +173,20 @@ or fork is involved. Pagehide invalidates the in-memory access capability
 and aborts tracked transactions where possible; a cached page must reload.
 Construction does not open IndexedDB. The adapter is metadata only:
 domain verification before pointer CAS remains the caller's responsibility.
-The Scene/Compare domain adapter also supports a shared lifetime capability
-(`captureSharedDocumentLifetime()`) with the same pagehide transaction guard.
-Its fixed domain identity `shared-experiment` is disjoint from all old
-`working-<tabId>` IDs. It reuses immutable revision, HEAD CAS, digest,
-readback and recovery-checkpoint code; no fork API is exposed.
-Shared recovery staging additionally checks the current HEAD against its
-base revision in the same transaction, so a stale writer cannot recreate
-an old draft after another writer commits and retires its draft.
-The shared migration candidate is copied only from matching legacy
-IndexedDB/localStorage evidence, with source/destination checks before,
-during and after copy. Any other key in the working-session store
-(including prior preview copies, orphan recovery, or edited shared HEAD)
-blocks automatic initial migration; evidence remains intact. An identical
-initial retry is allowed. The recovery-aware experiment controller accepts the shared lifetime and
-fixed identities, using the same save tracker and recovery offers.
-`sharedExperimentCoordinator(navigator.locks)` takes one origin-wide
-exclusive **operation** lock for open/reconciliation, individual draft
-checkpoints, and the document/session save including retirement. It is
-released after the operation, not held for the lifetime of a tab.
-The controller rereads and compares exact session, HEAD and recovery
-before staging or saving, without adopting newer foreign state. Later
-local input during a save stays pending in memory until the new base is
-acknowledged, then is staged against that base. A failure preserves the
-latest input and existing durable evidence. This coordinates cooperating
-shared controllers, not direct diagnostic or legacy writes; the CAS
-guards still apply. Missing Web Locks blocks shared controller creation.
-The shared working adapter exposes read-only `inspectMigration(storage)`
-and explicit `prepareSelectedMigration(selection,{storage,isCurrent})`.
-Inventory reads the domain rows in one readonly transaction and validates
-legacy current, local fallback, old immutable revisions and old recovery
-drafts (including their base revisions). HEAD is a pointer, not a candidate.
-Invalid records are reported and retained. Each selectable payload has a
-SHA-256 evidence token over its source, key, raw record and any draft base.
-The selected import rechecks those exact bytes in the writer transaction,
-refuses an existing shared HEAD/draft or different initial candidate, and
-verifies readback and selected evidence after commit. Its immutable base
-has explicit source provenance; old rows and Web Storage stay intact.
-Identical retries are allowed. Selecting an old draft explicitly imports
-its payload as a new base, never deletes its original recovery record.
-The shared metadata adapter separately exposes
-`inspectLegacyDocuments()` for old document/fork pointers: structural
-validation is not domain verification or authorization to activate.
-These diagnostic APIs do not change startup or bind the shared session;
-the caller must still CAS the verified selection. Separate databases
-are not a single atomic inventory. The opt-in live consumer is `CurvatureModern.html?document-session=shared`.
-Normal Modern remains unchanged. The historical
-`document-session=preview` URL is a compatibility alias for the same
-shared controller; it no longer starts a per-tab writer. First open with no bound experiment shows verified migration
-sources in the existing recovery panel; an explicit selection and
-confirmation of backup/test-profile use are required. The confirmation
-is not proof of a verified backup. A successful selection writes the
-shared binding and reloads; later F5 restores the acknowledged global
-workspace and experiment. Stale edits fail visibly and the evidence
-download retains the rejected in-memory input. Explicit public URLs
-and other existing route intents bypass the preview; Copy Experiment URL
-strips the opt-in parameter. Reset, History and auxiliary workspaces
-remain unavailable in this limited preview. Use a disposable profile or
-a verified portable backup before testing populated data. No automatic
-migration or default startup switch is authorized until acceptance. The old v1 format and `document:<tabId>` keys remain readable and
-unchanged; a separate key avoids collisions with historical tab IDs.
+The shared lifetime capability is used by the atomic Scene/Compare
+checkpoint. The old metadata and working-copy formats remain readable for
+explicit migration. The origin-wide operation lock coordinates migration
+with cooperating historical writers, not every live atomic save; the
+atomic record's CAS is sufficient for normal edits. Old writers outside
+that lock must be stopped before migration.
+
+The opt-in live consumer is `CurvatureModern.html?document-session=shared`
+(and historical `document-session=preview` alias). Both use the atomic
+controller. Normal Modern remains unchanged pending acceptance. First open
+without an atomic record shows verified migration choices in the recovery
+panel. Explicit selection and backup/test-profile confirmation are required.
+The confirmation is not proof of a verified backup. Existing URL/import
+intent, History and auxiliary workspace restrictions are unchanged.
 
 Old per-tab preview rows, fork provenance, pending
 journals and immutable revisions are migration/recovery evidence. Do not
@@ -650,29 +604,15 @@ No revision deletion, garbage collection, live consumer switch, or automatic
 URL rewrite is implemented here. Existing legacy checkpoint, migration
 snapshot, History and independent A/B physics remain untouched.
 
-### Headless experiment session controller
+### Atomic experiment session controller
 
-`ModernDocumentSession.createExperimentController()` coordinates the
-shared metadata and working-copy adapters used by the document preview.
-Explicit external intent skips private reads. An unbound session may bind
-only a verified migration candidate whose revision matches the durable head.
-The controllers require the captured shared page lifetime and fixed working
-copy identity; the recoverable controller always coordinates operations.
-Historical tab envelopes remain readable for migration, not active control.
-Existing non-experiment workspace/recovery bindings are not replaced.
-
-Opening an existing binding reads its exact acknowledged immutable revision
-and the current domain head. Divergence enters `recovering`, exposing both
-versions and a recovery offer tied to the observed session revision and
-head. No editing or automatic promotion is allowed. Explicit acceptance
-rereads both stores and CASes only an unchanged offer. A normal save uses
-the existing save tracker: domain write/readback, followed by session CAS
-and acknowledgement. If an acknowledgement fails, recovery rereads both
-stores; it must not invent a saved edit or blindly repeat a write. The
-caller retains unsaved input. A later edit during a failed save blocks recovery
-until the caller handles that unsaved input explicitly. This controller does not provide crash
-recovery for edits that never reached IndexedDB, a UI recovery chooser,
-or a new active-workspace owner. No URL or default persistence changes.
+The old two-store Scene/Compare controllers have been removed. The atomic
+controller owns one acknowledged checkpoint, coalesces draft edits and
+promotes the exact acknowledged draft. Later edits stay pending during
+promotion. A stale CAS or failed acknowledgement blocks further editing
+and preserves the latest input for export. Fresh readback distinguishes
+a committed promotion from a retained draft. Historical domain/session
+adapters remain temporarily for migration and their own contracts.
 
 ### Scene/Compare document session preview
 
@@ -691,23 +631,23 @@ document preview and UI registry preview are not combined. Only Scene and
 Compare are enabled: other workspaces, History navigation and reset are
 disabled pending migration. Startup locks the physical workspace until
 verified binding; absent or conflicting evidence fails closed without
-falling back to the legacy writer. A divergent head shows the acknowledged
-revision read-only and offers explicit confirmation of the exact durable
-head. Confirming it CASes the session then reloads. A diagnostic JSON export
-contains the two verified revisions and the in-memory experiment, not photo
-bytes or a complete portable backup. No destructive recovery.
+falling back to the legacy writer. Historical divergent HEADs are handled
+only by explicit migration selection. The live atomic row contains the
+committed payload and optional draft, not a divergent HEAD. Diagnostic JSON
+exports include verified state and in-memory input, not photo bytes or a
+complete portable backup. No destructive recovery.
 
 Each physical edit snapshots the experiment immediately for the recovery
 controller, and the normal debounced save calls the controller instead of
 writing the legacy working checkpoint or publishing an automatic URL.
 The status distinguishes a pending checkpoint, a verified recoverable
-draft, and an acknowledged document. The recovery panel has separate
-actions for accepting divergent HEAD and restoring unsaved edits. A draft
+draft, and an acknowledged document. The recovery panel offers explicit
+restoration of unsaved edits. A draft
 is loaded explicitly, with autosave disabled during physical and workspace
 hydration; afterwards normal debounce commits it. The diagnostic export
 includes the latest in-memory input and verified draft when available.
 The selected Scene/Compare mode is included in the session acknowledgement.
-A no-op edit verifies both stores without allocating a new revision.
+A no-op promotion clears the draft without changing the committed document identity.
 A failed write leaves the preview blocked, retaining live data and old
 durable records; the explicit share action remains available. Closing or
 reloading with unacknowledged edits requests the browser's unload warning;
