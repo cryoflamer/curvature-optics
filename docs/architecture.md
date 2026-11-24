@@ -618,7 +618,9 @@ disabled pending migration. Startup locks the physical workspace until
 verified binding; absent or conflicting evidence fails closed without
 falling back to the legacy writer. Historical divergent HEADs are handled
 only by explicit migration selection. The live atomic row contains the
-committed payload and optional draft, not a divergent HEAD. Diagnostic JSON
+committed payload and optional draft, not a divergent HEAD. The live controller
+exposes only the acknowledged `bound` revision and optional `draft`; historical
+HEAD choices remain confined to the migration inventory. Diagnostic JSON
 exports include verified state and in-memory input, not photo bytes or a
 complete portable backup. No destructive recovery.
 

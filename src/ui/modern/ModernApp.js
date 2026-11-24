@@ -1667,8 +1667,6 @@
         });
       }
     }
-    var accept=newUiEl('ModernDocumentSessionAcceptHead');
-    if(accept)accept.hidden=true;
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction;}
     var download=newUiEl('ModernDocumentSessionDownload');

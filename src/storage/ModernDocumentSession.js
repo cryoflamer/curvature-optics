@@ -123,7 +123,7 @@
     }
     function state(){
       return clone({status,busy,error,row:row?{revision:row.revision,envelope:row.envelope}:null,
-        bound:bound(),head:bound(),draft:draft(),draftOffer:offer,
+        bound:bound(),draft:draft(),draftOffer:offer,
         checkpoint:error?'failed':latest&&latest!==staged?'pending':draft()?'durable':'none',
         latestInput:latest?latest.experiment:null});
     }
@@ -194,8 +194,7 @@
       }catch(e){fail(e);throw e;}
       finally{promoting=false;busy=false;startPump();}
     }
-    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,
-      recoveryOffer:()=>null,state});
+    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,
