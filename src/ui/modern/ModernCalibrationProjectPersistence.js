@@ -112,8 +112,10 @@
          Object.keys(changes).some(k=>!['title','resultIds'].includes(k)))
         throw RangeError('Invalid Calibration Project working metadata');
       checkpoint.validateDraft(draft,inline);
-      const title=changes.title??active.project.title;
-      const resultIds=changes.resultIds??active.project.resultIds;
+      // Later editor snapshots must carry metadata from an unresolved save,
+      // not roll back a captured rename/result link to the last committed row.
+      const title=changes.title??active.latest?.title??active.project.title;
+      const resultIds=changes.resultIds??active.latest?.resultIds??active.project.resultIds;
       // Validate title and links before we replace the recoverable snapshot.
       model.fresh({id:active.project.id,now:active.project.createdAt,title,resultIds});
       const captured={projectId:active.project.id,generation:active.generation,

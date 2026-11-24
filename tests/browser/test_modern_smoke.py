@@ -12029,6 +12029,26 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(saved['journal'])
         self.assertEqual(saved['inline'],'retained legacy inline evidence')
         self.assertEqual(saved['tab'],'retained legacy tab evidence')
+        self.page.locator('#ModernCalibrationProjectsToggle').click()
+        rename=self.page.locator('[data-calibration-project-rename="'+project['id']+'"]')
+        expect(rename).to_be_enabled()
+        self.page.once('dialog',lambda dialog:dialog.accept('Shared renamed project'))
+        rename.click()
+        self.page.wait_for_function("""id => {
+            const app=CurvatureModernApp,e=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const s=e.projectPersistenceStatus(),ref=app.getExperimentSessionPreview().controller.row.envelope.documents.calibration;
+            return s.error||(!s.pending&&!s.unsaved&&s.projectId===id&&ref.revision==='rev:'+s.revision&&
+                document.querySelector('#ModernCalibrationProjectsStatus').textContent.includes('Renamed to Shared renamed project'));
+        }""",arg=project['id'],timeout=30000)
+        renamed=self.page.evaluate(read,project['id'])
+        self.assertIsNone(renamed['editor']['error'],renamed['editor'])
+        self.assertEqual(renamed['project']['title'],'Shared renamed project')
+        self.assertEqual(renamed['project']['revision'],saved['project']['revision']+1)
+        self.assertEqual(renamed['row']['revision'],saved['row']['revision']+1)
+        self.assertEqual(renamed['project']['photo'],saved['project']['photo'])
+        self.assertEqual(renamed['project']['resultIds'],saved['project']['resultIds'])
+        self.assertIsNone(renamed['journal'])
+        saved=renamed
         self.page.reload(wait_until='load')
         self.page.wait_for_function(ready,timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'calibration')

@@ -806,7 +806,8 @@ test('project editor captures bound autosave before a queued task and persists i
   const start=src.indexOf('function persist(forSwitch=false)'),end=src.indexOf('async function restoreDraft()',start);
   const persistence=src.slice(start,end);
   assert.ok(start>=0&&end>start);
-  assert.match(persistence,/session\.mark\(data,inline\);\s*saved=session\.save\(\)/);
+  assert.match(persistence,/session\.mark\(data,inline\);\s*\}\s*saved=session\.save\(\)/);
+  assert.match(persistence,/if\(changes\)session\.mark\(data,inline,changes\)/);
   assert.doesNotMatch(persistence,/writeQueue\.catch\(\(\)=>\{\}\)\.then\(async\(\)=>\{\s*if\(session\)/);
   const inline=src.slice(src.indexOf('function saveInline(fromPersist=false)'),
     src.indexOf('function readInline()'));

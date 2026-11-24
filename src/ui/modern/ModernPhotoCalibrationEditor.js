@@ -1150,7 +1150,7 @@
       // The opened project is already being edited; reopening it is neither
       // useful nor safe while its live checkpoint may be changing.
       if(!active)action('Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
-      action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection);
+      action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection&&(!active||unsaved||!!state?.pending||!!state?.error));
       action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
       card.append(actions);
       const deletion=doc.createElement('button');
@@ -1357,7 +1357,10 @@
     async function renameCalibrationProject(entry,title){
       const {storage}=projectActions();
       const active=projectSession?.project()?.id===entry.id;
-      if(!active)return storage.rename(env.indexedDB,entry.id,entry.revision,title);
+      if(!active){
+        if(sharedSelection)throw Error('Open the project before renaming it in shared-session preview');
+        return storage.rename(env.indexedDB,entry.id,entry.revision,title);
+      }
       if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
           photoGestures.active||resultGestures.active)
         throw Error('Finish active calibration operations before renaming');
@@ -1371,6 +1374,16 @@
         const session=projectSession;
         const current=session.project();
         if(current.id!==entry.id)throw Error('Selected project changed before rename');
+        if(sharedSelection){
+          const state=session.state();
+          if(state.pending||state.unsaved||state.error||state.selectionPending)
+            throw Error('Resolve unsaved Calibration work before renaming');
+          if(current.title===title)return current;
+          const outcome=await persist(true,{title});
+          if(!outcome?.current||session.state().unsaved||session.state().selectionPending||
+             session.state().error)throw Error('Rename acknowledgement incomplete; retained recovery');
+          return outcome.project;
+        }
         const renamed=await storage.rename(env.indexedDB,current.id,current.revision,title);
         if(projectSwitchEpoch!==request||switchInterference)
           throw Error('Calibration changed during rename; refresh to inspect the saved title');
@@ -1382,7 +1395,7 @@
       }
     }
     async function renameFromProjects(entry){
-      if(sharedSelection||projectListBusy)return;
+      if(projectListBusy||sharedSelection&&projectSession?.project()?.id!==entry.id)return;
       const title=env.prompt('Rename Calibration Project',entry.title);
       if(title===null||title===entry.title)return;
       projectListBusy=true;renderProjects();
@@ -1390,7 +1403,9 @@
       try{
         const renamed=await renameCalibrationProject(entry,title.trim());
         projectListBusy=false;await refreshProjectList();
-        projectsMessage('Renamed to '+renamed.title+'.');
+        projectsMessage(renamed.id!==entry.id?
+          'Rename saved as a conflict copy: '+renamed.title+'.':
+          'Renamed to '+renamed.title+'.');
       }catch(error){projectActionMessage(error,'Rename failed');}
       finally{projectListBusy=false;renderProjects();}
     }
@@ -1541,7 +1556,7 @@
       }
       return projectSession;
     }
-    function persist(forSwitch=false){
+    function persist(forSwitch=false,changes=null){
       if(restoring||!scene||sharedSelection&&(sharedPresentationHydrating||!projectSession?.project()||leavingPage||workspace.hidden))return;
       if(projectSwitchBusy&&!forSwitch){
         // A programmatic event during a switch invalidates the pending
@@ -1561,12 +1576,15 @@
         // allow a late callback to accidentally mark a newly opened project.
         try{
           const fingerprint=sharedSelection?JSON.stringify([data,inline]):null;
-          if(sharedSelection&&fingerprint===sharedInput){
+          if(sharedSelection&&!changes&&fingerprint===sharedInput){
             if(forSwitch&&(session.state().unsaved||session.state().pending||session.state().error))
               return sharedWrite||Promise.reject(Error('Resolve unsaved Calibration work first'));
             return;
           }
-          session.mark(data,inline);
+          if(changes)session.mark(data,inline,changes);
+          else {
+            session.mark(data,inline);
+          }
           saved=session.save().then(result=>{
             const current=projectSession===session&&
               session.state().projectId===result.project.id;
