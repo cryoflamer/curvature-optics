@@ -96,10 +96,11 @@
       return Object.freeze({ready:true,warnings:warnings.slice()});
     }
     // Explicit migration after all scopes have been read and validated.
-    // Auxiliary views are still on their staged domain-migration path.
+    // Calibration presentation is mounted; Animation still has a separate
+    // staged domain-migration path.
     async function initializeSharedLayout(verifyLegacy){
       check(sharedPresentation&&ready&&!warnings.length,'compatible shared restore required');
-      const targets=MODES.filter(mode=>missing.has(mode));
+      const targets=[...MODES,'calibration'].filter(mode=>missing.has(mode));
       if(!targets.length)return [];
       check(typeof verifyLegacy==='function','legacy layout verification required');
       verifyLegacy(targets.slice());

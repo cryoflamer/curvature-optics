@@ -339,18 +339,22 @@ test('explicit shared layout backfill verifies source once per missing scope and
   const rows=new Map(),make=(value,tab='Camera')=>bridgeApi.create({
     registryApi,managerApi,env:{},sharedPresentation:true,
     sessionStoreApi:{create:()=>memoryStore('unused',rows)},
-    suffixes:['camera.navigation'],legacyValue:()=>value,legacyTab:()=>tab});
+    suffixes:['camera.navigation'],legacyValue:()=>value,legacyTab:()=>tab,
+    legacyView:workspace=>workspace==='calibration'&&!value?'projects':workspace==='calibration'?'editor':'library'});
   const a=make(true,'Objects');await a.restore();
   assert.equal(rows.size,0,'plain restore remains read-only');
   await assert.rejects(a.initializeSharedLayout(()=>{throw Error('legacy corrupt');}),/legacy corrupt/);
   assert.equal(rows.size,0);
-  assert.deepEqual(await a.initializeSharedLayout(()=>{}),['scene','compare']);
-  assert.equal(rows.size,2);
+  assert.deepEqual(await a.initializeSharedLayout(()=>{}),['scene','compare','calibration']);
+  assert.equal(rows.size,3);
+  assert.equal(rows.get('workspace:calibration').envelope.values['workspace.view'].value,'editor');
+  assert.equal(rows.has('workspace:animation'),false);
   const saved=structuredClone([...rows.entries()]);
   const b=make(false,'Display');await b.restore();
   assert.deepEqual(await b.initializeSharedLayout(()=>{throw Error('legacy must not be read');}),[]);
   assert.equal(b.get('scene','camera.navigation'),true);
   assert.equal(b.getTab('scene'),'Objects');
+  assert.equal(b.getView('calibration'),'editor','durable view overrides changed legacy');
   assert.deepEqual([...rows.entries()],saved);
   rows.delete('workspace:compare');
   const c=make(false,'Surface');await c.restore();

@@ -1302,7 +1302,7 @@
         legacyTab:function(mode){return (shared?legacyLayout.workspace:workspaceState)[mode+'Tab'];},
         legacyMode:function(){return workspaceState.mode;},
         legacyView:function(workspace){return workspace==='animation'?
-          studioView:workspaceState.calibrationView;}
+          studioView:(shared?legacyLayout.workspace.calibrationView:workspaceState.calibrationView);}
       });
     }catch(error){
       workspaceUiRegistryPreview={status:'error',bridge:null,error:error.message};

@@ -11385,7 +11385,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.add_init_script("""(() => {
             const key='curvature-modern-application-preferences-v1';
             if(localStorage.getItem(key)===null)localStorage.setItem(key,JSON.stringify({
-                version:1,workspace:{mode:'animation',sceneTab:'Camera',compareTab:'Camera',
+                version:1,workspace:{mode:'animation',sceneTab:'Camera',compareTab:'Camera',calibrationView:'projects',
                     sections:{'scene.surface.geometry':false,'compare.surface.geometry':true}}}));
         })()""")
         self.page.goto(url,wait_until='load')
@@ -11402,6 +11402,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const durable=await checkpoint.read();
             return {scene:await store.read('workspace',{workspace:'scene'}),
                 compare:await store.read('workspace',{workspace:'compare'}),
+                calibration:await store.read('workspace',{workspace:'calibration'}),
+                animation:await store.read('workspace',{workspace:'animation'}),
                 doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
                 durableDoc:{revision:durable.revision,envelope:durable.envelope,draft:durable.draft},
                 ui:CurvatureModernApp.getWorkspaceUiRegistryPreview().selection,
@@ -11414,6 +11416,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertFalse(json.loads(initial['local'])['workspace']['sections']['scene.surface.geometry'])
         self.assertEqual(initial['scene']['revision'],1)
         self.assertEqual(initial['compare']['revision'],1)
+        self.assertEqual(initial['calibration']['revision'],1)
+        self.assertEqual(initial['calibration']['envelope']['values']['workspace.view']['value'],'projects')
+        self.assertEqual(initial['animation']['revision'],0)
+        self.assertEqual(initial['ui']['calibrationView'],'projects')
         self.assertFalse(initial['scene']['envelope']['values']['workspace.section.surface.geometry']['value'])
         self.assertTrue(initial['compare']['envelope']['values']['workspace.section.surface.geometry']['value'])
         self.assertIsNone(initial['tab'])
@@ -11483,7 +11489,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             # Old layout is now migration evidence, never a restore authority.
             other.evaluate("""() => localStorage.setItem(
                 CurvatureModernApplicationPreferences.STORAGE_KEY,JSON.stringify({
-                    version:1,workspace:{sceneTab:'Display',compareTab:'Camera',
+                    version:1,workspace:{sceneTab:'Display',compareTab:'Camera',calibrationView:'editor',
                         sections:{'scene.surface.geometry':false,'compare.surface.geometry':true}}}))""")
             other.reload(wait_until='load')
             other.wait_for_function(ready,timeout=30000)
