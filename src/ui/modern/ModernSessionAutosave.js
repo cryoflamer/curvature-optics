@@ -455,67 +455,8 @@
           return Object.freeze({kind:'experiment',id,revision});
         }finally{busy=false;}
       }
-      async function prepareFork(source,isCurrent){
-        ensure(!busy&&typeof isCurrent==='function','working-copy fork guard required');
-        function guard(){lease.check(true);ensure(isCurrent()===true,'stale fork generation');}
-        guard();
-        busy=true;baseline=null;
-        try{
-          const envelope=source&&source.envelope,ref=envelope&&envelope.documents.experiment;
-          ensure(source&&Number.isSafeInteger(source.revision)&&source.revision>=1&&
-            envelope&&['scene','compare'].includes(envelope.workspace)&&
-            ref&&ref.id==='working-'+envelope.tabId&&ref.id!==id&&!ref.recovery,
-            'duplicate source is not an acknowledged experiment');
-          const parentKey=revisionKey(ref.revision,ref.id);
-          const original=await withStore(indexedDB,'readonly',store=>store.get(parentKey),lease);
-          const value=await decode(original,ref.revision,ref.id);guard();
-          const experiment=value.experiment;
-          ensure(experiment.display.mode===envelope.workspace,'duplicate source workspace mismatch');
-          const raw=canonical(experiment);
-          const row={format:FORK_FORMAT,version:1,id,revision:await digest(raw,crypto),
-            experiment:JSON.parse(raw),origin:{id:ref.id,revision:ref.revision,
-              sessionRevision:source.revision}};
-          guard();
-          let failure=null;
-          try{
-            await transaction(indexedDB,store=>{
-              const fail=error=>{failure=error;try{store.transaction.abort();}catch(ignore){}};
-              const sourceReq=store.get(parentKey);
-              sourceReq.onsuccess=()=>{
-                try{
-                  guard();
-                  ensure(canonical(sourceReq.result)===canonical(original),'duplicate source revision changed');
-                  const headReq=store.get(headKey);
-                  headReq.onsuccess=()=>{
-                    try{
-                      guard();ensure(headReq.result===undefined,'unbound fork has edited head; evidence retained');
-                      const target=store.get(baseKey);
-                      target.onsuccess=()=>{
-                        try{
-                          guard();
-                          if(target.result===undefined)store.add(row,baseKey);
-                          else ensure(canonical(target.result)===canonical(row),'existing fork differs; evidence retained');
-                        }catch(error){fail(error);}
-                      };
-                    }catch(error){fail(error);}
-                  };
-                }catch(error){fail(error);}
-              };
-              return null;
-            },lease);
-          }catch(error){throw failure||error;}
-          const saved=await readWorkingCopy(indexedDB,id,codec,crypto);guard();
-          ensure(saved&&saved.revision===row.revision&&
-            canonical(saved.experiment)===raw&&canonical(saved.origin)===canonical(row.origin),
-            'working-copy fork readback conflict');
-          return {status:'verified',workspace:envelope.workspace,
-            document:{id,revision:row.revision,recovery:null}};
-        }finally{busy=false;}
-      }
-
       // A separately acknowledged draft never advances the document head.
-      // This namespace is private to the owned working copy, not inherited
-      // by prepareFork(). Keep the original bytes on every invalid read.
+      // This namespace belongs to its document. Preserve invalid old bytes.
       const RECOVERY_FORMAT='curvature-modern-working-recovery';
       const recoveryId=shared?'shared-experiment-recovery':'recovery-'+lease.tabId,
         recoveryKey='working-recovery:'+id;
@@ -815,7 +756,7 @@
         }finally{busy=false;}
       }
       return Object.freeze({id,read,readRevision,write,
-        ...(shared?{inspectMigration,prepareSelectedMigration}:{prepareFork}),
+        ...(shared?{inspectMigration,prepareSelectedMigration}:{}),
         readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,

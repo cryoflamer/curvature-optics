@@ -232,7 +232,7 @@ async function recoveryFixture(){
   const a=open(),initial=await a.read();
   return {db,open,a,initial,base,lease,lose(){active=false;}};
 }
-test('working recovery survives reopening without moving HEAD or inheriting into a fork',async()=>{
+test('working recovery survives reopening and historical fork remains readable',async()=>{
   const f=await recoveryFixture(),edit={...f.base,height:2};
   assert.equal(await f.a.readRecovery(),null);
   const staged=await f.a.stageRecovery(edit,f.initial.revision,null);
@@ -242,11 +242,20 @@ test('working recovery survives reopening without moving HEAD or inheriting into
   const childLease={...f.lease,tabId:'child-tab'};
   const child=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}})
     .openWorkingCopy(f.db,{lease:childLease,codec:{validate:v=>v},crypto:require('node:crypto').webcrypto});
-  await child.prepareFork({revision:1,envelope:{tabId:f.lease.tabId,workspace:'scene',
-    documents:{experiment:{id:f.initial.id,revision:f.initial.revision,recovery:null}}}},()=>true);
+  // Historical on-disk fixture; production no longer creates fork records.
+  const id='working-child-tab';
+  f.db.rows.set('working-copy:'+id,{format:'curvature-modern-working-fork',version:1,
+    id,revision:f.initial.revision,experiment:f.base,
+    origin:{id:f.initial.id,revision:f.initial.revision,sessionRevision:1}});
+  assert.equal(child.prepareFork,undefined);
   assert.equal(await child.readRecovery(),null);
   assert.deepEqual((await child.read()).experiment,f.base);
   assert.deepEqual(await f.a.readRecovery(),staged);
+  const shared=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}})
+    .openWorkingCopy(f.db,{lease:{sessionId:'shared',check(){},track(){return ()=>{};}},
+      codec:{STORAGE_KEY:'fixture',validate:v=>v},crypto:require('node:crypto').webcrypto});
+  const inventory=await shared.inspectMigration({getItem:()=>null});
+  assert.deepEqual(inventory.candidates.find(x=>x.selection.key==='working-copy:'+id).experiment,f.base);
 });
 test('working recovery CAS never erases a later edit or acknowledges a different payload',async()=>{
   const f=await recoveryFixture(),one={...f.base,height:2},two={...f.base,height:3};

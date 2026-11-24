@@ -257,19 +257,6 @@ test('domain lease is generation-bound and tracks transactions until pagehide',a
   ctx.leave();
 });
 
-test('document fork does not rotate the copied token if durable origin capture fails',async()=>{
-  const locks=lockFixture(),parentEnv=ownedEnv(locks),parent=store.create(parentEnv);
-  const first=await parent.claimTab();
-  const copied=storage({[store.TAB_KEY]:first.tabId});
-  const childEnv=ownedEnv(locks,copied,'00000000-0000-4000-8000-000000000002');
-  const child=store.create(childEnv);
-  await assert.rejects(child.claimTab({documentFork:true}),/UI IDB should not open/);
-  assert.equal(copied.getItem(store.TAB_KEY),first.tabId);
-  await Promise.resolve();await Promise.resolve();
-  assert.equal(locks.held.size,1);
-  parentEnv.leave();
-});
-
 test('shared document adapter needs no tab dependencies and suspends on pagehide',async()=>{
   let opened=0,leave;
   const env={indexedDB:{open(){opened++;throw Error('unexpected DB open');}},

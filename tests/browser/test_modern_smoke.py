@@ -10623,7 +10623,19 @@ class ModernBrowserSmoke(unittest.TestCase):
                 explicitIntent:false,isCurrent:()=>true};
             const candidate=await S.prepareWorkingCopy(indexedDB,opts);
             const legacy=ui.documentSessions(D);await legacy.read();
-            await legacy.write(D.select(D.empty(tabId),'compare',candidate.document),0);
+            const parent=await legacy.write(D.select(D.empty(tabId),'compare',candidate.document),0);
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(CurvatureModernUiSessionStore.DATABASE);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction('sessions','readwrite');
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=()=>{db.close();reject(tx.error);};
+                    tx.objectStore('sessions').add({id:'document-fork:historical-child',
+                        version:1,parentTabId:tabId,source:{id:'document:'+tabId,
+                            version:1,revision:parent.revision,envelope:parent.envelope}});
+                };
+            });
             const old=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
             const before=await old.read(),e=structuredClone(before.experiment);
             e.scene.camera.Height+=5;e.compare.A.atmosphere='vacuum';
@@ -10649,7 +10661,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 unchanged:raw===localStorage.getItem(C.STORAGE_KEY)};
         }""")
         self.assertTrue(result['refused'])
-        self.assertEqual(result['metadata'][0]['status'],'verified-metadata')
+        self.assertEqual(len(result['metadata']),2)
+        self.assertTrue(all(row['status']=='verified-metadata' for row in result['metadata']))
+        self.assertTrue(any(row['id']=='document-fork:historical-child' for row in result['metadata']))
         self.assertEqual(result['selected'],result['retry'])
         self.assertEqual(result['value']['experiment'],result['e'])
         self.assertEqual(result['old'],result['before'])
@@ -11533,7 +11547,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         choice.click()
         expect(self.page.locator('#ModernDocumentSessionRecoveryStatus')).to_contain_text(
             'simulated shared binding failure',timeout=30000)
-        self.page.evaluate("IDBObjectStore.prototype.put=window.originalSessionPut")
+        self.page.evaluate("() => { IDBObjectStore.prototype.put=window.originalSessionPut; }")
         self.select_shared_preview_current()
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old+2)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.revision'),1)

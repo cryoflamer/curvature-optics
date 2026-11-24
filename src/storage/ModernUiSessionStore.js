@@ -68,29 +68,6 @@
         }catch(error){if(!settled){settled=true;reject(error);}}
       });
     }
-    // Document preview records a durable snapshot of the parent's acknowledged
-    // session BEFORE rotating the copied token. No parent write or HEAD read.
-    async function persistForkOrigin(child,parent,guard){
-      const key='document-fork:'+child;
-      const saved=await transact('sessions','readwrite',(store,reply)=>{
-        const req=store.get('document:'+parent);
-        req.onsuccess=()=>{
-          try{
-            guard();
-            const row={id:key,version:1,parentTabId:parent,
-              source:req.result===undefined?null:req.result};
-            store.add(row);reply.result(row);
-          }catch(error){reply.reject(error);}
-        };
-      });
-      guard();
-      const verified=await transact('sessions','readonly',(store,reply)=>{
-        const req=store.get(key);
-        req.onsuccess=()=>reply.result(req.result);
-      });
-      guard();
-      check(JSON.stringify(saved)===JSON.stringify(verified),'document fork origin readback conflict');
-    }
     function attachLifecycle(){
       if(lifecycleAttached||typeof env.addEventListener!=='function')return;
       lifecycleAttached=true;
@@ -105,7 +82,7 @@
         claimPromise=null;resumePromise=null;
       });
     }
-    function claimTab({documentFork=false}={}){
+    function claimTab(){
       if(claimPromise)return claimPromise;
       attachLifecycle();
       const epoch=claimEpoch;
@@ -123,8 +100,6 @@
             try{
               guard();
               if(candidate!==original){
-                if(documentFork)await persistForkOrigin(candidate,original,guard);
-                guard();
                 sessionStorage.setItem(TAB_KEY,candidate);
               }
               owner={id:candidate,active:true,writable:true,release,documentTransactions:new Set()};
@@ -510,21 +485,6 @@
           observed={lease,row:saved};return saved;
         }finally{busy=false;}
       }
-      async function readForkSource(){
-        const lease=owner;verifyDocumentLease(lease,false);
-        const record=await transact('sessions','readonly',(store,reply)=>{
-          const req=store.get('document-fork:'+lease.id);
-          req.onsuccess=()=>reply.result(req.result);
-        },lease);
-        verifyDocumentLease(lease,false);
-        if(record===undefined)return null;
-        check(record&&Object.keys(record).length===4&&
-          record.id==='document-fork:'+lease.id&&record.version===1&&
-          typeof record.parentTabId==='string'&&ID.test(record.parentTabId)&&
-          record.parentTabId!==lease.id,'invalid document fork origin');
-        check(record.source!==null,'duplicate has no acknowledged parent document');
-        return decode(record.source,record.parentTabId);
-      }
       async function inspectLegacyDocuments(){
         const lease=currentLease();verifyDocumentLease(lease,false);
         const records=await transact('sessions','readonly',(store,reply)=>{
@@ -549,7 +509,7 @@
           }catch(error){return {id:row.id,status:'invalid',error:error.message};}
         });
       }
-      const api=Object.freeze(shared?{read,write,inspectLegacyDocuments}:{read,write,readForkSource});
+      const api=Object.freeze(shared?{read,write,inspectLegacyDocuments}:{read,write});
       if(shared)sharedDocumentAdapter={contract,api};
       else documentAdapter={contract,api};
       return api;
