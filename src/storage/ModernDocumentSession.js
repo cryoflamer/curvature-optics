@@ -355,6 +355,191 @@
     }
     return Object.freeze({open,markDirty,save,recover,recoveryOffer,acceptHead,state});
   }
+
+  // Opt-in recovery orchestration around the existing document/session CAS
+  // controller. The domain owns the draft bytes; the session always points
+  // to the last acknowledged document (including during a draft write).
+  function createRecoverableExperimentController(options={}){
+    const {lease,sessions,working,isCurrent}=options;
+    check(working&&['readRecovery','stageRecovery','retireRecovery'].every(
+      name=>typeof working[name]==='function'),'working recovery adapter required');
+    const core=createExperimentController(options);
+    const clone=v=>JSON.parse(JSON.stringify(v));
+    const payloadKey=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?
+      Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+    const samePayload=(a,b)=>payloadKey(a)===payloadKey(b);
+    let draft=null,offer=null,latest=null,generation=0,durableGeneration=0;
+    let pump=null,retiring=false,busy=false,checkpointError=null;
+    const guard=(writable=false)=>{
+      check(isCurrent()===true,'stale recovery controller generation');lease.check(writable);
+    };
+    function fail(error){checkpointError=String(error&&error.message||error);}
+    function state(){
+      const current=core.state();
+      return {...current,busy:busy||current.busy,
+        status:checkpointError?'failed':offer?'recovering':current.status,
+        error:checkpointError||current.error,
+        checkpoint:checkpointError?'failed':latest&&latest.generation!==durableGeneration?
+          'pending':draft?'durable':'none',
+        draft:draft?clone(draft):null,draftOffer:offer?clone(offer):null,
+        latestInput:latest?clone(latest.experiment):null};
+    }
+    function checkedDraft(value){
+      if(value===null)return null;
+      check(value&&value.kind==='experiment'&&value.documentId===working.id&&
+        value.id==='recovery-'+lease.tabId&&value.experiment&&
+        typeof value.revision==='string'&&typeof value.baseRevision==='string',
+        'working recovery identity mismatch');
+      token(value.revision,'draft revision');token(value.baseRevision,'draft base revision');
+      return clone(value);
+    }
+    function startPump(){
+      if(pump||retiring||checkpointError||!latest||latest.generation===durableGeneration)return;
+      // A single recovery writer can run concurrently with document CAS.
+      // Coalesce edits that arrived while the prior checkpoint was in flight.
+      pump=(async()=>{
+        while(latest&&latest.generation!==durableGeneration){
+          guard(true);
+          const job=latest,base=core.state().bound;
+          check(base,'acknowledged document required for recovery');
+          const saved=checkedDraft(await working.stageRecovery(job.experiment,base.revision,
+            draft?draft.revision:null));
+          guard(true);
+          check(saved&&saved.baseRevision===base.revision&&samePayload(saved.experiment,job.experiment),
+            'working recovery acknowledgement mismatch');
+          draft=saved;durableGeneration=job.generation;
+        }
+      })().catch(fail).finally(()=>{
+        pump=null;startPump();
+      });
+    }
+    async function flushCheckpoint(){
+      startPump();
+      while(pump)await pump;
+      guard();
+      check(!checkpointError,checkpointError||'working recovery failed');
+      check(!latest||latest.generation===durableGeneration,'working recovery not acknowledged');
+      return draft?clone(draft):null;
+    }
+    function markDirty(experiment){
+      guard(true);
+      check(!checkpointError&&!offer,'resolve working recovery before editing');
+      check(experiment&&typeof experiment==='object'&&!Array.isArray(experiment),
+        'experiment snapshot required for recovery');
+      check(generation<Number.MAX_SAFE_INTEGER,'recovery edit generation exhausted');
+      const snapshot=clone(experiment);
+      core.markDirty();
+      latest={generation:++generation,experiment:snapshot};
+      startPump();
+      return state();
+    }
+    async function retire(acknowledged,expected){
+      // Serialize retirement against checkpoint writes. Edits arriving here
+      // stay pending in memory and start staging after the exact CAS returns.
+      check(!pump&&!retiring,'recovery writer still active');
+      retiring=true;
+      try{
+        guard(true);
+        check(draft&&draft.revision===expected&&samePayload(draft.experiment,acknowledged.experiment),
+          'recovery retirement receipt mismatch');
+        check(await working.retireRecovery(expected,acknowledged.revision)===true,
+          'recovery retirement not acknowledged');
+        guard(true);draft=null;
+      }catch(error){fail(error);throw error;}
+      finally{retiring=false;startPump();}
+    }
+    async function inspectDraft(){
+      guard();
+      draft=checkedDraft(await working.readRecovery());guard();
+      offer=null;
+      const current=core.state();
+      if(!draft)return;
+      check(current.bound&&current.head,'unbound working recovery; evidence retained');
+      // A divergent document HEAD must be explicitly reconciled first.
+      // Never silently promote it or apply a draft to an unknown head.
+      if(current.status==='recovering')return;
+      check(current.status==='clean'&&current.head.revision===current.bound.revision,
+        'working recovery cannot be activated; evidence retained');
+      if(samePayload(draft.experiment,current.bound.experiment)){
+        // Crash after session CAS but before retirement. Both stores were
+        // just verified by core.open()/acceptHead(); no new revision needed.
+        await retire(current.bound,draft.revision);return;
+      }
+      offer=Object.freeze({sessionRevision:current.row.revision,
+        documentRevision:current.bound.revision,recoveryRevision:draft.revision,
+        baseRevision:draft.baseRevision});
+    }
+    async function open({explicitIntent=false}={}){
+      check(!busy,'recovery controller operation pending');busy=true;
+      try{
+        await core.open({explicitIntent});
+        if(!explicitIntent)await inspectDraft();
+      }catch(error){fail(error);throw error;}finally{busy=false;}
+    }
+    function recoveryOffer(){return checkpointError?null:core.recoveryOffer();}
+    function draftOffer(){return !checkpointError&&offer?clone(offer):null;}
+    async function acceptHead(selection){
+      check(!busy&&!checkpointError&&!offer,'resolve recovery before accepting head');
+      busy=true;
+      try{
+        guard(true);
+        const current=checkedDraft(await working.readRecovery());guard();
+        check(same(current,draft),'working recovery changed; evidence retained');
+        await core.acceptHead(selection);
+        await inspectDraft();
+      }catch(error){fail(error);throw error;}finally{busy=false;}
+    }
+    async function loadDraft(selection){
+      check(!busy&&!checkpointError&&offer&&same(offer,selection),
+        'explicit current draft offer required');
+      busy=true;
+      try{
+        guard(true);
+        const current=core.state(),saved=await sessions.read();guard();
+        check(same(saved,current.row),'draft session changed; evidence retained');
+        const head=await working.read();guard();
+        check(same(head,current.bound),'draft document changed; evidence retained');
+        const verified=checkedDraft(await working.readRecovery());guard();
+        check(same(verified,draft),'draft offer changed; evidence retained');
+        check(generation<Number.MAX_SAFE_INTEGER,'recovery edit generation exhausted');
+        core.markDirty();
+        latest={generation:++generation,experiment:clone(draft.experiment)};
+        durableGeneration=generation;offer=null;
+        // Caller may now activate the exact payload in memory. No commit
+        // occurs until a separately requested save().
+        return clone(latest.experiment);
+      }catch(error){fail(error);throw error;}finally{busy=false;}
+    }
+    async function save(){
+      check(!busy&&!checkpointError&&!offer&&latest&&core.state().status==='dirty',
+        'dirty recoverable experiment required');
+      busy=true;
+      try{
+        await flushCheckpoint();
+        const job=latest,savedDraft=draft;
+        check(job&&savedDraft&&job.generation===durableGeneration,'draft acknowledgement required');
+        const before=core.state().bound;
+        // Legacy migration may preserve a different JSON property order.
+        // The existing core still gets an exact no-op snapshot in that case.
+        await core.save(samePayload(savedDraft.experiment,before.experiment)?
+          before.experiment:clone(savedDraft.experiment));
+        guard(true);
+        // A later edit may already be durable or still in flight. Never
+        // retire any draft on behalf of this older document completion.
+        if(latest===job&&core.state().status!=='dirty'&&!checkpointError){
+          check(!pump,'unexpected pending recovery write');
+          // Clear only this in-memory generation before retirement. A new
+          // edit can replace it while the retirement transaction runs.
+          await retire(core.state().bound,savedDraft.revision);
+          if(latest===job)latest=null;
+        }
+        check(!checkpointError,checkpointError||'working recovery failed');
+      }catch(error){if(core.state().status!=='failed')fail(error);throw error;}
+      finally{busy=false;}
+    }
+    return Object.freeze({open,markDirty,flushCheckpoint,save,recoveryOffer,
+      acceptHead,draftOffer,loadDraft,state});
+  }
   return Object.freeze({FORMAT,VERSION,KINDS,WORKSPACES,empty,normalize,
-    select,planRestore,createSaveTracker,createExperimentController});
+    select,planRestore,createSaveTracker,createExperimentController,createRecoverableExperimentController});
 }));

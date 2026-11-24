@@ -612,6 +612,38 @@ after session acknowledgement. Memory-only input and interrupted IndexedDB
 writes are not guaranteed durable. Those lifecycle and UI behaviors require
 separate integration and acceptance.
 
+### Recovery-aware experiment controller (headless opt-in)
+
+The recovery-aware controller composes the existing experiment controller,
+rather than replacing its domain/session CAS. `markDirty(experiment)`
+captures a snapshot synchronously and starts a serialized, coalescing
+checkpoint writer immediately. The latest queued edit supersedes older
+queued (not in-flight) input. `flushCheckpoint()` confirms the current
+snapshot's durable readback; `save()` waits for it before starting normal
+document/session CAS. The checkpoint writer may stage subsequent edits
+while document CAS is pending, using the then-acknowledged base. A later
+draft remains intact when an older save completes. Retirement is serialized
+against staging and requires the exact saved payload and acknowledged
+session; an edit arriving during retirement is staged afterwards. A write
+failure is visible and the latest in-memory input remains available for
+export, not silently marked saved.
+
+On open, explicit external intent still bypasses private reads. A draft
+matching the freshly verified acknowledged document may be retired without
+a new revision (interruption after session CAS). Otherwise, the controller
+offers the exact draft for explicit loading, rechecking session, HEAD and
+draft before activation. A divergent HEAD is reconciled through the existing
+explicit head offer first, retaining any different draft and then offering
+it separately. A draft may be based on an earlier immutable revision of
+the same document; it is never silently promoted or inherited by a fork.
+Loading a draft updates only the controller's in-memory dirty state; the
+caller activates its returned payload and separately requests save.
+
+The API is explicitly opt-in and currently not mounted in ModernApp.
+A pending checkpoint is not crash-durable until acknowledgement; a failed
+checkpoint requires reload/export or a future explicit retry UX. No Web
+Storage changes or new URL behavior are introduced.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small

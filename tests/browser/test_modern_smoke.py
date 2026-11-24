@@ -10720,6 +10720,52 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['after']['row']['revision'],3)
         self.assertEqual(after['after']['bound'],after['before']['head'])
 
+    def test_recoverable_experiment_controller_stages_and_restores_draft_after_f5(self):
+        """Real recovery checkpoints stay independent of acknowledged document/session CAS."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        first=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab(),lease=ui.captureDocumentLease();
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const sessions=ui.documentSessions(D);
+            const c=D.createRecoverableExperimentController({lease,working,sessions,
+                isCurrent:()=>true,prepare:()=>S.prepareWorkingCopy(indexedDB,{
+                    tabId,lease,storage:localStorage,codec:C,crypto,
+                    explicitIntent:false,isCurrent:()=>true})});
+            await c.open();
+            const initial=c.state(),edit=structuredClone(initial.bound.experiment);
+            edit.scene.camera.Height+=1;c.markDirty(edit);await c.flushCheckpoint();
+            return {initial,edit,staged:c.state(),head:await working.read()};
+        }""")
+        self.assertEqual(first['staged']['checkpoint'],'durable')
+        self.assertEqual(first['staged']['row'],first['initial']['row'])
+        self.assertEqual(first['head'],first['initial']['bound'])
+        self.page.reload(wait_until='load')
+        second=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession,ui=CurvatureModernUiSessionStore.create(window);
+            await ui.claimTab();const lease=ui.captureDocumentLease();
+            const working=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const sessions=ui.documentSessions(D);
+            const c=D.createRecoverableExperimentController({lease,working,sessions,
+                isCurrent:()=>true,prepare:()=>{throw Error('must not migrate again');}});
+            await c.open();const before=c.state();
+            const loaded=await c.loadDraft(c.draftOffer());const dirty=c.state();
+            await c.save();return {before,loaded,dirty,after:c.state(),remaining:await working.readRecovery()};
+        }""")
+        self.assertEqual(second['before']['status'],'recovering')
+        self.assertEqual(second['before']['bound'],first['initial']['bound'])
+        self.assertEqual(second['loaded'],first['edit'])
+        self.assertEqual(second['dirty']['status'],'dirty')
+        self.assertEqual(second['dirty']['row'],first['initial']['row'])
+        self.assertEqual(second['after']['status'],'committed')
+        self.assertEqual(second['after']['bound']['experiment'],first['edit'])
+        self.assertIsNone(second['remaining'])
+
     def test_document_session_preview_live_scene_compare_edits_and_f5(self):
         """Real UI save/restore without implicit URL or legacy checkpoint writes."""
         self.open_modern()

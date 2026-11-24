@@ -175,7 +175,7 @@ function controllerFixture({existing=true}={}){
       faults.prepares++;return {status:'verified',workspace:'scene',
         document:{id,revision:'r1',recovery:null}};
     }});
-  return {makeController,faults,working,sessions,row:()=>current};
+  return {makeController,faults,working,sessions,lease,row:()=>current};
 }
 test('controller binds only verified migration and external intent skips private reads',async()=>{
   const f=controllerFixture({existing:false}),external=f.makeController();
@@ -262,4 +262,133 @@ test('controller verifies an unchanged edit without creating a revision',async()
   const f=controllerFixture(),c=f.makeController();await c.open();c.markDirty();
   await c.save({value:1});assert.equal(c.state().status,'clean');
   assert.equal(f.row().revision,1);
+});
+
+
+function recoverableFixture(){
+  const f=controllerFixture(),{working,sessions,lease}=f;
+  const copy=v=>JSON.parse(JSON.stringify(v));
+  let draft=null,number=0;
+  const faults={stage:null,retire:null,staged:[],retired:[],reads:0};
+  working.readRecovery=async()=>{faults.reads++;return copy(draft);};
+  working.stageRecovery=async(experiment,base,expected)=>{
+    faults.staged.push(experiment.value);
+    if(faults.stage)await faults.stage(experiment);
+    assert.equal(expected,draft?draft.revision:null);
+    draft={kind:'experiment',id:'recovery-'+lease.tabId,documentId:working.id,
+      revision:'draft-'+(++number),baseRevision:base,experiment:copy(experiment)};
+    return copy(draft);
+  };
+  working.retireRecovery=async(expected,ack)=>{
+    if(faults.retire)await faults.retire();
+    assert.equal(draft.revision,expected);
+    assert.deepEqual((await working.readRevision(ack)).experiment,draft.experiment);
+    faults.retired.push(expected);draft=null;return true;
+  };
+  const make=()=>contract.createRecoverableExperimentController({lease,sessions,working,
+    isCurrent:()=>f.faults.valid,prepare:async()=>{throw Error('unexpected migration');}});
+  return {...f,make,recovery:faults,draft:()=>copy(draft)};
+}
+function deferredRecovery(){
+  let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};
+}
+test('recoverable controller checkpoints early, coalesces and explicitly restores exact draft',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();
+  const gate=deferredRecovery();f.recovery.stage=()=>gate.promise;
+  const input={value:2};c.markDirty(input);input.value=99;
+  c.markDirty({value:3});c.markDirty({value:4});
+  assert.equal(c.state().checkpoint,'pending');
+  assert.equal(f.row().revision,1);
+  gate.resolve();await c.flushCheckpoint();
+  assert.deepEqual(f.recovery.staged,[2,4]);
+  assert.equal(c.state().checkpoint,'durable');
+  assert.equal(f.draft().experiment.value,4);
+  const reopened=f.make();await reopened.open();
+  assert.equal(reopened.state().status,'recovering');
+  assert.equal(reopened.state().bound.experiment.value,1);
+  await assert.rejects(reopened.loadDraft({recoveryRevision:'wrong'}),/explicit current/);
+  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:4});
+  assert.equal(reopened.state().status,'dirty');assert.equal(f.row().revision,1);
+  await reopened.save();
+  assert.equal(reopened.state().status,'committed');
+  assert.equal(f.row().revision,2);assert.equal(f.draft(),null);
+});
+test('recoverable controller stages before CAS and preserves later edits during older commit',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();
+  const gate=deferredRecovery(),entered=deferredRecovery(),original=f.working.write;
+  f.working.write=async(...args)=>{
+    assert.equal(f.draft().experiment.value,2);entered.resolve();await gate.promise;
+    return original(...args);
+  };
+  c.markDirty({value:2});const saving=c.save();await entered.promise;
+  c.markDirty({value:3});await c.flushCheckpoint();
+  const later=f.draft();gate.resolve();await saving;
+  assert.equal(c.state().status,'dirty');
+  assert.equal(f.row().envelope.documents.experiment.revision,'r2');
+  assert.deepEqual(f.draft(),later);assert.deepEqual(f.recovery.retired,[]);
+  const reopened=f.make();await reopened.open();
+  assert.equal(reopened.state().bound.experiment.value,2);
+  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:3});
+});
+test('recoverable controller serializes retirement against an edit arriving during retirement',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();
+  const gate=deferredRecovery(),entered=deferredRecovery();
+  f.recovery.retire=()=>{entered.resolve();return gate.promise;};
+  c.markDirty({value:2});const saving=c.save();await entered.promise;
+  c.markDirty({value:3});
+  assert.equal(c.state().checkpoint,'pending');
+  gate.resolve();await saving;await c.flushCheckpoint();
+  assert.equal(c.state().status,'dirty');
+  assert.equal(f.draft().experiment.value,3);
+  assert.equal(f.draft().baseRevision,'r2');
+  assert.equal(f.recovery.retired.length,1);
+});
+test('recoverable controller retains draft after domain failure and reconciles divergent head first',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
+  f.faults.domain='before';await assert.rejects(c.save(),/domain failure/);
+  assert.equal(f.draft().experiment.value,2);
+  f.faults.domain=null;
+  const reopened=f.make();await reopened.open();
+  await reopened.loadDraft(reopened.draftOffer());
+  f.faults.session='before';await assert.rejects(reopened.save(),/session failure/);
+  assert.equal(f.row().revision,1);
+  const retry=f.make();await retry.open();
+  assert.equal(retry.state().status,'recovering');assert.equal(retry.draftOffer(),null);
+  assert.equal(retry.recoveryOffer().revision,'r2');
+  f.faults.session=null;await retry.acceptHead(retry.recoveryOffer());
+  assert.equal(retry.state().status,'clean');assert.equal(f.draft(),null);
+});
+test('recoverable controller does not erase newer draft when acknowledging divergent head',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
+  const original=f.working.write;
+  f.working.write=async(...args)=>{const receipt=await original(...args);
+    c.markDirty({value:3});await c.flushCheckpoint();return receipt;};
+  f.faults.session='before';await assert.rejects(c.save(),/session failure/);
+  const reopened=f.make();await reopened.open();
+  assert.equal(reopened.draftOffer(),null);
+  f.faults.session=null;await reopened.acceptHead(reopened.recoveryOffer());
+  assert.equal(reopened.state().status,'recovering');
+  assert.equal(reopened.state().bound.experiment.value,2);
+  assert.deepEqual(await reopened.loadDraft(reopened.draftOffer()),{value:3});
+});
+test('recoverable controller fails closed on checkpoint failure, retains input and external priority',async()=>{
+  const f=recoverableFixture(),external=f.make();await external.open({explicitIntent:true});
+  assert.equal(f.recovery.reads,0);assert.equal(f.faults.reads,0);
+  const c=f.make();await c.open();
+  f.recovery.stage=()=>{throw Error('quota');};c.markDirty({value:2});
+  await assert.rejects(c.flushCheckpoint(),/quota/);
+  assert.equal(c.state().status,'failed');assert.deepEqual(c.state().latestInput,{value:2});
+  await assert.rejects(c.save(),/dirty recoverable/);assert.equal(f.row().revision,1);
+});
+test('recoverable controller retires matching post-CAS draft on F5 and rejects changed offer',async()=>{
+  const f=recoverableFixture(),c=f.make();await c.open();c.markDirty({value:2});
+  f.faults.session='after';await assert.rejects(c.save(),/lost session/);
+  assert.equal(f.row().revision,2);assert.ok(f.draft());
+  f.faults.session=null;const reopened=f.make();await reopened.open();
+  assert.equal(reopened.state().status,'clean');assert.equal(f.draft(),null);
+  reopened.markDirty({value:3});await reopened.flushCheckpoint();
+  const next=f.make();await next.open();const selection=next.draftOffer();
+  await f.working.stageRecovery({value:4},'r2',f.draft().revision);
+  await assert.rejects(next.loadDraft(selection),/offer changed/);
+  assert.equal(f.draft().experiment.value,4);
 });
