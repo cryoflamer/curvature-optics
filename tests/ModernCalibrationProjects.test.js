@@ -1280,3 +1280,26 @@ test('Calibration store tracks shared write transactions and aborts before a sta
   assert.equal(await store.get(db,B),null);
   assert.equal(lease.tracked.size,0);
 });
+
+test('shared editor activation uses the exact selected revision and preserves the outgoing editor',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const {project:target}=await migration.migrate(env,{adapter,decoder:importer,now:200});
+  const start=project(A);await store.create(db,start);
+  const lease=sharedCalibrationLease(),ref=coordinator.projectReference(target);
+  const session=coordinator.create(env,{adapter,decoder:importer,
+    sharedSelection:{lease,async acknowledge(){throw Error('preflight must not write');}}});
+  session.bind(start);
+  const prepared=await session.prepareSelected(ref);
+  assert.deepEqual(prepared.project,target);
+  assert.deepEqual(prepared.draft.rows,raw.rows);
+  assert.equal(session.state().projectId,A);
+  await assert.rejects(session.prepareSelected({...ref,revision:'rev:2'}),/revision changed/);
+  session.mark(raw);
+  await assert.rejects(session.prepareSelected(ref),/Stale or unsaved/);
+  assert.equal(session.state().unsaved,true);
+  session.discard();lease.suspend();
+  await assert.rejects(session.prepareSelected(ref),/Shared page suspended/);
+  assert.deepEqual(await store.get(db,target.id),target);
+  assert.deepEqual(await store.legacy(db),raw);
+  await assert.rejects(coordinator.create(env).prepareSelected(ref),/coordinator required/);
+});

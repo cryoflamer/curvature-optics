@@ -11808,19 +11808,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
             await c.open();const physical=c.state().bound;
             await c.selectWorkspace('calibration',P.projectReference(project));
-            const prepared=await P.prepareSharedSelection(window,P.projectReference(project));
             const calls=[];
             let block=true;
             const session=P.create(window,{sharedSelection:{lease,async acknowledge(receipt){
                 const durable=await S.get(indexedDB,receipt.current.id);
                 calls.push({receipt,durableRevision:durable.revision});
                 if(block)throw Error('Injected pointer failure');
-                const base=c.state().row.envelope.documents.calibration;
-                if(!base||base.id!==receipt.previous.id||base.revision!==receipt.previous.revision||
-                    base.recovery!==null||receipt.previous.recovery!==null)
-                    throw Error('Unexpected selection base');
-                await c.selectWorkspace('calibration',receipt.current);
+                await c.acknowledgeDocumentRevision('calibration',receipt);
             }}});
+            const prepared=await session.prepareSelected(P.projectReference(project));
             session.bind(project);
             prepared.draft.weight='2';
             session.mark(prepared.draft,prepared.inline);

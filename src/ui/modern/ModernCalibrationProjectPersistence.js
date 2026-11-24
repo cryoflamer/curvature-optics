@@ -188,16 +188,27 @@
     // synchronously recheck their editor generation and commit only after
     // the existing editor has durably saved its outgoing checkpoint.
     async function prepareOpen(id,guard=()=>true){
+      return prepareActivation(id,null,guard);
+    }
+    // Restoring a shared selection is stricter than an explicit library Open:
+    // never substitute the latest revision or a project without a checkpoint.
+    async function prepareSelected(reference,guard=()=>true){
+      if(!sharedSelection)throw Error('Shared Calibration selection coordinator required');
+      return prepareActivation(reference?.id,reference,guard);
+    }
+    async function prepareActivation(id,reference,guard){
       model.id(id);
       if(typeof guard!=='function')throw TypeError('Invalid project activation guard');
       const owner=active,expectedEpoch=epoch,expectedSequence=sequence;
       function assertCurrent(){
+        checkLifetime();
         if(active!==owner||epoch!==expectedEpoch||sequence!==expectedSequence||
            active&&(active.pending||active.latest||active.selectionPending)||guard()!==true)
           throw Error('Stale or unsaved calibration activation; active editor was not changed');
       }
       assertCurrent();
-      return prepareExact(env,id,{storage,adapter,decoder,guard:()=>{assertCurrent();return true;}});
+      const options={storage,adapter,decoder,guard:()=>{assertCurrent();return true;}};
+      return reference===null?prepareExact(env,id,options):prepareSharedSelection(env,reference,options);
     }
     function discard(){
       if(!active)throw Error('No bound Calibration Project');
@@ -236,7 +247,7 @@
         ...(sharedSelection?{selectionPending:state().selectionPending}:{})});
     }
     function project(){return active?model.normalize(active.project):null;}
-    return Object.freeze({bind,mark,save,retry:()=>save(true),linkResult,prepareOpen,discard,recovery,project,state});
+    return Object.freeze({bind,mark,save,retry:()=>save(true),linkResult,prepareOpen,prepareSelected,discard,recovery,project,state});
   }
   return Object.freeze({create,projectReference,prepareSharedSelection,sharedDocumentReader});
 }));
