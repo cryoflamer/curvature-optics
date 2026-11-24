@@ -191,6 +191,16 @@
       return changed?commitChanged(scope,ctx):Promise.resolve(false);
     }
     function reset(key){return set(key,specFor(key).defaultValue);}
+    // Explicit initial backfill, never an implicit side effect of hydration.
+    function initializeScope(scope){
+      check(ready&&!restoring&&[...specs.values()].some(x=>x.scope===scope),
+        'registered scope must be restored before initialization');
+      ensureWritable(scope);
+      const ctx=context(scope),id=group(scope);
+      if(revisions.get(id)!==0)return Promise.resolve(false);
+      check(!queues.has(id)&&!errors.has(id),'initialization already attempted');
+      return commitChanged(scope,ctx);
+    }
     async function flush(){await Promise.all([...queues.values()]);}
     function lastErrors(){return [...errors.entries()].map(([scope,error])=>({
       scope,message:String(error&&error.message||error)
@@ -311,7 +321,7 @@
       return ()=>{off();for(const fn of cleanup)fn();};
     }
     return Object.freeze({register,restore,get,set,setMany,reset,subscribe,flush,
-      lastErrors,retryFailed,verifyResumed,bindDetails,bindChoices,isReady:()=>ready,
+      lastErrors,retryFailed,verifyResumed,bindDetails,bindChoices,initializeScope,isReady:()=>ready,
       hasUnacknowledged:()=>pendingWrites>0||errors.size>0});
   }
   return Object.freeze({create});

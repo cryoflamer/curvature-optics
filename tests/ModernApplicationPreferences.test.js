@@ -269,3 +269,73 @@ test('Calibration Projects subview reuses the existing workspace preferences and
   preferences.reset(db);
   assert.deepEqual(preferences.read(db).workspace,workspaceDefaults);
 });
+
+function sharedFixture(source,initial={revision:0,envelope:null}){
+  let row=structuredClone(initial),writes=0;
+  const backend={
+    async read(scope){assert.equal(scope,'global');return structuredClone(row);},
+    async write(scope,ctx,envelope,expected){
+      assert.equal(scope,'global');
+      if(row.revision!==expected)throw Error('revision conflict');
+      writes++;row={revision:expected+1,envelope:structuredClone(envelope)};
+      return {revision:row.revision};
+    }
+  };
+  const open=(legacy=source)=>preferences.createShared({
+    registryApi:require('../src/storage/ModernStateRegistry'),
+    managerApi:require('../src/storage/ModernUiSessionManager'),store:backend,storage:legacy});
+  return {open,read:()=>structuredClone(row),writes:()=>writes};
+}
+test('global preferences migrate exactly once without owning layout or changing legacy bytes',async()=>{
+  const raw=JSON.stringify({version:1,opticalQuality:'fast',navigation:{speed:100},
+    workspace:{mode:'compare',compareModel:'B'},displayPanels:{advanced:true}});
+  const legacy=storage({[preferences.STORAGE_KEY]:raw}),f=sharedFixture(legacy);
+  const a=f.open();assert.equal((await a.restore()).opticalQuality,'fast');
+  assert.equal(a.values().navigation.speed,100);
+  assert.equal(f.writes(),1);
+  assert.equal(a.hasUnacknowledged(),false);
+  const keys=Object.keys(f.read().envelope.values);
+  assert.equal(keys.length,preferences.GLOBAL_KEYS.length);
+  assert.equal(keys.includes('application.workspace'),false);
+  assert.equal(keys.includes('application.displayPanels'),false);
+  const b=f.open({getItem(){throw Error('legacy must not be accessed after backfill');}});
+  await b.restore();assert.equal(f.writes(),1);
+  await a.save({...a.values(),cameraHudVisible:false});
+  assert.equal(f.writes(),2);
+  await assert.rejects(b.save({...b.values(),previewDetail:'4'}),/revision conflict/);
+  await assert.rejects(b.retryFailed(),/revision conflict/);
+  const c=f.open();await c.restore();
+  assert.equal(c.values().cameraHudVisible,false);
+  assert.equal(c.values().previewDetail,'auto');
+  assert.equal(f.writes(),2);
+  assert.equal(legacy.data.get(preferences.STORAGE_KEY),raw);
+});
+test('global preference migration preserves malformed sources and incomplete or future global rows',async()=>{
+  for(const raw of ['{bad','null','{"version":2}']){
+    const legacy=storage({[preferences.STORAGE_KEY]:raw}),f=sharedFixture(legacy);
+    await assert.rejects(f.open().restore());
+    assert.equal(f.writes(),0);
+    assert.equal(legacy.data.get(preferences.STORAGE_KEY),raw);
+  }
+  const legacy=storage(),f=sharedFixture(legacy);await f.open().restore();
+  const full=f.read();
+  for(const mutate of [
+    row=>delete row.envelope.values['application.opticalQuality'],
+    row=>row.envelope.values['application.opticalQuality'].version=2,
+    row=>row.envelope.values['application.opticalQuality'].value='invalid',
+    row=>row.envelope.values['application.future']={version:1,value:true}
+  ]){
+    const bad=structuredClone(full);mutate(bad);
+    const g=sharedFixture(legacy,bad);
+    await assert.rejects(g.open().restore(),/Unsupported/);
+    assert.equal(g.writes(),0);assert.deepEqual(g.read(),bad);
+  }
+});
+test('old navigation-only preferences can initialize the shared global envelope',async()=>{
+  const raw=JSON.stringify({speed:100,turnRate:5,wheelStep:1});
+  const legacy=storage({[preferences.LEGACY_NAVIGATION_KEY]:raw}),f=sharedFixture(legacy);
+  const a=f.open();await a.restore();
+  assert.deepEqual(a.values().navigation,{speed:100,turnRate:5,wheelStep:1});
+  assert.equal(legacy.data.get(preferences.LEGACY_NAVIGATION_KEY),raw);
+  assert.equal(f.writes(),1);
+});

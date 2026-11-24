@@ -166,7 +166,98 @@
     storage.removeItem(LEGACY_NAVIGATION_KEY);
     return true;
   }
-  return Object.freeze({STORAGE_KEY:STORAGE_KEY,LEGACY_NAVIGATION_KEY:LEGACY_NAVIGATION_KEY,
+  // Global application state has one complete envelope. Workspace layout
+  // and the selected experiment/model belong to their existing owners.
+  var GLOBAL_KEYS=Object.freeze(Object.keys(normalize()).filter(function(key){
+    return key!=='workspace'&&key!=='displayPanels';
+  }));
+  function globalValues(input){
+    var data=normalize(input),result={};
+    GLOBAL_KEYS.forEach(function(key){result[key]=data[key];});
+    return result;
+  }
+  function canonical(value){
+    if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
+    if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(function(key){
+      return JSON.stringify(key)+':'+canonical(value[key]);
+    }).join(',')+'}';
+    return JSON.stringify(value);
+  }
+  // The ordinary reader remains forgiving. Migration cannot silently
+  // substitute defaults for an unreadable/future legacy preference source.
+  function migrationSource(storage){
+    if(!storage||typeof storage.getItem!=='function')
+      throw Error('Legacy application preferences unavailable');
+    function parse(raw){
+      var value=JSON.parse(raw);
+      if(!value||typeof value!=='object'||Array.isArray(value)||
+         (value.version!==undefined&&value.version!==1))
+        throw Error('Unsupported legacy application preferences');
+      return value;
+    }
+    var raw=storage.getItem(STORAGE_KEY);
+    if(raw!==null)return globalValues(parse(raw));
+    raw=storage.getItem(LEGACY_NAVIGATION_KEY);
+    return globalValues(raw===null?{}:{navigation:parse(raw)});
+  }
+  function createShared({registryApi,managerApi,store,storage}={}){
+    if(!registryApi||!managerApi||!store)throw Error('Shared application preference dependencies required');
+    var manager=null;
+    function requireManager(){
+      if(!manager||!manager.isReady())throw Error('Shared application preferences not restored');
+      return manager;
+    }
+    function key(name){return 'application.'+name;}
+    async function restore(){
+      if(manager)throw Error('Shared application preferences already opened');
+      // This first read only decides whether legacy input is needed. The
+      // manager independently rereads the row and uses its own CAS baseline.
+      var before=await store.read('global',{});
+      var initial=before.revision===0?migrationSource(storage):globalValues();
+      var adapter={
+        read:async function(scope,ctx){
+          var row=await store.read(scope,ctx);
+          if(row.revision>0&&(!row.envelope||!row.envelope.values||
+             Object.keys(row.envelope.values).length!==GLOBAL_KEYS.length||
+             GLOBAL_KEYS.some(function(name){return !Object.hasOwn(row.envelope.values,key(name));})))
+            throw Error('Unsupported or incomplete global preferences; original evidence retained');
+          if(row.revision===0&&before.revision>0)
+            throw Error('Global preferences disappeared during restore');
+          return row;
+        },
+        write:function(scope,ctx,frame,revision){return store.write(scope,ctx,frame,revision);}
+      };
+      manager=managerApi.create({registry:registryApi.create(),store:adapter});
+      GLOBAL_KEYS.forEach(function(name){
+        manager.register({key:key(name),scope:'global',version:1,defaultValue:initial[name],
+          validate:function(value){
+            return canonical(normalize({[name]:value})[name])===canonical(value);
+          }});
+      });
+      var report=await manager.restore();
+      if(report.unrecognizedKeys.length)
+        throw Error('Unsupported global preferences: '+report.unrecognizedKeys.join(', '));
+      // Write only when the authoritative row is absent. A competing
+      // initializer must win by CAS, not by silently replacing its values.
+      await manager.initializeScope('global');
+      return values();
+    }
+    function values(){
+      var owner=requireManager(),result={};
+      GLOBAL_KEYS.forEach(function(name){result[name]=owner.get(key(name));});
+      return result;
+    }
+    function save(input){
+      var owner=requireManager(),patch={},data=globalValues(input);
+      GLOBAL_KEYS.forEach(function(name){patch[key(name)]=data[name];});
+      return owner.setMany(patch);
+    }
+    return Object.freeze({restore,values,save,
+      retryFailed:function(){return requireManager().retryFailed();},
+      lastErrors:function(){return manager?manager.lastErrors():[];},
+      hasUnacknowledged:function(){return !!manager&&manager.hasUnacknowledged();}});
+  }
+  return Object.freeze({GLOBAL_KEYS,globalValues,createShared,STORAGE_KEY:STORAGE_KEY,LEGACY_NAVIGATION_KEY:LEGACY_NAVIGATION_KEY,
     WORKSPACE_MODES:WORKSPACE_MODES,startupWorkspace:startupWorkspace,
     defaults:function(){return normalize();},normalize:normalize,read:read,write:write,reset:reset});
 }));

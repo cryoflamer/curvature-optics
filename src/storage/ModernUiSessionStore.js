@@ -365,7 +365,7 @@
           }
           const before=req.result,revision=before?before.revision:0;
           if(before&&(before.version!==1||!Number.isSafeInteger(before.revision)||
-            before.revision<1||(scope==='workspace'&&
+            before.revision<1||(sharedScope(scope)&&
               (before.id!==target.id||!before.envelope||
                before.envelope.format!==FORMAT||before.envelope.version!==1||
                before.envelope.scope!==scope||!before.envelope.values||
@@ -380,11 +380,11 @@
           catch(error){reply.reject(error);}
         };
       },lifetime);
-      if(scope==='workspace'){
+      if(sharedScope(scope)){
         const verified=await read(scope,context);
         check(verified.revision===saved.revision&&
           JSON.stringify(verified.envelope)===JSON.stringify(envelope),
-          'shared workspace readback conflict');
+          'shared UI readback conflict');
       }
       return saved;
     }
