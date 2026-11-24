@@ -88,7 +88,7 @@ test('shared document envelope uses fixed identity and retains independent domai
   assert.equal(second.documents.experiment.revision,'r1');
 });
 
-function atomicControllerFixture(){
+function atomicControllerFixture({canonicalBindings=false}={}){
   const copy=v=>JSON.parse(JSON.stringify(v));
   const base={display:{mode:'scene'},height:1};
   let durable={revision:1,envelope:contract.select(contract.emptyShared(),'scene',
@@ -106,8 +106,15 @@ function atomicControllerFixture(){
       },
       async selectWorkspace(mode,document,revision,options){
         if(JSON.stringify(seen)!==JSON.stringify(durable)||revision!==durable.revision)throw Error('CAS conflict');
-        const frame=contract.select(durable.envelope,mode,document);
+        let frame=contract.select(durable.envelope,mode,document);
         if(['calibration','animation'].includes(mode))await contract.planRestore(frame,options);
+        if(canonicalBindings){
+          frame=copy(frame);
+          for(const key of Object.keys(frame.documents)){
+            const ref=frame.documents[key];
+            if(ref)frame.documents[key]={recovery:ref.recovery,id:ref.id,revision:ref.revision};
+          }
+        }
         if(fault==='selection-before')throw Error('selection failed before commit');
         durable={...durable,revision:revision+1,envelope:frame,digest:'select:'+revision};
         if(fault==='selection-after')throw Error('selection acknowledgement lost');
@@ -265,7 +272,7 @@ test('lost selection acknowledgement requires renewed domain verification',async
 });
 
 test('auxiliary save receipt advances only the exact active document revision',async()=>{
-  const f=atomicControllerFixture();let revision='rev:1';
+  const f=atomicControllerFixture({canonicalBindings:true});let revision='rev:1';
   const a=f.open({readDocument:async(kind,id)=>({kind,id,revision})});await a.open();
   const before={id:'cal-a',revision:'rev:1',recovery:null};
   const after={...before,revision:'rev:2'};
@@ -284,7 +291,7 @@ test('auxiliary save receipt advances only the exact active document revision',a
 });
 test('auxiliary receipt retries only its own pending selection without rebasing',async()=>{
   for(const fault of ['selection-before','selection-after']){
-    const f=atomicControllerFixture();let revision='rev:1';
+    const f=atomicControllerFixture({canonicalBindings:true});let revision='rev:1';
     const a=f.open({readDocument:async(kind,id)=>({kind,id,revision})});await a.open();
     const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
     await a.selectWorkspace('calibration',previous);revision='rev:2';

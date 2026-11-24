@@ -255,11 +255,11 @@
       const before=binding(previous),after=binding(current);
       check(before&&after&&before.recovery===null&&after.recovery===null&&!same(before,after),
         'invalid auxiliary revision receipt');
-      check(row&&row.envelope.workspace===kind&&same(row.envelope.documents[kind],before),
+      check(row&&row.envelope.workspace===kind&&same(binding(row.envelope.documents[kind]),before),
         'auxiliary selection changed; domain receipt retained');
       if(selectionAttempt){
         check(selectionAttempt.mode===kind&&same(selectionAttempt.document,after)&&
-          same(selectionAttempt.before.envelope.documents[kind],before),
+          same(binding(selectionAttempt.before.envelope.documents[kind]),before),
           'different workspace selection pending; domain receipt retained');
         return retryWorkspaceSelection();
       }

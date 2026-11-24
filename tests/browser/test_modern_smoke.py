@@ -11790,7 +11790,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             other.close()
 
     def test_shared_calibration_domain_save_acknowledges_session_after_project(self):
-        """Actual separate databases retain a committed project if its session CAS fails."""
+        """Actual separate databases retain a committed project and compare canonicalized selection bindings."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
         self.page.goto(url,wait_until='load')
         self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
