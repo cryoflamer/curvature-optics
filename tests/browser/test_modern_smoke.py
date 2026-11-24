@@ -12132,6 +12132,78 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             stale.close()
 
+    def test_shared_calibration_legacy_adoption_preserves_source_and_selection(self):
+        """Explicit adoption creates an independent verified project, never a session switch."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=> {
+            const a=CurvatureModernApp,s=a.getExperimentSessionPreview();
+            return s.status==='failed'||s.status==='clean'&&a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+        data=self.soundly_calibration_experiment()
+        before=self.page.evaluate("""async data=>{
+            const S=CurvatureModernCalibrationProjectStore;
+            const source=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+            const prepared=await CurvatureModernCalibrationProjectCheckpoint.prepare(source,window);
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE,S.VERSION);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction(S.LEGACY,'readwrite');
+                    tx.objectStore(S.LEGACY).put(prepared.draft,'active');
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            const inline=JSON.stringify({id:prepared.draft.physicalSessionId,
+                photo:prepared.draft.record.id,sessions:{initial:null}});
+            localStorage.setItem('curvature-calibration-inline-v2',inline);
+            await S.remove(indexedDB,source.id,source.revision);
+            return {raw:prepared.draft,inline,
+                row:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }""",data)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        adopt=self.page.locator('#ModernCalibrationProjectsAdopt')
+        expect(adopt).to_be_visible(timeout=30000)
+        expect(adopt).to_be_enabled()
+        adopt.click()
+        expect(self.page.locator('#ModernCalibrationProjectsStatus')).to_contain_text('Existing draft adopted',timeout=30000)
+        read="""async()=>{
+            const S=CurvatureModernCalibrationProjectStore,marker=await S.migrationMarker(indexedDB);
+            const project=await S.get(indexedDB,marker.projectId);
+            const prepared=await CurvatureModernCalibrationProjectCheckpoint.prepare(project,window);
+            return {raw:await S.legacy(indexedDB),inline:localStorage.getItem('curvature-calibration-inline-v2'),
+                marker,project,prepared:prepared.draft,preparedInline:prepared.inline,count:(await S.list(indexedDB)).length,
+                row:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                receipt:await S.readSharedSelectionReceipt(indexedDB)};
+        }"""
+        saved=self.page.evaluate(read)
+        self.assertEqual(saved['raw'],before['raw'])
+        self.assertEqual(saved['inline'],before['inline'])
+        self.assertEqual(saved['row'],before['row'])
+        self.assertEqual(saved['prepared'],before['raw'])
+        self.assertEqual(saved['preparedInline']['id'],before['raw']['physicalSessionId'])
+        self.assertEqual(saved['count'],1)
+        self.assertIsNone(saved['receipt'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),saved)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(adopt).to_be_hidden(timeout=30000)
+        self.page.locator('[data-calibration-project-open="'+saved['project']['id']+'"]').click()
+        self.page.wait_for_function("""id=>{
+            const s=CurvatureModernApp.getExperimentSessionPreview();
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s.status==='failed'||e?.projectId===id&&!e.pending&&!e.unsaved;
+        }""",arg=saved['project']['id'],timeout=30000)
+        opened=self.page.evaluate(read)
+        self.assertEqual(opened['project'],saved['project'])
+        self.assertEqual(opened['row']['envelope']['workspace'],'calibration')
+        self.assertEqual(opened['raw'],before['raw'])
+        self.assertEqual(opened['inline'],before['inline'])
+
     def test_shared_calibration_delete_interrupted_after_detach(self):
         """An interrupted delete preserves the project without a dangling session pointer."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

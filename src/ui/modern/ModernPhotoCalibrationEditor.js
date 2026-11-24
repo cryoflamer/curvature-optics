@@ -1069,7 +1069,8 @@
       projectsSave.textContent=save?.pending>0?'Saving…':save?.error?'Retry save':'Save now';
       projectsToggle.setAttribute('aria-expanded',String(!projectsPanel.hidden));
       projectsRefresh.disabled=projectListBusy;
-      projectsAdopt.disabled=projectListBusy||!!sharedSelection;
+      projectsAdopt.disabled=projectListBusy||!!projectSession?.project()&&!!sharedSelection||
+        !!sharedSelection&&!sharedSelection.canAdoptLegacy?.();
       projectsNew.disabled=projectListBusy;
       projectsSaveDraft.hidden=!!projectSession?.project()||!scene||!record;
       projectsSaveDraft.disabled=projectListBusy||restoring||!!pendingPhotoLoads||
@@ -1719,7 +1720,16 @@
       finally{restoring=false;if(scene&&!physicalSessionId)newPhysicalSession();syncFitControls();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
     }
     async function adoptLegacyCalibrationDraft(){
-      if(sharedSelection)throw Error('Legacy draft adoption is not yet enabled in shared-session preview');
+      if(sharedSelection){
+        if(projectSession?.project()||!sharedSelection.canAdoptLegacy?.()||
+           projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads)
+          throw Error('Resolve active work before adopting the retained draft');
+        const outcome=await sharedSelection.adoptLegacy();
+        if(!outcome.project||!['migrated','already'].includes(outcome.status))
+          throw Error('Draft migration produced no openable project');
+        projectStartupStatus={status:'adopted',projectId:outcome.project.id};
+        return outcome.project;
+      }
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!migration)throw Error('Calibration migration unavailable');
       if(projectSession?.project())

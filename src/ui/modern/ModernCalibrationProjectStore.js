@@ -368,7 +368,8 @@
   // Serialized with other project writes and competing browser tabs. The
   // source snapshot is compared *inside* this transaction, after the image
   // was verified outside it. Never delete or overwrite draft/active.
-  function adoptLegacy(db,sourceSnapshot,projectInput){
+  function adoptLegacy(db,sourceSnapshot,projectInput,lease=null){
+    if(lease)requireSharedLease(lease);
     if(!sourceSnapshot||![1,2].includes(sourceSnapshot.version))
       throw RangeError('Unsupported source for calibration migration');
     const source=JSON.stringify(sourceSnapshot),project=model.normalize(projectInput);
@@ -378,7 +379,7 @@
       (tx,read,finish)=>{
         const legacyStore=tx.objectStore(LEGACY),records=tx.objectStore(PROJECTS),
           summaries=tx.objectStore(SUMMARIES),control=tx.objectStore(CONTROL);
-        read(control.get(MIGRATION_KEY),raw=>{
+        const adopt=()=>read(control.get(MIGRATION_KEY),raw=>{
           if(raw!==undefined){
             const existing=marker(raw);
             read(records.get(existing.projectId),saved=>{
@@ -411,7 +412,12 @@
             });
           });
         });
-      });
+        if(lease)read(control.get(SHARED_SELECTION_KEY),receipt=>{
+          if(receipt!==undefined)throw Error('Shared Calibration receipt unresolved; adoption rejected');
+          adopt();
+        });
+        else adopt();
+      },lease);
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,

@@ -780,8 +780,15 @@ verifying the shared checkpoint, then using a domain metadata-only CAS
 that atomically requires receipt absence. This does not advance the shared
 pointer or fork a stale record. A retained selected reference (including
 while the physical workspace is selected) must be opened before Rename;
-it uses the active receipt path instead. Apply, legacy adoption, Image
-Library navigation and mounted Animation are not enabled by this contract.
+it uses the active receipt path instead. Explicit standalone legacy adoption
+uses the existing verified asset-first migration and atomic project/summary/marker
+transaction under the shared operation lock and lifetime. It checks the shared
+checkpoint and rejects unresolved receipts and changed legacy inline bytes.
+Adoption creates an independent project without selecting it, preserves the
+raw draft and Web Storage evidence, and never repeats a retained marker.
+Concurrent legacy-route editors must remain closed; Web Storage is not part
+of an IndexedDB transaction. Apply, Image Library navigation and mounted
+Animation are not enabled by this contract.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A

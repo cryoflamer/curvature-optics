@@ -1423,3 +1423,29 @@ test('unselected shared Calibration rename is atomic, no-fork and refuses pendin
   assert.equal(await store.readSharedSelectionReceipt(db),null);
   assert.equal((await store.list(db)).length,2);
 });
+
+test('shared legacy adoption preserves raw draft and inline and refuses unresolved receipt or changed inline',async()=>{
+  const raw=legacyDraft(),inline=JSON.stringify(inlineState(raw)),db=memoryIndexedDB(raw);
+  const env=migrationEnv(db,inline),adapter=originalCatalog(env),lease=sharedCalibrationLease();
+  let checks=0;const verifyBase=async()=>{checks++;};
+  await store.create(db,project(A));
+  const receipt=await store.saveOrForkWithSelectionReceipt(db,A,1,{title:'Active'},B,1200,
+    {revision:9,digest:'sha256:'+'a'.repeat(64)},lease);
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,lease,verifyBase}),/receipt unresolved/);
+  assert.equal(await store.migrationMarker(db),null);
+  await store.retireSharedSelectionReceipt(db,receipt.selectionReceipt,lease);
+  const ensure=adapter.ensureOriginal;let inlineText=inline;
+  env.localStorage.getItem=()=>inlineText;
+  adapter.ensureOriginal=async(...args)=>{const result=await ensure(...args);inlineText='changed';return result;};
+  await assert.rejects(migration.migrate(env,{adapter,decoder:importer,lease,verifyBase}),/inline session changed/);
+  assert.equal(await store.migrationMarker(db),null);
+  assert.deepEqual(await store.legacy(db),raw);
+  adapter.ensureOriginal=ensure;inlineText=inline;
+  const saved=await migration.migrate(env,{adapter,decoder:importer,lease,verifyBase,now:1300});
+  assert.equal(saved.status,'migrated');assert.equal(saved.project.revision,1);
+  assert.deepEqual(saved.project.checkpoint.payload.inline,JSON.parse(inline));
+  assert.deepEqual(await store.legacy(db),raw);
+  assert.equal(inlineText,inline);assert.ok(checks>=5);
+  assert.equal((await migration.migrate(env,{adapter,decoder:importer,lease,verifyBase})).project.id,saved.project.id);
+  assert.equal((await store.list(db)).length,2);
+});

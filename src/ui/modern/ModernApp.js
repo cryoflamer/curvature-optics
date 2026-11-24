@@ -1975,6 +1975,19 @@
       verify:function(ref){return coordinate(()=>controller.captureSelectionBase('calibration',ref));},
       leave:function(mode){return coordinate(()=>controller.selectWorkspace(mode));},
       recover:function(receipt){return coordinate(()=>controller.recoverDocumentSelection(receipt));},
+      canAdoptLegacy:function(){
+        var s=controller.state();
+        return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy;
+      },
+      adoptLegacy:async function(){
+        try{
+          return await coordinate(()=>root.CurvatureModernCalibrationProjectMigration.migrate(root,{
+            lease:lease,verifyBase:()=>controller.assertCleanCheckpoint()}));
+        }catch(error){
+          if(controller.state().status==='failed'&&experimentPreview.status!=='suspended')previewFailure(error);
+          throw error;
+        }
+      },
       canRenameUnselected:function(id){
         var s=controller.state();
         return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy&&

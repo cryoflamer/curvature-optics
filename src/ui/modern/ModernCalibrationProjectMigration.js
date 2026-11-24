@@ -118,23 +118,38 @@
     await checkpoint.prepare(record,env,adapter,decoder);
     return {status:'already',marker:existing.marker||null,project:record};
   }
-  async function migrate(env,{adapter,decoder,now=Date.now()}={}){
+  async function migrate(env,{adapter,decoder,now=Date.now(),lease=null,verifyBase=null}={}){
     if(!env?.indexedDB||!env?.crypto)
       throw Error('Calibration migration requires IndexedDB and crypto');
     // This module is not an editor startup hook. Call only when no old v1
     // IndexedDB connection can block the version-2 project-store upgrade.
+    if(lease){
+      if(typeof verifyBase!=='function')throw Error('Shared migration checkpoint guard required');
+      lease.check(true);await verifyBase();lease.check(true);
+      if(await store.readSharedSelectionReceipt(env.indexedDB,lease))
+        throw Error('Shared Calibration receipt unresolved; adoption rejected');
+    }
     const previous=await store.migrationMarker(env.indexedDB);
     if(previous)return checkedExisting(env,{status:'already',projectId:previous.projectId,
       marker:previous},adapter,decoder);
     const raw=await store.legacy(env.indexedDB);
     if(raw===null)return {status:'empty',marker:null,project:null};
     const draft=normalizeLegacy(raw);
-    const inline=matchingInline(env.localStorage,draft);
+    // Snapshot the original inline bytes once. Shared migration refuses a
+    // changed source before the domain commit; the raw bytes remain untouched.
+    const inlineText=lease?env.localStorage?.getItem(INLINE_KEY)??null:null;
+    const inline=matchingInline(lease?{getItem:()=>inlineText}:env.localStorage,draft);
     const parts=await checkpoint.captureVerified(draft,inline,env,adapter,decoder);
+    if(lease){
+      lease.check(true);await verifyBase();lease.check(true);
+      if((env.localStorage?.getItem(INLINE_KEY)??null)!==inlineText)
+        throw Error('Legacy inline session changed during migration; retry without replacing the draft');
+    }
     const id=model.createId(env.crypto);
     const title=(draft.record?.title||'Recovered calibration').trim();
     const project=model.fresh({id,title,now,...parts});
-    const outcome=await store.adoptLegacy(env.indexedDB,raw,project);
+    const outcome=await store.adoptLegacy(env.indexedDB,raw,project,lease);
+    if(lease)lease.check(true);
     if(outcome.status!=='migrated')return checkedExisting(env,outcome,adapter,decoder);
     // Read back both committed stores, then verify and hydrate the real
     // original. No editor switch/activation happens, even on failure.
