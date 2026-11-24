@@ -205,6 +205,7 @@ function recoveryMemoryDB(){
             return op;
           }
           const store={transaction:tx,get:k=>request(()=>values.has(k)?structuredClone(values.get(k)):undefined),
+            getAllKeys:()=>request(()=>[...values.keys()]),
             add(v,k){return request(()=>{assert.equal(mode,'readwrite');assert(!values.has(k));values.set(k,structuredClone(v));});},
             put(v,k){return request(()=>{assert.equal(mode,'readwrite');values.set(k,structuredClone(v));});},
             delete(k){return request(()=>{assert.equal(mode,'readwrite');values.delete(k);});}};
@@ -276,4 +277,35 @@ test('working recovery refuses corrupt evidence, invalid base and lost lease',as
   f.db.rows.set(key,original);f.lose();
   await assert.rejects(f.a.readRecovery(),/lease lost/);
   assert.deepEqual(f.db.rows.get(key),original);
+});
+
+test('shared experiment migration, stale writers and recovery retain the original checkpoint',async()=>{
+  const crypto=require('node:crypto').webcrypto,db=recoveryMemoryDB();
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  const codec={STORAGE_KEY:'fixture',validate:v=>v};
+  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+  const base={display:{mode:'compare'},height:1,compare:{A:'vacuum',B:'standard'}};
+  const opts={lease,storage:{getItem:()=>null},codec,crypto,explicitIntent:false,isCurrent:()=>true};
+  await adapter.write(db,base,100);
+  db.rows.set('working-recovery:working-old',{legacy:true});
+  await assert.rejects(adapter.prepareWorkingCopy(db,opts),/explicit migration selection/);
+  assert.deepEqual(db.rows.get('working-recovery:working-old'),{legacy:true});
+  db.rows.delete('working-recovery:working-old'); // test fixture only
+  const candidate=await adapter.prepareWorkingCopy(db,opts);
+  assert.equal(candidate.document.id,'shared-experiment');
+  assert.deepEqual(await adapter.prepareWorkingCopy(db,opts),candidate);
+  const a=adapter.openWorkingCopy(db,{lease,codec,crypto}),b=adapter.openWorkingCopy(db,{lease,codec,crypto});
+  assert.equal(a.prepareFork,undefined);
+  const initial=await a.read();await b.read();
+  const edit={...base,height:2},stale={...base,height:3};
+  const draft=await a.stageRecovery(edit,initial.revision,null);
+  const saved=await a.write(edit,initial.revision);
+  await assert.rejects(b.write(stale,initial.revision),/revision or envelope conflict/);
+  await a.retireRecovery(draft.revision,saved.revision);
+  await assert.rejects(b.stageRecovery(stale,initial.revision,null),/base is no longer current/);
+  assert.equal(await a.readRecovery(),null);
+  assert.deepEqual((await a.read()).experiment,edit);
+  assert.deepEqual((await a.readRevision(initial.revision)).experiment,base);
+  assert.deepEqual(await adapter.read(db),{version:1,savedAt:100,experiment:base});
+  await assert.rejects(adapter.prepareWorkingCopy(db,opts),/explicit migration selection/);
 });

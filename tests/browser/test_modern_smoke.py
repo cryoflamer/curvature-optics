@@ -10534,6 +10534,81 @@ class ModernBrowserSmoke(unittest.TestCase):
                 CurvatureModernExperimentState,crypto)""",result['first']['document']['id'])
         self.assertEqual(read,result['read'])
 
+    def test_shared_working_copy_migration_cas_and_stale_recovery(self):
+        """Migrate only unambiguous evidence; share revisions without a tab identity."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const D=CurvatureModernDocumentSession;
+            const ui=CurvatureModernUiSessionStore.create({indexedDB,
+                addEventListener:window.addEventListener.bind(window),
+                get sessionStorage(){throw Error('tab storage accessed');}});
+            const sessions=ui.sharedDocumentSessions(D),lease=ui.captureSharedDocumentLifetime();
+            const legacy=await S.read(indexedDB),e=C.validate(legacy.experiment);
+            e.compare.A.atmosphere='vacuum';e.compare.B.atmosphere='inverse-spherical';
+            const stamp=legacy.savedAt+1;
+            await S.write(indexedDB,e,stamp);
+            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
+            localStorage.setItem(S.META_KEY,String(stamp));
+            const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
+            const opts={lease,storage:localStorage,codec:C,crypto,
+                explicitIntent:false,isCurrent:()=>true};
+            const candidate=await S.prepareWorkingCopy(indexedDB,opts);
+            const again=await S.prepareWorkingCopy(indexedDB,opts);
+            const a=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const b=S.openWorkingCopy(indexedDB,{lease,codec:C,crypto});
+            const initial=await a.read();await b.read();
+            const base=await sessions.read();
+            const row=await sessions.write(D.select(D.emptyShared(),'compare',candidate.document),base.revision);
+            const edit=structuredClone(initial.experiment);edit.scene.camera.Height+=1;
+            const stale=structuredClone(initial.experiment);stale.scene.camera.Height+=2;
+            const draft=await a.stageRecovery(edit,initial.revision,null);
+            const receipt=await a.write(edit,initial.revision);
+            const tracker=D.createSaveTracker({session:row.envelope,sessionRevision:row.revision});
+            tracker.markDirty();const token=tracker.beginSave();
+            const pending=tracker.acknowledgeDocument(token,receipt);
+            const saved=await sessions.write(pending.envelope,pending.expectedRevision);
+            tracker.acknowledgeSession(token,saved);
+            await a.retireRecovery(draft.revision,receipt.revision);
+            const errors=[];
+            try{await b.write(stale,initial.revision);}catch(err){errors.push(err.message);}
+            try{await b.stageRecovery(stale,initial.revision,null);}catch(err){errors.push(err.message);}
+            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){errors.push(err.message);}
+            return {candidate,again,initial,saved,edit,errors,
+                latest:await a.read(),draft:await a.readRecovery(),
+                original:await a.readRevision(initial.revision),
+                legacySame:JSON.stringify(await S.read(indexedDB))===JSON.stringify({version:1,savedAt:stamp,experiment:e}),
+                localSame:raw===localStorage.getItem(C.STORAGE_KEY),urlSame:url===location.href};
+        }""")
+        self.assertEqual(result['candidate'],result['again'])
+        self.assertEqual(result['candidate']['document']['id'],'shared-experiment')
+        self.assertEqual(result['initial'],result['original'])
+        self.assertEqual(result['latest']['experiment'],result['edit'])
+        self.assertIsNone(result['draft'])
+        self.assertIn('revision or envelope conflict',result['errors'][0])
+        self.assertIn('base is no longer current',result['errors'][1])
+        self.assertIn('explicit migration selection',result['errors'][2])
+        self.assertTrue(result['legacySame'])
+        self.assertTrue(result['localSame'])
+        self.assertTrue(result['urlSame'])
+        other=self.context.new_page()
+        try:
+            other.goto(self.base_url,wait_until='load')
+            restored=other.evaluate("""async () => {
+                const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+                const ui=CurvatureModernUiSessionStore.create(window);
+                const row=await ui.sharedDocumentSessions(CurvatureModernDocumentSession).read();
+                const a=S.openWorkingCopy(indexedDB,{lease:ui.captureSharedDocumentLifetime(),codec:C,crypto});
+                return {row,value:await a.readRevision(row.envelope.documents.experiment.revision)};
+            }""")
+            self.assertEqual(restored['row'],result['saved'])
+            self.assertEqual(restored['value']['experiment'],result['edit'])
+        finally:
+            other.close()
+
     def test_working_copy_migration_refuses_ambiguous_and_changed_sources(self):
         """No private read for external intent; no copy over conflicting evidence."""
         self.open_modern()

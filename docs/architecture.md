@@ -173,8 +173,23 @@ or fork is involved. Pagehide invalidates the in-memory access capability
 and aborts tracked transactions where possible; a cached page must reload.
 Construction does not open IndexedDB. The adapter is metadata only:
 domain verification before pointer CAS remains the caller's responsibility.
-A shared experiment writer and its migration/coordination are not mounted
-yet. The old v1 format and `document:<tabId>` keys remain readable and
+The Scene/Compare domain adapter also supports a shared lifetime capability
+(`captureSharedDocumentLifetime()`) with the same pagehide transaction guard.
+Its fixed domain identity `shared-experiment` is disjoint from all old
+`working-<tabId>` IDs. It reuses immutable revision, HEAD CAS, digest,
+readback and recovery-checkpoint code; no fork API is exposed.
+Shared recovery staging additionally checks the current HEAD against its
+base revision in the same transaction, so a stale writer cannot recreate
+an old draft after another writer commits and retires its draft.
+The shared migration candidate is copied only from matching legacy
+IndexedDB/localStorage evidence, with source/destination checks before,
+during and after copy. Any other key in the working-session store
+(including prior preview copies, orphan recovery, or edited shared HEAD)
+blocks automatic initial migration; evidence remains intact. An identical
+initial retry is allowed. Explicit recovery selection of divergent old
+records, metadata inventory and cross-database write coordination remain
+necessary before mounting a shared consumer. This is not yet activation
+of the shared writer in Modern. The old v1 format and `document:<tabId>` keys remain readable and
 unchanged; a separate key avoids collisions with historical tab IDs.
 
 Old per-tab preview rows, fork provenance, pending

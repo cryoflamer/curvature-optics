@@ -69,7 +69,13 @@
   // live owner until a separately verified document-session activation.
   const COPY_FORMAT='curvature-modern-working-copy',COPY_PREFIX='working-copy:';
   const FORK_FORMAT='curvature-modern-working-fork';
-  const COPY_ID=/^working-[A-Za-z0-9_-]{1,128}$/;
+  const SHARED_COPY_ID='shared-experiment';
+  const COPY_ID=/^(?:working-[A-Za-z0-9_-]{1,128}|shared-experiment)$/;
+  function sharedLease(lease){return lease&&lease.sessionId==='shared'&&!('tabId' in lease);}
+  function migrationKeys(keys,baseKey){
+    ensure(Array.isArray(keys)&&keys.every(key=>key===KEY||key===baseKey),
+      'other working-copy evidence requires explicit migration selection');
+  }
   function ensure(ok,message){if(!ok)throw Error('Working-copy migration: '+message);}
   function canonical(value){
     if(value===null||typeof value==='boolean'||typeof value==='string')
@@ -181,15 +187,25 @@
       if(explicitIntent)return {status:'external'};
       ensure(writer,'coordinated working-session writer required');
       ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
-      ensure(typeof tabId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(tabId),
+      const shared=sharedLease(lease);
+      if(shared)ensure(tabId===undefined,'shared migration cannot use a tab identity');
+      else ensure(typeof tabId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(tabId),
         'invalid tab identity');
       ensure(codec&&typeof codec.validate==='function'&&typeof codec.STORAGE_KEY==='string',
         'experiment validator required');
-      if(lease)ensure(lease.tabId===tabId,'migration lease identity mismatch');
-      const id='working-'+tabId,key=copyKey(id);
+      if(lease&&!shared)ensure(lease.tabId===tabId,'migration lease identity mismatch');
+      const id=shared?SHARED_COPY_ID:'working-'+tabId,key=copyKey(id);
       const local=localEvidence(storage,codec);
+      if(shared){
+        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+        guard();migrationKeys(keys,key);
+      }
       const checkpoint=await read(indexedDB);guard();
       if(!checkpoint){
+        if(shared){
+          const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+          guard();ensure(keys.length===0,'existing working-copy evidence requires explicit recovery');
+        }
         ensure(local.raw===null&&local.stamp===null,
           'local-only or incomplete checkpoint requires explicit recovery');
         return {status:'empty'};
@@ -221,12 +237,14 @@
           // Read source and destination under one readwrite transaction.
           // No async digest work inside the IDB callback, and never put over
           // a candidate; a retry can only acknowledge identical bytes.
-          const output={result:null},req=store.get(KEY);
+          const output={result:null};
           function fail(error){
             failure=error;
             try{store.transaction.abort();}catch(ignore){}
           }
-          req.onsuccess=()=>{
+          function copySource(){
+            const req=store.get(KEY);
+            req.onsuccess=()=>{
             try{
               guard();verifyLocal();
               ensure(canonical(req.result)===source.raw,
@@ -242,7 +260,15 @@
                 }catch(error){fail(error);}
               };
             }catch(error){fail(error);}
-          };
+            };
+          }
+          if(shared){
+            const keys=store.getAllKeys();
+            keys.onsuccess=()=>{
+              try{guard();migrationKeys(keys.result,key);copySource();}
+              catch(error){fail(error);}
+            };
+          }else copySource();
           return output;
         },lease||null);
       }catch(error){throw failure||error;}
@@ -256,6 +282,10 @@
         'working-copy readback mismatch');
       const after=await read(indexedDB);guard();verifyLocal();
       ensure(canonical(after)===source.raw,'IndexedDB source changed after copy');
+      if(shared){
+        const keys=await withStore(indexedDB,'readonly',store=>store.getAllKeys(),lease);
+        guard();verifyLocal();migrationKeys(keys,key);
+      }
       return {status:'verified',workspace:saved.experiment.display.mode,
         document:{id:saved.id,revision:saved.revision,recovery:null}};
     }
@@ -267,7 +297,8 @@
       ensure(lease&&typeof lease.check==='function'&&typeof lease.track==='function',
         'captured document lease required');
       lease.check();
-      const id='working-'+lease.tabId,baseKey=copyKey(id);
+      const shared=sharedLease(lease);
+      const id=shared?SHARED_COPY_ID:'working-'+lease.tabId,baseKey=copyKey(id);
       const headKey='working-head:'+id;
       const REV_FORMAT='curvature-modern-working-revision',HEAD_FORMAT='curvature-modern-working-head';
       const initial=/^sha256:[0-9a-f]{64}$/;
@@ -471,7 +502,8 @@
       // This namespace is private to the owned working copy, not inherited
       // by prepareFork(). Keep the original bytes on every invalid read.
       const RECOVERY_FORMAT='curvature-modern-working-recovery';
-      const recoveryId='recovery-'+lease.tabId,recoveryKey='working-recovery:'+id;
+      const recoveryId=shared?'shared-experiment-recovery':'recovery-'+lease.tabId,
+        recoveryKey='working-recovery:'+id;
       const recoveryToken=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       let recoveryBusy=false;
       function recoveryFields(row){
@@ -530,7 +562,7 @@
         finally{recoveryBusy=false;}
       }
       function recoverySignature(raw){return canonical(raw);}
-      async function mutateRecovery(before,revision,original,mutation){
+      async function mutateRecovery(before,revision,original,mutation,requireCurrentHead=false){
         let failure;
         try{
           await transaction(indexedDB,store=>{
@@ -546,7 +578,15 @@
                     lease.check(true);
                     ensure(canonical(target.result)===canonical(original),
                       'working recovery document revision changed; evidence retained');
-                    mutation(store);
+                    if(shared&&requireCurrentHead){
+                      readRaw(store,head=>{
+                        lease.check(true);
+                        ensure(head.row&&head.row.revision===revision&&
+                          canonical(head.row)===canonical(original),
+                          'shared recovery base is no longer current; evidence retained');
+                        mutation(store);
+                      },fail);
+                    }else mutation(store);
                   }catch(error){fail(error);}
                 };
               }catch(error){fail(error);}
@@ -585,7 +625,7 @@
           lease.check(true);
           await mutateRecovery(before,baseRevision,original,store=>{
             if(before===null)store.add(row,recoveryKey);else store.put(row,recoveryKey);
-          });
+          },true);
           const saved=await recoverySnapshot(),verified=await verifyRecovery(saved);
           lease.check(true);
           ensure(saved&&canonical(saved.row)===canonical(row),
@@ -621,8 +661,8 @@
           return true;
         }finally{recoveryBusy=false;}
       }
-      return Object.freeze({id,read,readRevision,write,prepareFork,
-        readRecovery,stageRecovery,retireRecovery});
+      return Object.freeze({id,read,readRevision,write,
+        ...(shared?{}:{prepareFork}),readRecovery,stageRecovery,retireRecovery});
     }
     return Object.freeze({read,write,clear,prepareWorkingCopy,readWorkingCopy,openWorkingCopy,
       coordination:writer?'participating-writer':'uncoordinated'});

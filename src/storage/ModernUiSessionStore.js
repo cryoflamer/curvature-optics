@@ -294,6 +294,18 @@
         }
       });
     }
+    function captureSharedDocumentLifetime(){
+      const lease=sharedDocumentLifetime;verifyDocumentLease(lease,false);
+      return Object.freeze({
+        sessionId:lease.id,
+        check(writable=false){verifyDocumentLease(lease,writable);},
+        track(tx,writable=false){
+          verifyDocumentLease(lease,writable);
+          lease.documentTransactions.add(tx);
+          return ()=>lease.documentTransactions.delete(tx);
+        }
+      });
+    }
     async function transact(storeName,mode,action,documentLease=null){
       const db=await connect();
       if(documentLease){
@@ -521,7 +533,8 @@
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
       read,write,stage,readPending,acknowledge,
       documentSessions:contract=>documentSessions(contract),
-      sharedDocumentSessions:contract=>documentSessions(contract,true),captureDocumentLease});
+      sharedDocumentSessions:contract=>documentSessions(contract,true),
+      captureDocumentLease,captureSharedDocumentLifetime});
   }
   return Object.freeze({DATABASE,VERSION,TAB_KEY,create});
 }));
