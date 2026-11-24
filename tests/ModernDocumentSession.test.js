@@ -263,3 +263,52 @@ test('lost selection acknowledgement requires renewed domain verification',async
   assert.equal(a.state().pendingSelection.baseRevision,1);
   revision='rev:7';assert.equal((await a.retryWorkspaceSelection()).row.revision,2);
 });
+
+test('auxiliary save receipt advances only the exact active document revision',async()=>{
+  const f=atomicControllerFixture();let revision='rev:1';
+  const a=f.open({readDocument:async(kind,id)=>({kind,id,revision})});await a.open();
+  const before={id:'cal-a',revision:'rev:1',recovery:null};
+  const after={...before,revision:'rev:2'};
+  await a.selectWorkspace('calibration',before);revision='rev:2';
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous:{...before,id:'cal-b'},current:after}),/selection changed/);
+  await assert.rejects(a.acknowledgeDocumentRevision('animation',{previous:before,current:after}),/selection changed/);
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous:before,current:before}),/invalid auxiliary revision/);
+  assert.equal(a.state().row.revision,2);
+  const result=await a.acknowledgeDocumentRevision('calibration',{previous:before,current:after});
+  assert.deepEqual(result.row.envelope.documents.calibration,after);
+  assert.deepEqual(result.bound.experiment,f.base);
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous:before,current:after}),/selection changed/);
+  await a.selectWorkspace('scene');
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous:after,current:{...after,revision:'rev:3'}}),/selection changed/);
+  assert.equal(a.state().row.envelope.workspace,'scene');
+});
+test('auxiliary receipt retries only its own pending selection without rebasing',async()=>{
+  for(const fault of ['selection-before','selection-after']){
+    const f=atomicControllerFixture();let revision='rev:1';
+    const a=f.open({readDocument:async(kind,id)=>({kind,id,revision})});await a.open();
+    const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+    await a.selectWorkspace('calibration',previous);revision='rev:2';
+    f.fault(fault);
+    await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous,current}),/selection/);
+    f.fault(null);
+    await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous,current:{...current,id:'cal-b'}}),/different workspace selection/);
+    assert.deepEqual(a.state().pendingSelection.document,current);
+    const result=await a.acknowledgeDocumentRevision('calibration',{previous,current});
+    assert.equal(result.row.revision,3);assert.equal(result.pendingSelection,null);
+    assert.deepEqual(result.row.envelope.documents.calibration,current);
+  }
+});
+test('auxiliary receipt cannot replace a newer selection made by another controller',async()=>{
+  const f=atomicControllerFixture();let revision='rev:1';
+  const readDocument=async(kind,id)=>({kind,id,revision});
+  const a=f.open({readDocument});await a.open();
+  const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+  await a.selectWorkspace('calibration',previous);
+  const b=f.open({readDocument});await b.open();await b.selectWorkspace('scene');
+  revision='rev:2';
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous,current}),/CAS conflict/);
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous,current}),/CAS conflict/);
+  const fresh=f.open({readDocument});await fresh.open();
+  assert.equal(fresh.state().row.envelope.workspace,'scene');
+  assert.deepEqual(fresh.state().row.envelope.documents.calibration,previous);
+});

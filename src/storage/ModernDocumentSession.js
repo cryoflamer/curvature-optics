@@ -246,7 +246,27 @@
       finally{selecting=false;busy=false;}
       return state();
     }
-    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,retryWorkspaceSelection,state});
+    // Domain saves may update/fork a project before the shared pointer is
+    // acknowledged. A receipt is not an explicit request to open a different
+    // document: it may advance only the exact currently selected binding.
+    async function acknowledgeDocumentRevision(kind,{previous,current}={}){
+      guard(true);
+      check(['calibration','animation'].includes(kind),'auxiliary document kind required');
+      const before=binding(previous),after=binding(current);
+      check(before&&after&&before.recovery===null&&after.recovery===null&&!same(before,after),
+        'invalid auxiliary revision receipt');
+      check(row&&row.envelope.workspace===kind&&same(row.envelope.documents[kind],before),
+        'auxiliary selection changed; domain receipt retained');
+      if(selectionAttempt){
+        check(selectionAttempt.mode===kind&&same(selectionAttempt.document,after)&&
+          same(selectionAttempt.before.envelope.documents[kind],before),
+          'different workspace selection pending; domain receipt retained');
+        return retryWorkspaceSelection();
+      }
+      return selectWorkspace(kind,after);
+    }
+    return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
+      retryWorkspaceSelection,acknowledgeDocumentRevision,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,
