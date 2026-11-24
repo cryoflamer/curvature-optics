@@ -9179,8 +9179,10 @@
       root.addEventListener('pagehide',checkpointKeyframeOnLeave);
       root.addEventListener('beforeunload',checkpointKeyframeOnLeave);
     }
-    var previewParams=new URLSearchParams(root.location&&root.location.search||'');
-    var previewRoute=studioViewsApi&&studioViewsApi.route&&studioViewsApi.route(root.location&&root.location.href);
+    var previewParams=documentSessionPreviewRequested?
+      new URLSearchParams(root.location&&root.location.search||''):null;
+    var previewRoute=documentSessionPreviewRequested&&studioViewsApi&&studioViewsApi.route&&
+      studioViewsApi.route(root.location&&root.location.href);
     if(documentSessionPreviewRequested&&!explicitAtStartup&&!previewRoute&&
        !previewParams.has('mode')&&!previewParams.has('state')&&!previewParams.has('tab')&&!previewParams.has('model')){
       experimentPreview.live=true;experimentPreview.status='loading';previewControls();
