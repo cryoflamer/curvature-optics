@@ -63,6 +63,11 @@
        typeof sharedSelection.lease.check!=='function'||typeof sharedSelection.lease.track!=='function'||
        typeof sharedSelection.acknowledge!=='function'))
       throw TypeError('Invalid shared Calibration selection coordinator');
+    const durableSelection=sharedSelection?.captureBase!==undefined;
+    if(durableSelection&&(typeof sharedSelection.captureBase!=='function'||
+       typeof storage.saveOrForkWithSelectionReceipt!=='function'||
+       typeof storage.retireSharedSelectionReceipt!=='function'))
+      throw TypeError('Invalid durable Calibration selection coordinator');
     function checkLifetime(){if(sharedSelection)sharedSelection.lease.check(true);}
     let active=null,epoch=0,sequence=0,tail=Promise.resolve();
     function state(){
@@ -74,7 +79,9 @@
         ...(sharedSelection?{selectionPending:active?.selectionPending?
           {previous:projectReference(active.selectionPending.previous),
             current:projectReference(active.selectionPending.project),
-            status:active.selectionPending.status}:null}:{})});
+            status:active.selectionPending.status,
+            ...(active.selectionPending.durable?{receipt:copy(active.selectionPending.durable),
+              acknowledged:active.selectionPending.acknowledged}: {})}:null}:{})});
     }
     function notify(){
       // Observation must never turn an acknowledged IndexedDB commit into a failure.
@@ -113,10 +120,18 @@
       if(owner!==active)throw Error('Stale calibration selection generation');
       // The domain transaction already committed. Retrying this step must
       // never save/fork the project a second time or infer a new CAS base.
-      await sharedSelection.acknowledge(Object.freeze({
-        previous:projectReference(receipt.previous),current:projectReference(receipt.project),
-        status:receipt.status,generation:owner.generation}));
+      if(!receipt.acknowledged){
+        await sharedSelection.acknowledge(Object.freeze({
+          previous:projectReference(receipt.previous),current:projectReference(receipt.project),
+          status:receipt.status,generation:owner.generation,
+          ...(receipt.durable?{base:copy(receipt.durable.base)}:{})}));
+        receipt.acknowledged=true;
+      }
       checkLifetime();
+      if(receipt.durable){
+        await storage.retireSharedSelectionReceipt(env.indexedDB,receipt.durable,sharedSelection.lease);
+        checkLifetime();
+      }
       if(owner!==active)throw Error('Stale calibration selection generation');
       owner.selectionPending=null;
       owner.lastAck={status:receipt.status,id:receipt.project.id,revision:receipt.project.revision};
@@ -152,7 +167,13 @@
           checkpoint:parts.checkpoint,overview:parts.overview,resultIds:captured.resultIds};
         const forkId=model.createId(env.crypto);
         // Resolves only after the atomic record+summary IDB transaction commits.
-        const result=await storage.saveOrFork(env.indexedDB,expected.id,expected.revision,
+        let result;
+        if(durableSelection){
+          const base=await sharedSelection.captureBase(projectReference(expected));
+          checkLifetime();
+          result=await storage.saveOrForkWithSelectionReceipt(env.indexedDB,expected.id,
+            expected.revision,changes,forkId,clock(),base,sharedSelection.lease);
+        }else result=await storage.saveOrFork(env.indexedDB,expected.id,expected.revision,
           changes,forkId,clock(),sharedSelection?.lease??null);
         const durable=model.normalize(result.project);
         if(!['updated','forked'].includes(result.status))
@@ -161,7 +182,7 @@
           owner.project=durable;
           if(sharedSelection){
             owner.selectionPending={status:result.status,previous:expected,project:durable,
-              sequence:captured.sequence};
+              sequence:captured.sequence,durable:result.selectionReceipt??null,acknowledged:false};
             await finishSelection(owner);
           }else{
             owner.lastAck={status:result.status,id:durable.id,revision:durable.revision};

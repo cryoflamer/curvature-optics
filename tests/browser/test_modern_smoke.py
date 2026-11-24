@@ -11810,7 +11810,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             await c.selectWorkspace('calibration',P.projectReference(project));
             const calls=[];
             let block=true;
-            const session=P.create(window,{sharedSelection:{lease,async acknowledge(receipt){
+            const session=P.create(window,{sharedSelection:{lease,
+                captureBase:reference=>c.captureSelectionBase('calibration',reference),
+                async acknowledge(receipt){
                 const durable=await S.get(indexedDB,receipt.current.id);
                 calls.push({receipt,durableRevision:durable.revision});
                 if(block)throw Error('Injected pointer failure');
@@ -11822,16 +11824,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             session.mark(prepared.draft,prepared.inline);
             let failure=null;try{await session.save();}catch(e){failure=e.message;}
             const pending=session.state(),saved=await S.get(indexedDB,project.id),
-                beforeRetry=await make().read();
+                beforeRetry=await make().read(),journal=await S.readSharedSelectionReceipt(indexedDB);
             block=false;await session.retry();
             const after=await make().read(),final=await S.get(indexedDB,project.id);
-            return {physical,failure,pending,saved,beforeRetry,after,final,calls,state:session.state(),
+            return {physical,failure,pending,saved,beforeRetry,after,final,calls,journal,
+                retired:await S.readSharedSelectionReceipt(indexedDB),state:session.state(),
                 legacy:await S.legacy(indexedDB),projectCount:(await S.list(indexedDB)).length};
         }""",data)
         self.assertIn('Injected pointer failure',outcome['failure'])
         self.assertEqual(outcome['saved']['revision'],2)
         self.assertEqual(outcome['pending']['selectionPending']['current']['revision'],'rev:2')
         self.assertEqual(outcome['beforeRetry']['envelope']['documents']['calibration']['revision'],'rev:1')
+        self.assertEqual(outcome['journal']['base']['digest'],outcome['beforeRetry']['digest'])
+        self.assertEqual(outcome['journal']['current']['revision'],'rev:2')
+        self.assertIsNone(outcome['retired'])
         self.assertEqual(outcome['after']['envelope']['documents']['calibration']['revision'],'rev:2')
         self.assertEqual(outcome['final'],outcome['saved'])
         self.assertEqual(outcome['calls'][0],outcome['calls'][1])

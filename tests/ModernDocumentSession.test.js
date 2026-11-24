@@ -319,3 +319,18 @@ test('auxiliary receipt cannot replace a newer selection made by another control
   assert.equal(fresh.state().row.envelope.workspace,'scene');
   assert.deepEqual(fresh.state().row.envelope.documents.calibration,previous);
 });
+
+test('auxiliary durable receipt captures exact checkpoint base and refuses stale base',async()=>{
+  const f=atomicControllerFixture({canonicalBindings:true});let revision='rev:1';
+  const readDocument=async(kind,id)=>({kind,id,revision});
+  const a=f.open({readDocument});await a.open();
+  const previous={id:'cal-a',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+  await a.selectWorkspace('calibration',previous);
+  const base=await a.captureSelectionBase('calibration',previous);
+  assert.equal(base.revision,2);revision='rev:2';
+  await assert.rejects(a.acknowledgeDocumentRevision('calibration',{previous,current,base:{...base,digest:'different'}}),/receipt base changed/);
+  await a.acknowledgeDocumentRevision('calibration',{previous,current,base});
+  const b=f.open({readDocument});await b.open();
+  await a.selectWorkspace('scene');
+  await assert.rejects(b.captureSelectionBase('calibration',current),/CAS conflict/);
+});

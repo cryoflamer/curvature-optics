@@ -1351,3 +1351,29 @@ test('shared Calibration receipt rejects invalid base and suspended lifetime bef
   assert.equal(await store.readSharedSelectionReceipt(db),null);
   assert.deepEqual(await store.get(db,A),start);
 });
+
+test('durable Calibration coordinator retries retirement without repeating domain or session writes',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),adapter=originalCatalog(env),start=project(A);
+  await store.create(db,start);
+  const lease=sharedCalibrationLease(),base={revision:9,digest:'sha256:'+'a'.repeat(64)};
+  let acknowledgements=0,captures=0;
+  const session=coordinator.create(env,{adapter,decoder:importer,clock:()=>1300,
+    sharedSelection:{lease,async captureBase(ref){
+      captures++;assert.deepEqual(ref,coordinator.projectReference(start));return base;
+    },async acknowledge(receipt){
+      acknowledgements++;assert.deepEqual(receipt.base,base);
+      assert.deepEqual((await store.readSharedSelectionReceipt(db)).current,receipt.current);
+      db.failMutation(store.CONTROL,'delete');
+    }}});
+  session.bind(start);session.mark(legacyDraft());
+  await assert.rejects(session.save(),/Injected/);
+  const saved=await store.get(db,A),receipt=await store.readSharedSelectionReceipt(db);
+  assert.equal(saved.revision,2);
+  assert.equal(session.state().selectionPending.acknowledged,true);
+  assert.deepEqual(session.state().selectionPending.receipt,receipt);
+  await session.retry();
+  assert.equal(acknowledgements,1);assert.equal(captures,1);
+  assert.equal(await store.readSharedSelectionReceipt(db),null);
+  assert.deepEqual(await store.get(db,A),saved);
+  assert.equal(session.state().unsaved,false);
+});

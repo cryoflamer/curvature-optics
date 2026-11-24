@@ -249,7 +249,22 @@
     // Domain saves may update/fork a project before the shared pointer is
     // acknowledged. A receipt is not an explicit request to open a different
     // document: it may advance only the exact currently selected binding.
-    async function acknowledgeDocumentRevision(kind,{previous,current}={}){
+    async function captureSelectionBase(kind,previous){
+      guard(true);
+      check(['calibration','animation'].includes(kind),'auxiliary document kind required');
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&row.draft===null&&
+        ['clean','committed'].includes(status)&&row.envelope.workspace===kind&&
+        previous&&same(binding(row.envelope.documents[kind]),binding(previous)),
+        'active clean auxiliary selection required');
+      busy=true;
+      try{
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'auxiliary selection CAS conflict before domain save');
+        return Object.freeze({revision:row.revision,digest:row.digest});
+      }catch(e){fail(e);throw e;}
+      finally{busy=false;}
+    }
+    async function acknowledgeDocumentRevision(kind,{previous,current,base}={}){
       guard(true);
       check(['calibration','animation'].includes(kind),'auxiliary document kind required');
       const before=binding(previous),after=binding(current);
@@ -257,6 +272,12 @@
         'invalid auxiliary revision receipt');
       check(row&&row.envelope.workspace===kind&&same(binding(row.envelope.documents[kind]),before),
         'auxiliary selection changed; domain receipt retained');
+      if(base!==undefined){
+        fields(base,['revision','digest'],'auxiliary receipt base');
+        const origin=selectionAttempt?selectionAttempt.before:row;
+        check(origin.revision===base.revision&&origin.digest===base.digest,
+          'auxiliary receipt base changed; evidence retained');
+      }
       if(selectionAttempt){
         check(selectionAttempt.mode===kind&&same(selectionAttempt.document,after)&&
           same(binding(selectionAttempt.before.envelope.documents[kind]),before),
@@ -266,7 +287,7 @@
       return selectWorkspace(kind,after);
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
-      retryWorkspaceSelection,acknowledgeDocumentRevision,state});
+      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,
