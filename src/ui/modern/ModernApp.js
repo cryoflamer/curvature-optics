@@ -1804,6 +1804,8 @@
     });
     if(sharedPresentationActive()){
       var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=!usable||!presentationReady||!sharedPreferencesRestored;
+      var hint=newUiEl('ModernResetPreferencesHint');
+      if(hint)hint.textContent='Resets global display and navigation preferences, not workspace layout or experiments.';
     }
     var panel=newUiEl('ModernDocumentSessionRecovery');
     if(panel)panel.hidden=usable||status==='loading';

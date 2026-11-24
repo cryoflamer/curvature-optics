@@ -11619,6 +11619,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
         self.page.wait_for_function(ready,timeout=30000)
         self.page.locator('#ModernSettingsDisplay').click()
+        self.page.locator('#ModernDisplayAdvanced summary').click()
+        expect(self.page.locator('#ModernDisplayAdvanced')).to_have_attribute('open','')
         self.page.wait_for_function("""() =>
             !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
         read="""async () => {
