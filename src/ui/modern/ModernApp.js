@@ -706,7 +706,7 @@
     new URLSearchParams(root.location&&root.location.search||'').get('document-session');
   var documentSessionPreviewRequested=['shared','preview'].includes(documentSessionRoute);
   var experimentPreview={status:'disabled',controller:null,ui:null,live:false,error:null,recoveryAction:false,
-    migration:null};
+    migration:null,calibrationContext:null,calibrationEditor:null,calibrationNavigation:false,calibrationBusy:false};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -921,8 +921,13 @@
     if(workspaceState.calibrationView===view)return;
     workspaceViewEditGeneration.calibration++;
     workspaceState.calibrationView=view;
-    saveApplicationPreferences();
+    if(!sharedPresentationActive())saveApplicationPreferences();
     var trial=workspaceUiRegistryPreview;
+    if(sharedPresentationActive()){
+      if(trial.status==='ready'&&trial.bridge)
+        observeUiRegistrySave(trial.bridge.setView('calibration',view),'Calibration view save failed: ');
+      return;
+    }
     if(trial.status==='ready'&&trial.bridge)
       trial.bridge.setView('calibration',view).catch(function(error){
         preferencesStatus('UI Registry preview Calibration view save failed: '+error.message,true);
@@ -1384,6 +1389,11 @@
           }
         }
       }
+      if(shared&&experimentPreview.calibrationEditor){
+        var calibrationView=bridge.getView('calibration');
+        workspaceState.calibrationView=calibrationView;
+        if(photoCalibrationWorkspaceOpen)experimentPreview.calibrationEditor.selectPresentationView(calibrationView);
+      }
       applyWorkspaceSections();
       refreshUiRegistryRecoveryNotice();
       if(shared)previewControls();
@@ -1784,10 +1794,13 @@
         savedAt:Number.isSafeInteger(savedAt)&&savedAt>0?savedAt:null};
     }catch(error){return null;}
   }
-  function previewModeAllowed(mode){return mode==='scene'||mode==='compare';}
+  function previewModeAllowed(mode){return mode==='scene'||mode==='compare'||
+    mode==='calibration'&&sharedPresentationActive()&&!!experimentPreview.calibrationEditor;}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
+    var editor=experimentPreview.calibrationEditor,calibration=editor&&editor.projectPersistenceStatus();
     return experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving'||
+      !!(calibration&&(calibration.unsaved||calibration.pending||calibration.selectionPending))||
       (sharedPresentationActive()&&registryUnacknowledged()));
   }
   function warnUnsavedExperiment(event){
@@ -1807,10 +1820,12 @@
     var status=experimentPreview.status;
     var usable=['clean','dirty','saving','committed'].includes(status);
     var presentationReady=!sharedPresentationActive()||workspaceUiRegistryPreview.status==='ready';
-    var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable||!presentationReady;
+    var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
+    var photo=newUiEl('ModernPhotoCalibration');
+    if(photo&&experimentPreview.calibrationEditor)photo.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
     Object.keys(workspaceTabs).forEach(function(mode){
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
-      if(tab)tab.disabled=!usable||!presentationReady||!previewModeAllowed(mode);
+      if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||!previewModeAllowed(mode);
     });
     ['ModernResetExperiment','ModernHistoryToggle'].forEach(function(id){
       var button=newUiEl(id);if(button)button.disabled=true;
@@ -1824,9 +1839,12 @@
     if(panel)panel.hidden=usable||status==='loading';
     var controller=experimentPreview.controller;
     var draftOffer=status==='recovering'&&controller&&controller.draftOffer();
+    var receipt=controller&&controller.state().selectionRecovery;
+    var receiptOffer=receipt&&['recovering-selection','failed'].includes(status);
     var message=newUiEl('ModernDocumentSessionRecoveryStatus');
     if(message)modernStatus(message,experimentPreview.error||
-      (draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
+      (receiptOffer?'An interrupted Calibration save was found. Complete its exact durable acknowledgement before opening the editor.':
+       draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
         'Document session preview is unavailable. Remove document-session='+documentSessionRoute+
           ' to use the unchanged legacy working session.'),'error');
     var choices=newUiEl('ModernDocumentSessionMigrationChoices');
@@ -1847,7 +1865,11 @@
       }
     }
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
-    if(restore){restore.hidden=!draftOffer;restore.disabled=experimentPreview.recoveryAction||!presentationReady;}
+    if(restore){
+      restore.textContent=receiptOffer?'Complete Calibration save':'Restore unsaved edits';
+      restore.hidden=!draftOffer&&!receiptOffer;
+      restore.disabled=experimentPreview.recoveryAction||!receiptOffer&&!presentationReady;
+    }
     var download=newUiEl('ModernDocumentSessionDownload');
     if(download){download.hidden=!controller;download.disabled=experimentPreview.recoveryAction;}
   }
@@ -1911,7 +1933,12 @@
     var checkpoint=sessionAutosave.openSharedCheckpoint(root.indexedDB,
       {lease:lease,codec:experiments,crypto:root.crypto,contract:api});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
+    var calibrationApi=root.CurvatureModernCalibrationProjectPersistence;
+    var calibrationEnabled=sharedPresentationRequested;
+    if(calibrationEnabled&&!calibrationApi)throw Error('Shared Calibration persistence unavailable');
     var controller=api.createAtomicExperimentController({lease:lease,checkpoint:checkpoint,isCurrent:current,
+      ...(calibrationEnabled?{readDocument:calibrationApi.sharedDocumentReader(root),
+        selectionRecovery:calibrationApi.sharedSelectionRecovery(root,lease,{existingOnly:true})}:{}),
       prepare:async function(){
         var storage=preferencesStorage(),opts={sessions:sessions,storage:storage,coordinate:coordinate,isCurrent:current};
         var old=await sessions.read(),inventory;
@@ -1941,6 +1968,19 @@
       }});
     experimentPreview.ui=ui;
     experimentPreview.controller=controller;
+    if(calibrationEnabled)experimentPreview.calibrationContext={
+      lease:lease,
+      captureBase:function(ref){return controller.captureSelectionBase('calibration',ref);},
+      acknowledge:function(receipt){return controller.acknowledgeDocumentRevision('calibration',receipt);},
+      verify:function(ref){return controller.captureSelectionBase('calibration',ref);},
+      select:async function(ref){
+        var result=await controller.selectWorkspace('calibration',ref);
+        experimentPreview.status=result.status;return result;
+      },
+      onChange:syncPreviewUnloadWarning,
+      fail:previewFailure,
+      usable:function(){return ['clean','committed'].includes(experimentPreview.status);}
+    };
     await controller.open();
     experimentPreview.migration=null;
     return controller.state();
@@ -1977,6 +2017,18 @@
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore)restore.addEventListener('click',function(){
       var c=experimentPreview.controller,offer=c&&c.draftOffer();
+      var receipt=c&&c.state().selectionRecovery;
+      if(receipt&&['recovering-selection','failed'].includes(experimentPreview.status)){
+        if(experimentPreview.recoveryAction)return;
+        experimentPreview.recoveryAction=true;previewControls();
+        c.recoverDocumentSelection(receipt).then(function(){
+          if(experimentPreview.status!=='suspended')root.location.reload();
+        }).catch(function(error){
+          experimentPreview.recoveryAction=false;
+          if(experimentPreview.status!=='suspended')previewFailure(error);
+        });
+        return;
+      }
       if(experimentPreview.status!=='recovering'||!offer||experimentPreview.recoveryAction||
          (sharedPresentationActive()&&workspaceUiRegistryPreview.status!=='ready'))return;
       experimentPreview.recoveryAction=true;previewControls();
@@ -2089,6 +2141,8 @@
   function scheduleExperimentSave(){
     if(keyframeEditSession)return;
     if(!persistence.ready||!experiments||!root.location)return;
+    if(experimentPreview.live&&experimentPreview.controller&&
+       experimentPreview.controller.state().row?.envelope.workspace==='calibration')return;
     var snapshot=null;
     if(sharedPresentationActive()&&experimentPreview.controller&&
        ['clean','dirty','saving','committed'].includes(experimentPreview.status)){
@@ -6428,6 +6482,7 @@
     return runCalibrationApply(null,target,true);
   }
   async function runCalibrationApply(editor,target,archived){
+    if(experimentPreview.live)throw Error('Calibration Apply is not yet enabled in shared-session preview');
     if(!['Scene','A','B'].includes(target))
       throw RangeError('Explicit calibration Apply target must be Scene, A or B');
     if(calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy)
@@ -8785,6 +8840,8 @@
   // All top-level workspace choices use this one success/remember path.
   // Individual activation branches own only their rendering and lifecycle.
   function setMode(mode,remember){
+    if(experimentPreview.live&&(mode==='calibration'||photoCalibrationWorkspaceOpen)&&
+       !experimentPreview.calibrationNavigation)return false;
     if(experimentPreview.live&&(!previewModeAllowed(mode)||
       (persistence.ready&&!['clean','dirty','saving','committed'].includes(experimentPreview.status))))return false;
     if(keyframeEditSession&&!keyframeEditEntering){
@@ -8800,6 +8857,53 @@
     if(remember!==false)rememberWorkspaceMode(mode);
     refreshCalibrationApplicability(true);
     return true;
+  }
+  async function restoreSharedCalibration(reference){
+    var api=root.CurvatureModernPhotoCalibrationEditor;
+    var editor=api&&api.mount(document,experimentPreview.calibrationContext);
+    if(!editor)throw Error('Shared Calibration editor unavailable');
+    experimentPreview.calibrationEditor=editor;
+    await editor.openSharedProject(reference,true);
+    if(experimentPreview.status==='suspended')return;
+    experimentPreview.status='clean';experimentPreview.calibrationNavigation=true;
+    try{if(setMode('calibration',false)===false)throw Error('Cannot activate shared Calibration');}
+    finally{experimentPreview.calibrationNavigation=false;}
+  }
+  async function requestPreviewWorkspace(mode){
+    if(!experimentPreview.live||mode!=='calibration'&&!photoCalibrationWorkspaceOpen){
+      setMode(mode);return;
+    }
+    var c=experimentPreview.controller,editor=experimentPreview.calibrationEditor;
+    if(!editor||!previewModeAllowed(mode)||experimentPreview.calibrationBusy||
+       !['clean','committed'].includes(experimentPreview.status))return;
+    if(mode===currentWorkspaceMode())return;
+    experimentPreview.calibrationBusy=true;previewControls();
+    try{
+      if(mode==='calibration'){
+        var ref=c.state().row.envelope.documents.calibration;
+        if(!ref)throw Error('No retained Calibration Project');
+        await editor.openSharedProject(ref,false);
+      }else{
+        await editor.prepareSharedLeave();
+        var view=await c.selectWorkspace(state.mode);
+        experimentPreview.status=view.status;
+      }
+      if(experimentPreview.status==='suspended')return;
+      experimentPreview.calibrationNavigation=true;
+      if(setMode(mode)===false)throw Error('Cannot activate selected workspace');
+    }catch(error){
+      if(experimentPreview.status==='suspended')return;
+      if(c.state().status==='failed'||c.state().row?.envelope.workspace!==currentWorkspaceMode())
+        previewFailure(error);
+      else{
+        persistenceStatus(error.message,true);
+        var notice=newUiEl('ModernCalibrationStorage');if(notice)notice.textContent=error.message;
+      }
+    }finally{
+      experimentPreview.calibrationNavigation=false;
+      experimentPreview.calibrationBusy=false;
+      previewControls();syncPreviewUnloadWarning();
+    }
   }
   function activateWorkspace(mode){
     if(mode==='calibration'){
@@ -9379,10 +9483,10 @@
     bindCameraHud();
     bindTargetIndicator();
     Object.keys(workspaceTabs).forEach(function(mode){
-      var tab=(mode==='scene'||mode==='compare')?el(workspaceTabs[mode]):newUiEl(workspaceTabs[mode]);if(tab)tab.addEventListener('click',function(){setMode(mode);});
+      var tab=(mode==='scene'||mode==='compare')?el(workspaceTabs[mode]):newUiEl(workspaceTabs[mode]);if(tab)tab.addEventListener('click',function(){void requestPreviewWorkspace(mode);});
     });
     var photoTab=newUiEl('ModernPhotoCalibrationOpen'),photoClose=newUiEl('ModernCalibrationClose');
-    if(photoClose)photoClose.addEventListener('click',function(){setMode('scene');});
+    if(photoClose)photoClose.addEventListener('click',function(){void requestPreviewWorkspace('scene');});
     var returnToStudio=newUiEl('ModernReturnToAnimation');
     if(returnToStudio)returnToStudio.addEventListener('click',function(){
       setMode('animation');
@@ -9441,7 +9545,7 @@
       if(experimentPreview.live){
         allowStudioRoute=false;
         startupMode=preview&&preview.row&&preview.row.envelope?preview.row.envelope.workspace:'scene';
-        if(!previewModeAllowed(startupMode))startupMode='scene';
+        if(!previewModeAllowed(startupMode)&&startupMode!=='calibration')startupMode='scene';
       }
       if(!experimentPreview.live&&!persistence.explicitUrl&&workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
       if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
@@ -9458,6 +9562,16 @@
       if(experimentPreview.live){
         updateSnapshotSaveAction();resetHistoryBaseline();refreshCalibrationApplicability();
         previewControls();
+        if(experimentPreview.status==='clean'&&startupMode==='calibration'){
+          experimentPreview.status='loading';previewControls();
+          restoreSharedCalibration(preview.row.envelope.documents.calibration).then(function(){
+            if(experimentPreview.status==='suspended')return;
+            persistenceStatus('Document session restored');
+            if(sharedPreferencesRestored)startWorkspaceUiRegistryPreview();
+            previewControls();
+          }).catch(function(error){if(experimentPreview.status!=='suspended')previewFailure(error);});
+          return;
+        }
         if(experimentPreview.status==='clean')persistenceStatus('Document session restored');
         if(sharedPresentationActive()&&preview&&preview.bound&&sharedPreferencesRestored)
           startWorkspaceUiRegistryPreview();
@@ -9553,7 +9667,7 @@
         if(experimentPreview.status==='suspended')return;
         experimentPreview.status=preview.status;
         if(preview.status==='empty')experimentPreview.error='No verified document checkpoint. Reload or recover from backup.';
-        if(preview.status==='recovering')persistenceStatus('Document session recovery required',true);
+        if(['recovering','recovering-selection'].includes(preview.status))persistenceStatus('Document session recovery required',true);
         finishStartup(null,null,preview);
       }).catch(function(error){
         if(experimentPreview.status==='suspended')return;

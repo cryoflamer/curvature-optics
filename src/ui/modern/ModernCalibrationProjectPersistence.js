@@ -53,12 +53,13 @@
       return {kind,id:reference.id,revision:reference.revision};
     };
   }
-  function sharedSelectionRecovery(env,lease,{storage=store}={}){
+  function sharedSelectionRecovery(env,lease,{storage=store,existingOnly=false}={}){
     if(!lease||lease.sessionId!=='shared'||'tabId' in lease||
        typeof lease.check!=='function'||typeof lease.track!=='function')
       throw Error('Shared Calibration recovery requires a shared lifetime');
     return Object.freeze({kind:'calibration',
-      read:()=>storage.readSharedSelectionReceipt(env.indexedDB,lease),
+      read:()=>existingOnly?storage.readExistingSharedSelectionReceipt(env.indexedDB,lease):
+        storage.readSharedSelectionReceipt(env.indexedDB,lease),
       retire:receipt=>storage.retireSharedSelectionReceipt(env.indexedDB,receipt,lease)});
   }
   function create(env,{adapter,decoder,storage=store,clock=()=>Date.now(),onChange=null,

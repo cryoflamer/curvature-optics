@@ -188,6 +188,17 @@
         finish(raw===undefined?null:selectionReceipt(raw)));
     },lease);
   }
+  // Startup inspection must not create or upgrade a historical database
+  // merely because the new shared preview was opened.
+  async function readExistingSharedSelectionReceipt(db,lease){
+    lease.check();
+    if(typeof db.databases!=='function')throw Error('Calibration receipt inventory unavailable');
+    const entries=await db.databases();lease.check();
+    const existing=entries.find(entry=>entry.name===DATABASE);
+    if(!existing||existing.version<VERSION)return null;
+    if(existing.version!==VERSION)throw Error('Unsupported Calibration database version; evidence retained');
+    return readSharedSelectionReceipt(db,lease);
+  }
   // Call only after the session controller has verified the exact receipt
   // acknowledgement. This transaction guards the receipt and domain revision;
   // it is intentionally not a cross-database transaction.
@@ -381,5 +392,5 @@
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
     create,get,list,update,saveOrFork,rename,remove,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
-    retireSharedSelectionReceipt});
+    readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
 }));

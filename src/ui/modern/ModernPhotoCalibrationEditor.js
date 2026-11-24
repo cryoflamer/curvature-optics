@@ -509,7 +509,7 @@
       best:current==="result"&&!!hasFit&&preferredCamera!=="initial"};
   }
   let mounted=null;
-  function mount(doc){
+  function mount(doc,sharedSelection=null){
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
     if(!workspace)return null;
     if(mounted)return mounted;
@@ -638,6 +638,7 @@
           }
           return;
         }
+        if(sharedSelection)return;
         env.localStorage.setItem(INLINE_KEY,JSON.stringify({id:physicalSessionId,photo:record?.id||null,sessions:inlineSessions}));
       }catch(error){/* Optional UI storage; project write failures are reported by persist(). */}
     }
@@ -659,7 +660,7 @@
       physicalSessionId=env.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
       inlineSessions={initial:null};inlineRole=null;
       // Retain historical inline recovery while editing a project.
-      if(!projectSession?.project())try{env.localStorage.removeItem(INLINE_KEY);env.localStorage.removeItem('curvature-calibration-magnifier-v1');env.localStorage.removeItem('curvature-landmark-viewer-window-v1');}catch(error){/* Optional UI storage. */}
+      if(!sharedSelection&&!projectSession?.project())try{env.localStorage.removeItem(INLINE_KEY);env.localStorage.removeItem('curvature-calibration-magnifier-v1');env.localStorage.removeItem('curvature-landmark-viewer-window-v1');}catch(error){/* Optional UI storage. */}
     }
     let previewValid=false,photoGhost=null,initialProjectionKey=null;
     const identityRaster=doc.createElement('canvas');
@@ -784,7 +785,7 @@
     let projectStartupStatus={status:'uninspected'};
     // No project owns the live editor until an explicit, fully qualified open.
     let projectSession=null,projectSwitchBusy=false,projectSwitchEpoch=0;
-    let editorMutation=0,switchInterference=false;
+    let editorMutation=0,switchInterference=false,sharedInput=null,sharedWrite=null;
     function database(){
       if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
         // Opening without a fixed version also supports the project-store v2
@@ -883,6 +884,7 @@
     // identity in sessionStorage; unsaved or failed writes must not auto-bind.
     let leavingPage=false;
     function rememberCleanProjectState(state){
+      if(sharedSelection)return;
       try{
         if(state?.projectId&&!state.unsaved&&!state.pending&&!state.error)
           env.sessionStorage?.setItem(RELOAD_PROJECT_KEY,state.projectId);
@@ -902,13 +904,13 @@
     env.addEventListener('beforeunload',markCleanProjectOnLeave,true);
     env.addEventListener('pagehide',markCleanProjectOnLeave,true);
     function rememberPreviousProject(previous,opened){
-      if(!previous||previous===opened)return;
+      if(sharedSelection||!previous||previous===opened)return;
       try{env.sessionStorage?.setItem(PREVIOUS_PROJECT_KEY,previous);}catch(_ignored){}
     }
     // A single explicit Delete may request exactly one startup handoff.
     // Never auto-open an arbitrary last-used project on an ordinary F5.
     let deletedProjectHandoff=null;
-    try{deletedProjectHandoff=env.sessionStorage?.getItem(DELETED_PROJECT_HANDOFF_KEY)??null;}
+    try{if(!sharedSelection)deletedProjectHandoff=env.sessionStorage?.getItem(DELETED_PROJECT_HANDOFF_KEY)??null;}
     catch(_ignored){/* Optional handoff storage. */}
     let projectRows=[],projectListBusy=false,projectListToken=0,projectInspection=null;
     // A UI-only selection, deliberately independent of the active project.
@@ -1044,7 +1046,7 @@
       projectsSave.textContent=save?.pending>0?'Saving…':save?.error?'Retry save':'Save now';
       projectsToggle.setAttribute('aria-expanded',String(!projectsPanel.hidden));
       projectsRefresh.disabled=projectListBusy;
-      projectsAdopt.disabled=projectListBusy;
+      projectsAdopt.disabled=projectListBusy||!!sharedSelection;
       projectsNew.disabled=projectListBusy;
       projectsSaveDraft.hidden=!!projectSession?.project()||!scene||!record;
       projectsSaveDraft.disabled=projectListBusy||restoring||!!pendingPhotoLoads||
@@ -1145,7 +1147,7 @@
       // The opened project is already being edited; reopening it is neither
       // useful nor safe while its live checkpoint may be changing.
       if(!active)action('Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
-      action('Rename','calibrationProjectRename',renameFromProjects);
+      action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection);
       action('Duplicate','calibrationProjectDuplicate',duplicateFromProjects);
       card.append(actions);
       const deletion=doc.createElement('button');
@@ -1153,8 +1155,9 @@
       deletion.className='modern-animation-library-delete modern-card-delete';
       deletion.dataset.calibrationProjectDelete=entry.id;
       deletion.disabled=projectListBusy;
+      if(sharedSelection){deletion.disabled=true;deletion.title='Delete is not yet enabled in shared-session preview';}
       deletion.setAttribute('aria-label','Delete calibration '+entry.title);
-      deletion.title=active?'Delete the currently opened calibration project':
+      if(!sharedSelection)deletion.title=active?'Delete the currently opened calibration project':
         'Delete calibration '+entry.title;
       deletion.onclick=event=>{event.stopPropagation();void deleteFromProjects(entry);};
       ['pointerdown','mousedown','dblclick','dragstart'].forEach(type=>
@@ -1237,7 +1240,7 @@
       projectsDisclosure.open=open;
       projectsPanel.hidden=!open;
       if(!open)projectInspector?.hide();
-      if(!hydrating)env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
+      if(!hydrating&&(!sharedSelection||changed))env.CurvatureModernApp?.rememberCalibrationView?.(open?'projects':'editor');
       projectsControls();
       if(!changed)return;
       if(open)void refreshProjectList();
@@ -1258,7 +1261,7 @@
         const outcome=await openCalibrationProject(id);
         rememberPreviousProject(previous,outcome.project.id);
         projectSelectedId=outcome.project.id;
-        try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,outcome.project.id);}
+        try{if(!sharedSelection)env.sessionStorage?.setItem(LAST_PROJECT_KEY,outcome.project.id);}
         catch(_ignored){/* Session selection is optional. Never store photo bytes. */}
         // The caller must leave the library after a successful activation;
         // do not hide the editor on any failed validation or save.
@@ -1306,7 +1309,7 @@
           const opened=await openCalibrationProject(created.id);
           rememberPreviousProject(previous,opened.project.id);
           projectSelectedId=opened.project.id;
-          try{env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
+          try{if(!sharedSelection)env.sessionStorage?.setItem(LAST_PROJECT_KEY,opened.project.id);}catch(_ignored){}
           projectListBusy=false;showProjectList(false);
         }catch(error){
           await refreshProjectList();
@@ -1374,7 +1377,7 @@
       }
     }
     async function renameFromProjects(entry){
-      if(projectListBusy)return;
+      if(sharedSelection||projectListBusy)return;
       const title=env.prompt('Rename Calibration Project',entry.title);
       if(title===null||title===entry.title)return;
       projectListBusy=true;renderProjects();
@@ -1399,7 +1402,7 @@
       finally{projectListBusy=false;renderProjects();}
     }
     async function deleteFromProjects(entry){
-      if(projectListBusy)return;
+      if(sharedSelection||projectListBusy)return;
       const active=projectSession?.project()?.id===entry.id;
       if(active&&(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
           photoGestures.active||resultGestures.active)){
@@ -1523,17 +1526,18 @@
       if(!projectSession){
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
-        projectSession=helper.create(env,{onChange:()=>{
+        projectSession=helper.create(env,{sharedSelection,onChange:()=>{
           // Bind/save/failure acknowledgments maintain the tab-scoped durable
           // identity. No auto-resume token is kept for unresolved edits.
           if(!leavingPage)rememberCleanProjectState(projectSession?.state());
           if(!projectsPanel.hidden)renderProjects();
+          if(sharedSelection)sharedSelection.onChange();
         }});
       }
       return projectSession;
     }
     function persist(forSwitch=false){
-      if(restoring||!scene)return;
+      if(restoring||!scene||sharedSelection&&(!projectSession?.project()||leavingPage||workspace.hidden))return;
       if(projectSwitchBusy&&!forSwitch){
         // A programmatic event during a switch invalidates the pending
         // activation. Never silently drop its mutated editor state.
@@ -1551,6 +1555,12 @@
         // yielding to any earlier async write. Queuing mark() itself would
         // allow a late callback to accidentally mark a newly opened project.
         try{
+          const fingerprint=sharedSelection?JSON.stringify([data,inline]):null;
+          if(sharedSelection&&fingerprint===sharedInput){
+            if(forSwitch&&(session.state().unsaved||session.state().pending||session.state().error))
+              return sharedWrite||Promise.reject(Error('Resolve unsaved Calibration work first'));
+            return;
+          }
           session.mark(data,inline);
           saved=session.save().then(result=>{
             const current=projectSession===session&&
@@ -1560,6 +1570,7 @@
                 'Calibration Project saved in this browser.';
             return result;
           });
+          if(sharedSelection){sharedInput=fingerprint;sharedWrite=saved;}
         }catch(error){saved=Promise.reject(error);}
       }else{
         saved=writeQueue.catch(()=>{}).then(async()=>{
@@ -1583,6 +1594,7 @@
       return saved;
     }
     async function restoreDraft(){
+      if(sharedSelection)throw Error('Legacy draft restore is disabled in shared-session preview');
       // A deleted project's reload must not resurrect the unrelated retained
       // legacy draft and present it as though another project were opened.
       if(deletedProjectHandoff!==null)return;
@@ -1643,6 +1655,7 @@
       finally{restoring=false;if(scene&&!physicalSessionId)newPhysicalSession();syncFitControls();if(viewBest&&fitBest)paintBest();else meshDraw();photoDraw();}
     }
     async function adoptLegacyCalibrationDraft(){
+      if(sharedSelection)throw Error('Legacy draft adoption is not yet enabled in shared-session preview');
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!migration)throw Error('Calibration migration unavailable');
       if(projectSession?.project())
@@ -1683,6 +1696,11 @@
     // The only editor-side project switch entry point. The library UI added
     // in 8F.7p.6 will invoke this explicit operation; startup never does.
     async function openCalibrationProject(id,{cleanReload=false}={}){
+      if(sharedSelection){
+        const saved=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,id);
+        if(!saved)throw Error('Calibration Project missing');
+        return openSharedProject(env.CurvatureModernCalibrationProjectPersistence.projectReference(saved),false);
+      }
       const storage=env.CurvatureModernCalibrationProjectStore;
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!storage||!migration)throw Error('Calibration Projects are unavailable');
@@ -1781,7 +1799,63 @@
         syncFitControls();
       }
     }
+    // Only an exact shared reference may activate this editor. The old
+    // standalone draft and tab identities are never consulted or rewritten.
+    async function openSharedProject(reference,restore=true){
+      if(!sharedSelection)throw Error('Shared Calibration editor is not configured');
+      if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+         photoGestures.active||resultGestures.active)
+        throw Error('Finish active Calibration operations before opening a project');
+      const previousInert=workspace.inert,request=++projectSwitchEpoch;
+      projectSwitchBusy=true;switchInterference=false;workspace.inert=true;
+      let observed=editorMutation,pointerCommitted=false;
+      const guard=()=>projectSwitchBusy&&projectSwitchEpoch===request&&
+        editorMutation===observed&&!switchInterference&&!fitWorker&&!applyBusy&&!pendingPhotoLoads;
+      const requireGuard=()=>{if(!guard())throw Error('Calibration changed during shared activation');};
+      try{
+        const session=persistenceSession();
+        if(!restore&&session.project()&&!workspace.hidden){
+          const ack=persist(true);if(ack)await ack;
+        }
+        await writeQueue;observed=editorMutation;requireGuard();
+        const prepared=await session.prepareSelected(reference,guard);requireGuard();
+        const incoming=await prepareVisualProject(prepared);requireGuard();
+        const saved=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,reference.id);
+        requireGuard();
+        if(!saved||JSON.stringify(saved)!==JSON.stringify(prepared.project))
+          throw Error('Calibration Project changed during visual preparation');
+        if(restore)await sharedSelection.verify(reference);
+        else await sharedSelection.select(reference);
+        pointerCommitted=true;requireGuard();
+        activateVisualProject(incoming);
+        session.bind(prepared.project);
+        sharedInput=JSON.stringify([captureDraftState(),captureInlineState()]);sharedWrite=null;
+        projectStartupStatus={status:'active',projectId:prepared.project.id};
+        projectSelectedId=prepared.project.id;
+        $('ModernCalibrationStorage').textContent='Calibration Project opened and verified.';
+        return {status:'opened',project:session.project()};
+      }catch(error){
+        if(pointerCommitted)sharedSelection.fail(error);
+        throw error;
+      }finally{
+        projectSwitchBusy=false;
+        if(!pointerCommitted||sharedSelection.usable())workspace.inert=previousInert;
+        syncFitControls();
+      }
+    }
+    async function prepareSharedLeave(){
+      if(!sharedSelection||projectSwitchBusy||projectListBusy||restoring||fitWorker||applyBusy||
+         pendingPhotoLoads||photoGestures.active||resultGestures.active)
+        throw Error('Finish active Calibration operations before leaving');
+      const ack=persist(true);if(ack)await ack;
+      await writeQueue;
+      const state=projectSession?.state();
+      if(!state?.projectId||state.pending||state.unsaved||state.error||state.selectionPending)
+        throw Error('Resolve unsaved Calibration work before leaving');
+      return true;
+    }
     async function resumeCleanProjectAfterReload(){
+      if(sharedSelection)return;
       // No automatic activation without a clean tab-scoped exit identity;
       // never replace the standalone recovery state after a failed write.
       if(deletedProjectHandoff!==null||projectSession?.project()||
@@ -1806,6 +1880,7 @@
       }
     }
     async function resumeAfterDeletedProject(){
+      if(sharedSelection)return;
       if(deletedProjectHandoff===null)return;
       const requested=deletedProjectHandoff;
       // Consume the one-shot request even when the target disappeared or
@@ -1962,6 +2037,7 @@
     sourcePicker.onchange=()=>{};
     sourceRefresh.onclick=refreshSources;
     $('ModernCalibrationOpenImageLibrary').onclick=()=>{
+      if(sharedSelection){sourceStatus.textContent='Image Library navigation is not yet enabled in shared-session preview';return;}
       const libraryTab=$('ModernImageLibraryTab'),imageLibrary=$('ModernReferenceImageLibrary');
       if(!libraryTab||!imageLibrary){
         sourceStatus.textContent='Image Library navigation is unavailable';return;
@@ -2348,6 +2424,12 @@
       message('Load a reference photo and select matching vertices.');
     }
     function enter(snapshot){
+      if(sharedSelection){
+        if(!projectSession?.project())return false;
+        void refreshSources();
+        showProjectList(env.CurvatureModernApp?.getCalibrationView?.()==='projects',true);
+        return true;
+      }
       if(!scene){
         if(blockedFlatDraft&&!env.confirm('The stored Flat calibration is no longer supported. Replace it with a new Globe session?'))return false;
         try{showScene(prepareScene(snapshot));blockedFlatDraft=false;}
@@ -2457,7 +2539,7 @@
       runFit.disabled=stage!=="calibration"||restoring||pendingPhotoLoads>0||applyBusy||
         !!fitWorker||!record||!scene||!initialSupported||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
-      const applyDisabled=applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
+      const applyDisabled=!!sharedSelection||applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
         !!fitWorker||!record||!scene||!bestSupported;
       if(applyButton)applyButton.disabled=applyDisabled;
       if(applyTarget)applyTarget.disabled=applyDisabled;
@@ -2771,6 +2853,7 @@
       });
     syncFitControls();syncPairToolbar();
     mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
+      openSharedProject,prepareSharedLeave,
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,
       refreshProjectList,projectPersistenceStatus:()=>projectSession?.state()||null,

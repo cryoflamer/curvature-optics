@@ -11748,11 +11748,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         other=self.context.new_page()
         try:
             other.goto(url,wait_until='load')
-            # The mounted editor has not yet been wired to the domain reader:
-            # it must reject this selection, not restore an unrelated Scene.
-            other.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",
-                timeout=30000)
-            expect(other.locator('#ModernSceneTab')).to_be_disabled()
+            other.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+                CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'&&
+                CurvatureModernApp.getWorkspaceMode()==='calibration'""",timeout=30000)
+            expect(other.locator('#ModernPhotoCalibration')).to_be_visible()
+            self.assertEqual(other.evaluate("""() => CurvatureModernPhotoCalibrationEditor.mount(document)
+                .projectPersistenceStatus().projectId"""),setup['project']['id'])
             restored=other.evaluate("""async () => {
                 const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence;
                 const ui=CurvatureModernUiSessionStore.create(window);ui.sharedDocumentSessions(D);
@@ -11911,7 +11912,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                     return {saved,before:await make().read()};
                 }""",{"data":data,"committed":committed})
                 self.page.reload(wait_until='load')
-                self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",timeout=30000)
+                self.page.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='recovering-selection'""",timeout=30000)
+                expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_have_text('Complete Calibration save')
                 restored=self.page.evaluate("""async () => {
                     const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
                         P=CurvatureModernCalibrationProjectPersistence,U=CurvatureModernUiSessionStore.create(window);
