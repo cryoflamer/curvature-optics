@@ -11527,7 +11527,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""
         before=self.page.evaluate(read)
         self.assertEqual(before['envelope']['values']['workspace.settingsTab']['value'],'Surface')
-        self.page.evaluate('IDBObjectStore.prototype.put=window.originalUiPut')
+        self.page.evaluate('() => {IDBObjectStore.prototype.put=window.originalUiPut;}')
         self.page.locator('#ModernUiRegistryRetry').click()
         self.page.wait_for_function("""() =>
             !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged""",timeout=30000)
