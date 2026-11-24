@@ -13,6 +13,46 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(model,store,checkpoint){
   'use strict';
   function copy(value){return JSON.parse(JSON.stringify(value));}
+  function projectReference(project){
+    const value=model.normalize(project);
+    return Object.freeze({id:value.id,revision:'rev:'+value.revision,recovery:null});
+  }
+  // One verified domain preflight for both ordinary Open and shared-session
+  // selection. A matching revision alone is insufficient if bytes changed.
+  async function prepareExact(env,id,{storage=store,adapter,decoder,
+    expectedRevision=null,guard=()=>true,requireCheckpoint=false}={}){
+    model.id(id);
+    if(typeof guard!=='function')throw TypeError('Invalid project activation guard');
+    function current(){
+      if(guard()!==true)throw Error('Stale or unsaved calibration activation; active editor was not changed');
+    }
+    current();
+    const before=await storage.get(env.indexedDB,id);current();
+    if(!before)throw Error('Calibration project missing; active editor was not changed');
+    if(expectedRevision!==null&&projectReference(before).revision!==expectedRevision)
+      throw Error('Calibration project revision changed; active editor was not changed');
+    const prepared=await checkpoint.prepare(before,env,adapter,decoder);current();
+    if(requireCheckpoint&&!prepared.draft)
+      throw Error('Calibration project has no verified editor checkpoint');
+    const after=await storage.get(env.indexedDB,id);current();
+    if(!after||JSON.stringify(model.normalize(after))!==JSON.stringify(model.normalize(before)))
+      throw Error('Calibration project changed during activation preparation');
+    return prepared;
+  }
+  function prepareSharedSelection(env,reference,options={}){
+    if(!reference||Object.keys(reference).length!==3||reference.recovery!==null||
+       typeof reference.revision!=='string'||!/^rev:[1-9][0-9]*$/.test(reference.revision))
+      throw Error('Unsupported Calibration selection or recovery reference');
+    return prepareExact(env,reference.id,{...options,expectedRevision:reference.revision,requireCheckpoint:true});
+  }
+  function sharedDocumentReader(env,options={}){
+    return async function(kind,id){
+      if(kind!=='calibration')throw Error('Unsupported auxiliary document kind: '+kind);
+      const prepared=await prepareExact(env,id,{...options,requireCheckpoint:true});
+      const reference=projectReference(prepared.project);
+      return {kind,id:reference.id,revision:reference.revision};
+    };
+  }
   function create(env,{adapter,decoder,storage=store,clock=()=>Date.now(),onChange=null}={}){
     if(!env?.indexedDB||!env?.crypto)
       throw Error('Calibration Project persistence requires IndexedDB and crypto');
@@ -113,18 +153,7 @@
           throw Error('Stale or unsaved calibration activation; active editor was not changed');
       }
       assertCurrent();
-      const before=await storage.get(env.indexedDB,id);
-      assertCurrent();
-      if(!before)throw Error('Calibration project missing; active editor was not changed');
-      const prepared=await checkpoint.prepare(before,env,adapter,decoder);
-      assertCurrent();
-      // A competing tab can rename/delete/save between photo decoding and
-      // activation. Never accept a stale revision or an orphan list row.
-      const current=await storage.get(env.indexedDB,id);
-      assertCurrent();
-      if(!current||current.revision!==before.revision)
-        throw Error('Calibration project changed during activation preparation');
-      return prepared;
+      return prepareExact(env,id,{storage,adapter,decoder,guard:()=>{assertCurrent();return true;}});
     }
     function discard(){
       if(!active)throw Error('No bound Calibration Project');
@@ -163,5 +192,5 @@
     function project(){return active?model.normalize(active.project):null;}
     return Object.freeze({bind,mark,save,retry:save,linkResult,prepareOpen,discard,recovery,project,state});
   }
-  return Object.freeze({create});
+  return Object.freeze({create,projectReference,prepareSharedSelection,sharedDocumentReader});
 }));

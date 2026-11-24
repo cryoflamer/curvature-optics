@@ -11708,6 +11708,84 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(saved['envelope'],future['envelope'])
         self.assertEqual(saved['revision'],future['revision'])
 
+    def test_shared_calibration_domain_selection_verifies_original_and_revision(self):
+        """The real domain store is verified independently of the shared checkpoint."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        data=self.soundly_calibration_experiment()
+        setup=self.page.evaluate("""async data => {
+            const D=CurvatureModernDocumentSession,S=CurvatureModernCalibrationProjectStore,
+                P=CurvatureModernCalibrationProjectPersistence;
+            const project=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const lease=ui.captureSharedDocumentLifetime();
+            const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+            const original=await checkpoint.read();
+            const ref=P.projectReference(project);
+            const prepared=await P.prepareSharedSelection(window,ref);
+            const c=D.createAtomicExperimentController({lease,checkpoint,isCurrent:()=>true,
+                prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
+            await c.open();
+            const selected=await c.selectWorkspace('calibration',ref);
+            return {original,selected,project,originalVerified:prepared.photo.original.dataUrl===data.referenceImage.original.dataUrl,
+                rows:prepared.draft.rows.length,legacy:await S.legacy(indexedDB),
+                tab:sessionStorage.getItem('curvature-calibration-clean-reload-project-v1')};
+        }""",data)
+        self.assertTrue(setup['originalVerified'])
+        self.assertEqual(setup['rows'],len(data['observations']))
+        self.assertFalse(setup['selected']['busy'])
+        self.assertEqual(setup['selected']['row']['envelope']['workspace'],'calibration')
+        self.assertEqual(setup['selected']['row']['envelope']['documents']['experiment'],
+            setup['original']['envelope']['documents']['experiment'])
+        self.assertEqual(setup['selected']['bound']['experiment'],setup['original']['experiment'])
+        self.assertIsNone(setup['legacy'])
+        self.assertIsNone(setup['tab'])
+        other=self.context.new_page()
+        try:
+            other.goto(url,wait_until='load')
+            # The mounted editor has not yet been wired to the domain reader:
+            # it must reject this selection, not restore an unrelated Scene.
+            other.wait_for_function("""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='failed'""",
+                timeout=30000)
+            expect(other.locator('#ModernSceneTab')).to_be_disabled()
+            restored=other.evaluate("""async () => {
+                const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence;
+                const ui=CurvatureModernUiSessionStore.create(window),lease=ui.captureSharedDocumentLifetime();
+                const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                    lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+                const c=D.createAtomicExperimentController({lease,checkpoint,isCurrent:()=>true,
+                    prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
+                await c.open();return c.state();
+            }""")
+            self.assertEqual(restored['row'],setup['selected']['row'])
+            self.assertEqual(restored['bound']['experiment'],setup['original']['experiment'])
+            result=other.evaluate("""async id => {
+                const D=CurvatureModernDocumentSession,P=CurvatureModernCalibrationProjectPersistence,
+                    S=CurvatureModernCalibrationProjectStore;
+                const renamed=await S.rename(indexedDB,id,1,'Changed calibration');
+                const ui=CurvatureModernUiSessionStore.create(window),lease=ui.captureSharedDocumentLifetime();
+                const checkpoint=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                    lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+                const before=await checkpoint.read();
+                const c=D.createAtomicExperimentController({lease,checkpoint,isCurrent:()=>true,
+                    prepare:()=>{throw Error('Unexpected migration');},readDocument:P.sharedDocumentReader(window)});
+                let error=null;
+                try{await c.open();}catch(e){error=e.message;}
+                return {error,status:c.state().status,before,after:await checkpoint.read(),
+                    renamed,legacy:await S.legacy(indexedDB)};
+            }""",setup['project']['id'])
+            self.assertIn('revision changed',result['error'])
+            self.assertEqual(result['status'],'failed')
+            self.assertEqual(result['after'],result['before'])
+            self.assertEqual(result['renamed']['revision'],2)
+            self.assertIsNone(result['legacy'])
+        finally:
+            other.close()
+
     def seed_bound_preview_history(self):
         """Create three distinct historical payloads and unrelated domain bindings."""
         self.open_modern()

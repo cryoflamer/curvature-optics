@@ -1132,3 +1132,49 @@ test('Explicit retry of a failed project save keeps work and clears warning afte
   assert.equal(session.state().pending,0);
   assert.equal((await store.get(db,A)).checkpoint.payload.draft.view.x,137);
 });
+
+test('shared Calibration preflight verifies project, original, exact revision and retained legacy evidence',async()=>{
+  const raw=legacyDraft(),db=memoryIndexedDB(raw),env=migrationEnv(db),adapter=originalCatalog(env);
+  const {project:saved}=await migration.migrate(env,{adapter,decoder:importer,now:200});
+  const ref=coordinator.projectReference(saved),opts={adapter,decoder:importer};
+  const reader=coordinator.sharedDocumentReader(env,opts);
+  assert.deepEqual(ref,{id:saved.id,revision:'rev:1',recovery:null});
+  assert.deepEqual(await reader('calibration',saved.id),{kind:'calibration',id:saved.id,revision:'rev:1'});
+  const before=await store.get(db,saved.id);
+  const prepared=await coordinator.prepareSharedSelection(env,ref,opts);
+  assert.deepEqual(prepared.project,before);
+  assert.equal(prepared.photo.original.dataUrl,raw.record.original.dataUrl);
+  assert.deepEqual(prepared.draft.rows,raw.rows);
+  assert.deepEqual(await store.legacy(db),raw);
+  assert.deepEqual(await store.get(db,saved.id),before);
+  await assert.rejects(reader('animation',saved.id),/Unsupported auxiliary/);
+  await assert.rejects(coordinator.prepareSharedSelection(env,{...ref,revision:'rev:2'},opts),/revision changed/);
+  await assert.rejects(coordinator.prepareSharedSelection(env,{...ref,recovery:{id:'unknown'}},opts),/Unsupported Calibration selection/);
+  adapter.originals.clear();
+  await assert.rejects(reader('calibration',saved.id),/original photograph unavailable/);
+  assert.deepEqual(await store.get(db,saved.id),before);
+});
+test('shared Calibration preflight rejects missing, empty, changed and stale projects without binding',async()=>{
+  const db=memoryIndexedDB(),env=migrationEnv(db),a=project(A);
+  const reader=coordinator.sharedDocumentReader(env);
+  await assert.rejects(reader('calibration',A),/project missing/);
+  await store.create(db,a);
+  await assert.rejects(reader('calibration',A),/no verified editor checkpoint/);
+  const raw=legacyDraft();raw.record=null;raw.activeSource=null;raw.rows=[];
+  raw.pending=null;raw.pendingModel=null;raw.activePair=null;raw.editing=null;raw.selectedOwner=null;
+  const parts=await require('../src/ui/modern/ModernCalibrationProjectCheckpoint').captureVerified(raw,null,env);
+  const target=model.fresh({id:B,now:100,...parts});await store.create(db,target);
+  let allowed=true;
+  const wrapper={...store,get:async(...args)=>{const row=await store.get(...args);allowed=false;return row;}};
+  await assert.rejects(coordinator.prepareSharedSelection(env,coordinator.projectReference(target),{
+    storage:wrapper,guard:()=>allowed}),/Stale or unsaved/);
+  let count=0;
+  const changed={...store,get:async(...args)=>{
+    const row=await store.get(...args);
+    if(++count===1)await store.rename(db,B,1,'Changed elsewhere',200);
+    return row;
+  }};
+  await assert.rejects(coordinator.sharedDocumentReader(env,{storage:changed})('calibration',B),/changed during activation/);
+  assert.equal((await store.get(db,B)).revision,2);
+  assert.equal((await store.list(db)).length,2);
+});

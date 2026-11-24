@@ -762,4 +762,9 @@ evidence and prevents activation; it does not roll back a committed domain
 record. Physical edits cannot be staged while an auxiliary workspace is
 active. The ordinary mounted preview does not yet enable auxiliary
 selection; an unsupported auxiliary restore fails closed without a domain
-reader. Domain-specific activation is a separate step.
+reader. The Calibration domain reader now reuses the existing project
+checkpoint hydration, verifying the original photograph, full project
+readback and exact revision. It rejects empty checkpoints and unresolved
+recovery references. No sessionStorage selection marker or legacy draft
+write is needed by this reader. Domain-specific mounted activation is a
+separate step.

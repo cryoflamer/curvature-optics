@@ -207,9 +207,10 @@
       busy=true;selecting=true;
       try{
         row=await checkpoint.selectWorkspace(mode,document,row.revision,{readDocument,readRecovery,isCurrent});
-        guard(true);status='committed';return state();
+        guard(true);status='committed';
       }catch(e){fail(e);throw e;}
       finally{selecting=false;busy=false;}
+      return state();
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,state});
   }
