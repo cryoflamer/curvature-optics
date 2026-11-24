@@ -10367,5 +10367,107 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result['committed'],{'revision':1,'envelope':result['next']})
 
 
+
+    def test_working_copy_migration_verified_idempotent_and_f5(self):
+        """Copy a real Scene/Compare checkpoint without mounting a new reader."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab();
+            const before=await S.read(indexedDB);
+            // Preserve exact asymmetric physics in the migration fixture.
+            const e=C.validate(before.experiment);
+            e.compare.A.atmosphere='vacuum';
+            e.compare.B.atmosphere='inverse-spherical';
+            const stamp=before.savedAt+1;
+            await S.write(indexedDB,e,stamp);
+            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
+            localStorage.setItem(S.META_KEY,String(stamp));
+            const raw=localStorage.getItem(C.STORAGE_KEY),url=location.href;
+            const opts={tabId,storage:localStorage,codec:C,crypto,
+                explicitIntent:false,isCurrent:()=>true};
+            const first=await S.prepareWorkingCopy(indexedDB,opts);
+            const again=await S.prepareWorkingCopy(indexedDB,opts);
+            const read=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
+            const after=await S.read(indexedDB);
+            return {tabId,first,again,read,e,stamp,after,
+                localSame:raw===localStorage.getItem(C.STORAGE_KEY),
+                urlSame:url===location.href};
+        }""")
+        self.assertEqual(result['first']['status'],'verified')
+        self.assertEqual(result['first'],result['again'])
+        self.assertEqual(result['first']['workspace'],'compare')
+        self.assertRegex(result['first']['document']['revision'],r'^sha256:[0-9a-f]{64})
+        self.assertEqual(result['read']['experiment'],result['e'])
+        self.assertEqual(result['after'],{'version':1,'savedAt':result['stamp'],
+                                          'experiment':result['e']})
+        self.assertTrue(result['localSame'])
+        self.assertTrue(result['urlSame'])
+        self.page.reload(wait_until='load')
+        read=self.page.evaluate("""async id =>
+            CurvatureModernSessionAutosave.readWorkingCopy(indexedDB,id,
+                CurvatureModernExperimentState,crypto)""",result['first']['document']['id'])
+        self.assertEqual(read,result['read'])
+
+    def test_working_copy_migration_refuses_ambiguous_and_changed_sources(self):
+        """No private read for external intent; no copy over conflicting evidence."""
+        self.open_modern()
+        self.page.locator('#ModernCompareTab').click()
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Working session saved',timeout=30000)
+        result=self.page.evaluate("""async () => {
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const {tabId}=await ui.claimTab();
+            const before=await S.read(indexedDB),e=structuredClone(before.experiment);
+            const opts={tabId,storage:localStorage,codec:C,crypto,
+                explicitIntent:false,isCurrent:()=>true};
+            const external=await S.prepareWorkingCopy(null,{
+                explicitIntent:true,isCurrent:()=>true});
+            e.scene.camera.Height+=1;
+            const raw=JSON.stringify(e);
+            localStorage.setItem(C.STORAGE_KEY,raw);
+            let conflict,race,existing;
+            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){conflict=err.message;}
+            const absent=await S.readWorkingCopy(indexedDB,'working-'+tabId,C,crypto);
+            const preserved=localStorage.getItem(C.STORAGE_KEY)===raw&&
+                JSON.stringify(await S.read(indexedDB))===JSON.stringify(before);
+            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(before.experiment));
+            localStorage.setItem(S.META_KEY,String(before.savedAt));
+            // A second writer changes current while the first hashes its source.
+            const racingCrypto={subtle:{async digest(...args){
+                const hash=await crypto.subtle.digest(...args);
+                await S.write(indexedDB,e,before.savedAt+1);
+                return hash;
+            }}};
+            try{await S.prepareWorkingCopy(indexedDB,{...opts,crypto:racingCrypto});}
+            catch(err){race=err.message;}
+            const afterRace=await S.readWorkingCopy(indexedDB,'working-'+tabId,C,crypto);
+            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(e));
+            localStorage.setItem(S.META_KEY,String(before.savedAt+1));
+            const first=await S.prepareWorkingCopy(indexedDB,opts);
+            const next=structuredClone(e);next.scene.camera.Height+=1;
+            await S.write(indexedDB,next,before.savedAt+2);
+            localStorage.setItem(C.STORAGE_KEY,JSON.stringify(next));
+            localStorage.setItem(S.META_KEY,String(before.savedAt+2));
+            try{await S.prepareWorkingCopy(indexedDB,opts);}catch(err){existing=err.message;}
+            const saved=await S.readWorkingCopy(indexedDB,first.document.id,C,crypto);
+            return {external,conflict,race,existing,absent,preserved,afterRace,
+                first,saved,e};
+        }""")
+        self.assertEqual(result['external'],{'status':'external'})
+        self.assertIn('local and IndexedDB checkpoints differ',result['conflict'])
+        self.assertTrue(result['preserved'])
+        self.assertIsNone(result['absent'])
+        self.assertIn('IndexedDB source changed during migration',result['race'])
+        self.assertIsNone(result['afterRace'])
+        self.assertIn('existing working copy differs',result['existing'])
+        self.assertEqual(result['saved']['revision'],result['first']['document']['revision'])
+        self.assertEqual(result['saved']['experiment'],result['e'])
+
 if __name__ == '__main__':
     unittest.main()

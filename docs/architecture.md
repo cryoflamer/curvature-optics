@@ -443,6 +443,39 @@ domain migration, automatic recovery or deletion API is provided. The
 existing portable backup inventories present databases and stores, so the
 row remains within that inventory; this is not an atomic multi-DB backup.
 
+### Read-first Scene/Compare working-copy candidate
+
+The existing domain owner, `ModernSessionAutosave`, provides an explicit
+`prepareWorkingCopy()` migration primitive and a digest-verified
+`readWorkingCopy()`. It does not mount a new live reader or writer. An
+external URL/import intent skips private reads. Otherwise the caller supplies
+a claimed tab ID, explicit generation guard, Web Crypto and the existing
+experiment validator. This primitive is not itself a tab-lease authority.
+
+The first stage copies only a valid durable legacy `current` checkpoint.
+A present localStorage fallback must have exactly the same canonical JSON
+experiment and a matching timestamp (or no timestamp); divergent, malformed,
+local-only or incomplete evidence blocks migration instead of guessing which
+copy to open. Source and destination are checked together inside the existing
+working-session IndexedDB store under its coordinated writer path. The
+candidate is add-only at `working-copy:working-<tabId>`, with format/version,
+stable ID, SHA-256 revision of canonical raw experiment JSON, and the original
+checkpoint snapshot (including timestamp). Canonical JSON sorts object keys
+without reordering arrays; the existing validator supplies the same normalized
+experiment for subsequent domain reads. Raw legacy evidence is not rewritten.
+
+A repeated attempt only accepts the exact same source/candidate. A changed
+source or conflicting existing row is not overwritten. A successful
+transaction is followed by a separate digest-checked readback and source
+recheck, then returns a document binding candidate; no session pointer is
+written or activated. The legacy current key, localStorage, History, explicit
+URL and physical behavior stay unchanged. A failed or interrupted migration
+may leave a verified but unbound candidate, which must be reconciled rather
+than deleted. Future editable working-copy CAS, local-only recovery,
+cross-store binding, actual lease/generation integration and consumer switch
+are separate steps. The existing database and store remain compatible with
+the portable backup inventory.
+
 ## One-user rollback drill
 
 The pre-refactor safety check is intentionally minimal: use the small

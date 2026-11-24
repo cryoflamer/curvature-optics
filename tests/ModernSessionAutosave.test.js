@@ -142,3 +142,30 @@ test('failed working-session transactions release shared locks and report failur
   await assert.rejects(adapter.clear(blocked),/IndexedDB blocked/);
   assert.deepEqual(requests,['shared','shared']);
 });
+
+test('working-copy preparation gives explicit external intent priority without reading storage',async()=>{
+  const adapter=autosave.makeAdapter(null);
+  const external=await adapter.prepareWorkingCopy(null,{
+    explicitIntent:true,isCurrent:()=>true});
+  assert.deepEqual(external,{status:'external'});
+  await assert.rejects(adapter.prepareWorkingCopy(null,{
+    explicitIntent:false,isCurrent:()=>true}),/coordinated working-session writer required/);
+  await assert.rejects(adapter.prepareWorkingCopy(null,{
+    explicitIntent:true,isCurrent:()=>false}),/stale migration generation/);
+  await assert.rejects(adapter.prepareWorkingCopy(null,{}),/generation guard required/);
+});
+test('working-copy preparation refuses local-only evidence instead of guessing a source',async()=>{
+  const db=memoryIndexedDB(),adapter=autosave.makeAdapter({request(name,options,action){
+    return action({name,mode:options.mode});
+  }});
+  const storage={getItem(key){return key===codec.STORAGE_KEY?'{"old":"draft"}':null;}};
+  await assert.rejects(adapter.prepareWorkingCopy(db,{
+    tabId:'tab-a',storage,codec,explicitIntent:false,isCurrent:()=>true
+  }),/local-only or incomplete checkpoint/);
+  assert.equal(await autosave.read(db),null);
+  const result=await adapter.prepareWorkingCopy(db,{
+    tabId:'tab-a',storage:{getItem(){return null;}},codec,
+    explicitIntent:false,isCurrent:()=>true
+  });
+  assert.deepEqual(result,{status:'empty'});
+});
