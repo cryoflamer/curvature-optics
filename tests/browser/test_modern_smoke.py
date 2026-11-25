@@ -477,6 +477,79 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'objects': 2, 'bytes': [1, 2, 3]})
 
+    def test_managed_domain_snapshot_and_original_roundtrip(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const row={id:17,version:1,createdAt:42,source:'manual',pinned:true,
+                name:'Saved compare',description:'Independent atmospheres',thumbnail:null,experiment};
+            const first=await adapter.saveHistory(row);
+            const restored=await adapter.readHistory(17);
+            ok(JSON.stringify(restored.row.experiment)===JSON.stringify(experiment),'physical roundtrip changed');
+            ok(restored.row.experiment.compare.selected==='B','Compare selection changed');
+            ok(restored.row.name===row.name&&restored.row.pinned,'History metadata changed');
+            await adapter.saveHistory({...row,id:18,name:'Other name'},{snapshotId:first.snapshotId});
+            ok((await adapter.store.get(first.snapshotId)).refCount===2,'snapshot not shared');
+            const changed=structuredClone(row);changed.experiment.compare.selected='A';
+            await rejects(()=>adapter.saveHistory({...changed,id:19},{snapshotId:first.snapshotId}),/identical complete experiment/);
+            await adapter.saveHistory({...row,name:'Renamed'},{expectedRevision:1,snapshotId:first.snapshotId});
+            ok((await adapter.readHistory(17)).row.name==='Renamed','metadata update lost');
+            const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#c04020';ctx.fillRect(0,0,3,2);
+            const original={dataUrl:canvas.toDataURL('image/png'),width:3,height:2};
+            const record={version:1,id:'photo_a',original,title:'First observation',author:'Observer A'};
+            const photo=await adapter.saveObservation({id:record.id,revision:4,record,
+                kind:'photograph',tags:['tower'],collections:['research'],annotationRevision:2});
+            const photo2=await adapter.saveObservation({id:'photo_b',revision:1,record:{...record,id:'photo_b',
+                title:'Second observation',author:'Observer B'}},{originalId:photo.originalId});
+            const out=await adapter.readObservation('photo_a'),out2=await adapter.readObservation('photo_b');
+            ok(out.row.record.original.dataUrl===original.dataUrl&&out2.row.record.original.dataUrl===original.dataUrl,
+                'original PNG changed');
+            ok(out.row.record.author==='Observer A'&&out2.row.record.author==='Observer B','attribution merged');
+            ok(out.row.revision===4&&out.row.annotationRevision===2&&out.row.tags[0]==='tower','metadata lost');
+            ok(photo.observationId!==photo2.observationId&&photo.originalId===photo2.originalId,'identity split incorrect');
+            ok((await adapter.store.get(photo.originalId)).refCount===2,'original not retained by both observations');
+            await adapter.store.removeDocument({documentId:'observation:photo_a',expectedRevision:1});
+            await adapter.store.collectGarbage(photo.observationId);
+            ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'shared original reclaimed');
+            ok((await adapter.readObservation('photo_b')).row.record.original.dataUrl===original.dataUrl,'other observation lost');
+            const names=(await indexedDB.databases()).map(db=>db.name);
+            ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:2};
+        }""")
+        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.
