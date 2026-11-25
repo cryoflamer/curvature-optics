@@ -611,7 +611,60 @@
         resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]});
       return {collectionId:id,managedRevision:document.revision};
     }
-    return Object.freeze({store,saveWorkingCheckpoint,readWorkingCheckpoint,
+    // Qualification of an exact restored archive, not a live migration
+    // gate. The inventory comes from the verified archive, not a UI list.
+    async function qualifyRestoredArchive(database,backup){
+      const rows=name=>{
+        const entry=database.stores.find(s=>s.name===name);
+        check(entry,'managed archive store missing: '+name);
+        return entry.records.map(r=>({key:backup.decode(r.key),value:backup.decode(r.value)}));
+      };
+      const integrity=await store.verifyIntegrity();
+      check(integrity.valid,'restored managed reference count mismatch');
+      const documents=rows('documents'),objects=rows('objects'),owners={};
+      let originalsVerified=0;
+      for(const {key,value} of objects){
+        check(key===value.id,'restored object key mismatch');
+        if(!value.deleted&&value.type===ORIGINAL){
+          await verifiedOriginal(await store.get(key));
+          originalsVerified++;
+        }
+      }
+      for(const {key,value} of documents){
+        check(key===value.id,'restored document key mismatch');
+        if(value.deleted)continue;
+        let opened;
+        const alias=value.metadata?.id;
+        switch(value.kind){
+        case 'history':
+          check(key===historyId(alias),'restored History root alias mismatch');
+          opened=await readHistory(alias);break;
+        case 'observation':
+          check(key===observationId(alias),'restored observation root alias mismatch');
+          opened=await readObservation(alias);break;
+        case 'animation':
+          check(key==='animation:'+images.validId(alias),'restored Animation root alias mismatch');
+          opened=await readAnimation(alias);break;
+        case 'calibration-result':
+          check(key===resultDocumentId(alias),'restored Calibration result root alias mismatch');
+          opened=await readCalibrationResult(alias);break;
+        case 'calibration':
+          check(calibrations&&key==='calibration:'+calibrations.id(alias),'restored Calibration root alias mismatch');
+          opened=await readCalibrationProject(alias);break;
+        case 'working-checkpoint':
+          check(key===workingId,'restored working root alias mismatch');
+          opened=await readWorkingCheckpoint();break;
+        case DRAFTS:
+          check(key===draftsId,'restored Animation working root alias mismatch');
+          opened=await readAnimationWorkingCollection();break;
+        default:throw Error('Managed Resources: unsupported restored document kind: '+value.kind);
+        }
+        check(opened&&opened.managedRevision===value.revision,'restored document revision mismatch');
+        owners[value.kind]=(owners[value.kind]||0)+1;
+      }
+      return {owners,originalsVerified,integrity,countsRecomputed:true};
+    }
+    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
@@ -768,5 +821,34 @@
           integrity,eligibleForMigration:false,sourceUntouched:true};
       });
   }
-  return Object.freeze({create,rehearseLegacyArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION,DRAFTS});
+  // Only an empty disposable profile may be restored. Exact portable
+  // restore precedes typed verification; failure preserves the target as
+  // diagnostic evidence and never authorizes production activation.
+  async function restoreAndQualifyManagedArchive(archive,env,deps=env){
+    const backup=deps.CurvatureModernPortableBackup;
+    check(backup&&env?.navigator?.locks,'portable backup and Web Locks required');
+    return env.navigator.locks.request('curvature-modern-managed-rehearsal',
+      {mode:'exclusive',ifAvailable:true},async lock=>{
+        check(lock,'another rehearsal is active; close the other tab and retry');
+        await backup.inspect(archive,env.crypto);
+        const database=JSON.parse(archive.payload).content.databases.find(db=>
+          db.name===deps.CurvatureModernManagedObjectStore.DATABASE&&db.status==='present');
+        check(database,'archive contains no managed store');
+        const adapter=create(env,deps);
+        check(adapter.store.coordination==='participating-writer','backup coordination required');
+        const restored=await backup.restoreEmpty(archive,env);
+        try{
+          const qualification=await adapter.qualifyRestoredArchive(database,backup);
+          // Qualification is read-only. Re-observe the exact managed store
+          // to detect intervening writes in the disposable test profile.
+          const after=(await backup.captureCoordinated(env)).archive;
+          const observed=JSON.parse(after.payload).content.databases.find(db=>db.name===database.name);
+          check(same(database,observed),'managed restore changed during qualification');
+          return {restored,qualification,eligibleForMigration:false};
+        }catch(error){
+          throw Error('Managed restore qualification failed; discard this disposable profile: '+String(error.message||error));
+        }
+      });
+  }
+  return Object.freeze({create,rehearseLegacyArchive,restoreAndQualifyManagedArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION,DRAFTS});
 }));

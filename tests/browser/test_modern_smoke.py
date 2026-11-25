@@ -1468,6 +1468,56 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertIn({'source':'curvature-modern-working-session/session','records':1},result['report']['unhandled'])
             self.assertIn({'source':'curvature-modern-animation-draft/draft','records':1},result['report']['unhandled'])
             self.assertTrue(result['report']['integrity']['valid'])
+            # Round-trip the actual migrated domain graph, not just a generic
+            # test resource. A second profile starts empty.
+            managed_archive=target.evaluate("""async()=>
+                (await CurvatureModernPortableBackup.captureCoordinated(window)).archive""")
+            restored_context=self.browser.new_context()
+            try:
+                restored=restored_context.new_page()
+                prepare(restored)
+                qualification=restored.evaluate("""async archive=>{
+                    const api=CurvatureModernManagedResources;
+                    const report=await api.restoreAndQualifyManagedArchive(archive,window);
+                    const adapter=api.create(window);
+                    const draft=await adapter.readAnimationWorkingCollection();
+                    const working=await adapter.readWorkingCheckpoint();
+                    return {report,digest:draft.row.digest,physical:working.row.digest,
+                        original:draft.referenceImages[0].original.dataUrl};
+                }""",managed_archive)
+                self.assertEqual(qualification['digest'],source['drafts']['digest'])
+                self.assertEqual(qualification['physical'],source['working']['digest'])
+                self.assertEqual(qualification['original'],source['record']['original']['dataUrl'])
+                self.assertEqual(qualification['report']['qualification']['owners'],{
+                    'history':1,'observation':2,'animation':1,'working-checkpoint':1,
+                    'animation-working-collection':1})
+                self.assertEqual(qualification['report']['qualification']['originalsVerified'],1)
+                self.assertTrue(qualification['report']['qualification']['countsRecomputed'])
+                self.assertFalse(qualification['report']['eligibleForMigration'])
+            finally:
+                restored_context.close()
+            # A freshly checksummed but semantically corrupt archive must
+            # not pass merely because its portable manifest is valid.
+            corrupt=target.evaluate("""async()=>{
+                const api=CurvatureModernManagedResources,adapter=api.create(window);
+                const graph=await adapter.store.readDocumentGraph('animation:legacy_animation');
+                await adapter.store.writeDocument({documentId:graph.document.id,kind:'animation',
+                    expectedRevision:graph.document.revision,metadata:{...graph.document.metadata,id:'wrong_alias'},
+                    references:graph.document.references});
+                return (await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
+            }""")
+            invalid_context=self.browser.new_context()
+            try:
+                invalid=invalid_context.new_page()
+                prepare(invalid)
+                refusal=invalid.evaluate("""async archive=>{
+                    try{await CurvatureModernManagedResources.restoreAndQualifyManagedArchive(archive,window);}
+                    catch(error){return String(error.message);}
+                    return '';
+                }""",corrupt)
+                self.assertIn('restored Animation root alias mismatch',refusal)
+            finally:
+                invalid_context.close()
             self.assertFalse(self.page.evaluate("""async()=> (await indexedDB.databases()).some(
                 db=>db.name==='curvature-modern-managed-objects')"""))
         finally:

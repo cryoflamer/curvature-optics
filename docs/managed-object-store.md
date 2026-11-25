@@ -221,7 +221,16 @@ schema-capable reads); uncoordinated callers are not eligible for cutover.
 Exact empty-profile restore preserves binary payloads and compound edge keys;
 full graph qualification must additionally validate types, closure and derived
 counts, and recompute counts where needed. Temporary browser locks are not portable
-roots. Reuse the existing structured binary codec and coordinated backup
+roots. The explicit `restoreAndQualifyManagedArchive` drill restores only
+into an empty disposable profile. After exact byte/record restore it verifies
+the typed graph, independently derives counts and refuses discrepancies
+(rather than silently repairing an archive), verifies every live original
+including unreachable ones, and reopens every live supported domain root
+through its existing adapter. Unknown document kinds and incorrect alias
+bindings fail closed. A coordinated recapture checks that managed records
+did not change during qualification. This is a disposable-profile drill,
+not a concurrent live validation or activation; no pending intents are
+replayed, and no automatic cleanup is attempted on failure. Reuse the existing structured binary codec and coordinated backup
 barrier, keeping its documented limits. Existing explicit portable exports
 remain self-contained. Preserve exact original bytes, calibration evidence,
 physical invariants and independent Compare A/B atmosphere settings.
