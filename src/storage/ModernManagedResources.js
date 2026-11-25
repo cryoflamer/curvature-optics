@@ -1229,7 +1229,27 @@
     function animationExpected(existing){
       return {kind:'animation',documents:existing.map(v=>({id:'animation:'+v.row.id,revision:v.managedRevision}))};
     }
-    async function createApplicationAnimation(project,optics,now,thumbnail,allowDuplicate,cover){
+    // A working copy is an immutable source only at an acknowledged
+    // workspace revision. Scope asset lookup to that workspace, not to
+    // unrelated aliases present in the rest of the collection.
+    async function workingAnimationSource(ref,input){
+      const project=projects.validate(input);
+      const owner=await readAnimationWorkingCollection();
+      check(owner&&ref&&same(drafts.documentReference(owner.row,ref.id),ref),
+        'Working Animation revision changed; save or reopen before using its evidence');
+      const cp=drafts.getWorkspace(owner.row.collection,ref.id);
+      const photoIds=new Set(cp.draft.frames.flatMap(frame=>frame.referenceImageIds||[]));
+      const origins=[cp.draft.contract?.referenceExperiment,...cp.draft.frames.map(frame=>frame.experiment)]
+        .map(experiment=>experiment?.calibrationOrigin).filter(Boolean);
+      check(aliases(project).every(id=>photoIds.has(id))&&
+        calibrationOrigins(project).every(origin=>origins.some(value=>same(value,origin))),
+        'Project evidence is not in the acknowledged working Animation');
+      const references=owner.referenceImages.filter(record=>aliases(project).includes(record.id));
+      check(references.length===aliases(project).length,'Working Animation original missing');
+      return {...owner,referenceImages:references};
+    }
+    async function createApplicationAnimation(project,optics,now,thumbnail,allowDuplicate,cover,
+      {workingReference=null,guard=()=>{}}={}){
       const time=now||Date.now(),row=animations.record(project,optics,project.id,time,time,thumbnail,cover);
       const existing=await animationInventory();
       check(!existing.some(v=>v.row.id===row.id),'Animation Library project already exists');
@@ -1237,8 +1257,11 @@
         const match=existing.find(v=>animations.fingerprint(v.row.project)===animations.fingerprint(row.project));
         if(match)throw animations.duplicateError(match.row);
       }
-      const next=await planAnimation(row,null,0);
-      await store.writeDocuments([next.plan],{expectedInventory:animationExpected(existing)});
+      const source=workingReference?await workingAnimationSource(workingReference,row.project):null;
+      const inventories=[animationExpected(existing)];
+      if(source)inventories.push({kind:DRAFTS,documents:[{id:draftsId,revision:source.managedRevision}]});
+      const next=await planAnimation(row,null,0,false,source);
+      await store.writeDocuments([next.plan],{expectedInventory:inventories,guard});
       return row;
     }
     async function changeApplicationAnimation(id,expected,build,{guard=()=>{},exactRow=null,planned=null}={}){
@@ -1339,6 +1362,13 @@
             v=>v.row,byTime('updatedAt'),store.inspectDocuments)).map(v=>v.row);
         },
         create:async(db,...args)=>{bound(db);return createApplicationAnimation(...args);},
+        createFromWorking:async(db,project,optics,now,thumbnail,cover,reference,guard)=>{
+          bound(db);check(reference,'exact working Animation reference required');
+          return createApplicationAnimation(project,optics,now,thumbnail,true,cover,{workingReference:reference,guard});
+        },
+        workingReferences:async(db,reference,project)=>{
+          bound(db);return (await workingAnimationSource(reference,project)).referenceImages;
+        },
         update:async(db,project,optics,expected,now,thumbnail)=>{
           bound(db);return changeApplicationAnimation(project.id,expected,old=>animations.nextRecord(old,project,optics,now,thumbnail));
         },

@@ -1727,6 +1727,19 @@ class ModernBrowserSmoke(unittest.TestCase):
             await store.removeDocument({documentId:'animation:'+secondNamed.id,expectedRevision:secondOwner.managedRevision});
             await store.removeDocument({documentId:'animation:'+named.id,expectedRevision:namedOwner.managedRevision});
             ok((await store.collectGarbage(namedOwner.projectId)).collected,'removed named owner still retained');
+            const port=L.createPort({managedResources:adapter});
+            const reference=A.documentReference(row,A.projectWorkspaceId(named.id));
+            const exported=P.validate({...named,id:'working_save_as'});
+            const refs=await port.workingReferences(indexedDB,reference,exported);
+            ok(refs.length===1&&refs[0].title===retainedRecord.title&&
+                refs[0].original.dataUrl===record.original.dataUrl,'working export lost exact retained photo');
+            const copy=await port.createFromWorking(indexedDB,exported,'auto',205,null,null,reference);
+            const copied=await adapter.readAnimation(copy.id);
+            ok(copied.observations[0].target===retainedPhoto.observationId,
+                'working Save As substituted gallery evidence');
+            await rejects(()=>port.createFromWorking(indexedDB,{...exported,id:'stale_save_as'},'auto',206,
+                null,null,{...reference,revision:'rev:999'}),/revision changed/);
+            await store.removeDocument({documentId:'animation:'+copy.id,expectedRevision:copied.managedRevision});
             ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
             return {valid:(await store.verifyIntegrity()).valid,revision:row.revision,pendingArchive,pendingExpected};

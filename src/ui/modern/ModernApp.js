@@ -3426,9 +3426,11 @@
     }
     return studioApi.buildSaved(draft,id);
   }
-  async function verifySharedAnimationOriginals(project,ctx){
-    var originals=await studioLibrary.collectReferences([{project}],
-      id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+  async function verifySharedAnimationOriginals(project,ctx,reference=null){
+    var originals=reference&&typeof studioLibrary.workingReferences==='function'?
+      await studioLibrary.workingReferences(root.indexedDB,reference,project):
+      await studioLibrary.collectReferences([{project}],
+        id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
     for(var record of originals)await root.CurvatureModernReferenceImageImport.verify(record,root);
     ctx.lease.check(true);
   }
@@ -3441,7 +3443,7 @@
        cp.quality!==intent.plan.after.quality)
       throw Error('Pending named save does not match the exact working draft');
     var base=await c.captureSelectionBase('animation',intent.reference);
-    await verifySharedAnimationOriginals(project,ctx);
+    await verifySharedAnimationOriginals(project,ctx,intent.reference);
     await studioLibrary.commitPlannedUpdate(root.indexedDB,intent.plan,()=>ctx.lease.check(true));
     ctx.lease.check(true);
     var confirmed=await studioLibrary.get(root.indexedDB,intent.plan.after.id);
@@ -3667,7 +3669,7 @@
             if(cp.libraryId!==original.id||cp.libraryRevision!==original.updatedAt)
               throw Error('Saved Animation revision changed; use Save As');
             var project=buildSharedAnimationSnapshot(cp,original.id,false);
-            await verifySharedAnimationOriginals(project,ctx);
+            await verifySharedAnimationOriginals(project,ctx,ref);
             var plan=studioLibrary.planExactUpdate(project,cp.quality,original,Date.now(),
               studioLibraryThumbnail(project));
             namedMutationStarted=true;
@@ -3690,11 +3692,14 @@
             await c.captureSelectionBase('animation',ref);
             var cp=studioDraftAutosave.getWorkspace(row.collection,ref.id);
             var project=buildSharedAnimationSnapshot(cp,studioLibrary.makeId(root.crypto),true);
-            await verifySharedAnimationOriginals(project,ctx);
+            await verifySharedAnimationOriginals(project,ctx,ref);
             // Save As deliberately creates a new named snapshot. The source
             // draft and shared selection are not relinked or deleted.
-            var saved=await studioLibrary.create(root.indexedDB,project,cp.quality,Date.now(),
-              studioLibraryThumbnail(project),true,studioLibraryActive?.cover);
+            var saved=typeof studioLibrary.createFromWorking==='function'?
+              await studioLibrary.createFromWorking(root.indexedDB,project,cp.quality,Date.now(),
+                studioLibraryThumbnail(project),studioLibraryActive?.cover,ref,()=>ctx.lease.check(true)):
+              await studioLibrary.create(root.indexedDB,project,cp.quality,Date.now(),
+                studioLibraryThumbnail(project),true,studioLibraryActive?.cover);
             ctx.lease.check(true);
             var verified=await studioLibrary.get(root.indexedDB,saved.id);
             if(JSON.stringify(verified)!==JSON.stringify(saved))
