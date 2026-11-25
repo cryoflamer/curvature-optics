@@ -427,10 +427,78 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>s.recount(),/payload reference mismatch/);
             await rejects(()=>s.removeDocument({documentId:'doc',expectedRevision:2}),/payload reference mismatch/);
             await rejects(()=>s.collectGarbage(initial.id),/payload reference mismatch/);
+            await rejects(()=>s.collectGarbageBatch([initial.id]),/payload reference mismatch/);
             ok(!!await s.get(initial.id),'corrupt graph permitted reclamation');
             return {revision:(await s.getDocument('doc')).revision,retained:true};
         }""")
         self.assertEqual(result, {'revision': 2, 'retained': True})
+
+    def test_managed_object_store_bounded_batch_gc(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedObjectStore;
+            const s=api.create(window,{types:[
+                {type:'test',version:1,validate:v=>!!v&&Array.isArray(v.refs),references:v=>v.refs}
+            ]});
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const make=(id,refs=[])=>({id,type:'test',version:1,payload:{refs}});
+            const strong=(slot,target)=>({slot,target,strength:'strong'});
+            const weak=(slot,target)=>({slot,target,strength:'weak'});
+            await s.writeDocument({documentId:'root',kind:'test',expectedRevision:0,metadata:{},
+                references:[strong('parent','z-parent'),strong('busy','busy'),strong('shared','shared')],
+                resources:[make('z-parent',[strong('child','a-child'),strong('shared','shared')]),
+                    make('a-child',[weak('parent','z-parent')]),make('shared'),make('busy')]});
+            await s.writeDocument({documentId:'root',kind:'test',expectedRevision:1,metadata:{},
+                references:[strong('shared','shared')]});
+            await rejects(()=>s.collectGarbageBatch([]),/batch size/);
+            await rejects(()=>s.collectGarbageBatch(['busy','busy']),/duplicate/);
+            await rejects(()=>s.collectGarbageBatch(Array.from({length:65},(_,i)=>'id'+i)),/batch size/);
+            const deletion=IDBObjectStore.prototype.delete;
+            IDBObjectStore.prototype.delete=function(...args){
+                if(this.name==='payloads'&&args[0]==='a-child')throw Error('Injected deletion abort');
+                return deletion.apply(this,args);
+            };
+            try{await rejects(()=>s.collectGarbageBatch(['a-child','z-parent']),/Injected deletion abort/);}
+            finally{IDBObjectStore.prototype.delete=deletion;}
+            ok(!!await s.get('z-parent')&&!!await s.get('a-child'),'failed batch partially committed');
+            let release,entered;
+            const ready=new Promise(resolve=>entered=resolve);
+            const hold=s.withRetained('busy',()=>new Promise(resolve=>{release=resolve;entered();}));
+            await ready;
+            const report=await s.collectGarbageBatch(['a-child','z-parent','busy','shared','absent']);
+            ok(report.collected.join(',')==='z-parent,a-child','candidate cascade failed');
+            ok(report.blocked.join(',')==='busy'&&report.retained.join(',')==='shared'&&
+                report.missing.join(',')==='absent','batch report incorrect');
+            ok(!!await s.get('busy')&&(await s.get('shared')).refCount===1,'batch lost retained resource');
+            release();await hold;
+            ok((await s.collectGarbageBatch(['busy'])).collected[0]==='busy','released candidate not collected');
+            // Compare equal-size sets; each set uses the same immutable schema.
+            const resources=Array.from({length:32},(_,i)=>make('bench-'+i));
+            await s.writeDocument({documentId:'bench',kind:'test',expectedRevision:0,metadata:{},
+                resources,references:resources.map((r,i)=>strong('s'+i,r.id))});
+            await s.writeDocument({documentId:'bench',kind:'test',expectedRevision:1,metadata:{},references:[]});
+            let start=performance.now();
+            for(const r of resources.slice(0,16))ok((await s.collectGarbage(r.id)).collected,'single collection failed');
+            const singleMs=performance.now()-start;
+            start=performance.now();
+            const batch=await s.collectGarbageBatch(resources.slice(16).map(r=>r.id));
+            const batchMs=performance.now()-start;
+            const integrity=await s.verifyIntegrity();
+            return {valid:integrity.valid,liveObjects:integrity.liveObjects,eligible:integrity.eligible.length,
+                count:batch.collected.length,singleMs,batchMs};
+        }""")
+        self.assertTrue(result['valid'])
+        self.assertEqual(result['liveObjects'],1)
+        self.assertEqual(result['eligible'],0)
+        self.assertEqual(result['count'],16)
+        print("MANAGED_GC_PROFILE "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
     def test_managed_object_store_atomic_resource_batch(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

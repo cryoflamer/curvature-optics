@@ -5,7 +5,7 @@
   root.CurvatureModernManagedObjectStore=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const DATABASE='curvature-modern-managed-objects',VERSION=1;
+  const DATABASE='curvature-modern-managed-objects',VERSION=1,MAX_GC_BATCH=64;
   const STORES=['documents','objects','payloads','references'];
   const TOKEN=/^[A-Za-z0-9_.:-]{1,128}$/;
   const check=(ok,message)=>{if(!ok)throw Error('Managed Object Store: '+message);};
@@ -446,9 +446,65 @@
         return {collected:true};
       }));
     }
+    // Explicit bounded maintenance only. Hold every acquired exclusive
+    // resource lock through the same IDB transaction. Busy candidates are
+    // skipped; all other candidates are rechecked against the current graph.
+    async function collectGarbageBatch(ids){
+      check(Array.isArray(ids)&&ids.length>0&&ids.length<=MAX_GC_BATCH,'invalid GC batch size');
+      const candidates=ids.map(id=>token(id,'object ID')).sort();
+      check(new Set(candidates).size===candidates.length,'duplicate GC candidate');
+      const locks=env.navigator?.locks;
+      check(locks&&typeof locks.request==='function','resource coordination unavailable; retry in a supported browser');
+      const acquired=[],blocked=[];
+      async function lockNext(index){
+        if(index<candidates.length){
+          const id=candidates[index];
+          return locks.request(DATABASE+':resource:'+id,{mode:'exclusive',ifAvailable:true},lock=>{
+            if(!lock){blocked.push(id);return lockNext(index+1);}
+            check(lock.mode==='exclusive','exclusive resource lock required');
+            acquired.push(id);
+            return lockNext(index+1);
+          });
+        }
+        if(!acquired.length)return {collected:[],blocked,retained:[],missing:[]};
+        return run('readwrite',async stores=>{
+          const g=await graph(stores),{counts}=inspect(g,types);
+          await verifyPayloads(g,stores,types);
+          const outgoing=new Map();
+          for(const edge of g.refs.values())if(edge.ownerKind==='object'){
+            if(!outgoing.has(edge.ownerId))outgoing.set(edge.ownerId,[]);
+            outgoing.get(edge.ownerId).push(edge);
+          }
+          const pending=new Set(acquired.filter(id=>counts.has(id)));
+          const missing=acquired.filter(id=>!counts.has(id)),collected=[];
+          // Only candidates with zero actual incoming strong edges may be
+          // removed. A parent collected in this batch can make another
+          // locked candidate eligible. No unlisted child is reclaimed.
+          let changed=true;
+          while(changed){
+            changed=false;
+            for(const id of pending){
+              if(counts.get(id)!==0)continue;
+              for(const edge of outgoing.get(id)||[]){
+                dropEdge(g,stores,edge);
+                if(edge.strength==='strong')counts.set(edge.target,counts.get(edge.target)-1);
+              }
+              const tombstone={id,deleted:true,refCount:0};
+              g.objects.set(id,tombstone);stores.objects.put(tombstone);
+              g.payloadKeys.delete(id);stores.payloads.delete(id);
+              pending.delete(id);collected.push(id);changed=true;
+            }
+          }
+          // Re-derive and validate all resulting counts before commit.
+          updateCounts(g,stores,types);
+          return {collected,blocked,retained:[...pending],missing};
+        });
+      }
+      return lockNext(0);
+    }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
-      verifyIntegrity,recount,withRetained,collectGarbage});
+      verifyIntegrity,recount,withRetained,collectGarbage,collectGarbageBatch});
   }
-  return Object.freeze({DATABASE,VERSION,create});
+  return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));

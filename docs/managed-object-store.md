@@ -102,8 +102,15 @@ all new objects must be strongly reachable from a durable document root.
 ID allocation alone does not reserve or persist a resource.
 The initial core keeps document/object ID tombstones, scans metadata on each
 mutation, validates payload/edge agreement during explicit integrity/recount/GC,
-and collects one object per call. This prioritizes correctness over throughput;
-performance and backup integration must be qualified before adoption. Writes are revision-checked, repeatable same-slot
+and supports explicit single-object collection or a bounded batch of up to
+64 distinct candidate IDs. Batch maintenance acquires nonblocking exclusive
+locks in sorted order, skips busy IDs, verifies the entire graph/payload
+contract once before deletion, rechecks incoming strong counts inside one
+transaction, and may collect newly eligible children only if they are among
+the explicitly locked candidates. It re-derives counts before commit and
+reports collected, blocked, retained and missing IDs separately. No automatic
+collector or production deletion is enabled. Performance and backup
+integration must be qualified before adoption. Writes are revision-checked, repeatable same-slot
 operations are idempotent, and replacement adjusts old and new target counts.
 Zero references means eligible, not necessarily immediately deleted.
 Reclamation rechecks canonical edges and temporary retention, removes outgoing
