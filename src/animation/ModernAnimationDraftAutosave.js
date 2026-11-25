@@ -986,12 +986,22 @@
     });
     return openSharedCollection(db,{lease,crypto}).read();
   }
-  function openSharedCollection(db,{lease,crypto}={}){
+  function openSharedCollection(db,options={}){
+    const {lease,crypto}=options;
     requireLease(lease);
+    // Inject only a managed backend. All transition builders, validators,
+    // journals and digest computation remain the single existing contract.
+    let managed=null;
+    if(Object.hasOwn(options,'managedResources')){
+      if(typeof options.managedResources?.createAnimationWorkingPort!=='function')
+        throw Error('Explicit managed Animation working port required');
+      managed=options.managedResources.createAnimationWorkingPort(db,lease);
+    }
     if(!db||typeof db.databases!=='function')throw Error('Shared Animation inventory unavailable');
     let observed,loaded=false,busy=false;
     async function fetch(){
       requireLease(lease);
+      if(managed)return (await managed.read())??undefined;
       const all=await db.databases();requireLease(lease);
       const existing=all.find(x=>x.name===DATABASE);
       if(!existing)return undefined;
@@ -1024,7 +1034,10 @@
         check();
         const data=build(prior),row=await seal(data,crypto);check();
         await verifySharedRow(row,crypto);check();
-        await sharedTransaction(db,lease,'readwrite',(store,read,finish)=>{
+        if(managed){
+          if(legacy)throw Error('Managed Animation legacy adoption requires coordinated cutover');
+          await managed.commit(prior,row,check);
+        }else await sharedTransaction(db,lease,'readwrite',(store,read,finish)=>{
           read(SHARED_COLLECTION_KEY,(raw,present)=>{
             if(present!==(prior!==null)||!equal(present?raw:null,prior))
               throw Error('Shared Animation collection CAS conflict; evidence retained');
@@ -1054,7 +1067,12 @@
       return {version:1,revision:1,collection:normalized,
         revisions:normalized.workspaces.map(item=>({id:item.id,revision:1})),receipt:null};
     }
+    function initializeManaged(collection,guard){
+      if(!managed)throw Error('Explicit managed Animation backend required');
+      return commit(null,()=>initial(collection),guard);
+    }
     function adoption(plan,storage){
+      if(managed)throw Error('Managed Animation legacy adoption requires coordinated cutover');
       if(!plan?.evidence)throw Error('Explicit Animation source inventory required');
       // Capture the evidence at invocation, not a mutable caller-owned plan.
       const {remote,local}=structuredClone(plan.evidence);
@@ -1354,7 +1372,8 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,removeInactiveDrafts,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,removeInactiveDrafts,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference,
+      ...(managed?{storageKind:'managed',initializeManaged}:{})});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

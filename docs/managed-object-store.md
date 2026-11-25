@@ -452,3 +452,18 @@ owner. Existing-only usage reads do not acquire the writer lock. Deletion
 and production routing remain disabled. Portable entry import requires
 available verified evidence; asset bundle orchestration and foreign standalone
 calibration provenance need additional integration before cutover.
+
+### Managed shared Animation working collection
+
+The existing `openSharedCollection` transition engine accepts an explicit
+managed dependency. It uses the same canonical row, digest, revision and
+journal validators for Named Save, temporary keyframe editing and selection
+acknowledgement. The backend checks the exact prior row plus managed root
+CAS, tracks the write transaction under the shared page lifetime, and
+reads existing schema without acquiring a recursive backup lock. No legacy
+store is opened by this path. Legacy adoption refuses; explicit managed
+initialization is reserved for controlled startup after migration fencing.
+A newly created selection receipt also roots the previous collection
+resource until retirement, including its original photos and fit evidence.
+A historical imported receipt without its previous collection cannot
+reconstruct that resource. This is an opt-in port, not production routing.

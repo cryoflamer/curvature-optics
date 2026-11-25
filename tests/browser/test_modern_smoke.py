@@ -1550,6 +1550,98 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result, {'valid': True, 'count': 2})
 
 
+    def test_managed_animation_working_application_port(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationStudio.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernAnimationLibrary,
+                P=CurvatureModernAnimationProject;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const open=()=>A.openSharedCollection(indexedDB,{lease,crypto,managedResources:adapter});
+            const working=open(),store=adapter.store;
+            ok(await working.read()===null&&!(await indexedDB.databases()).length,'managed read created schema');
+            const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#123456';ctx.fillRect(0,0,3,2);
+            const record={id:'prior_photo',version:1,title:'Prior photo',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:3,height:2}};
+            const photo=await adapter.saveObservation({id:record.id,revision:1,record});
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=P.createV2(contract,[{experiment},{experiment}],{id:'working_project',name:'Working'});
+            const linked=P.validate({...project,keyframes:project.keyframes.map((f,i)=>i?f:{...f,referenceImageIds:[record.id]})});
+            const draft=CurvatureModernAnimationStudio.fromProject(linked);
+            const cp=A.checkpoint({draft,selectedKey:draft.frames[0].key,quality:'auto',
+                prepared:false,positionMs:0,libraryId:null,libraryRevision:null},100);
+            const id='draft_managed';
+            let row=await working.initializeManaged(A.collection(id,cp,100));
+            const previous=await adapter.readAnimationWorkingCollection();
+            const stale=open();await stale.read();
+            const next=A.checkpoint({...cp,draft:{...cp.draft,frames:cp.draft.frames.map(f=>({...f,referenceImageIds:[]}))}},101);
+            const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
+            row=await working.saveSelected(row,A.documentReference(row,id),next,base);
+            ok(row.receipt&&row.revision===2,'selection receipt missing');
+            await store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
+            ok(!(await store.collectGarbage(previous.collectionId)).collected&&
+                !(await store.collectGarbage(photo.observationId)).collected,'receipt lost previous photo');
+            await rejects(()=>stale.saveSelected(previous.row,A.documentReference(previous.row,id),next,base),
+                /CAS conflict/);
+            const fresh=open(),found=await fresh.read();
+            ok(found.digest===row.digest,'reopened port changed row');
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspection=await barrier.snapshot(()=>open().read());
+            ok(inspection.value.digest===row.digest,'exclusive read changed receipt');
+            row=await fresh.retire(found,found.receipt);
+            ok(!row.receipt&&(await store.collectGarbage(previous.collectionId)).collected&&
+                (await store.collectGarbage(photo.observationId)).collected,'receipt retirement did not release old collection');
+            const before=await adapter.readAnimationWorkingCollection();
+            await rejects(()=>fresh.createDraft(row,'draft_rejected',cp,()=>false),/stale shared Animation/i);
+            ok((await adapter.readAnimationWorkingCollection()).row.digest===before.row.digest,'guard failure changed working collection');
+            ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
+            return {valid:(await store.verifyIntegrity()).valid,revision:row.revision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 3})
+
     def test_managed_animation_pending_journals_retain_resources(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))

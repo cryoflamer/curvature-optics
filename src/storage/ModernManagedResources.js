@@ -1366,11 +1366,31 @@
       draftContracts();
       const graph=await readGraph(draftsId);
       if(!graph)return null;
-      check(graph.document.kind===DRAFTS&&graph.document.references.length===1&&
+      const prior=graph.document.references.some(ref=>ref.slot==='previous');
+      check(graph.document.kind===DRAFTS&&graph.document.references.length===(prior?2:1)&&
         exact(graph.document.metadata,['sourceRevision']),'invalid Animation working root');
       const resource=pick(graph,'collection',DRAFTS),v=resource.payload;
       const row=await drafts.verifySharedRow(v.row,env.crypto);
       check(graph.document.metadata.sourceRevision===row.revision,'Animation working revision mismatch');
+      if(prior){
+        const previous=pick(graph,'previous',DRAFTS),old=await drafts.verifySharedRow(previous.payload.row,env.crypto);
+        check(row.receipt&&old.revision+1===row.revision&&
+          same(drafts.documentReference(old,row.receipt.previous.id),row.receipt.previous),
+          'Animation receipt previous collection mismatch');
+        // Validate retained prior evidence too; it may not appear in the current row.
+        const inventory=draftInventory(old),verified=new Map();
+        for(const entry of previous.payload.observations){
+          const observation=graph.resources.find(r=>r.id===entry.target);
+          check(observation?.type===OBSERVATION&&observation.payload.id===entry.alias,'prior Animation observation mismatch');
+          await materializeObservation(graph,observation,verified,false);
+        }
+        for(const entry of previous.payload.evidence){
+          if(entry.target===null)continue;
+          const result=graph.resources.find(r=>r.id===entry.target);
+          for(const origin of inventory.origins.filter(o=>o.resultId===entry.alias))checkOrigin(origin,result);
+          await verifyResultOriginal(graph,result,verified,false);
+        }
+      }
       const inventory=draftInventory(row),referenceImages=[],verified=new Map();
       for(const entry of v.observations){
         const observation=graph.resources.find(r=>r.id===entry.target);
@@ -1392,7 +1412,8 @@
     async function readAnimationWorkingCollection(){
       return loadAnimationWorkingCollection(store.readDocumentGraph);
     }
-    async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[]}={}){
+    async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
+      expectedRow=undefined,guard=()=>{},lease=null}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -1400,6 +1421,7 @@
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'Animation working revision conflict');
       check(!previous||row.revision===previous.row.revision+1,'Animation working source revision must advance once');
+      if(expectedRow!==undefined)check(same(previous?.row??null,expectedRow),'Shared Animation collection CAS conflict; evidence retained');
       const inventory=draftInventory(row),oldInventory=previous?draftInventory(previous.row):null;
       const oldPhotos=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
       const oldResults=new Map((previous?.evidence||[]).map(entry=>[entry.alias,entry.target]));
@@ -1435,10 +1457,38 @@
         evidence.push({alias,target});
       }
       const id=store.newObjectId();
-      const document=await store.writeDocument({documentId:draftsId,kind:DRAFTS,
-        expectedRevision,metadata:{sourceRevision:row.revision},references:[strong('collection',id)],
-        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]});
+      const references=[strong('collection',id)];
+      if(row.receipt&&previous){
+        check(same(drafts.documentReference(previous.row,row.receipt.previous.id),row.receipt.previous),
+          'Animation receipt previous workspace mismatch');
+        references.push(strong('previous',previous.collectionId));
+      }
+      const [document]=await store.writeDocuments([{documentId:draftsId,kind:DRAFTS,
+        expectedRevision,metadata:{sourceRevision:row.revision},references,
+        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]}],{guard,lease});
       return {collectionId:id,managedRevision:document.revision};
+    }
+    function createAnimationWorkingPort(db,lease){
+      draftContracts();
+      check(db===env.indexedDB,'Animation working database context mismatch');
+      check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
+        !('tabId' in lease),'Shared Animation lifetime required');
+      lease.check();
+      return Object.freeze({
+        async read(){
+          lease.check();
+          const value=await loadAnimationWorkingCollection(store.inspectDocumentGraph,false);
+          lease.check();return value?.row??null;
+        },
+        async commit(before,row,guard){
+          lease.check(true);
+          const previous=await loadAnimationWorkingCollection(store.readDocumentClosureForWrite,false);
+          check(same(previous?.row??null,before),'Shared Animation collection CAS conflict; evidence retained');
+          check(previous||row.revision===1,'initial Animation working revision must be one');
+          await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
+            expectedRow:before,guard,lease});
+        }
+      });
     }
     // Read verified domain rows, one closure at a time. A second inventory
     // refuses a mixed-revision list rather than silently dropping changed
@@ -1553,7 +1603,7 @@
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
-      saveAnimationWorkingCollection,readAnimationWorkingCollection,
+      saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createAnimationLibraryPort,
