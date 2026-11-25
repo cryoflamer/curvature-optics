@@ -6780,7 +6780,8 @@
       scheduleStudioInitialPaint('restored');
     }
   }
-  var historyMetadataEditingId=null,historyMetadataExpected=null;
+  var historyMetadataEditingId=null;
+  var historyMetadataExpected=null;
   function closeHistoryMetadataEditor(){
     var dialog=newUiEl('ModernHistoryMetadataDialog');
     if(dialog){
