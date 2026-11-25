@@ -12347,6 +12347,82 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read),current)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_named_save_conflict_can_export_and_abandon(self):
+        """Foreign named revision blocks exact completion; abandoning never rolls back either document."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Original named revision';
+            for(const frame of project.keyframes)delete frame.referenceImageIds;
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        studio=self.page.locator('#ModernAnimationStudio')
+        field=studio.get_by_label('Project name',exact=True)
+        if not field.is_visible():
+            studio.get_by_role('button',name='Inspect project settings').click()
+        field.fill('Draft must survive conflict')
+        field.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        seeded=self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernAnimationLibrary;
+            const store=A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto});
+            const row=await store.read(),ref=CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope.documents.animation;
+            const cp=A.getWorkspace(row.collection,ref.id),before=await L.get(indexedDB,cp.libraryId);
+            const plan=L.planExactUpdate(CurvatureModernAnimationStudio.buildSaved(cp.draft,before.id),
+                cp.quality,before,before.updatedAt+1);
+            const staged=await store.stageNamedSave(row,ref,plan);
+            const foreign=await L.rename(indexedDB,before.id,'Foreign named revision',before.updatedAt,plan.after.updatedAt+1);
+            return {staged,plan,cp,ref,foreign};
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            return {row,session:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                named:await CurvatureModernAnimationLibrary.list(indexedDB)};
+        }"""
+        before=self.page.evaluate(read)
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_be_disabled()
+        self.page.locator('#ModernSharedNamedAnimationCompleteSave').click()
+        message=self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')
+        expect(message).to_contain_text('changed since update was prepared')
+        self.assertEqual(self.page.evaluate(read),before)
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_be_disabled()
+        with self.page.expect_download() as download:
+            self.page.get_by_role('button',name='Download save evidence',exact=True).click()
+        evidence=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(evidence['intent'],seeded['staged']['namedSave'])
+        self.assertEqual(evidence['checkpoint'],seeded['cp'])
+        self.page.once('dialog',lambda dialog: dialog.accept())
+        self.page.locator('#ModernSharedNamedAnimationAbandonSave').click()
+        expect(message).to_contain_text('Named and working project bytes retained')
+        after=self.page.evaluate(read)
+        self.assertEqual(after['named'],[seeded['foreign']])
+        self.assertEqual(after['row']['collection'],before['row']['collection'])
+        self.assertEqual(after['row']['revisions'],before['row']['revisions'])
+        self.assertEqual(after['session'],before['session'])
+        self.assertNotIn('namedSave',after['row'])
+        expect(self.page.locator('#ModernSharedNamedAnimationSaveChanges')).to_be_disabled()
+        expect(self.page.locator('#ModernAnimationViewEditor')).to_be_enabled()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),after)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')['draft']['name'],
+                         'Draft must survive conflict')
+
     def test_shared_animation_named_import_preserves_session_and_deduplicates(self):
         """Named portable import remains independent of the shared working selection."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
