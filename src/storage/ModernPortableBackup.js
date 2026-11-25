@@ -15,6 +15,12 @@
     'curvature-modern-experiment-history','curvature-modern-calibration-results',
     'curvature-photo-calibration'
   ]);
+  // The V1 archive's seven required descriptors remain unchanged for
+  // compatibility with existing backups. New captures explicitly inventory
+  // the later UI registry and cache even if they are absent.
+  const ADDITIONAL_DATABASES=Object.freeze([
+    'curvature-modern-ui-state','curvature-modern-keyframe-thumbnails'
+  ]);
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
   function ensure(ok,reason){if(!ok)throw Error('Portable backup: '+reason);}
@@ -316,7 +322,7 @@
       infos.set(entry.name,entry);
     }
     const databases=[];
-    for(const name of [...new Set([...KNOWN_DATABASES,...infos.keys()])].sort()){
+    for(const name of [...new Set([...KNOWN_DATABASES,...ADDITIONAL_DATABASES,...infos.keys()])].sort()){
       databases.push(infos.has(name)?
         await readDatabase(env.indexedDB,infos.get(name)):
         {name,status:'absent',version:null,stores:[]});
@@ -333,6 +339,21 @@
       'data changed between read-only passes; retry after writes settle');
     // Two equal observations do not constitute an atomic cut across databases.
     return pack(unpackData(before),env.crypto);
+  }
+  // This is a stronger execution boundary, not a stronger portable schema.
+  // Retain V1's conservative two-pass consistency and writerCoordination:false
+  // inside the file: a reader cannot reconstruct live lock participation
+  // from imported bytes. The live return value records the actual lock.
+  async function captureCoordinated(env){
+    ensure(env&&env.navigator?.locks&&typeof env.navigator.locks.request==='function',
+      'Web Locks unavailable for coordinated capture');
+    const barrier=env.CurvatureModernBackupWriteBarrier;
+    ensure(barrier&&typeof barrier.create==='function','backup writer barrier unavailable');
+    const captured=await barrier.create(env.navigator.locks).snapshot(()=>capture(env));
+    ensure(captured.coordination==='participating-writers-only'&&captured.eligibleForMigration===false,
+      'unexpected backup coordination result');
+    return Object.freeze({archive:captured.value,coordination:captured.coordination,
+      eligibleForMigration:false});
   }
   // Source-specific qualification is distinct from archive checksum validation.
   // An archive can be byte-perfect yet miss the original photo needed by a
@@ -668,5 +689,5 @@
     await inspect(archive,crypto);
     return archive;
   }
-  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,encode,decode,pack,inspect,capture,restoreIsolated,qualifyEvidence,previewEmptyRestore,restoreEmpty,fileBlob,readFile});
+  return Object.freeze({FORMAT,VERSION,KNOWN_DATABASES,ADDITIONAL_DATABASES,encode,decode,pack,inspect,capture,captureCoordinated,restoreIsolated,qualifyEvidence,previewEmptyRestore,restoreEmpty,fileBlob,readFile});
 }));

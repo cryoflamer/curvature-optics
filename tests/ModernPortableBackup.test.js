@@ -100,7 +100,7 @@ test('capture inventories absent databases without opening or creating them',asy
   const archive=await backup.capture(env);
   const checked=await backup.inspect(archive,webcrypto);
   assert.equal(calls,2);assert.equal(opens,0);
-  assert.equal(checked.manifest.databases.length,backup.KNOWN_DATABASES.length);
+  assert.equal(checked.manifest.databases.length,backup.KNOWN_DATABASES.length+backup.ADDITIONAL_DATABASES.length);
   assert.ok(checked.manifest.databases.every(x=>x.status==='absent'));
   assert.equal(checked.manifest.excludedWebStorageKeys.local,1);
   assert.equal(checked.eligibleForMigration,false);
@@ -330,4 +330,32 @@ test('empty-profile guard rejects proof databases and surviving tab recovery key
   assert.equal(preview.empty,false);
   await assert.rejects(()=>backup.restoreEmpty(archive,env),/target is not empty/);
   assert.equal(preview.conflicts.sessionKeys.length,1);
+});
+
+test('coordinated capture holds an exclusive lock through both observational passes and stays unqualified',async()=>{
+  let held=false,passes=0;
+  const env={crypto:webcrypto,localStorage:storage({}),sessionStorage:storage({}),
+    navigator:{locks:{request(){throw Error('test adapter must be used');}}},
+    CurvatureModernBackupWriteBarrier:{create(locks){
+      assert.equal(locks,env.navigator.locks);
+      return {async snapshot(fn){
+        held=true;
+        try{return {value:await fn(),coordination:'participating-writers-only',eligibleForMigration:false};}
+        finally{held=false;}
+      }};
+    }},indexedDB:{databases:async()=>{assert.equal(held,true);passes++;return [];},
+      open(){throw Error('unexpected open');}}};
+  const captured=await backup.captureCoordinated(env);
+  assert.equal(passes,2);
+  assert.equal(held,false);
+  assert.equal(captured.coordination,'participating-writers-only');
+  assert.equal(captured.eligibleForMigration,false);
+  const review=await backup.inspect(captured.archive,webcrypto);
+  assert.equal(review.consistency,'two-pass-observation-only');
+  assert.equal(review.eligibleForMigration,false);
+  for(const name of backup.ADDITIONAL_DATABASES)
+    assert.equal(review.manifest.databases.find(row=>row.name===name).status,'absent');
+  const old=await backup.inspect(await backup.pack(inventory(),webcrypto),webcrypto);
+  assert.equal(old.manifest.databases.length,backup.KNOWN_DATABASES.length);
+  await assert.rejects(backup.captureCoordinated({...env,navigator:{}}),/Web Locks unavailable/);
 });

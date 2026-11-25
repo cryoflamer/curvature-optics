@@ -8688,6 +8688,66 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
 
+    def test_coordinated_backup_waits_for_writer_and_preserves_acknowledged_history(self):
+        """Actual backup API captures the History commit only after the writer lock releases."""
+        self.open_modern()
+        other=self.context.new_page()
+        try:
+            other.goto(self.base_url,wait_until='load')
+            other.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+            self.page.evaluate("""async()=>{
+                const H=CurvatureModernApp.getHistoryStore();
+                const entry=(await H.record(CurvatureModernDemoCatalog.load()[0].project.baseExperiment,
+                    'manual',null,{retainAuto:true})).entry;
+                window.__backupHistoryId=entry.id;
+                const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+                const writer=gate.registerWriter('test.history.fixture');
+                window.__writerEntered=false;
+                window.__writerTask=writer.commit(async()=>{
+                    window.__writerEntered=true;
+                    await new Promise(resolve=>window.__writerRelease=resolve);
+                    // Exact existing row; direct fixture transaction is already
+                    // inside the writer lock. Do not acquire it recursively.
+                    return new Promise((resolve,reject)=>{
+                        const req=indexedDB.open('curvature-modern-experiment-history',2);
+                        req.onerror=()=>reject(req.error);
+                        req.onsuccess=()=>{
+                            const db=req.result,tx=db.transaction('snapshots','readwrite');
+                            tx.objectStore('snapshots').put({...entry,name:'Acknowledged fixture'});
+                            tx.oncomplete=()=>{db.close();resolve(true);};
+                            tx.onabort=()=>{db.close();reject(tx.error);};
+                        };
+                    });
+                });
+            }""")
+            self.page.wait_for_function('window.__writerEntered===true')
+            other.evaluate("""()=>{
+                window.__backupSettled=false;
+                window.__coordinatedBackup=CurvatureModernPortableBackup.captureCoordinated(window)
+                    .then(result=>{window.__backupSettled=true;return result;});
+            }""")
+            other.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+                lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='exclusive')""")
+            self.assertFalse(other.evaluate('window.__backupSettled'))
+            self.page.evaluate("window.__writerRelease()")
+            self.assertTrue(self.page.evaluate('window.__writerTask'))
+            snapshot_id=self.page.evaluate('window.__backupHistoryId')
+            result=other.evaluate("""async id=>{
+                const result=await window.__coordinatedBackup,api=CurvatureModernPortableBackup;
+                const review=await api.inspect(result.archive,crypto);
+                const db=JSON.parse(result.archive.payload).content.databases.find(
+                    db=>db.name==='curvature-modern-experiment-history');
+                const row=db.stores.find(s=>s.name==='snapshots').records.find(
+                    row=>api.decode(row.key)===id);
+                return {coordination:result.coordination,eligible:result.eligibleForMigration,
+                    archiveEligible:review.eligibleForMigration,name:api.decode(row.value).name,
+                    uiRecorded:review.manifest.databases.some(db=>db.name==='curvature-modern-ui-state')};
+            }""",snapshot_id)
+            self.assertEqual(result,{'coordination':'participating-writers-only','eligible':False,
+                'archiveEligible':False,'name':'Acknowledged fixture','uiRecorded':True})
+        finally:
+            other.close()
+
     def test_backup_write_barrier_serializes_participating_tabs(self):
         """Real Web Locks: one tab's acknowledged writer must finish before the
         other tab enters its exclusive read-only snapshot.
