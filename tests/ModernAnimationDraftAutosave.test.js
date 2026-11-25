@@ -1143,3 +1143,79 @@ test('shared named save intent refuses a wrong checkpoint and can be explicitly 
   assert.deepEqual(retired.revisions,h.row.revisions);
   assert.equal(Object.hasOwn(retired,'namedSave'),false);
 });
+
+
+async function keyframeJournalFixture(){
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const one=scene(),two=structuredClone(one);
+  two.scene.camera.Height=25;
+  const project=projects.createV2({version:1,mode:'camera',target:null,referenceExperiment:one},
+    [{name:'First',experiment:one},{name:'Second',experiment:two}],{id:'keyframe_fixture'});
+  const draft=studio.fromProject(project),id='draft_keyframe';
+  const cp=autosave.checkpoint({draft,selectedKey:draft.frames[0].key,quality:'auto',
+    prepared:true,positionMs:1000},100);
+  const collection=autosave.withWorkspace(f.collection,id,cp,102);
+  const row=await a.initializeEmpty(await f.inspect(),collection,f.local),ref=autosave.documentReference(row,id);
+  const original=cp.draft.frames[0].experiment,workspace=scene();
+  workspace.scene.camera.Height=70;
+  const intent={version:1,reference:ref,base:f.base,returnView:'editor',compareSelected:'A',
+    session:{version:1,projectId:id,frameKey:cp.draft.frames[0].key,mode:'scene',original,
+      workspace:experiments.validate(workspace),candidate:original,past:[],future:[]}};
+  return {...f,a,row,ref,cp,intent};
+}
+test('shared temporary keyframe journal persists bounded edits and atomically applies only its canonical frame',async()=>{
+  const h=await keyframeJournalFixture(),staged=await h.a.stageKeyframeEdit(h.row,h.intent);
+  assert.deepEqual(staged.collection,h.row.collection);
+  assert.deepEqual(staged.revisions,h.row.revisions);
+  const reopened=h.open();assert.deepEqual(await reopened.read(),staged);
+  const candidate=structuredClone(h.intent.session.candidate);candidate.scene.camera.Height=40;
+  const session={...h.intent.session,candidate,past:[h.intent.session.original]};
+  const updated=await reopened.updateKeyframeEdit(staged,staged.keyframeEdit,session,'B');
+  assert.deepEqual(updated.collection,h.row.collection);
+  assert.deepEqual(updated.revisions,h.row.revisions);
+  assert.equal(updated.keyframeEdit.session.candidate.scene.camera.Height,40);
+  assert.equal(updated.keyframeEdit.session.workspace.scene.camera.Height,70);
+  assert.equal(updated.keyframeEdit.compareSelected,'B');
+  assert.deepEqual(await h.open().read(),updated);
+  await assert.rejects(reopened.saveSelected(updated,h.ref,{...h.cp,savedAt:200},h.base),/pending temporary keyframe/);
+  await reopened.read();
+  const applied=await reopened.applyKeyframeEdit(updated,updated.keyframeEdit,h.base);
+  assert.equal(Object.hasOwn(applied,'keyframeEdit'),false);
+  assert.deepEqual(applied.receipt.previous,h.ref);
+  assert.deepEqual(applied.receipt.base,h.base);
+  const changed=autosave.getWorkspace(applied.collection,h.ref.id);
+  assert.deepEqual(changed.draft,studio.replaceFrameExperiment(h.cp.draft,session.frameKey,candidate));
+  assert.deepEqual(changed.draft.frames[1],h.cp.draft.frames[1]);
+  assert.equal(changed.prepared,false);assert.equal(changed.positionMs,0);
+  assert.deepEqual(autosave.documentReference(applied,h.other),autosave.documentReference(h.row,h.other));
+  const retired=await reopened.retire(applied,applied.receipt);
+  assert.equal(retired.receipt,null);
+  assert.deepEqual(await h.open().read(),retired);
+});
+test('temporary keyframe recovery refuses stale bases, invalid history and changed origins without losing evidence',async()=>{
+  const h=await keyframeJournalFixture(),staged=await h.a.stageKeyframeEdit(h.row,h.intent);
+  const bad=structuredClone(staged.keyframeEdit.session);
+  bad.past=[structuredClone(bad.original)];bad.past[0].scene.surface.rEarth=9000000;
+  await assert.rejects(h.a.updateKeyframeEdit(staged,staged.keyframeEdit,bad,'A'),/contract-incompatible/);
+  await h.a.read();
+  const moved=structuredClone(staged.keyframeEdit.session);
+  moved.workspace.scene.camera.Height=90;
+  await assert.rejects(h.a.updateKeyframeEdit(staged,staged.keyframeEdit,moved,'A'),/origin changed/);
+  await h.a.read();
+  await assert.rejects(h.a.applyKeyframeEdit(staged,staged.keyframeEdit,{...h.base,revision:h.base.revision+1}),/Shared session changed/);
+  assert.deepEqual(await h.a.read(),staged);
+  const stale=h.open();await stale.read();
+  const cleared=await h.a.cancelKeyframeEdit(staged,staged.keyframeEdit);
+  assert.deepEqual(cleared.collection,h.row.collection);
+  assert.deepEqual(cleared.revisions,h.row.revisions);
+  await assert.rejects(stale.applyKeyframeEdit(staged,staged.keyframeEdit,h.base),/CAS conflict/);
+  assert.deepEqual(await h.open().read(),cleared);
+});
+test('unchanged temporary keyframe Apply clears only the journal and emits no selection receipt',async()=>{
+  const h=await keyframeJournalFixture(),staged=await h.a.stageKeyframeEdit(h.row,h.intent);
+  const cleared=await h.a.applyKeyframeEdit(staged,staged.keyframeEdit,h.base);
+  assert.equal(cleared.receipt,null);
+  assert.equal(Object.hasOwn(cleared,'keyframeEdit'),false);
+  assert.deepEqual(cleared.collection,h.row.collection);
+  assert.deepEqual(cleared.revisions,h.row.revisions);
+});

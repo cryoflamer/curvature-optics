@@ -867,6 +867,20 @@ revision. If the domain acknowledgement is uncertain, reload is required
 rather than allowing the old editor to continue. Abandoning does not undo
 a possibly completed named transaction; the older draft link remains as
 evidence and can be saved independently with Save As.
+The headless temporary-keyframe protocol uses a separate, mutually exclusive
+journal in the same shared row. It captures the exact Animation reference,
+the shared session base revision/digest, original frame, ordinary physical
+workspace snapshot, candidate, and bounded temporary Undo/Redo history.
+Every candidate and history snapshot must satisfy the existing project
+contract; ordinary collection writes are blocked while the journal exists.
+Journal updates and cancellation do not advance document references.
+Apply removes the journal and replaces only the target frame through the
+existing canonical Studio replacement in one domain CAS, with a selection
+receipt for a changed frame and no receipt for an unchanged one. A different
+shared session base blocks Apply. The host must verify its live shared
+session base and physical workspace before entering/recovering the editor;
+a stale temporary editor cannot restore its old physical workspace over a
+new one. The headless protocol does not mount the editor or write Web Storage.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

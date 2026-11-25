@@ -1035,7 +1035,9 @@
       "directHtmlLoads": [
         "modern"
       ],
-      "commonJsSourceCallers": [],
+      "commonJsSourceCallers": [
+        "src/animation/ModernAnimationDraftAutosave.js"
+      ],
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
         "tests/ModernAnimationBackgroundExport.test.js",

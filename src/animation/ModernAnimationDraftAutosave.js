@@ -18,10 +18,12 @@
   // it lazily only when validating a shared named-save intent.
   var getLibrary=()=>typeof module==='object'&&module.exports?
     require('./ModernAnimationLibrary'):root.CurvatureModernAnimationLibrary;
-  var api=factory(experiment,hud,contracts,projects,getLibrary);
+  var getStudio=()=>typeof module==='object'&&module.exports?
+    require('./ModernAnimationStudio'):root.CurvatureModernAnimationStudio;
+  var api=factory(experiment,hud,contracts,projects,getLibrary,getStudio);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects,getLibrary){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects,getLibrary,getStudio){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -752,9 +754,42 @@
       throw Error('Named Animation save intent does not match the working checkpoint');
     return {version:1,reference:ref,plan};
   }
+  // Temporary physical editing owns only a bounded recovery journal. The
+  // acknowledged Scene/Compare checkpoint and Animation draft remain separate.
+  function validateKeyframeEdit(value,row){
+    if(!exact(value,['version','reference','base','returnView','compareSelected','session'])||
+       value.version!==1||!['library','editor','preview'].includes(value.returnView)||
+       !['A','B'].includes(value.compareSelected))
+      throw Error('Invalid shared keyframe edit intent');
+    const ref=validateReference(value.reference),base=selectionBase(value.base),s=value.session;
+    if(row.receipt||row.namedSave||!equal(documentReference(row,ref.id),ref)||
+       !exact(s,['version','projectId','frameKey','mode','original','workspace','candidate','past','future'])||
+       s.version!==1||s.projectId!==ref.id||!['scene','compare'].includes(s.mode)||
+       !Array.isArray(s.past)||!Array.isArray(s.future)||s.past.length>30||s.future.length>30)
+      throw Error('Invalid shared keyframe recovery identity or history');
+    const cp=getWorkspace(row.collection,ref.id),contract=cp?.draft.contract;
+    const frame=cp?.draft.frames.find(item=>item.key===s.frameKey);
+    if(!contract||!['camera','physical'].includes(contract.mode)||!frame||
+       frame.experiment.display.mode!==s.mode)
+      throw Error('Keyframe edit requires the exact contracted working frame');
+    function candidate(raw){
+      const result=experiment.validate(raw);
+      if(result.display.mode!==s.mode||!contracts.inspectCandidate(contract,result).allowed)
+        throw Error('Keyframe recovery contains a contract-incompatible state');
+      return result;
+    }
+    const original=candidate(s.original);
+    if(!equal(original,frame.experiment))throw Error('Keyframe original changed; recovery retained');
+    const session={version:1,projectId:ref.id,frameKey:frame.key,mode:s.mode,original,
+      workspace:experiment.validate(s.workspace),candidate:candidate(s.candidate),
+      past:s.past.map(candidate),future:s.future.map(candidate)};
+    return {version:1,reference:ref,base,returnView:value.returnView,
+      compareSelected:value.compareSelected,session};
+  }
   function normalizeSharedRow(raw){
     const keys=['version','revision','collection','revisions','receipt','digest'];
     if(object(raw)&&Object.hasOwn(raw,'namedSave'))keys.push('namedSave');
+    if(object(raw)&&Object.hasOwn(raw,'keyframeEdit'))keys.push('keyframeEdit');
     if(!exact(raw,keys)||
        raw.version!==1||!positive(raw.revision)||!Array.isArray(raw.revisions)||
        typeof raw.digest!=='string'||!/^sha256:[0-9a-f]{64}$/.test(raw.digest))
@@ -771,6 +806,7 @@
     const receipt=raw.receipt===null?null:validateReceipt(raw.receipt);
     const row={version:1,revision:raw.revision,collection,revisions,receipt};
     if(Object.hasOwn(raw,'namedSave'))row.namedSave=validateNamedSave(raw.namedSave,row);
+    if(Object.hasOwn(raw,'keyframeEdit'))row.keyframeEdit=validateKeyframeEdit(raw.keyframeEdit,row);
     row.digest=raw.digest;
     if(receipt&&!equal(documentReference(row,receipt.current.id),receipt.current))
       throw Error('Animation receipt does not match durable workspace');
@@ -932,6 +968,7 @@
       if(!row||row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
       if(row.receipt)throw Error('Resolve pending Animation selection receipt before writing');
       if(row.namedSave)throw Error('Resolve pending named Animation save before writing');
+      if(row.keyframeEdit)throw Error('Resolve pending temporary keyframe edit before writing');
       return row.revision+1;
     }
     // An explicitly chosen alternative becomes an independent working
@@ -1046,6 +1083,60 @@
           revisions:row.revisions,receipt:null};
       },guard);
     }
+    function stageKeyframeEdit(expected,intent,guard){
+      return commit(expected,row=>{
+        const revision=nextRevision(row),keyframeEdit=validateKeyframeEdit(intent,row);
+        return {version:1,revision,collection:row.collection,revisions:row.revisions,
+          receipt:null,keyframeEdit};
+      },guard);
+    }
+    function pendingKeyframeRevision(row,intent){
+      if(!row?.keyframeEdit||!equal(row.keyframeEdit,intent))
+        throw Error('Temporary keyframe edit changed; recovery retained');
+      if(row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
+      return row.revision+1;
+    }
+    function updateKeyframeEdit(expected,intent,session,compareSelected,guard){
+      return commit(expected,row=>{
+        const revision=pendingKeyframeRevision(row,intent);
+        const keyframeEdit=validateKeyframeEdit({...intent,session,compareSelected},row);
+        const before=intent.session,after=keyframeEdit.session;
+        if(before.frameKey!==after.frameKey||!equal(before.original,after.original)||
+           !equal(before.workspace,after.workspace))
+          throw Error('Temporary keyframe edit origin changed; recovery retained');
+        return {version:1,revision,collection:row.collection,revisions:row.revisions,
+          receipt:null,keyframeEdit};
+      },guard);
+    }
+    function cancelKeyframeEdit(expected,intent,guard){
+      return commit(expected,row=>({version:1,revision:pendingKeyframeRevision(row,intent),
+        collection:row.collection,revisions:row.revisions,receipt:null}),guard);
+    }
+    // Applying a temporary edit and removing its journal are one domain CAS.
+    // Only the existing canonical Studio replacement may generate frame bytes.
+    // The original shared session checkpoint must still be the captured base.
+    function applyKeyframeEdit(expected,intent,base,guard){
+      const bound=selectionBase(base);
+      return commit(expected,row=>{
+        const revision=pendingKeyframeRevision(row,intent);
+        if(!equal(bound,intent.base))throw Error('Shared session changed during keyframe edit');
+        const previous=intent.reference,prior=getWorkspace(row.collection,previous.id),s=intent.session;
+        const studio=getStudio();
+        if(!studio)throw Error('Animation Studio replacement validator unavailable');
+        const draft=studio.replaceFrameExperiment(prior.draft,s.frameKey,s.candidate);
+        const value=normalize({...prior,draft,savedAt:prior.savedAt+1,
+          selectedKey:s.frameKey,prepared:false,positionMs:0});
+        if(equal(value.draft,prior.draft))
+          return {version:1,revision,collection:row.collection,revisions:row.revisions,receipt:null};
+        const next=withWorkspace(row.collection,previous.id,value,value.savedAt);
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        const current=reference(previous.id,revision);
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===previous.id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),
+          receipt:{version:1,base:bound,previous,current,status:'updated'}};
+      },guard);
+    }
     function saveSelected(expected,ref,checkpoint,base,guard){
       const previous=validateReference(ref),bound=selectionBase(base),value=normalize(checkpoint);
       return commit(expected,row=>{
@@ -1082,7 +1173,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,applyKeyframeEdit,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}
