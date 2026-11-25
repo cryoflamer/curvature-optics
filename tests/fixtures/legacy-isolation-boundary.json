@@ -2928,7 +2928,8 @@
         "src/ui/modern/ModernSessionAutosave.js"
       ],
       "commonJsTestCallers": [
-        "tests/ModernBackupWriteBarrier.test.js"
+        "tests/ModernBackupWriteBarrier.test.js",
+        "tests/ModernExperimentHistory.test.js"
       ],
       "commonJsToolCallers": []
     },
