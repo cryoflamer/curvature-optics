@@ -585,7 +585,7 @@
     if(env.CurvatureModernApp?.getWorkspaceMode?.()==='images')activated();
   }
   // Loaded only by Modern. The standalone Library remains lazy until its tab opens.
-  if(env.document&&library&&importer)env.document.addEventListener('DOMContentLoaded',function(){
+  if(env.document&&legacyLibrary&&importer)env.document.addEventListener('DOMContentLoaded',function(){
     var host=env.document.getElementById('ModernReferenceImageLibrary');if(host)mount(host,env.indexedDB);
   });
   return Object.freeze({mount:mount,metadataFact:metadataFact});

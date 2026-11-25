@@ -6282,6 +6282,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.locator('#ModernImageLibraryTab').count(),1)
         self.assertEqual(self.page.locator('#ModernReferenceImageLibrary').count(),1)
         self.assertEqual(self.page.locator('#ModernAnimationLibraryView #ModernReferenceImageLibrary').count(),0)
+        self.assertEqual(self.page.locator('#ModernReferenceImageLibrary .modern-reference-body').count(),1,
+                         'standalone Image Library must mount exactly once at startup')
         panel=self.open_image_library()
         expect(self.page.locator('#ModernImageLibraryTab')).to_have_attribute('aria-pressed','true')
         expect(self.page.locator('#ModernImageLibraryTitle')).to_have_text('Image Library')
