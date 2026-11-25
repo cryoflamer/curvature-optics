@@ -1223,6 +1223,137 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertGreaterEqual(result['eligible'],1)
         print("MANAGED_AUTOSAVE_PROFILE_SCOPED "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
+    def test_managed_animation_pending_journals_retain_resources(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationStudio.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernAnimationLibrary,
+                P=CurvatureModernAnimationProject;
+            const store=adapter.store,photos=[];
+            for(const [id,color] of [['before_photo','#123456'],['after_photo','#654321']]){
+                const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;
+                const ctx=canvas.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,3,2);
+                const record={id,version:1,title:id,original:{dataUrl:canvas.toDataURL('image/png'),width:3,height:2}};
+                photos.push({record,...await adapter.saveObservation({id,revision:1,record})});
+            }
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=P.createV2(contract,[{experiment},{experiment}],
+                {id:'journal_animation',name:'Working project'});
+            const draft=CurvatureModernAnimationStudio.fromProject(project);
+            const cp=A.checkpoint({draft,selectedKey:draft.frames[0].key,quality:'auto',
+                prepared:false,positionMs:0,libraryId:project.id,libraryRevision:100},100);
+            const id=A.projectWorkspaceId(project.id);
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const legacy=A.openSharedCollection(indexedDB,{lease,crypto});
+            await legacy.read();
+            let row=await legacy.initializeEmpty(await A.inspectLegacySources(window),
+                A.collection(id,cp,100),localStorage);
+            let saved=await adapter.saveAnimationWorkingCollection(row);
+            const withPhoto=(alias)=>({...project,keyframes:project.keyframes.map((f,i)=>
+                i?f:{...f,referenceImageIds:[alias]})});
+            const before=L.normalize({version:1,id:project.id,createdAt:100,updatedAt:100,
+                quality:'accurate',project:withPhoto(photos[0].record.id),thumbnail:null});
+            const after=L.normalize({...before,updatedAt:101,project:withPhoto(photos[1].record.id)});
+            const plan={version:1,before,after};
+            row=await legacy.stageNamedSave(row,A.documentReference(row,id),plan);
+            const staged=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            const reopened=await api.create(window).readAnimationWorkingCollection();
+            ok(reopened.row.digest===row.digest&&JSON.stringify(reopened.row.namedSave.plan)===JSON.stringify(plan),
+                'named save journal changed');
+            ok(reopened.referenceImages.length===2,'both sides of named save must retain photos');
+            for(const photo of photos){
+                await store.removeDocument({documentId:'observation:'+photo.record.id,expectedRevision:1});
+                ok(!(await store.collectGarbage(photo.observationId)).collected,'pending named save lost photo');
+                ok(!(await store.collectGarbage(photo.originalId)).collected,'pending named save lost original');
+                const found=reopened.referenceImages.find(r=>r.id===photo.record.id);
+                ok(found.original.dataUrl===photo.record.original.dataUrl,'pending original bytes changed');
+            }
+            await rejects(()=>adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision}),
+                /revision conflict/);
+            row=await legacy.abandonNamedSave(row,row.namedSave);
+            saved=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:staged.managedRevision});
+            ok((await store.collectGarbage(staged.collectionId)).collected,'retired journal still rooted');
+            for(const photo of photos){
+                ok((await store.collectGarbage(photo.observationId)).collected,'abandoned journal kept observation');
+                ok((await store.collectGarbage(photo.originalId)).collected,'abandoned journal kept original');
+            }
+            // The actual journal validator owns the original, current
+            // candidate, surrounding workspace, Undo and Redo states.
+            const frame=cp.draft.frames[0],original=frame.experiment;
+            const change=n=>{const e=structuredClone(original);e.scene.camera.Height+=n;return e;};
+            const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
+            const intent={version:1,reference:A.documentReference(row,id),base,returnView:'editor',
+                compareSelected:'B',session:{version:1,projectId:id,frameKey:frame.key,
+                    mode:original.display.mode,original,workspace:change(10),candidate:change(2),
+                    past:[change(1)],future:[change(3)]}};
+            row=await legacy.stageKeyframeEdit(row,intent);
+            saved=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            let restored=await api.create(window).readAnimationWorkingCollection();
+            ok(JSON.stringify(restored.row.keyframeEdit)===JSON.stringify(row.keyframeEdit),
+                'Undo/Redo journal changed on reopen');
+            const edit=row.keyframeEdit.session;
+            row=await legacy.updateKeyframeEdit(row,row.keyframeEdit,
+                {...edit,candidate:edit.future[0],past:[...edit.past,edit.candidate],future:[]},'A');
+            saved=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            row=await legacy.stageKeyframeHistory(row,row.keyframeEdit,base);
+            saved=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            restored=await api.create(window).readAnimationWorkingCollection();
+            ok(restored.row.digest===row.digest&&restored.row.keyframeEdit.history&&
+                restored.row.keyframeEdit.session.past.length===2&&
+                restored.row.keyframeEdit.session.future.length===0&&
+                restored.row.keyframeEdit.compareSelected==='A','pending History journal or redo lost');
+            row=await legacy.cancelKeyframeEdit(row,row.keyframeEdit);
+            saved=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            restored=await adapter.readAnimationWorkingCollection();
+            ok(!restored.row.namedSave&&!restored.row.keyframeEdit&&
+                JSON.stringify(A.getWorkspace(restored.row.collection,id))===JSON.stringify(cp),
+                'cancel mutated acknowledged working frame');
+            return {valid:(await store.verifyIntegrity()).valid,revision:saved.managedRevision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 7})
+
     def test_managed_animation_working_collection_retains_inactive_draft_originals(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
@@ -1448,6 +1579,19 @@ class ModernBrowserSmoke(unittest.TestCase):
                 name:'Calibrated',description:'',thumbnail:null,experiment};
             const snap=await adapter.saveHistory(history);
             ok((await adapter.store.get(saved.resultId)).refCount===2,'snapshot did not retain archive');
+            // A newly contracted but empty draft still owns its calibrated
+            // reference experiment; no keyframe is needed to retain evidence.
+            const A=CurvatureModernAnimationDraftAutosave;
+            const cp=A.checkpoint({draft:{name:'Empty calibrated draft',description:'',mode:'camera',
+                target:'auto',contract:CurvatureModernAnimationContract.create(experiment,{mode:'camera'}),
+                source:'none',frames:[]},selectedKey:null,quality:'auto',prepared:false,positionMs:0},43);
+            const emptyRow={version:1,revision:1,collection:A.collection('draft_calibrated',cp,43),
+                revisions:[{id:'draft_calibrated',revision:1}],receipt:null};
+            const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(emptyRow)));
+            emptyRow.digest='sha256:'+Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+            await adapter.saveAnimationWorkingCollection(emptyRow);
+            ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===saved.resultId,
+                'empty contracted draft lost calibration evidence');
             const projectApi=CurvatureModernCalibrationProject;
             const draft={version:2,scene:{model:m,physics},record,activeSource:{source:'local',links:[]},
                 rows:observations,pending:[330,151],pendingModel:structuredClone(observations[0].landmark),
@@ -1467,7 +1611,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const calibration=projectApi.fresh({id:projectApi.createId(crypto),title:'Calibration owner',now:44,
                 ...parts,resultIds:[archived.id]});
             const project=await adapter.saveCalibrationProject(calibration,{originalId:photo.originalId});
-            ok((await adapter.store.get(saved.resultId)).refCount===3,'Calibration Project did not retain result');
+            ok((await adapter.store.get(saved.resultId)).refCount===4,'Calibration Project did not retain result');
             const prepared=await adapter.readCalibrationProject(calibration.id);
             ok(JSON.stringify(prepared.project)===JSON.stringify(calibration),'Calibration Project changed');
             ok(JSON.stringify(prepared.draft.undoStack)===JSON.stringify(draft.undoStack)&&
@@ -1478,7 +1622,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             ],{id:'calibrated_animation',name:'Calibrated Animation',mode:'camera'});
             const animation=await adapter.saveAnimation({id:animationProject.id,version:1,project:animationProject,
                 createdAt:45,updatedAt:45,quality:'accurate',thumbnail:null});
-            ok((await adapter.store.get(saved.resultId)).refCount===4,'calibrated Animation did not retain archive');
+            ok((await adapter.store.get(saved.resultId)).refCount===5,'calibrated Animation did not retain archive');
             const corrupt=structuredClone(history);corrupt.id=72;
             corrupt.experiment.calibrationOrigin.historicalFit.rmsPx=123;
             await rejects(()=>adapter.saveHistory(corrupt),/calibration origin evidence mismatch/);
@@ -1489,6 +1633,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'snapshot lost fit evidence');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'snapshot lost photo evidence');
             ok((await adapter.readHistory(71)).evidence.result===saved.resultId,'snapshot cannot reopen evidence');
+            ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===saved.resultId,
+                'empty contracted draft lost archived result');
             const reopenedProject=await adapter.readCalibrationProject(calibration.id);
             ok(reopenedProject.project.resultIds[0]===archived.id&&reopenedProject.results[0].target===saved.resultId,
                 'Calibration Project lost result after gallery removal');

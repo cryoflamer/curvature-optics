@@ -33,7 +33,11 @@
       if(experiment.calibrationOrigin)origins.push(experiment.calibrationOrigin);
     }
     for(const workspace of row.collection.workspaces){
-      for(const frame of workspace.checkpoint.draft.frames){
+      const draft=workspace.checkpoint.draft;
+      // A V2 contract owns its reference experiment even before the first
+      // frame exists (and in experimental mode it may differ from all frames).
+      if(draft.contract)physical(draft.contract.referenceExperiment);
+      for(const frame of draft.frames){
         physical(frame.experiment);
         for(const id of frame.referenceImageIds||[])photos.add(id);
       }
