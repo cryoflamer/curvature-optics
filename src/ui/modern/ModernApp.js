@@ -583,7 +583,7 @@
   var keyframeEditSession=null,keyframeEditBanner=null,keyframeEditEntering=false;
   var keyframeEditReturnView=null,keyframeEditShellLocks=null;
   var keyframeControlLocks=null,keyframeEditUIBaseline=null,keyframeEditApplying=false;
-  var keyframeEditDraftAtEntry=null,keyframeEditHistoryControls=null;
+  var keyframeEditDraftAtEntry=null,keyframeEditHistoryControls=null,sharedKeyframeWriter=null;
   var keyframeEditRestoring=false,keyframeEditWheelGroupTimer=null;
   var KEYFRAME_EDIT_RECOVERY_KEY='curvature-modern-keyframe-edit-recovery-v1';
   var keyframeRecoveryPending=null,keyframeRecoverySettled=false,keyframeRecoveryRemote=null;
@@ -843,7 +843,7 @@
     }
   }
   function saveApplicationPreferences(){
-    if(!applicationPreferences)return;
+    if(!applicationPreferences||experimentPreview.live&&keyframeEditSession)return;
     try{
       var snapshot={
         opticalQuality:state.opticalQuality,previewDetail:state.previewDetail,
@@ -974,7 +974,8 @@
   function setStudioView(view,focus,routeAction,hydrating){
     if(!['library','editor','preview'].includes(view))return false;
     if(experimentPreview.live&&view!=='library'&&
-       (!studioWorkspaceReady||experimentPreview.animationContext?.row?.namedSave))return false;
+       (!studioWorkspaceReady||experimentPreview.animationContext?.row?.namedSave||
+        experimentPreview.animationContext?.row?.keyframeEdit))return false;
     var previous=studioView;
     // User/navigation intent during asynchronous registry hydration must win.
     if(previous!==view&&!hydrating)workspaceViewEditGeneration.animation++;
@@ -1802,9 +1803,10 @@
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
     var editor=experimentPreview.calibrationEditor,calibration=editor&&editor.projectPersistenceStatus();
-    var animation=experimentPreview.animationContext?.writer.state();
+    var animation=experimentPreview.animationContext?.writer.state(),keyframe=sharedKeyframeWriter?.state();
     return experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving'||
       !!(animation&&(animation.unsaved||animation.pending||animation.selectionPending))||
+      !!(keyframe&&(keyframe.unsaved||keyframe.pending||keyframe.error))||
       !!(calibration&&(calibration.unsaved||calibration.pending||calibration.selectionPending))||
       (sharedPresentationActive()&&registryUnacknowledged()));
   }
@@ -2142,7 +2144,8 @@
           controller:c.state(),migration:experimentPreview.migration,
           live:persistence.ready?experimentSnapshot():null,
           animation:experimentPreview.animationContext?.writer.recovery()??null,
-          namedAnimationSave:experimentPreview.animationContext?.row?.namedSave??null};
+          namedAnimationSave:experimentPreview.animationContext?.row?.namedSave??null,
+          keyframeEdit:sharedKeyframeWriter?.recovery()??experimentPreview.animationContext?.row?.keyframeEdit??null};
         var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
           {type:'application/json'})),link=document.createElement('a');
         link.href=uri;link.download='curvature-experiment-recovery.json';
@@ -2881,12 +2884,28 @@
     var heading=element('div','modern-animation-library-heading');
     heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes updates the exact linked saved revision. Temporary keyframe editing is not yet enabled.'));
+      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes updates the exact linked saved revision. Temporary keyframe edits have a separate recovery journal.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
-    views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady||!!ctx.row?.namedSave;});
+    views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady||!!ctx.row?.namedSave||!!ctx.row?.keyframeEdit;});
     var status=ctx.writer.state();
+    var edit=ctx.row?.keyframeEdit;
+    if(edit){
+      var pending=group('Interrupted temporary keyframe edit');
+      pending.appendChild(element('span','modern-animation-library-note',
+        'Resume the exact retained candidate and Undo/Redo history, or discard the temporary journal. No working frame has been replaced.'));
+      var selected=status.reference&&status.reference.id===edit.reference.id&&
+        status.reference.revision===edit.reference.revision;
+      action(pending,'Resume keyframe edit',()=>void enterSharedKeyframeEdit(null,true),!selected,
+        {'id':'ModernSharedKeyframeResume'});
+      action(pending,'Download keyframe evidence',()=>downloadHistoryJson(
+        JSON.stringify({format:'curvature-shared-keyframe-recovery',version:1,intent:edit},null,2)+'\n',
+        'curvature-keyframe-recovery.json'));
+      action(pending,'Discard temporary edit',()=>void discardSharedKeyframeJournal(),false,
+        {'id':'ModernSharedKeyframeDiscard'});
+      return;
+    }
     var intent=ctx.row?.namedSave;
     if(intent){
       var pending=group('Interrupted Save Changes');
@@ -3068,8 +3087,9 @@
       var linked=(ctx.named||[]).find(record=>record.id===cp.libraryId&&record.updatedAt===cp.libraryRevision);
       if(linked){studioLibraryActive=linked;studioLibraryPending=null;}
       studioDraftStatus(ctx.row.namedSave?'Named save pending · Complete or abandon in Library':
-        'Shared working draft saved in IndexedDB',!!ctx.row.namedSave);
-      if(ctx.row.namedSave)setStudioView('library',false,null,true);
+        ctx.row.keyframeEdit?'Temporary keyframe edit pending · Resume or discard in Library':
+        'Shared working draft saved in IndexedDB',!!(ctx.row.namedSave||ctx.row.keyframeEdit));
+      if(ctx.row.namedSave||ctx.row.keyframeEdit)setStudioView('library',false,null,true);
       renderAnimationStudio(studioHistoryEntries);
     }catch(error){
       // Acknowledged selection may already have moved. Do not keep editing the
@@ -3081,6 +3101,8 @@
   async function flushSharedAnimation(){
     if(experimentPreview.animationContext?.row?.namedSave)
       throw Error('Complete or abandon the pending named Animation save before leaving');
+    if(experimentPreview.animationContext?.row?.keyframeEdit)
+      throw Error('Resolve the temporary keyframe edit before leaving Animation');
     if(!studioWorkspaceReady)return true;
     stopStudioPlayback(false);
     if(!saveStudioDraft(false)||!await persistStudioWorkspace({requireDurable:true}))
@@ -3095,6 +3117,7 @@
       'Recover this exact historical Animation source? Confirm a verified local backup (or disposable test profile) and close old Modern tabs. Old records will be retained.')))return false;
     if(kind==='deleteNamed'&&(!root.confirm||!root.confirm(
       'Delete the inspected saved Animation project "'+value.project.name+'"? Working drafts, History and reference photographs will be retained.')))return false;
+    if(ctx.row?.keyframeEdit)return false;
     if(ctx.row?.namedSave&&!['open','completeNamedSave','abandonNamedSave'].includes(kind))return false;
     if(kind==='abandonNamedSave'&&(!root.confirm||!root.confirm(
       'Abandon this pending Save Changes intent? This does not undo any named save that may already have committed. Download the evidence first if needed. The working draft is retained.')))return false;
@@ -3904,7 +3927,7 @@
   function saveStudioDraft(throttled){
     if(experimentPreview.live){
       var ctx=experimentPreview.animationContext;
-      if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady||ctx.row?.namedSave)return false;
+      if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady||ctx.row?.namedSave||ctx.row?.keyframeEdit||keyframeEditSession)return false;
       var now=Date.now();
       if(throttled&&now-studioDraftLastPositionSave<1200)return true;
       studioDraftLastPositionSave=now;
@@ -5570,13 +5593,174 @@
     keyframeEditShellLocks.forEach(function(item){item.node.inert=item.inert;});
     keyframeEditShellLocks=null;
   }
+  function setTemporaryKeyframeMode(mode){
+    if(!experimentPreview.live)return setMode(mode,false);
+    var prior=experimentPreview.calibrationNavigation;
+    experimentPreview.calibrationNavigation=true;
+    try{return setMode(mode,false);}
+    finally{experimentPreview.calibrationNavigation=prior;}
+  }
+  function sharedKeyframeNotice(message){
+    var note=keyframeEditBanner?.querySelector('.modern-keyframe-edit-hint');
+    if(note)note.textContent=message;
+  }
+  async function persistSharedKeyframe(retry){
+    var writer=sharedKeyframeWriter,ctx=experimentPreview.animationContext;
+    if(!writer)throw Error('No temporary keyframe writer');
+    try{
+      await (retry?writer.retry():writer.save());
+      if(sharedKeyframeWriter!==writer)return;
+      ctx.row=writer.acknowledgedRow();
+      sharedKeyframeNotice('Temporary recovery saved in IndexedDB · Apply or Cancel to finish');
+    }catch(error){
+      sharedKeyframeNotice('Temporary recovery not acknowledged: '+error.message+' · Retry or download recovery');
+      throw error;
+    }finally{syncPreviewUnloadWarning();}
+  }
+  async function enterSharedKeyframeEdit(key,resume){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!ctx||ctx.busy||keyframeEditSession||!animationWorkspaceOpen||
+       !studioWorkspaceReady||!['clean','committed'].includes(experimentPreview.status))return false;
+    ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
+    try{
+      if(!resume)await flushSharedAnimation();
+      var intent=await ctx.coordinate(async()=>{
+        await c.assertCleanCheckpoint();
+        var store=ctx.makeStore(),row=await store.read(),ref=ctx.writer.state().reference;
+        if(JSON.stringify(row)!==JSON.stringify(ctx.row)||!ref)
+          throw Error('Shared Animation changed before keyframe entry; reload');
+        var base=await c.captureSelectionBase('animation',ref);
+        var workspace=experiments.validate(c.state().bound.experiment);
+        if(resume){
+          var saved=row.keyframeEdit;
+          if(!saved||JSON.stringify(saved.reference)!==JSON.stringify(ref)||
+             JSON.stringify(saved.base)!==JSON.stringify(base)||
+             JSON.stringify(saved.session.workspace)!==JSON.stringify(workspace))
+            throw Error('Temporary edit belongs to a different session revision; export or discard it');
+          return saved;
+        }
+        var cp=studioDraftAutosave.getWorkspace(row.collection,ref.id);
+        var frame=cp.draft.frames.find(f=>f.key===key);
+        var session=keyframeEditApi.begin({projectId:ref.id,revision:ref.revision,
+          frame,contract:cp.draft.contract,workspaceExperiment:workspace,contractApi:studioContractApi});
+        ctx.row=await store.stageKeyframeEdit(row,{version:1,reference:ref,base,
+          returnView:studioView,compareSelected:frame.experiment.compare.selected,
+          session:session.recovery()});
+        return ctx.row.keyframeEdit;
+      });
+      sharedKeyframeWriter=studioPersistenceApi.createSharedKeyframe({
+        storage:ctx.makeStore(),selection:{coordinate:ctx.coordinate,
+          check:()=>ctx.lease.check(true),captureBase:ref=>c.captureSelectionBase('animation',ref)},
+        onChange:syncPreviewUnloadWarning});
+      sharedKeyframeWriter.bind(ctx.row);
+      beginStudioKeyframeEdit(intent.session.frameKey,keyframeEditCommit,{
+        returnView:intent.returnView,uiBaseline:{sceneTab:workspaceState.sceneTab,
+          compareTab:workspaceState.compareTab,compareModel:workspaceState.compareModel},
+        compareSelected:intent.compareSelected,session:intent.session});
+      return true;
+    }catch(error){
+      sharedKeyframeWriter=null;ctx.error=true;ctx.message=error.message;
+      if(ctx.row?.keyframeEdit)setStudioView('library',false,null,true);
+      // An unknown staging outcome must not re-enable ordinary draft edits.
+      try{
+        var observed=await ctx.coordinate(()=>ctx.makeStore().read());
+        if(JSON.stringify(observed)!==JSON.stringify(ctx.row))throw Error('Reload required to inspect temporary recovery');
+      }catch(failure){if(experimentPreview.status!=='suspended')previewFailure(failure);}
+      return false;
+    }finally{
+      ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();
+    }
+  }
+  async function discardSharedKeyframeJournal(){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!ctx?.row?.keyframeEdit||ctx.busy||keyframeEditSession||
+       !root.confirm('Discard the retained temporary keyframe edits? Working draft and named project will not change.'))return;
+    ctx.busy=true;previewControls();
+    try{
+      await ctx.coordinate(async()=>{
+        await c.assertCleanCheckpoint();
+        var store=ctx.makeStore(),row=await store.read();
+        if(JSON.stringify(row)!==JSON.stringify(ctx.row))throw Error('Temporary edit changed; reload before discarding');
+        ctx.row=await store.cancelKeyframeEdit(row,row.keyframeEdit);
+      });
+      if(studioWorkspaceReady)await bindSharedAnimation(ctx.writer.state().reference,true);
+      ctx.error=false;ctx.message='Temporary edit discarded. Working draft unchanged.';
+    }catch(error){ctx.error=true;ctx.message=error.message;previewFailure(error);}
+    finally{ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();}
+  }
+  async function finishSharedKeyframeEdit(apply){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller,
+      writer=sharedKeyframeWriter,session=keyframeEditSession;
+    if(!writer||!session||keyframeEditApplying)return;
+    keyframeEditApplying=true;ctx.busy=true;
+    var physical=newUiEl('ModernWorkspace'),buttons=Array.from(keyframeEditBanner.querySelectorAll('button'));
+    physical.inert=true;buttons.forEach(b=>b.disabled=true);
+    var mutationStarted=false;
+    try{
+      endKeyframeEditWheelGroup();stopCameraKeyboard(true);abortCameraDrag();cancelEdits();
+      if(apply&&!validateKeyframePreview())throw Error('Candidate violates project contract');
+      await persistSharedKeyframe(!!writer.state().error);
+      var before=studioDraft,previousSelection=studioSelectedKey,history=studioEditHistory,
+        returnView=keyframeEditReturnView;
+      var ref=await ctx.coordinate(async()=>{
+        var store=ctx.makeStore(),row=await store.read(),intent=row?.keyframeEdit;
+        if(!intent||JSON.stringify(row)!==JSON.stringify(writer.acknowledgedRow()))
+          throw Error('Temporary keyframe journal changed; download recovery and reload');
+        var base=await c.captureSelectionBase('animation',intent.reference);
+        if(JSON.stringify(base)!==JSON.stringify(intent.base))
+          throw Error('Shared session changed during keyframe edit');
+        if(apply&&studioLibraryActive)await verifySharedNamedAnimation(studioLibraryActive);
+        mutationStarted=true;
+        ctx.row=apply?await store.applyKeyframeEdit(row,intent,base):
+          await store.cancelKeyframeEdit(row,intent);
+        if(ctx.row.receipt){
+          var result=await c.acknowledgeDocumentRevision('animation',ctx.row.receipt);
+          experimentPreview.status=result.status;
+          ctx.row=await store.retire(ctx.row,ctx.row.receipt);
+        }
+        return studioDraftAutosave.documentReference(ctx.row,intent.reference.id);
+      });
+      sharedKeyframeWriter=null;
+      cancelStudioKeyframeEdit();
+      await bindSharedAnimation(ref,true);
+      if(history){
+        studioEditHistory=history;
+        if(apply)studioApi.recordEdit(history,before,studioDraft,previousSelection,null);
+        studioApi.endEditGroup(history);
+      }
+      setStudioView(returnView||'editor',true,null,true);
+      renderAnimationStudio(studioHistoryEntries);
+      studioDraftStatus('Shared working draft saved in IndexedDB',false);
+      var note=newUiEl('ModernAnimationStudioMessage');
+      if(note)note.textContent=apply?'Keyframe applied to the acknowledged working draft.':'Temporary edit cancelled. Working draft unchanged.';
+    }catch(error){
+      sharedKeyframeNotice('Temporary edit not completed: '+error.message+' · Download recovery before reloading');
+      if(mutationStarted)previewFailure(error);
+    }finally{
+      keyframeEditApplying=false;ctx.busy=false;previewControls();
+      if(keyframeEditSession===session){
+        buttons.forEach(b=>b.disabled=false);
+        syncKeyframeEditHistoryControls();
+      }
+      syncPreviewUnloadWarning();
+    }
+  }
   function clearKeyframeEditRecovery(){
+    if(experimentPreview.live)return;
     keyframeRecoveryPending=null;
     try{if(root.sessionStorage)root.sessionStorage.removeItem(KEYFRAME_EDIT_RECOVERY_KEY);}
     catch(error){/* Storage may be unavailable, but Cancel still ends the session. */}
   }
   function saveKeyframeEditRecovery(){
     if(!keyframeEditSession||keyframeEditEntering||keyframeEditRestoring)return;
+    if(experimentPreview.live){
+      if(!sharedKeyframeWriter)return;
+      try{
+        sharedKeyframeWriter.mark(keyframeEditSession.recovery(),state.compareSelected);
+        if(!sharedKeyframeWriter.state().error)void persistSharedKeyframe(false).catch(()=>{});
+      }catch(error){sharedKeyframeNotice('Temporary recovery not saved: '+error.message);}
+      return;
+    }
     try{
       var storage=root.sessionStorage;
       if(!storage||!keyframeRecoveryWindowId)
@@ -5732,6 +5916,10 @@
   // project revision and the existing multi-tab CAS coordinator agree.
   // A second tab's divergent edit must fork instead of overwriting it.
   async function applyStudioKeyframeEdit(button,commit,saveToHistory){
+    if(experimentPreview.live){
+      if(!saveToHistory)await finishSharedKeyframeEdit(true);
+      return;
+    }
     if(!keyframeEditSession||keyframeEditApplying)return;
     var session=keyframeEditSession;
     keyframeEditApplying=true;button.disabled=true;syncKeyframeEditHistoryControls();
@@ -5835,7 +6023,8 @@
   // inert. Stage 2 must implement the full contract-based control allowlist
   // before any editable input or Apply action is enabled.
   function beginStudioKeyframeEdit(key,commit){
-    if(experimentPreview.live)throw Error('Temporary keyframe editing is not migrated to shared sessions');
+    if(experimentPreview.live&&(!sharedKeyframeWriter||!arguments[2]))
+      throw Error('Verified shared keyframe journal required');
     if(typeof commit!=='function')throw TypeError('Animation Studio commit callback is required');
     if(keyframeEditSession||!keyframeEditApi||!studioContractApi||!keyframeControlLocksApi||
        !studioWorkspaceReady||!persistence.ready||studioLibraryBusy)
@@ -5916,7 +6105,10 @@
     var cancel=document.createElement('button');
     cancel.type='button';cancel.className='modern-keyframe-edit-cancel';
     cancel.textContent='Cancel & Return';
-    cancel.addEventListener('click',function(){cancelStudioKeyframeEdit('replace');});
+    cancel.addEventListener('click',function(){
+      if(experimentPreview.live)void finishSharedKeyframeEdit(false);
+      else cancelStudioKeyframeEdit('replace');
+    });
     actions.appendChild(cancel);
     var apply=document.createElement('button');
     apply.type='button';apply.className='modern-keyframe-edit-apply';
@@ -5931,7 +6123,22 @@
     applyWithHistory.addEventListener('click',function(){
       applyStudioKeyframeEdit(applyWithHistory,commit,true);
     });
-    actions.appendChild(applyWithHistory);
+    if(!experimentPreview.live)actions.appendChild(applyWithHistory);
+    else{
+      var retry=document.createElement('button');
+      retry.type='button';retry.className='modern-keyframe-edit-cancel';
+      retry.textContent='Retry recovery save';
+      retry.addEventListener('click',()=>void persistSharedKeyframe(true).catch(()=>{}));
+      actions.appendChild(retry);
+      var download=document.createElement('button');
+      download.type='button';download.className='modern-keyframe-edit-cancel';
+      download.textContent='Download recovery';
+      download.addEventListener('click',()=>downloadHistoryJson(
+        JSON.stringify({format:'curvature-shared-keyframe-recovery',version:1,
+          recovery:sharedKeyframeWriter?.recovery(),live:keyframeEditSession?.recovery()},null,2)+'\n',
+        'curvature-keyframe-recovery.json'));
+      actions.appendChild(download);
+    }
     banner.appendChild(actions);
     keyframeEditReturnView=recovered?recovered.returnView:studioView;
     // Use the durable checkpoint's canonical field order for the opening
@@ -5961,7 +6168,7 @@
       if(scope==='A'||scope==='B')state.compareSelected=scope;
       syncNumericInputs();syncCompareEditor();
       keyframeEditEntering=true;
-      if(setMode(session.mode,false)===false)throw Error('Cannot open keyframe editor');
+      if(setTemporaryKeyframeMode(session.mode)===false)throw Error('Cannot open keyframe editor');
       activateSettings(studioDraft.contract.mode==='camera'?'Camera':
         target.parameter==='surface.curvature'?'Surface':'Atmosphere',false,false);
       physical.inert=false;
@@ -5987,7 +6194,7 @@
       keyframeEditHistoryControls=null;
       keyframeEditEntering=false;
       applyExperiment(session.cancel());syncNumericInputs();syncCompareEditor();
-      resetHistoryBaseline();setMode('animation',false);
+      resetHistoryBaseline();setTemporaryKeyframeMode('animation');
       keyframeEditUIBaseline=null;keyframeEditReturnView=null;
       keyframeEditDraftAtEntry=null;
       if(!recovered)clearKeyframeEditRecovery();
@@ -5998,6 +6205,8 @@
   }
   function cancelStudioKeyframeEdit(routeAction){
     if(!keyframeEditSession)return false;
+    if(experimentPreview.live&&sharedKeyframeWriter)
+      throw Error('Resolve the durable temporary keyframe journal first');
     endKeyframeEditWheelGroup();
     clearKeyframeEditRecovery();
     var session=keyframeEditSession,original=session.cancel();
@@ -6020,8 +6229,8 @@
     }
     resetHistoryBaseline();
     studioSelectedKey=session.frameKey;
-    setMode('animation',false);
-    setStudioView(keyframeEditReturnView||'editor',true,routeAction);
+    setTemporaryKeyframeMode('animation');
+    setStudioView(keyframeEditReturnView||'editor',true,routeAction,experimentPreview.live);
     renderAnimationStudio(studioHistoryEntries);
     keyframeEditReturnView=null;keyframeEditDraftAtEntry=null;
     return true;
@@ -6247,7 +6456,8 @@
         }catch(error){report(error);}
       },
       canEditKeyframe:function(key){
-        if(experimentPreview.live)return false;
+        if(experimentPreview.live&&(experimentPreview.animationContext?.row?.keyframeEdit||
+           experimentPreview.animationContext?.row?.namedSave))return false;
         var frame=studioDraft.frames.find(function(item){return item.key===key;});
         if(!frame||!studioDraft.contract||studioDraft.contract.mode==='experimental'||
            !studioContractApi||!keyframeEditApi)return false;
@@ -6255,6 +6465,7 @@
         catch(error){return false;}
       },
       editKeyframe:function(key){
+        if(experimentPreview.live){void enterSharedKeyframeEdit(key,false);return;}
         try{beginStudioKeyframeEdit(key,keyframeEditCommit);}
         catch(error){report(error);}
       },
@@ -8103,7 +8314,7 @@
         cancelEdits();state.compareSelected=side;
         if(keyframeEditSession){
           // Inspect either model without persisting a transient tab choice.
-          syncCompareEditor();return;
+          syncCompareEditor();saveKeyframeEditRecovery();return;
         }
         workspaceState.compareModel=side;
         syncCompareEditor();saveApplicationPreferences();scheduleExperimentSave();
@@ -9507,6 +9718,7 @@
     finally{experimentPreview.calibrationNavigation=false;}
   }
   async function requestPreviewWorkspace(mode,{reference}={}){
+    if(experimentPreview.live&&(keyframeEditSession||experimentPreview.animationContext?.busy))return false;
     if(!experimentPreview.live||!['calibration','images','animation'].includes(mode)&&
        !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen&&!animationWorkspaceOpen){
       return setMode(mode);
@@ -10063,7 +10275,10 @@
     if(root.addEventListener)root.addEventListener('popstate',function(){
       // Consume the browser's destination route after restoring the normal
       // workspace; do not force the old Editor view over a Back navigation.
-      if(keyframeEditSession)cancelStudioKeyframeEdit();
+      if(keyframeEditSession){
+        if(experimentPreview.live)return;
+        cancelStudioKeyframeEdit();
+      }
       var view=studioViewsApi&&studioViewsApi.route&&
         studioViewsApi.route(root.location&&root.location.href);
       if(!animationWorkspaceOpen)return;
@@ -10322,7 +10537,7 @@
     bindWorkingSessionLifecycle();
     if(root.addEventListener){
       function checkpointKeyframeOnLeave(){
-        if(!keyframeEditSession)return;
+        if(!keyframeEditSession||experimentPreview.live)return;
         var focused=document.activeElement;
         if(focused&&focused.closest&&focused.closest('#ModernWorkspace')&&
            focused.matches&&focused.matches('input:not(:disabled)')){

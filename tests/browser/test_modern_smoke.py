@@ -12255,6 +12255,88 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
                          'Independent named snapshot')
 
+    def test_shared_animation_temporary_keyframe_resume_apply_cancel(self):
+        """Temporary editor recovery and Apply never replace the ordinary physical checkpoint."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const P=CurvatureModernAnimationProject;
+            const first=structuredClone(CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment);
+            const second=structuredClone(first);second.scene.camera.Height+=5;
+            const project=P.createV2({version:1,mode:'camera',target:null,referenceExperiment:first},
+                [{name:'First',experiment:first},{name:'Second',experiment:second}],
+                {id:'shared_keyframe_test',name:'Temporary keyframe test'});
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return {row,session:c.row,bound:c.bound,
+                named:await CurvatureModernAnimationLibrary.list(indexedDB)};
+        }"""
+        start=self.page.evaluate(read)
+        studio=self.page.locator('#ModernAnimationStudio')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        studio.locator('.modern-studio-filmstrip-item').first.get_by_role('button',name=re.compile(r'^Edit ')).click()
+        expect(banner).to_be_visible(timeout=30000)
+        h=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(h+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(banner).to_contain_text('Temporary recovery saved in IndexedDB',timeout=30000)
+        self.page.wait_for_function("""async h=>{
+            const U=CurvatureModernUiSessionStore.create(window);U.sharedDocumentSessions(CurvatureModernDocumentSession);
+            const row=await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            return row.keyframeEdit?.session.candidate.scene.camera.Height===h;
+        }""",arg=h+3)
+        self.assertEqual(self.page.evaluate(read)['bound'],start['bound'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernSharedKeyframeResume')).to_be_visible()
+        self.page.locator('#ModernSharedKeyframeResume').click()
+        expect(banner).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),h+3)
+        banner.get_by_role('button',name='Undo',exact=True).click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),h)
+        banner.get_by_role('button',name='Redo',exact=True).click()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),h+3)
+        banner.get_by_role('button',name='Apply & Return',exact=True).click()
+        expect(banner).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text('Shared working draft saved in IndexedDB',timeout=30000)
+        after=self.page.evaluate(read)
+        self.assertEqual(after['bound'],start['bound'])
+        self.assertEqual(after['named'],start['named'])
+        self.assertNotIn('keyframeEdit',after['row'])
+        self.assertIsNone(after['row']['receipt'])
+        draft=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft')
+        self.assertEqual(draft['frames'][0]['experiment']['scene']['camera']['Height'],h+3)
+        self.assertEqual(draft['frames'][1],start['row']['collection']['workspaces'][0]['checkpoint']['draft']['frames'][1])
+        studio.locator('.modern-studio-filmstrip-item').first.get_by_role('button',name=re.compile(r'^Edit ')).click()
+        expect(banner).to_be_visible(timeout=30000)
+        self.page.locator('#ModernHeight').fill(str(h+9))
+        self.page.locator('#ModernHeight').press('Tab')
+        banner.get_by_role('button',name='Cancel & Return',exact=True).click()
+        expect(banner).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text('Shared working draft saved in IndexedDB',timeout=30000)
+        cancelled=self.page.evaluate(read)
+        self.assertEqual(cancelled['row']['collection'],after['row']['collection'])
+        self.assertEqual(cancelled['bound'],start['bound'])
+        self.assertNotIn('keyframeEdit',cancelled['row'])
+        self.assertIsNone(self.page.evaluate("sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"))
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),cancelled)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_animation_save_changes_and_interrupted_named_commit(self):
         """Save Changes relinks the acknowledged draft; either interrupted named state completes exactly once."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

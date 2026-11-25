@@ -846,8 +846,9 @@ opening the new named snapshot is an explicit separate action. No cross-
 database relink is implied by the successful named transaction.
 The named store also exposes an exact-record compare-and-update operation,
 which checks identity and the complete inspected normalized record within
-one readwrite transaction. Save Changes is available in the combined shared preview; the temporary
-keyframe editor remains disabled pending its edit lifecycle migration.
+one readwrite transaction. Save Changes and the contract-locked temporary keyframe editor are available
+in the combined shared preview. Apply + Save to History remains disabled until
+its cross-store provenance lifecycle is migrated.
 The named-save protocol first seals a write-ahead intent in the
 existing shared Animation row: exact working reference and a deterministic
 before/after named record (including one fixed target timestamp). Ordinary
@@ -885,7 +886,13 @@ the shared operation lock, keeps later edits in memory, and ignores
 unchanged hydration. Explicit retry accepts only the original row or an
 exact immediate successor of the captured attempt, never a foreign
 journal. Unacknowledged edits and attempted snapshots remain exportable.
-The headless protocol does not mount the editor or write Web Storage.
+The shared editor stages its journal before mounting the ordinary contract-
+locked physical editor. F5 shows explicit Resume, evidence export and Discard
+in Library; Resume requires the same session base and physical snapshot.
+Apply acknowledges the domain receipt before restoring the ordinary physical
+workspace. Cancel removes only the exact journal. Unknown write outcomes
+require reload rather than rebasing. The shared path never writes or clears
+the historical sessionStorage recovery key.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
