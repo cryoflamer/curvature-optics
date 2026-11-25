@@ -75,6 +75,9 @@
         origin(frame.experiment,id,draft.name||id,revision,source+' · frame provenance',frame,index,content);
       });
     }
+    (sources.physical||[]).forEach(row=>{
+      origin(row.experiment,'physical:'+row.key,row.title,row.revision,row.key);
+    });
     (sources.history||[]).forEach(row=>{
       origin(row.experiment,'history:'+row.id,row.name||'Snapshot '+row.id,null,'History snapshot '+row.id);
     });
@@ -196,6 +199,12 @@
       catch(error){failures.push(name+': '+(error&&error.message||String(error)));}}
     var db=env.indexedDB;
     await Promise.all([
+      read('Physical experiment provenance',()=>env.CurvatureModernSessionAutosave.inspectProvenance(db,{
+        storage:env.localStorage,codec:env.CurvatureModernExperimentState,
+        crypto:env.crypto,contract:env.CurvatureModernDocumentSession}),inventory=>{
+        sources.physical=inventory.entries;
+        inventory.issues.forEach(issue=>failures.push('Physical experiment provenance: '+issue));
+      }),
       read('History provenance',()=>env.CurvatureModernExperimentHistory.inspectProvenance(db),inventory=>{
         sources.history=inventory.entries;
         inventory.issues.forEach(issue=>failures.push('History provenance: '+issue));

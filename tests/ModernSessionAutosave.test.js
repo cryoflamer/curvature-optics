@@ -823,3 +823,33 @@ test('atomic History restore refuses drafts, auxiliary workspace and lost genera
     assert.deepEqual(await f.open().read(),before);
   }
 });
+
+test('Physical provenance inventory retains committed, draft and historical sources without writes',async()=>{
+  const db=recoveryMemoryDB(),crypto=require('node:crypto').webcrypto;
+  db.databases=async()=>[{name:autosave.DATABASE,version:1}];
+  const adapter=autosave.makeAdapter({request(name,options,action){return action({name,mode:options.mode});}});
+  const contract=require('../src/storage/ModernDocumentSession');
+  const codec={STORAGE_KEY:'fixture',validate(v){assert(['scene','compare'].includes(v.display.mode));return v;}};
+  const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+  const photo={version:1,sha256:'a'.repeat(64),width:2,height:2};
+  const experiment={display:{mode:'scene'},calibrationOrigin:{photo}};
+  const local=JSON.stringify(experiment),storage={getItem:key=>key==='fixture'?local:null};
+  await adapter.write(db,experiment,100);
+  const checkpoint=adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
+  const initial=await checkpoint.initialize(experiment);
+  await checkpoint.stage({...experiment,extra:'draft'},initial.revision);
+  db.rows.set('unknown',{version:999});
+  const before=structuredClone([...db.rows]);
+  const report=await adapter.inspectProvenance(db,{storage,codec,crypto,contract});
+  assert.deepEqual(report.entries.map(entry=>entry.key).sort(),
+    ['idb:current','local:fixture','shared:committed','shared:draft']);
+  assert.match(report.issues.join('; '),/unknown/);
+  assert.deepEqual([...db.rows],before);
+  const observer=adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract,existingOnly:true});
+  await observer.read();
+  await assert.rejects(observer.stage(experiment,initial.revision+1),/observational checkpoint reader cannot mutate/);
+  const absent={databases:async()=>[],open(){throw Error('Must not create');}};
+  const empty=await adapter.inspectProvenance(absent,{storage,codec,crypto,contract});
+  assert.deepEqual(empty.entries.map(entry=>entry.key),['local:fixture']);
+  assert.deepEqual(empty.issues,[]);
+});

@@ -14,7 +14,7 @@
   'use strict';
   var DATABASE='curvature-modern-working-session',STORE='session',KEY='current';
   var META_KEY='curvature-modern-working-session-timestamp-v1';
-  function withStore(indexedDB,mode,perform,lease=null){
+  function withStore(indexedDB,mode,perform,lease=null,existingOnly=false){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
       var request,settled=false,db=null,untrack=null;
@@ -23,6 +23,7 @@
       try{request=indexedDB.open(DATABASE,1);}catch(error){rejectOnce(error);return;}
       request.onupgradeneeded=function(){
         db=request.result;
+        if(existingOnly){request.transaction.abort();rejectOnce(Error('Working-session database changed during inventory'));return;}
         if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE);
       };
       request.onerror=function(){rejectOnce(request.error||Error('Working-session database unavailable'));};
@@ -165,6 +166,13 @@
     return {kind:'experiment',id,revision,experiment:source.normalized,
       sourceSavedAt:row.source.savedAt};
   }
+  async function existingDatabase(indexedDB){
+    ensure(indexedDB&&typeof indexedDB.databases==='function','working-session inventory unavailable');
+    const existing=(await indexedDB.databases()).find(item=>item.name===DATABASE);
+    if(!existing)return false;
+    ensure(existing.version===1,'unsupported working-session database version');
+    return true;
+  }
   function makeAdapter(lockManager){
     if(lockManager&&typeof lockManager.request!=='function')
       throw TypeError('Working-session Web Locks manager is invalid');
@@ -188,7 +196,7 @@
     }
     // Atomic replacement primitive. Migration and activation are deliberately
     // separate: no old preview rows or other domain slots are rewritten here.
-    function openSharedCheckpoint(indexedDB,{lease,codec,crypto,contract}={}){
+    function openSharedCheckpoint(indexedDB,{lease,codec,crypto,contract,existingOnly=false}={}){
       ensure(writer,'coordinated working-session writer required');
       ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
       ensure(sharedLease(lease)&&typeof lease.check==='function'&&typeof lease.track==='function',
@@ -213,12 +221,13 @@
         return contract.select(frame,experiment.display.mode,
           {id:SHARED_COPY_ID,revision:'checkpoint:'+revision,recovery:null});
       }
-      function fetch(){
+      async function fetch(){
+        if(existingOnly&&!await existingDatabase(indexedDB))return {present:false};
         return withStore(indexedDB,'readonly',store=>{
           const out={result:null},req=store.get(key);
           req.onsuccess=()=>{out.result=req.result===undefined?{present:false}:{present:true,row:req.result};};
           return out;
-        },lease);
+        },lease,existingOnly);
       }
       async function decode(raw){
         ensure(raw,'checkpoint read unavailable');
@@ -258,6 +267,7 @@
       // The entire row, including the last observed draft, is the CAS
       // baseline. Revision tokens are never reused, even on reverted edits.
       async function mutate(expectedRevision,build,evidence=[],guard=()=>lease.check(true),requireEmpty=false,verify=null){
+        ensure(!existingOnly,'observational checkpoint reader cannot mutate');
         ensure(!busy,'shared checkpoint operation pending');
         lease.check(true);
         ensure(observed&&Number.isSafeInteger(expectedRevision)&&expectedRevision>=0&&
@@ -593,7 +603,7 @@
       return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,replaceFromHistory,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
-    function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){
+    function openWorkingCopy(indexedDB,{lease,codec,crypto,existingOnly=false}={}){
       ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
       ensure(lease&&typeof lease.check==='function'&&typeof lease.track==='function',
         'captured document lease required');
@@ -751,7 +761,8 @@
       }
       // Read the old records together, without changing them or treating
       // a timestamp, HEAD, or copied tab token as an automatic selection.
-      function inventoryRows(){
+      async function inventoryRows(){
+        if(existingOnly&&!await existingDatabase(indexedDB))return new Map();
         return withStore(indexedDB,'readonly',store=>{
           const output={result:null},req=store.getAllKeys();
           req.onsuccess=()=>{
@@ -763,7 +774,7 @@
             }
           };
           return output;
-        },lease);
+        },lease,existingOnly);
       }
       // Verified snapshot of the old shared binding, HEAD and recovery base.
       // Capture raw keys (including absence) for the destination transaction.
@@ -849,7 +860,36 @@
       }
       return Object.freeze({id,read,readRevision,inspectMigration,readMigrationEvidence,readMigrationSources,readRecovery});
     }
-    return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,
+    // Bounded observation of all verified retained physical experiments.
+    // The lease cannot select a document or track a writable transaction.
+    async function inspectProvenance(indexedDB,{storage,codec,crypto,contract}={}){
+      const lease=Object.freeze({sessionId:'shared',
+        check(write=false){if(write)throw Error('Physical provenance inspection is read-only');},
+        track(_tx,write=false){if(write)throw Error('Physical provenance inspection is read-only');return ()=>{};}
+      });
+      const entries=[],issues=[];
+      function add(key,title,revision,experiment){
+        if(experiment?.calibrationOrigin)entries.push({key,title,revision,
+          experiment:{calibrationOrigin:experiment.calibrationOrigin}});
+      }
+      try{
+        const old=await openWorkingCopy(indexedDB,{lease,codec,crypto,existingOnly:true}).readMigrationSources(storage);
+        old.candidates.forEach(item=>{
+          const ref=item.selection;
+          add(ref.source+':'+ref.key,'Retained physical experiment',ref.digest,item.experiment);
+        });
+        old.issues.forEach(item=>issues.push(item.source+':'+item.key+': '+item.error));
+      }catch(error){issues.push('Retained physical experiments: '+error.message);}
+      try{
+        const row=await openSharedCheckpoint(indexedDB,{lease,codec,crypto,contract,existingOnly:true}).read();
+        if(row){
+          add('shared:committed','Shared physical experiment',row.revision,row.experiment);
+          add('shared:draft','Shared physical recovery draft',row.revision,row.draft);
+        }
+      }catch(error){issues.push('Shared physical checkpoint: '+error.message);}
+      return {entries,issues};
+    }
+    return Object.freeze({read,write,clear,readWorkingCopy,openWorkingCopy,openSharedCheckpoint,inspectProvenance,
       coordination:writer?'participating-writer':'uncoordinated'});
   }
   const defaultAdapter=makeAdapter(root.navigator&&root.navigator.locks||null);
@@ -871,6 +911,7 @@
     readWorkingCopy,
     openWorkingCopy:defaultAdapter.openWorkingCopy,
     openSharedCheckpoint:defaultAdapter.openSharedCheckpoint,
+    inspectProvenance:defaultAdapter.inspectProvenance,
     coordination:defaultAdapter.coordination,makeAdapter,
     normalize:normalize,newer:newer});
 }));

@@ -518,6 +518,7 @@ test('Where used reports an unreadable calibration archive rather than asserting
   const identity={version:1,sha256:'e'.repeat(64),width:16,height:9};
   const env={
     indexedDB:{},localStorage:{},
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
@@ -624,6 +625,7 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     key:index=>[...keys.keys()][index]||null,
     getItem:key=>keys.has(key)?keys.get(key):null};
   const env={indexedDB:{},localStorage:storage,
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
@@ -658,6 +660,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   let reads=0;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:{get:async (idb,id)=>{reads++;return library.get(idb,id);}},
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
@@ -699,6 +702,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   const current=await library.get(db,'other'),updated=await library.update(db,'other',1,{title:'Tab B'});
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
@@ -724,6 +728,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
   let changed=false;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>{
       if(!changed){
@@ -758,6 +763,7 @@ test('Where used includes verified shared workspace revisions and both pending n
   const shared={collection:{workspaces:[{id:'workspace',checkpoint:{savedAt:44,draft}}]},
     revisions:[{id:'workspace',revision:9}],namedSave:{plan:{before:named(10),after:named(11)}}};
   const env={indexedDB:{},localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
@@ -800,6 +806,7 @@ test('Where used inventories old standalone sources independently and matches ca
   const cp={savedAt:2,draft:{name:'Single recovery',frames:[{key:'kf',referenceImageIds:[id]}]}};
   const raw={version:2,physicalSessionId:'legacy',record:{id:'different_alias',title:'Old calibration'}};
   const env={indexedDB:{},localStorage:{getItem:()=>null},
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:raw})},
@@ -856,6 +863,7 @@ test('Where used distinguishes historical calibration provenance from attached a
 test('Where used includes History provenance without authorizing deletion or hiding incomplete sources',async()=>{
   const photo={version:1,sha256:'c'.repeat(64),width:20,height:10};
   const env={indexedDB:{},localStorage:{getItem:()=>null},
+    CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({
       entries:[{id:4,name:'Calibrated view',experiment:{calibrationOrigin:{photo}}}],
       issues:['Snapshot 5: Invalid snapshot identity']})},
@@ -870,4 +878,18 @@ test('Where used includes History provenance without authorizing deletion or hid
   assert.deepEqual(report.uses.map(use=>[use.type,use.ownerId,use.title]),
     [['experiment-provenance','history:4','Calibrated view']]);
   assert.match(report.unavailable.join('; '),/History provenance.*Snapshot 5/);
+});
+
+test('Where used distinguishes committed physical provenance from retained recovery variants',()=>{
+  const photo={version:1,sha256:'d'.repeat(64),width:9,height:8};
+  const experiment={calibrationOrigin:{photo}};
+  const result=usageGraph.report('alias',photo,{physical:[
+    {key:'shared:committed',title:'Shared physical experiment',revision:4,experiment},
+    {key:'shared:draft',title:'Shared physical recovery draft',revision:4,experiment},
+    {key:'idb:current',title:'Retained physical experiment',revision:'sha256:fixture',experiment},
+    {key:'local:experiment',title:'Different photo',revision:null,experiment:{calibrationOrigin:{photo:{...photo,height:7}}}}
+  ]});
+  assert.equal(result.count,3);
+  assert.equal(new Set(result.uses.map(use=>use.ownerId)).size,3);
+  assert.ok(result.uses.every(use=>use.type==='experiment-provenance'));
 });
