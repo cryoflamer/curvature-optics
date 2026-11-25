@@ -1,0 +1,310 @@
+/* Opt-in managed resource graph. Not wired into Modern or portable backup yet. */
+(function(root,factory){
+  const api=factory();
+  if(typeof module==='object'&&module.exports)module.exports=api;
+  root.CurvatureModernManagedObjectStore=api;
+}(typeof globalThis!=='undefined'?globalThis:this,function(){
+  'use strict';
+  const DATABASE='curvature-modern-managed-objects',VERSION=1;
+  const STORES=['documents','objects','payloads','references'];
+  const TOKEN=/^[A-Za-z0-9_.:-]{1,128}$/;
+  const check=(ok,message)=>{if(!ok)throw Error('Managed Object Store: '+message);};
+  const token=(value,label)=>{check(typeof value==='string'&&TOKEN.test(value),'invalid '+label);return value;};
+  const revision=value=>{check(Number.isSafeInteger(value)&&value>=0,'expected revision required');return value;};
+  const key=e=>[e.ownerKind,e.ownerId,e.slot];
+  const edgeId=e=>JSON.stringify(key(e));
+  const typeKey=(type,version)=>JSON.stringify([type,version]);
+  const clone=value=>structuredClone(value);
+  function request(req){
+    return new Promise((resolve,reject)=>{
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error||Error('IndexedDB request failed'));
+    });
+  }
+  function open(indexedDB){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open(DATABASE,VERSION);
+      let blocked=false;
+      req.onblocked=()=>{blocked=true;reject(Error('Managed Object Store: database upgrade blocked; close other tabs and retry'));};
+      req.onerror=()=>reject(req.error);
+      req.onupgradeneeded=event=>{
+        if(event.oldVersion!==0){req.transaction.abort();return;}
+        const db=req.result;
+        db.createObjectStore('documents',{keyPath:'id'});
+        db.createObjectStore('objects',{keyPath:'id'});
+        db.createObjectStore('payloads',{keyPath:'id'});
+        const refs=db.createObjectStore('references',{keyPath:['ownerKind','ownerId','slot']});
+        refs.createIndex('owner',['ownerKind','ownerId']);
+        refs.createIndex('target','target');
+      };
+      req.onsuccess=()=>{
+        const db=req.result;
+        if(blocked){db.close();return;}
+        db.onversionchange=()=>db.close();
+        resolve(db);
+      };
+    });
+  }
+  async function transaction(indexedDB,mode,work){
+    const db=await open(indexedDB);
+    try{
+      const tx=db.transaction(STORES,mode);
+      const done=new Promise((resolve,reject)=>{
+        tx.oncomplete=resolve;
+        tx.onabort=()=>reject(tx.error||Error('Managed Object Store: transaction aborted'));
+      });
+      // Observe early aborts while individual requests are still pending.
+      done.catch(()=>{});
+      const stores=Object.fromEntries(STORES.map(name=>[name,tx.objectStore(name)]));
+      try{
+        const result=await work(stores);
+        await done;
+        return result;
+      }catch(error){
+        try{tx.abort();}catch(ignored){/* already ended */}
+        await done.catch(()=>{});
+        throw error;
+      }
+    }finally{db.close();}
+  }
+  function slots(value){
+    check(Array.isArray(value),'references must be an array');
+    const seen=new Set();
+    return value.map(ref=>{
+      check(ref&&typeof ref==='object','invalid reference');
+      const slot=token(ref.slot,'slot'),target=token(ref.target,'target');
+      check(ref.strength==='strong'||ref.strength==='weak','invalid reference strength');
+      check(!seen.has(slot),'duplicate reference slot');
+      seen.add(slot);
+      return {slot,target,strength:ref.strength};
+    });
+  }
+  async function graph(stores){
+    const [docs,objects,refs,payloadKeys]=await Promise.all([
+      request(stores.documents.getAll()),request(stores.objects.getAll()),
+      request(stores.references.getAll()),request(stores.payloads.getAllKeys())
+    ]);
+    return {docs:new Map(docs.map(row=>[row.id,row])),
+      objects:new Map(objects.map(row=>[row.id,row])),
+      refs:new Map(refs.map(row=>[edgeId(row),row])),payloadKeys:new Set(payloadKeys)};
+  }
+  // All metadata, but no binary payloads, are read by the initial implementation.
+  // Acyclicity is checked iteratively, so graph depth does not consume the stack.
+  function inspect(g,types,allowCountMismatch=false){
+    const counts=new Map(),degrees=new Map(),children=new Map();
+    for(const [id,obj] of g.objects){
+      token(id,'object ID');
+      check(obj.id===id&&typeof obj.deleted==='boolean','invalid object row');
+      if(obj.deleted){
+        check(!g.payloadKeys.has(id)&&obj.refCount===0,'invalid object tombstone');
+        continue;
+      }
+      check(types.has(typeKey(obj.type,obj.version)),'unsupported resource type/version');
+      check(g.payloadKeys.has(id),'missing payload');
+      counts.set(id,0);degrees.set(id,0);children.set(id,[]);
+    }
+    for(const id of g.payloadKeys)check(counts.has(id),'orphan payload');
+    for(const [id,doc] of g.docs){
+      token(id,'document ID');token(doc.kind,'document kind');
+      check(doc.id===id&&revision(doc.revision)>0,'invalid document revision');
+    }
+    for(const [id,edge] of g.refs){
+      check(id===edgeId(edge),'invalid edge key');
+      slots([edge]);
+      check(edge.ownerKind==='document'||edge.ownerKind==='object','invalid reference owner');
+      check(edge.ownerKind==='document'?g.docs.has(edge.ownerId):counts.has(edge.ownerId),'missing reference owner');
+      check(g.objects.has(edge.target),'unknown reference target');
+      if(edge.strength==='weak')continue;
+      check(counts.has(edge.target),'missing strong target');
+      counts.set(edge.target,counts.get(edge.target)+1);
+      if(edge.ownerKind==='object'){
+        degrees.set(edge.target,degrees.get(edge.target)+1);
+        children.get(edge.ownerId).push(edge.target);
+      }
+    }
+    const queue=[...degrees].filter(([,n])=>n===0).map(([id])=>id);
+    for(let i=0;i<queue.length;i++){
+      for(const child of children.get(queue[i])){
+        const n=degrees.get(child)-1;degrees.set(child,n);
+        if(n===0)queue.push(child);
+      }
+    }
+    check(queue.length===counts.size,'strong reference cycle');
+    const mismatches=[];
+    for(const [id,count] of counts){
+      if(g.objects.get(id).refCount!==count)mismatches.push({id,expected:count,actual:g.objects.get(id).refCount});
+    }
+    check(allowCountMismatch||!mismatches.length,'reference count mismatch');
+    return {counts,mismatches};
+  }
+  function setEdge(g,stores,edge){
+    const id=edgeId(edge);
+    g.refs.set(id,edge);
+    stores.references.put(edge);
+  }
+  function dropEdge(g,stores,edge){
+    g.refs.delete(edgeId(edge));
+    stores.references.delete(key(edge));
+  }
+  function updateCounts(g,stores,types){
+    const {counts,mismatches}=inspect(g,types,true);
+    for(const {id} of mismatches){
+      const row={...g.objects.get(id),refCount:counts.get(id)};
+      g.objects.set(id,row);stores.objects.put(row);
+    }
+    return mismatches.length;
+  }
+  function create(env,{types:definitions}={}){
+    check(env?.indexedDB&&typeof env.indexedDB.open==='function','IndexedDB required');
+    check(env?.crypto&&typeof env.crypto.randomUUID==='function','UUID generator required');
+    check(Array.isArray(definitions)&&definitions.length>0,'resource types required');
+    const types=new Map();
+    for(const definition of definitions){
+      const {type,version,validate,references}=definition;
+      token(type,'type');check(Number.isSafeInteger(version)&&version>0,'invalid type version');
+      check(typeof validate==='function'&&typeof references==='function','type adapter required');
+      const id=typeKey(type,version);check(!types.has(id),'duplicate type adapter');
+      types.set(id,{validate,references});
+    }
+    const run=(mode,fn)=>transaction(env.indexedDB,mode,fn);
+    const owned=(g,id,slot)=>g.refs.get(edgeId({ownerKind:'document',ownerId:id,slot}));
+    function checkedDocument(g,id,expected){
+      const doc=g.docs.get(id);
+      check((doc?.revision??0)===expected,'stale document revision');
+      return doc;
+    }
+    function saveDocument(g,stores,doc){
+      check(Number.isSafeInteger(doc.revision),'document revision exhausted');
+      g.docs.set(doc.id,doc);stores.documents.put(doc);
+      return clone(doc);
+    }
+    async function createAndAttach({documentId,kind,expectedRevision,metadata,slot,type,version,payload}){
+      token(documentId,'document ID');token(kind,'document kind');token(slot,'slot');revision(expectedRevision);
+      const adapter=types.get(typeKey(type,version));check(adapter,'unsupported resource type/version');
+      // Clone before and after adapter calls: neither callers nor adapters retain
+      // a mutable alias into the stored payload. Validators must be synchronous.
+      const value=clone(payload);
+      check(adapter.validate(clone(value))===true,'invalid payload');
+      const refs=slots(adapter.references(clone(value)));
+      const meta=clone(metadata);
+      const id=token(env.crypto.randomUUID(),'generated object ID');
+      return run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const old=checkedDocument(g,documentId,expectedRevision);
+        check(!old||old.kind===kind,'document kind mismatch');
+        check(!g.objects.has(id),'object ID collision');
+        const row={id,type,version,refCount:0,deleted:false};
+        g.objects.set(id,row);stores.objects.add(row);
+        g.payloadKeys.add(id);stores.payloads.add({id,value});
+        for(const ref of refs)setEdge(g,stores,{ownerKind:'object',ownerId:id,...ref});
+        setEdge(g,stores,{ownerKind:'document',ownerId:documentId,slot,target:id,strength:'strong'});
+        const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta});
+        updateCounts(g,stores,types);
+        return {id,document};
+      });
+    }
+    async function setReference({documentId,expectedRevision,slot,target,strength='strong'}){
+      token(documentId,'document ID');revision(expectedRevision);
+      const [ref]=slots([{slot,target,strength}]);
+      return run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
+        const old=owned(g,documentId,slot);
+        if(old?.target===target&&old.strength===strength)return clone(doc);
+        setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
+        updateCounts(g,stores,types);
+        return saveDocument(g,stores,{...doc,revision:doc.revision+1});
+      });
+    }
+    async function detach({documentId,expectedRevision,slot}){
+      token(documentId,'document ID');token(slot,'slot');revision(expectedRevision);
+      return run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
+        const old=owned(g,documentId,slot);
+        if(!old)return clone(doc);
+        dropEdge(g,stores,old);
+        updateCounts(g,stores,types);
+        return saveDocument(g,stores,{...doc,revision:doc.revision+1});
+      });
+    }
+    async function get(id){
+      token(id,'object ID');
+      return run('readonly',async stores=>{
+        const [obj,payload]=await Promise.all([request(stores.objects.get(id)),request(stores.payloads.get(id))]);
+        if(!obj||obj.deleted){check(!payload,'orphan payload');return null;}
+        const adapter=types.get(typeKey(obj.type,obj.version));
+        check(adapter&&payload&&adapter.validate(clone(payload.value))===true,'invalid or unsupported payload');
+        return {...obj,payload:payload.value};
+      });
+    }
+    async function getDocument(id){
+      token(id,'document ID');
+      return run('readonly',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=g.docs.get(id);
+        return doc?{...doc,references:[...g.refs.values()].filter(e=>e.ownerKind==='document'&&e.ownerId===id)
+          .map(({slot,target,strength})=>({slot,target,strength}))}:null;
+      });
+    }
+    async function inspectUsage(id){
+      token(id,'object ID');
+      return run('readonly',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        return {object:g.objects.get(id)||null,references:[...g.refs.values()].filter(e=>e.target===id)};
+      });
+    }
+    async function verifyIntegrity(){
+      return run('readonly',async stores=>{
+        const g=await graph(stores),{counts,mismatches}=inspect(g,types,true);
+        return {valid:!mismatches.length,liveObjects:counts.size,mismatches,
+          eligible:[...counts].filter(([,n])=>n===0).map(([id])=>id)};
+      });
+    }
+    async function recount(){
+      return run('readwrite',async stores=>{
+        const g=await graph(stores);
+        return {repaired:updateCounts(g,stores,types)};
+      });
+    }
+    function underResourceLock(id,mode,operation){
+      token(id,'object ID');
+      const locks=env.navigator?.locks;
+      check(locks&&typeof locks.request==='function','resource coordination unavailable; retry in a supported browser');
+      return locks.request(DATABASE+':resource:'+id,{mode,ifAvailable:true},lock=>{
+        check(lock&&lock.mode===mode,'resource in use; close the corresponding editor or tab and retry');
+        return operation();
+      });
+    }
+    async function withRetained(id,operation){
+      check(typeof operation==='function','retained operation required');
+      return underResourceLock(id,'shared',async()=>{
+        const value=await get(id);check(value,'resource missing');
+        return operation(value);
+      });
+    }
+    // Explicit single-object collection; later calls collect newly eligible
+    // children. No implicit collection, and no destructive domain integration.
+    async function collectGarbage(id){
+      return underResourceLock(id,'exclusive',()=>run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const row=g.objects.get(id);
+        if(!row||row.deleted)return {collected:false,reason:'missing'};
+        if(row.refCount!==0)return {collected:false,reason:'durable-reference'};
+        for(const edge of [...g.refs.values()]){
+          if(edge.ownerKind==='object'&&edge.ownerId===id)dropEdge(g,stores,edge);
+        }
+        // Keep a small tombstone to prevent accidental ID reuse and preserve
+        // the meaning of unresolved weak links. Payload bytes are reclaimed.
+        const tombstone={id,deleted:true,refCount:0};
+        g.objects.set(id,tombstone);stores.objects.put(tombstone);
+        g.payloadKeys.delete(id);stores.payloads.delete(id);
+        updateCounts(g,stores,types);
+        return {collected:true};
+      }));
+    }
+    return Object.freeze({createAndAttach,setReference,detach,get,getDocument,inspectUsage,
+      verifyIntegrity,recount,withRetained,collectGarbage});
+  }
+  return Object.freeze({DATABASE,VERSION,create});
+}));
