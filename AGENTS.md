@@ -254,6 +254,14 @@ criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
 
 ## Work boundaries and delivery
 
+- Preserve supported multi-tab workflows and existing synchronization. Prefer
+  simple, explicit refusal with an actionable explanation when a cross-tab
+  conflict cannot be safely resolved (for example, deletion of a resource
+  retained by another editor: close that editor and retry). Do not add
+  automatic conflict merging, tab eviction, state relocation or a global
+  single-tab restriction merely to handle such conflicts. Keep atomicity,
+  revision checks and fail-closed resource protection. Reuse existing
+  mechanisms; do not undertake a broad cleanup solely for this policy.
 - Implement only what was requested or agreed; surface any scope expansion.
   Avoid opportunistic refactors, new HTML entry points or duplicate stores.
 - Keep stable semantic filenames; never embed compatpatch/version/Issue
@@ -275,6 +283,7 @@ criteria. Canvas Direct/Fast are not the authoritative RK4 reference.
 
 - `README.md` — usage and source map
 - `docs/architecture.md` — runtime boundaries
+- `docs/managed-object-store.md` — managed resource ownership and lifecycle
 - `docs/physics.md` — numerical and physical model
 - `docs/development.md` — targeted commands and CI workflow
 - `docs/modern-animation-contract.md` — project/keyframe invariants
