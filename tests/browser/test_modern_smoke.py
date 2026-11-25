@@ -1617,7 +1617,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             let row=await working.initializeManaged(A.collection(id,cp,100));
             const previous=await adapter.readAnimationWorkingCollection();
             const stale=open();await stale.read();
-            const next=A.checkpoint({...cp,draft:{...cp.draft,frames:cp.draft.frames.map(f=>({...f,referenceImageIds:[]}))}},101);
+            const next=A.checkpoint({...cp,savedAt:101,draft:{...cp.draft,frames:cp.draft.frames.map(f=>({...f,referenceImageIds:[]}))}},101);
             const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
             row=await working.saveSelected(row,A.documentReference(row,id),next,base);
             ok(row.receipt&&row.revision===2,'selection receipt missing');
