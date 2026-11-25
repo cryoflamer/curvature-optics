@@ -173,9 +173,22 @@ The selection envelope is preserved as metadata, not activation of an
 auxiliary editor; mapping and validating its domain bindings remains a cutover
 requirement.
 
+The opt-in Animation working collection uses the existing acknowledged
+collection validator and digest, retaining one immutable collection resource
+per managed revision. Its inventory covers every active/inactive workspace,
+both sides of a named-save intent and the temporary keyframe journal (original,
+workspace, candidate, past/future and pending History experiment). Source
+snapshot IDs and selection receipts are provenance/navigation, not new roots.
+Photo alias versions are retained for the lifetime of that alias in the
+collection; a newly introduced alias must resolve to a verified observation.
+Archived fit evidence is strong; explicitly standalone unresolved origins
+have a null mapping, never a fabricated archive. Pending intents are
+preserved as recovery evidence, not replayed during adoption. The whole-row
+copy and verification costs require measurement before active autosave routing.
+
 These adapters are not the active Modern UI save path. Editing other retained
 owners after gallery removal, complete live-use coverage, working checkpoint
-adoption and Animation draft/recovery, limits and production cutover remain
+and Animation collection adoption, legacy conflict drafts, limits and production cutover remain
 required before enabling user-facing deletion.
 
 ## Backup and cutover

@@ -5,7 +5,8 @@
   root.CurvatureModernManagedResources=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project',RESULT='calibration-result',CALIBRATION='calibration-project';
+  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project',RESULT='calibration-result',CALIBRATION='calibration-project',
+    DRAFTS='animation-working-collection';
   const check=(ok,message)=>{if(!ok)throw Error('Managed Resources: '+message);};
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&
@@ -25,7 +26,8 @@
       projects=deps.CurvatureModernAnimationProject,animations=deps.CurvatureModernAnimationLibrary,
       results=deps.CurvatureModernCalibrationResult,calibrations=deps.CurvatureModernCalibrationProject,
       checkpoints=deps.CurvatureModernCalibrationProjectCheckpoint,
-      session=deps.CurvatureModernSessionAutosave,sessionContract=deps.CurvatureModernDocumentSession;
+      session=deps.CurvatureModernSessionAutosave,sessionContract=deps.CurvatureModernDocumentSession,
+      drafts=deps.CurvatureModernAnimationDraftAutosave;
     check(core&&state&&history&&fp&&images&&importer&&library,'domain dependencies required');
     const types=[
       {type:SNAPSHOT,version:1,validate:v=>{
@@ -84,6 +86,44 @@
     },references:v=>[
       ...(v.originalId?[strong('original',v.originalId)]:[]),
       ...v.results.map(entry=>strong('result:'+entry.alias,entry.target))
+    ]});
+    // The acknowledged shared collection is one revisioned owner. Inactive
+    // workspaces and pending journals are included, never only the selected one.
+    function draftInventory(row){
+      const photos=new Set(),origins=[];
+      function physical(experiment){
+        if(experiment.calibrationOrigin)origins.push(experiment.calibrationOrigin);
+      }
+      for(const workspace of row.collection.workspaces){
+        for(const frame of workspace.checkpoint.draft.frames){
+          physical(frame.experiment);
+          for(const id of frame.referenceImageIds||[])photos.add(id);
+        }
+      }
+      if(row.namedSave)for(const record of [row.namedSave.plan.before,row.namedSave.plan.after]){
+        for(const alias of aliases(record.project))photos.add(alias);
+        origins.push(...calibrationOrigins(record.project));
+      }
+      if(row.keyframeEdit){
+        const edit=row.keyframeEdit.session;
+        for(const experiment of [edit.original,edit.workspace,edit.candidate,...edit.past,...edit.future])
+          physical(experiment);
+        if(row.keyframeEdit.history)physical(row.keyframeEdit.history.experiment);
+      }
+      return {photos:[...photos].sort(),origins,results:[...new Set(origins.map(o=>o.resultId))].sort()};
+    }
+    function mapped(entries,ids,standalone=false){
+      return Array.isArray(entries)&&entries.length===ids.length&&entries.every((entry,i)=>
+        exact(entry,['alias','target'])&&entry.alias===ids[i]&&
+        (objectId(entry.target)||(standalone&&entry.target===null)));
+    }
+    if(drafts&&projects&&animations)types.push({type:DRAFTS,version:1,validate:v=>{
+      if(!exact(v,['row','observations','evidence']))return false;
+      const row=drafts.normalizeSharedRow(v.row),inventory=draftInventory(row);
+      return mapped(v.observations,inventory.photos)&&mapped(v.evidence,inventory.results,true);
+    },references:v=>[
+      ...v.observations.map(entry=>strong('photo:'+entry.alias,entry.target)),
+      ...v.evidence.filter(entry=>entry.target!==null).map(entry=>strong('result:'+entry.alias,entry.target))
     ]});
     const store=core.create(env,{types});
     const historyId=id=>{check(positive(id),'invalid History alias');return 'history:'+id;};
@@ -466,7 +506,85 @@
         expectedRevision,metadata,references,resources});
       return {managedRevision:saved.revision};
     }
+    const draftsId='animation-working:shared';
+    function draftContracts(){
+      check(drafts&&projects&&animations&&typeof drafts.verifySharedRow==='function',
+        'Animation working collection adapter unavailable');
+    }
+    async function readAnimationWorkingCollection(){
+      draftContracts();
+      const graph=await store.readDocumentGraph(draftsId);
+      if(!graph)return null;
+      check(graph.document.kind===DRAFTS&&graph.document.references.length===1&&
+        exact(graph.document.metadata,['sourceRevision']),'invalid Animation working root');
+      const resource=pick(graph,'collection',DRAFTS),v=resource.payload;
+      const row=await drafts.verifySharedRow(v.row,env.crypto);
+      check(graph.document.metadata.sourceRevision===row.revision,'Animation working revision mismatch');
+      const inventory=draftInventory(row),referenceImages=[];
+      for(const entry of v.observations){
+        const observation=graph.resources.find(r=>r.id===entry.target);
+        check(observation?.type===OBSERVATION&&observation.payload.id===entry.alias,
+          'Animation working observation mismatch');
+        referenceImages.push(await materializeObservation(graph,observation));
+      }
+      for(const entry of v.evidence){
+        if(entry.target===null)continue;
+        const result=graph.resources.find(r=>r.id===entry.target);
+        for(const origin of inventory.origins.filter(origin=>origin.resultId===entry.alias))
+          checkOrigin(origin,result);
+        await verifyResultOriginal(graph,result);
+      }
+      return {row,collectionId:resource.id,managedRevision:graph.document.revision,
+        observations:v.observations,evidence:v.evidence,referenceImages};
+    }
+    async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false}={}){
+      draftContracts();
+      const row=await drafts.verifySharedRow(input,env.crypto);
+      const previous=expectedRevision===0?null:await readAnimationWorkingCollection();
+      check(expectedRevision===0||previous?.managedRevision===expectedRevision,
+        'Animation working revision conflict');
+      check(!previous||row.revision===previous.row.revision+1,'Animation working source revision must advance once');
+      const inventory=draftInventory(row),oldInventory=previous?draftInventory(previous.row):null;
+      const oldPhotos=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
+      const oldResults=new Map((previous?.evidence||[]).map(entry=>[entry.alias,entry.target]));
+      const observations=[],evidence=[];
+      for(const alias of inventory.photos){
+        let target=oldPhotos.get(alias);
+        if(!target){
+          const graph=await store.readDocumentGraph(observationId(alias));
+          check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
+          const observation=pick(graph,'observation',OBSERVATION);
+          check(observation.payload.id===alias,'working observation alias mismatch');
+          await materializeObservation(graph,observation);
+          target=observation.id;
+        }
+        observations.push({alias,target});
+      }
+      for(const alias of inventory.results){
+        const origins=inventory.origins.filter(o=>o.resultId===alias);
+        let target=oldResults.get(alias);
+        if(!target){
+          const saved=await readCalibrationResult(alias);
+          target=saved?.resultId??null;
+        }
+        if(target){
+          const result=await store.get(target);
+          for(const origin of origins)checkOrigin(origin,result);
+        }else{
+          const retained=oldResults.has(alias)&&oldResults.get(alias)===null&&
+            origins.every(origin=>oldInventory.origins.some(old=>same(origin,old)));
+          check(standalone===true||retained,'working calibration result missing; standalone recovery must be explicit');
+        }
+        evidence.push({alias,target});
+      }
+      const id=store.newObjectId();
+      const document=await store.writeDocument({documentId:draftsId,kind:DRAFTS,
+        expectedRevision,metadata:{sourceRevision:row.revision},references:[strong('collection',id)],
+        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]});
+      return {collectionId:id,managedRevision:document.revision};
+    }
     return Object.freeze({store,saveWorkingCheckpoint,readWorkingCheckpoint,
+      saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
   }
@@ -585,5 +703,5 @@
           integrity,eligibleForMigration:false,sourceUntouched:true};
       });
   }
-  return Object.freeze({create,rehearseLegacyArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION});
+  return Object.freeze({create,rehearseLegacyArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION,DRAFTS});
 }));

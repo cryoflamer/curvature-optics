@@ -1386,5 +1386,6 @@
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
     SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
     inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,inspectSharedCollection,documentReference,
-    MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport,exportRecovery,remapRecoveryReferences,recoveryReferenceIds});
+    MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport,exportRecovery,remapRecoveryReferences,recoveryReferenceIds,
+    normalizeSharedRow,verifySharedRow});
 }));

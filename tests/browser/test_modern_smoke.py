@@ -587,6 +587,96 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
 
+    def test_managed_animation_working_collection_retains_inactive_draft_originals(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave;
+            const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;
+            canvas.getContext('2d').fillRect(0,0,3,2);
+            const original={dataUrl:canvas.toDataURL('image/png'),width:3,height:2};
+            const record={id:'draft_photo',version:1,original,title:'Draft original',author:'Researcher'};
+            const photo=await adapter.saveObservation({id:record.id,revision:1,record});
+            const blank=A.checkpoint({draft:{name:'Blank',description:'',mode:'auto',target:'auto',
+                source:'none',frames:[]},selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const linked=A.checkpoint({...blank,draft:{...blank.draft,name:'Inactive observation',source:'history',
+                frames:[{key:'first',sourceSnapshotId:17,name:'Compare',experiment,travelMs:0,holdMs:0,
+                    easing:'linear',referenceImageIds:[record.id]}]},selectedKey:'first'},101);
+            const legacy=A.openSharedCollection(indexedDB,{lease:{sessionId:'shared',check(){},track(){return ()=>{};}},crypto});
+            const plan=await A.inspectLegacySources(window);
+            ok(await legacy.read()===null,'legacy collection fixture not empty');
+            const initial=await legacy.initializeEmpty(plan,A.collection('draft_blank',blank,100),localStorage);
+            const row=await legacy.createDraft(initial,'draft_inactive',linked);
+            const first=await adapter.saveAnimationWorkingCollection(row);
+            const saved=await adapter.readAnimationWorkingCollection();
+            ok(saved.row.digest===row.digest&&saved.row.collection.activeId==='draft_blank'&&
+                saved.referenceImages[0].original.dataUrl===original.dataUrl,'inactive draft lost its original');
+            await adapter.store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
+            ok(!(await adapter.store.collectGarbage(photo.observationId)).collected,'inactive draft original reclaimed');
+            const next=await legacy.createDraft(row,'draft_other',blank);
+            const second=await adapter.saveAnimationWorkingCollection(next,{expectedRevision:1});
+            const reopened=await adapter.readAnimationWorkingCollection();
+            ok(reopened.observations[0].target===photo.observationId&&reopened.referenceImages[0].author==='Researcher',
+                'unrelated edit lost retained photo');
+            await rejects(()=>adapter.saveAnimationWorkingCollection(next,{expectedRevision:1}),/revision conflict/);
+            await rejects(()=>adapter.saveAnimationWorkingCollection({...next,digest:'sha256:'+'0'.repeat(64)},
+                {expectedRevision:2}),/digest mismatch/);
+            const removed=await legacy.removeInactiveDrafts(next,[A.documentReference(next,'draft_inactive')],
+                A.documentReference(next,'draft_blank'));
+            await adapter.saveAnimationWorkingCollection(removed,{expectedRevision:2});
+            const last=await adapter.readAnimationWorkingCollection();
+            ok(last.row.collection.removed.some(item=>item.id==='draft_inactive')&&
+                last.observations.length===0,'tombstone or detached photo changed');
+            ok((await adapter.store.collectGarbage(first.collectionId)).collected,'old collection not eligible');
+            ok((await adapter.store.collectGarbage(second.collectionId)).collected,'superseded collection not eligible');
+            ok((await adapter.store.collectGarbage(photo.observationId)).collected,'unowned observation not eligible');
+            ok((await adapter.store.collectGarbage(photo.originalId)).collected,'unowned original not eligible');
+            ok((await legacy.read()).digest===removed.digest,'managed adapter changed legacy row');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,revision:last.managedRevision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 3})
+
     def test_managed_working_checkpoint_preserves_compare_and_recovery(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
