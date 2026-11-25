@@ -932,7 +932,7 @@
     // A reusable control root, never a resurrected tombstone. An active
     // receipt owns the exact committed project and, when available, the
     // exact preceding revision. Retirement clears these strong edges.
-    async function loadCalibrationReceipt(graph){
+    async function loadCalibrationReceipt(graph,existingOnly){
       if(!graph)return null;
       const doc=graph.document;
       check(doc.id===calibrationReceiptId&&doc.kind===CALIBRATION_RECEIPT&&
@@ -951,14 +951,14 @@
         const previous=pick(graph,'previous',CALIBRATION);
         check(same(ref(previous.payload.project),receipt.previous),'Calibration receipt previous mismatch');
       }
-      const current=await readCalibrationProject(receipt.current.id);
+      const current=await (existingOnly?inspectCalibrationProject(receipt.current.id):readCalibrationProject(receipt.current.id));
       check(current&&current.projectId===target.id&&same(ref(current.project),receipt.current),
         'Receipt project changed; evidence retained');
       return {receipt,managedRevision:doc.revision,projectId:target.id,current};
     }
     async function readCalibrationReceipt(existingOnly=false){
       const graph=await (existingOnly?store.inspectDocumentGraph(calibrationReceiptId):store.readDocumentGraph(calibrationReceiptId));
-      return loadCalibrationReceipt(graph);
+      return loadCalibrationReceipt(graph,existingOnly);
     }
     async function changeApplicationCalibration(id,expected,changes,now,forkId=null,{guard=()=>{},lease=null,base=null,requireNoReceipt=false}={}){
       calibrations.id(id);check(positive(expected),'invalid expected project revision');

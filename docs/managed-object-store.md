@@ -432,3 +432,10 @@ receipts without recycling a tombstone. Backup qualification validates the
 receipt and its target, including a retired empty control root. The old
 session-pointer acknowledgement protocol is preserved; startup routing
 and the managed shared physical checkpoint adapter remain separate work.
+
+The existing-only receipt path uses existing-only project closure inspection
+as well, so an outer exclusive writer barrier never recursively requests a
+shared writer lock. The controller's pending-pointer and already-committed
+receipt recovery protocols remain unchanged; the managed domain port can
+be tested against the existing shared checkpoint implementation before
+the latter is routed to managed storage.

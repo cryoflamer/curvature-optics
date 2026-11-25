@@ -1748,12 +1748,38 @@ class ModernBrowserSmoke(unittest.TestCase):
                 throw Error('Expected refusal: '+pattern);
             };
             const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
-            const base={revision:1,digest:'sha256:'+'1'.repeat(64)};
+            const D=CurvatureModernDocumentSession,C=CurvatureModernExperimentState,
+                PERSIST=CurvatureModernCalibrationProjectPersistence;
+            const checkpoint=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:C,crypto,contract:D});
+            const controller=storage=>D.createAtomicExperimentController({
+                lease,checkpoint:checkpoint(),isCurrent:()=>true,
+                prepare:()=>{throw Error('Unexpected migration');},
+                readDocument:async(kind,id)=>{
+                    const row=await storage.get(indexedDB,id);
+                    return row?{kind,id,revision:'rev:'+row.revision}:null;
+                },
+                selectionRecovery:PERSIST.sharedSelectionRecovery(window,lease,{storage,existingOnly:true})
+            });
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=C.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const seed=checkpoint();await seed.read();await seed.initialize(experiment);
             const project=P.fresh({id:P.createId(crypto),title:'Original',now:10});
             const other=P.fresh({id:P.createId(crypto),title:'Other',now:10});
             await port.create(indexedDB,project);
             await port.create(indexedDB,other);
             const previous=await adapter.readCalibrationProject(project.id);
+            const initial=controller(port);await initial.open();
+            await initial.selectWorkspace('calibration',PERSIST.projectReference(project));
+            const base=await initial.captureSelectionBase('calibration',PERSIST.projectReference(project));
             let tracked=0,released=0;
             const aborted={sessionId:'shared',check(){},track(tx,write){
                 ok(write,'lease not tracked as write');tracked++;tx.abort();return ()=>{released++;};
@@ -1768,24 +1794,41 @@ class ModernBrowserSmoke(unittest.TestCase):
             const reloaded=S.createPort({managedResources:M.create(window)});
             const receipt=await reloaded.readExistingSharedSelectionReceipt(indexedDB,lease);
             ok(JSON.stringify(receipt)===JSON.stringify(saved.selectionReceipt),'receipt not durable');
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspection=await barrier.snapshot(()=>reloaded.readExistingSharedSelectionReceipt(indexedDB,lease));
+            ok(JSON.stringify(inspection.value)===JSON.stringify(receipt),'receipt inspection deadlocked or changed evidence');
             ok(!(await adapter.store.collectGarbage(previous.projectId)).collected,'previous revision not retained');
             await rejects(()=>reloaded.rename(indexedDB,project.id,2,'Blocked',13),/receipt unresolved/);
             await rejects(()=>reloaded.renameSharedUnselected(indexedDB,other.id,1,'Blocked',lease,13),/receipt unresolved/);
             ok((await reloaded.rename(indexedDB,other.id,1,'Independent',13)).revision===2,'unrelated ordinary write blocked');
             await rejects(()=>reloaded.retireSharedSelectionReceipt(indexedDB,
                 {...receipt,base:{...base,digest:'sha256:'+'2'.repeat(64)}},lease),/receipt changed/);
-            await reloaded.retireSharedSelectionReceipt(indexedDB,receipt,lease);
+            const recovering=controller(reloaded);await recovering.open();
+            ok(recovering.state().status==='recovering-selection','pending selection not offered');
+            const before=await checkpoint().read();
+            await recovering.recoverDocumentSelection(receipt);
+            const after=await checkpoint().read();
+            ok(after.revision===before.revision+1&&after.envelope.documents.calibration.revision==='rev:2'&&
+                JSON.stringify(after.experiment)===JSON.stringify(before.experiment),'pending pointer recovery failed');
             ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null&&
                 (await adapter.store.collectGarbage(previous.projectId)).collected,'receipt retirement did not release prior');
+            const secondBase=await recovering.captureSelectionBase('calibration',PERSIST.projectReference(saved.project));
+            await reloaded.rename(indexedDB,project.id,2,'Remote',14);
             const changes={title:'Conflict',photo:project.photo,checkpoint:project.checkpoint,
                 overview:project.overview,resultIds:project.resultIds};
             const forkId=P.createId(crypto);
-            const fork=await reloaded.saveOrForkWithSelectionReceipt(indexedDB,project.id,1,
-                changes,forkId,14,base,lease);
+            const fork=await reloaded.saveOrForkWithSelectionReceipt(indexedDB,project.id,2,
+                changes,forkId,15,secondBase,lease);
             ok(fork.status==='forked'&&fork.project.id===forkId&&fork.project.revision===1&&
-                (await reloaded.get(indexedDB,project.id)).title==='Saved','conflict fork overwrote remote');
-            await reloaded.retireSharedSelectionReceipt(indexedDB,fork.selectionReceipt,lease);
-            ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null,'second receipt did not retire');
+                (await reloaded.get(indexedDB,project.id)).title==='Remote','conflict fork overwrote remote');
+            await recovering.acknowledgeDocumentRevision('calibration',fork.selectionReceipt);
+            const acknowledged=await checkpoint().read();
+            const resumed=controller(reloaded);await resumed.open();
+            ok(resumed.state().status==='recovering-selection','committed receipt not offered');
+            await resumed.recoverDocumentSelection(fork.selectionReceipt);
+            ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null&&
+                JSON.stringify(await checkpoint().read())===JSON.stringify(acknowledged),
+                'already acknowledged pointer was rewritten');
             return {valid:(await adapter.store.verifyIntegrity()).valid,projects:(await reloaded.list(indexedDB)).length};
         }""")
         self.assertEqual(result, {'valid': True, 'projects': 3})
@@ -1958,7 +2001,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 revisedRead.results[0].target===saved.resultId&&
                 JSON.stringify(revisedRead.project)===JSON.stringify(revised),'Calibration edit lost historical evidence');
             await rejects(()=>adapter.saveCalibrationProject(revised,{expectedRevision:1}),/revision conflict/);
-            await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(),/shared lifetime/);
+            await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(indexedDB),/shared lifetime/);
             await rejects(()=>projectPort.remove(indexedDB,calibration.id,2),/deletion is disabled/);
             const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));
             ok(usage.value.projects.length===1&&usage.value.projects[0].revision===2&&usage.value.legacy===null,
