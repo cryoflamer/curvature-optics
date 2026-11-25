@@ -1618,7 +1618,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             const renamed=await port.rename(indexedDB,project.id,'Renamed',101,102);
             ok(renamed.project.name==='Renamed'&&renamed.updatedAt===102,'rename failed');
             await rejects(()=>port.commitPlannedUpdate(indexedDB,plan),/changed in another tab/);
-            const bundle=port.parseBundle(await port.exportRetainedPortable(indexedDB,[renamed]));
+            const exportedV2=await port.exportRetainedPortable(indexedDB,[renamed]);
+            ok(JSON.parse(exportedV2).version===2,'uncalibrated export changed its V2 format');
+            const bundle=port.parseBundle(exportedV2);
             ok(bundle.referenceImages.length===1&&
                 bundle.referenceImages[0].original.dataUrl===photos[1].record.original.dataUrl&&
                 JSON.stringify(bundle.animations[0].project)===JSON.stringify(renamed.project),
@@ -2801,10 +2803,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
             const portableText=await libraryPort.exportRetainedPortable(indexedDB,[verifiedRow,renamed]);
-            const portable=libraryPort.parseBundle(portableText);
-            ok(JSON.parse(portableText).version===3&&portable.calibrationEvidence[1]==='standalone'&&
-                canonical(portable.calibrationEvidence[0][0].record)===canonical(archived)&&
-                portable.calibrationEvidence[0][0].original.original.dataUrl===record.original.dataUrl,
+            const portableBundle=libraryPort.parseBundle(portableText);
+            ok(JSON.parse(portableText).version===3&&portableBundle.calibrationEvidence[1]==='standalone'&&
+                canonical(portableBundle.calibrationEvidence[0][0].record)===canonical(archived)&&
+                portableBundle.calibrationEvidence[0][0].original.original.dataUrl===record.original.dataUrl,
                 'portable export lost exact Calibration evidence');
             await rejects(async()=>L.parseBundle(portableText),/Unsupported animation JSON format/);
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length,portableText};
