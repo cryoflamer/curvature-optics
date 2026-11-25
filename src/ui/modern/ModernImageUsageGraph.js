@@ -255,7 +255,7 @@
         sources.history=inventory.entries;
         inventory.issues.forEach(issue=>failures.push('History provenance: '+issue));
       }),
-      read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.list(db);},v=>{sources.animations=v;}),
+      read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.inspectUsage(db);},v=>{sources.animations=v;}),
       read('Calibration Projects and legacy draft',function(){return env.CurvatureModernCalibrationProjectStore.inspectUsage(db);},
         v=>{sources.calibrations=v.projects;sources.rawLegacyCalibration=v.legacy;}),
       read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.list(db);},v=>{sources.archives=v;}),

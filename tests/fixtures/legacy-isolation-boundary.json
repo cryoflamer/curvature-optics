@@ -2918,6 +2918,7 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationLibrary.js",
         "src/ui/modern/ModernExperimentHistory.js",
         "src/ui/modern/ModernSessionAutosave.js"
       ],

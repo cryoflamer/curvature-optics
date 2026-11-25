@@ -1,5 +1,5 @@
 /* Explicit opt-in cooperation barrier for Modern storage writes.
- * Working-session and History adapters participate. This is not a complete
+ * Working-session, History and named Animation adapters participate. This is not a complete
  * migration safety gate; unregistered writers remain outside its scope.
  */
 (function(root,factory){

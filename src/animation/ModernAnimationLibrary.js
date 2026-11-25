@@ -12,10 +12,10 @@
     compatibility=require('./ModernAnimationCompatibility');
   }
   var images=typeof module==='object'&&module.exports?require('./ModernReferenceImage'):root.CurvatureModernReferenceImage;
-  var api=factory(projects,thumbnails,compatibility,images);
+  var api=factory(root,projects,thumbnails,compatibility,images);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationLibrary=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(projects,thumbnails,compatibility,images){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,projects,thumbnails,compatibility,images){
   'use strict';
   var VERSION=1,DATABASE='curvature-modern-animation-library',STORE='projects';
   var PORTABLE_FORMAT='curvature-modern-animations',PORTABLE_VERSION=1;
@@ -297,14 +297,26 @@
   // All results are resolved on transaction completion, not request success.
   // A failed or aborted transaction never reports a successful save/delete.
   function transaction(indexedDB,mode,action){
+    // Even a normal read may initialize the database. The separate
+    // inspectUsage reader never creates storage and needs no writer lock.
+    const locks=root.navigator?.locks;
+    if(!locks)return transactionRaw(indexedDB,mode,action);
+    const barrier=typeof module==='object'&&module.exports?
+      require('../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+    if(!barrier)return Promise.reject(Error('Animation Library write barrier unavailable'));
+    const writer=barrier.create(locks).registerWriter('animation.library');
+    return writer.commit(()=>transactionRaw(indexedDB,mode,action));
+  }
+  function transactionRaw(indexedDB,mode,action,existingOnly=false){
     if(!indexedDB||typeof indexedDB.open!=='function')
       return Promise.reject(Error('Animation Library requires IndexedDB'));
     return new Promise(function(resolve,reject){
-      var db=null,tx=null,request,done=false,result;
+      var db=null,tx=null,request,done=false,result,failure=null;
       function fail(error){if(done)return;done=true;try{if(db)db.close();}catch(ignore){}
         reject(error instanceof Error?error:Error(String(error||'Animation Library unavailable')));}
       try{request=indexedDB.open(DATABASE,1);}catch(error){fail(error);return;}
       request.onupgradeneeded=function(){
+        if(done||existingOnly){request.transaction.abort();fail(Error('Animation Library database changed during inspection'));return;}
         db=request.result;
         if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'id'});
       };
@@ -315,28 +327,37 @@
         db=request.result;
         try{tx=db.transaction(STORE,mode);}
         catch(error){fail(error);return;}
-        tx.oncomplete=function(){if(done)return;done=true;db.close();resolve(result);};
-        tx.onerror=function(){fail(tx.error||Error('Animation Library transaction failed'));};
-        tx.onabort=function(){fail(tx.error||Error('Animation Library transaction aborted'));};
+        tx.oncomplete=function(){if(done)return;if(failure){fail(failure);return;}done=true;db.close();resolve(result);};
+        tx.onerror=function(){failure=failure||tx.error||Error('Animation Library transaction failed');};
+        tx.onabort=function(){fail(failure||tx.error||Error('Animation Library transaction aborted'));};
         function finish(value){result=value;}
         function abort(error){
           if(done)return;
-          try{tx.abort();}catch(ignore){}
-          fail(error);
+          failure=error;
+          try{tx.abort();}catch(ignore){fail(error);}
         }
         try{action(tx.objectStore(STORE),finish,abort);}catch(error){abort(error);}
       };
     });
   }
+  function readList(store,finish,abort){
+    var req=store.getAll();
+    req.onsuccess=function(){try{
+      var entries=(req.result||[]).map(normalize);
+      entries.sort(function(a,b){return b.updatedAt-a.updatedAt||a.id.localeCompare(b.id);});
+      finish(entries);
+    }catch(error){abort(error);}};
+  }
   function list(indexedDB){
-    return transaction(indexedDB,'readonly',function(store,finish,abort){
-      var req=store.getAll();
-      req.onsuccess=function(){try{
-        var entries=(req.result||[]).map(normalize);
-        entries.sort(function(a,b){return b.updatedAt-a.updatedAt||a.id.localeCompare(b.id);});
-        finish(entries);
-      }catch(error){abort(error);}};
-    });
+    return transaction(indexedDB,'readonly',readList);
+  }
+  async function inspectUsage(indexedDB){
+    if(!indexedDB||typeof indexedDB.databases!=='function')
+      throw Error('Animation Library database inventory unavailable');
+    const existing=(await indexedDB.databases()).find(row=>row.name===DATABASE);
+    if(!existing)return [];
+    if(existing.version!==VERSION)throw Error('Unsupported Animation Library database version');
+    return transactionRaw(indexedDB,'readonly',readList,true);
   }
   function get(indexedDB,id){
     validId(id);
@@ -493,5 +514,5 @@
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,parseBundle:parseBundle,referenceIds:referenceIds,
     collectReferences:collectReferences,remapReferences:remapReferences,importEntries:importEntries,
-    list:list,get:get,create:create,update:update,updateExact:updateExact,planExactUpdate,validateUpdatePlan,commitPlannedUpdate,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
+    list:list,inspectUsage,get:get,create:create,update:update,updateExact:updateExact,planExactUpdate,validateUpdatePlan,commitPlannedUpdate,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
 }));

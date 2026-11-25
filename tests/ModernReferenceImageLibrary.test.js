@@ -521,7 +521,7 @@ test('Where used reports an unreadable calibration archive rather than asserting
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>{
       throw Error('Result store blocked in another tab');
@@ -629,7 +629,7 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
@@ -665,7 +665,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
@@ -684,7 +684,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   assert.match(empty.reasons.join('; '),/cannot be atomically excluded/);
   await assert.rejects(library.remove(db,asset.id,1),/deletion is disabled/);
   assert.deepEqual((await library.get(db,asset.id)).record.original,original.record.original);
-  env.CurvatureModernAnimationLibrary.list=async()=>[{
+  env.CurvatureModernAnimationLibrary.inspectUsage=async()=>[{
     id:'saved',updatedAt:1,project:{name:'Linked',
       keyframes:[{name:'First',referenceImageIds:[asset.id]}]}
   }];
@@ -708,7 +708,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
@@ -735,7 +735,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>{
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>{
       if(!changed){
         changed=true;
         await library.update(db,'concurrent_image',1,{title:'New title from second tab'});
@@ -771,7 +771,7 @@ test('Where used includes verified shared workspace revisions and both pending n
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
@@ -815,7 +815,7 @@ test('Where used inventories old standalone sources independently and matches ca
     sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:raw})},
     CurvatureModernCalibrationProjectMigration:{normalizeLegacy:v=>v,matchingInline:()=>null},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
@@ -875,7 +875,7 @@ test('Where used includes History provenance without authorizing deletion or hid
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({
       entries:[{id:4,name:'Calibrated view',experiment:{calibrationOrigin:{photo}}}],
       issues:['Snapshot 5: Invalid snapshot identity']})},
-    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[]},
     CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:null})},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{inspectSharedCollection:async()=>null,

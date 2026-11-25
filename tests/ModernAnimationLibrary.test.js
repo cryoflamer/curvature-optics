@@ -31,7 +31,7 @@ function source(){
 }
 function memoryIndexedDB(){
   const records=new Map();let exists=false;
-  return {open(name,version){
+  return {databases:async()=>exists?[{name:library.DATABASE,version:1}]:[],open(name,version){
     assert.equal(name,library.DATABASE);assert.equal(version,1);
     const request={result:null,error:null};
     queueMicrotask(()=>{
@@ -53,7 +53,7 @@ function memoryIndexedDB(){
                     assert.equal(mode,'readwrite');
                     const id=value.id;
                     if(method==='add'&&records.has(id)){
-                      finished=true;tx.error=Error('Constraint');tx.onerror&&tx.onerror();return;
+                      finished=true;tx.error=Error('Constraint');tx.onerror&&tx.onerror();queueMicrotask(()=>tx.onabort&&tx.onabort());return;
                     }
                     records.set(id,structuredClone(value));
                   }
@@ -1575,4 +1575,18 @@ test('planned named Animation update is exact and idempotent across a lost ackno
   let calls=0;
   await assert.rejects(library.commitPlannedUpdate(db,later,()=>{if(++calls>1)throw Error('expired');}),/expired/);
   assert.deepEqual(await library.get(db,original.id),changed);
+});
+
+test('Animation Library inspection does not create or upgrade a missing database',async()=>{
+  const db=memoryIndexedDB(),open=db.open;
+  let opens=0;
+  db.open=(...args)=>{opens++;return open(...args);};
+  assert.deepEqual(await library.inspectUsage(db),[]);
+  assert.equal(opens,0);
+  const entry=await library.create(db,studio.build(source(),'animation_inspected'),'auto',100);
+  assert.deepEqual(await library.inspectUsage(db),[entry]);
+  assert.equal(opens,2);
+  db.databases=async()=>[{name:library.DATABASE,version:999}];
+  await assert.rejects(library.inspectUsage(db),/Unsupported Animation Library database version/);
+  assert.equal(opens,2);
 });

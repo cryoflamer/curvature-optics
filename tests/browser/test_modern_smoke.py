@@ -14105,6 +14105,39 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_animation_library_writer_waits_for_exclusive_backup_barrier(self):
+        """The observer reads existing named projects while a separate writer waits."""
+        self.open_modern()
+        self.page.evaluate("""async()=>{
+            const L=CurvatureModernAnimationLibrary;
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.id='coordinated_animation';
+            window.__beforeAnimation=await L.create(indexedDB,project,'auto',100,null,true);
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__animationEntered=false;
+            window.__animationTask=gate.snapshot(async()=>{
+                window.__animationEntered=true;
+                await new Promise(resolve=>window.__animationRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__animationEntered===true')
+        self.page.evaluate("""()=>{
+            const L=CurvatureModernAnimationLibrary;
+            window.__animationSettled=false;
+            window.__animationWrite=L.rename(indexedDB,'coordinated_animation','Coordinated rename',100,101)
+                .then(row=>{window.__animationSettled=true;return row;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__animationSettled'))
+        old=self.page.evaluate("""async()=> (await CurvatureModernAnimationLibrary.inspectUsage(indexedDB))
+            .find(row=>row.id==='coordinated_animation')""")
+        self.assertEqual(old,self.page.evaluate('window.__beforeAnimation'))
+        self.page.evaluate("window.__animationRelease()")
+        self.assertEqual(self.page.evaluate('window.__animationWrite')['project']['name'],'Coordinated rename')
+        self.assertEqual(self.page.evaluate('window.__animationTask')['value'],'released')
+
     def test_history_writer_waits_for_exclusive_backup_barrier(self):
         """A real History mutation waits for the origin-wide exclusive lock."""
         self.open_modern()
