@@ -12148,6 +12148,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             second.close()
 
+    def test_shared_animation_recovery_bundle_remaps_original_collision(self):
+        """Portable recovery cannot alias either History IDs or unrelated local photographs."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        fixture=self.page.evaluate("""async()=>{
+            const H=CurvatureModernApp.getHistoryStore(),A=CurvatureModernAnimationDraftAutosave,
+                S=CurvatureModernAnimationStudio,L=CurvatureModernReferenceImageLibrary;
+            const snapshot=(await H.record(CurvatureModernDemoCatalog.load()[0].project.baseExperiment,
+                'manual',null,{retainAuto:true})).entry;
+            const draft=S.history([snapshot.id],[snapshot]);
+            draft.frames[0].referenceImageIds=['recovery_photo'];
+            function image(color,title){
+                const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+                const ctx=canvas.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,2,2);
+                return {version:1,id:'recovery_photo',title,
+                    original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:2}};
+            }
+            const original=image('#ff0000','Source original'),foreign=image('#0000ff','Unrelated local');
+            const existing=await L.create(indexedDB,foreign);
+            const checkpoint=A.checkpoint({draft,selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const recovery={version:1,reference:{id:'draft_source',revision:'rev:1',recovery:null},
+                checkpoint,receipt:null};
+            const raw=JSON.stringify({format:'curvature-shared-animation-recovery',version:1,recovery});
+            const text=await A.exportRecovery(recovery,async()=>({record:original}),
+                r=>CurvatureModernReferenceImageImport.verify(r,window),crypto);
+            const parsed=await A.prepareRecoveryImport(text,crypto);
+            return {text,raw,id:parsed.id,checkpoint,original,existing};
+        }""")
+        file=self.page.locator('#ModernSharedAnimationRecoveryFile')
+        file.set_input_files({'name':'raw-recovery.json','mimeType':'application/json',
+            'buffer':fixture['raw'].encode('utf-8')})
+        expect(self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+            'only reference image IDs')
+        self.assertEqual(len(self.page.evaluate('CurvatureModernReferenceImageLibrary.list(indexedDB)')),1)
+        file.set_input_files({'name':'portable-recovery.json','mimeType':'application/json',
+            'buffer':fixture['text'].encode('utf-8')})
+        expect(self.page.locator('[data-shared-animation-id="'+fixture['id']+'"]')).to_have_count(1)
+        result=self.page.evaluate("""async id=>{
+            const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernReferenceImageLibrary;
+            const row=await A.inspectSharedCollection(indexedDB,crypto);
+            const frame=A.getWorkspace(row.collection,id).draft.frames[0];
+            return {frame,original:await L.get(indexedDB,frame.referenceImageIds[0]),
+                old:await L.get(indexedDB,'recovery_photo'),active:row.collection.activeId};
+        }""",fixture['id'])
+        self.assertIsNone(result['frame']['sourceSnapshotId'])
+        self.assertNotEqual(result['frame']['referenceImageIds'],['recovery_photo'])
+        self.assertEqual(result['frame']['experiment'],fixture['checkpoint']['draft']['frames'][0]['experiment'])
+        self.assertEqual(result['original']['record']['original'],fixture['original']['original'])
+        self.assertEqual(result['old']['record'],fixture['existing']['record'])
+        self.assertNotEqual(result['active'],fixture['id'])
+
     def test_shared_animation_open_named_working_copy_preserves_library(self):
         """Opening a saved revision never overwrites the independent named project."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

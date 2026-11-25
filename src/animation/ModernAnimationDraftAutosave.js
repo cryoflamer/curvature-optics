@@ -728,14 +728,44 @@
     return {version:1,base,previous,current,status:'updated'};
   }
   // A downloaded recovery file is a portable checkpoint, never a replay
-  // authority for another browser's session or pending transaction.
+  // authority for another browser's session, local History or pending write.
   const MAX_SHARED_RECOVERY_LENGTH=80000000;
+  function recoveryEntries(cp){return [{project:{keyframes:cp.draft.frames}}];}
+  function recoveryReferenceIds(cp){
+    const ids=new Set();
+    for(const frame of cp.draft.frames)
+      for(const id of frame.referenceImageIds||[])ids.add(id);
+    return [...ids];
+  }
+  function canonicalRecovery(value){
+    if(Array.isArray(value))return value.map(canonicalRecovery);
+    if(object(value))return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonicalRecovery(value[k])]));
+    return value;
+  }
+  async function recoveryAssets(cp,records){
+    const ids=recoveryReferenceIds(cp),library=getLibrary();
+    if(!library)throw Error('Animation Library asset validator unavailable');
+    if(!Array.isArray(records)||records.length!==ids.length||!records.length||
+       records.some(record=>!record||typeof record.id!=='string')||
+       new Set(records.map(record=>record.id)).size!==records.length)
+      throw Error('Recovery originals must match all frame links exactly');
+    const byId=new Map(records.map(record=>[record.id,record]));
+    const checked=await library.collectReferences(recoveryEntries(cp),id=>{
+      if(!byId.has(id))throw Error('Missing recovery original: '+id);
+      return {record:byId.get(id)};
+    });
+    for(const record of checked)
+      if(!equal(canonicalRecovery(record),canonicalRecovery(byId.get(record.id))))
+        throw Error('Noncanonical recovery original');
+    return checked.slice().sort((a,b)=>a.id.localeCompare(b.id));
+  }
   async function prepareRecoveryImport(text,crypto){
     if(typeof text!=='string'||text.length>MAX_SHARED_RECOVERY_LENGTH)
       throw Error('Animation recovery JSON is too large or invalid');
     const envelope=JSON.parse(text);
-    if(!exact(envelope,['format','version','recovery'])||
-       envelope.format!=='curvature-shared-animation-recovery'||envelope.version!==1)
+    const bundled=envelope?.version===2;
+    if(!exact(envelope,bundled?['format','version','recovery','referenceImages']:['format','version','recovery'])||
+       envelope.format!=='curvature-shared-animation-recovery'||![1,2].includes(envelope.version))
       throw Error('Unsupported shared Animation recovery file');
     const recovery=envelope.recovery;
     if(!exact(recovery,['version','reference','checkpoint','receipt'])||recovery.version!==1||
@@ -743,20 +773,53 @@
     const ref=validateReference(recovery.reference),cp=normalize(recovery.checkpoint);
     // Reject lossy normalization, including unknown future fields, but do
     // not interpret JSON property ordering as a semantic change.
-    function canonical(value){
-      if(Array.isArray(value))return value.map(canonical);
-      if(object(value))return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));
-      return value;
-    }
-    if(!equal(canonical(cp),canonical(recovery.checkpoint)))
+    if(!equal(canonicalRecovery(cp),canonicalRecovery(recovery.checkpoint)))
       throw Error('Noncanonical Animation recovery checkpoint');
     if(recovery.receipt!==null){
       const receipt=validateReceipt(recovery.receipt);
       if(!equal(receipt.previous,ref))throw Error('Animation recovery receipt does not match its reference');
     }
-    const identity=await seal({id:ref.id,checkpoint:cp},crypto);
+    const ids=recoveryReferenceIds(cp);
+    if(ids.length&&!bundled)
+      throw Error('Recovery contains only reference image IDs. Re-export with verified originals from the source browser; raw evidence was not imported.');
+    const referenceImages=bundled?await recoveryAssets(cp,envelope.referenceImages):null;
+    const source={id:ref.id,checkpoint:cp};
+    if(referenceImages)source.referenceImages=referenceImages;
+    const identity=await seal(source,crypto);
+    // Like named portable imports, a recovery import cannot treat a
+    // foreign numeric (or shipped string) History ID as a local owner.
+    // Keep frame keys, experiment values and external raw evidence intact.
+    const draft={...cp.draft,frames:cp.draft.frames.map(frame=>({...frame,sourceSnapshotId:null}))};
     return {id:workspaceId('draft_imported_'+identity.digest.slice(7)),
-      checkpoint:normalize({...cp,libraryId:null,libraryRevision:null})};
+      checkpoint:normalize({...cp,draft,libraryId:null,libraryRevision:null}),
+      ...(referenceImages?{referenceImages}:{})};
+  }
+  async function exportRecovery(recovery,getOriginal,verifyOriginal,crypto){
+    const cp=normalize(recovery?.checkpoint),ids=recoveryReferenceIds(cp);
+    const envelope={format:'curvature-shared-animation-recovery',version:1,recovery};
+    if(ids.length){
+      if(typeof getOriginal!=='function'||typeof verifyOriginal!=='function')
+        throw Error('Verified recovery originals required');
+      const records=await getLibrary().collectReferences(recoveryEntries(cp),getOriginal);
+      for(const record of records)await verifyOriginal(record);
+      envelope.version=2;envelope.referenceImages=await recoveryAssets(cp,records);
+    }
+    const text=JSON.stringify(envelope,null,2)+'\n';
+    await prepareRecoveryImport(text,crypto);
+    return text;
+  }
+  function remapRecoveryReferences(checkpoint,mapping){
+    const cp=normalize(checkpoint);
+    if(!mapping||typeof mapping.get!=='function'||typeof mapping.has!=='function')
+      throw Error('Verified recovery original mapping required');
+    const draft={...cp.draft,frames:cp.draft.frames.map(frame=>{
+      if(!frame.referenceImageIds)return frame;
+      return {...frame,referenceImageIds:frame.referenceImageIds.map(id=>{
+        if(!mapping.has(id))throw Error('Unresolved recovery original: '+id);
+        return mapping.get(id);
+      })};
+    })};
+    return normalize({...cp,draft});
   }
   function documentReference(row,id){
     const item=row.revisions.find(x=>x.id===id);
@@ -1293,5 +1356,5 @@
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
     SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
     inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,inspectSharedCollection,documentReference,
-    MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport});
+    MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport,exportRecovery,remapRecoveryReferences,recoveryReferenceIds});
 }));

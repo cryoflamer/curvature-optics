@@ -1061,7 +1061,9 @@ test('shared Animation recovery import detaches named ownership and does not rep
   assert.deepEqual(await autosave.prepareRecoveryImport(JSON.stringify(reordered),crypto),imported);
   assert.equal(imported.checkpoint.libraryId,null);
   assert.equal(imported.checkpoint.libraryRevision,null);
-  assert.deepEqual(imported.checkpoint.draft,checkpoint.draft);
+  assert.deepEqual(imported.checkpoint.draft,{...checkpoint.draft,
+    frames:checkpoint.draft.frames.map(frame=>({...frame,sourceSnapshotId:null}))});
+  assert.deepEqual(checkpoint.draft.frames.map(frame=>frame.sourceSnapshotId),[41,42]);
   const added=await a.createDraft(row,imported.id,imported.checkpoint);
   assert.equal(added.collection.activeId,row.collection.activeId);
   assert.equal(added.receipt,null);
@@ -1275,4 +1277,43 @@ test('read-only shared Animation inspection verifies rows without creating or re
   f.db.records.set(autosave.SHARED_COLLECTION_KEY,bad);
   await assert.rejects(autosave.inspectSharedCollection(f.db,f.crypto),/digest mismatch/);
   assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),bad);
+});
+
+test('portable Animation recovery bundles exact original bytes and remaps links without foreign History IDs',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const ref=autosave.documentReference(row,f.id);
+  const cp=autosave.normalize({...f.cp,draft:{...f.cp.draft,frames:f.cp.draft.frames.map((frame,index)=>
+    index===0?{...frame,referenceImageIds:['photo_a']}:frame)}});
+  const recovery={version:1,reference:ref,checkpoint:cp,receipt:null};
+  const photo={version:1,id:'photo_a',title:'Original',
+    original:{dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOo6TsAAANUAcuEDSEIAAAAAElFTkSuQmCC',width:1,height:1}};
+  const raw=JSON.stringify({format:'curvature-shared-animation-recovery',version:1,recovery});
+  await assert.rejects(autosave.prepareRecoveryImport(raw,crypto),/only reference image IDs/);
+  await assert.rejects(autosave.exportRecovery(recovery,async()=>null,async()=>{},crypto),/Missing reference photograph/);
+  const verified=[];
+  const text=await autosave.exportRecovery(recovery,async id=>({record:photo}),async record=>{
+    verified.push(record.id);
+  },crypto);
+  assert.deepEqual(verified,['photo_a']);
+  const envelope=JSON.parse(text);
+  assert.equal(envelope.version,2);
+  assert.deepEqual(envelope.referenceImages,[photo]);
+  const imported=await autosave.prepareRecoveryImport(text,crypto);
+  assert.deepEqual(imported.referenceImages,[photo]);
+  assert.deepEqual(imported.checkpoint.draft.frames.map(frame=>frame.sourceSnapshotId),[null,null]);
+  assert.deepEqual(imported.checkpoint.draft.frames.map(frame=>frame.experiment),cp.draft.frames.map(frame=>frame.experiment));
+  assert.throws(()=>autosave.remapRecoveryReferences(imported.checkpoint,new Map()),/Unresolved recovery original/);
+  const mapped=autosave.remapRecoveryReferences(imported.checkpoint,new Map([['photo_a','new_photo']]));
+  assert.deepEqual(mapped.draft.frames[0].referenceImageIds,['new_photo']);
+  assert.deepEqual(cp.draft.frames[0].referenceImageIds,['photo_a']);
+  const added=await a.createDraft(row,imported.id,mapped);
+  assert.deepEqual(autosave.getWorkspace(added.collection,imported.id),mapped);
+  assert.deepEqual(autosave.getWorkspace(added.collection,f.id),f.cp);
+  envelope.referenceImages=[];
+  await assert.rejects(autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto),/match all frame links/);
+  envelope.referenceImages=[{...photo,id:'wrong'}];
+  await assert.rejects(autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto),/Missing recovery original/);
+  envelope.referenceImages=[{...photo,title:' Original '}];
+  await assert.rejects(autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto),/Noncanonical recovery original/);
 });

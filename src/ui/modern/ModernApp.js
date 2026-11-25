@@ -3053,11 +3053,17 @@
       return;
     }
     if(status.error||status.unsaved){
-      var recovery=group('Unsaved working draft');
+      var recovery=group('Unsaved working draft'),evidence=ctx.writer.recovery();
+      var linked=!!evidence?.checkpoint&&studioDraftAutosave.recoveryReferenceIds(evidence.checkpoint).length>0;
       action(recovery,'Retry shared save',()=>void persistStudioWorkspace({retry:true}),!status.error);
-      action(recovery,'Download unsaved draft',()=>downloadHistoryJson(
+      action(recovery,linked?'Download raw recovery evidence':'Download unsaved draft',()=>downloadHistoryJson(
         JSON.stringify({format:'curvature-shared-animation-recovery',version:1,recovery:ctx.writer.recovery()},null,2)+'\n',
-        'curvature-animation-recovery.json'),!ctx.writer.recovery());
+        'curvature-animation-recovery.json'),!evidence);
+      if(linked){
+        recovery.appendChild(element('span','modern-animation-library-note',
+          'Portable recovery requires the original photographs. Raw evidence alone cannot safely resolve image IDs in another browser.'));
+        action(recovery,'Download portable draft with originals',()=>void downloadSharedAnimationRecovery(ctx));
+      }
     }
     if(!ctx.inventory&&!ctx.row){
       host.appendChild(element('p','modern-animation-library-empty','Inspecting retained Animation evidence…'));return;
@@ -3165,6 +3171,22 @@
         ()=>void runSharedAnimationAction('open',ref),studioWorkspaceReady&&studioWorkspaceId===item.id,
         {'data-shared-animation-id':item.id});
     });
+  }
+  async function downloadSharedAnimationRecovery(ctx){
+    if(ctx.busy)return;
+    // Keep an exact copy of the failed checkpoint while resolving assets.
+    var evidence=structuredClone(ctx.writer.recovery());
+    ctx.busy=true;ctx.message='Collecting verified recovery originals…';renderSharedAnimationLibrary();
+    try{
+      var text=await studioDraftAutosave.exportRecovery(evidence,
+        id=>root.CurvatureModernReferenceImageLibrary.inspectOriginal(root.indexedDB,id),
+        record=>root.CurvatureModernReferenceImageImport.verify(record,root),root.crypto);
+      downloadHistoryJson(text,'curvature-animation-recovery-with-originals.json');
+      ctx.message='Portable recovery exported with original photographs.';
+    }catch(error){
+      ctx.error=true;ctx.message='Recovery export failed: '+error.message+
+        '. Download raw recovery evidence to preserve the checkpoint.';
+    }finally{ctx.busy=false;renderSharedAnimationLibrary();}
   }
   async function loadSharedAnimationLibrary(){
     var ctx=experimentPreview.animationContext,store=ctx.makeStore();
@@ -3393,7 +3415,21 @@
             ctx.namedError=null;
             ctx.message='Saved Animation deleted. Any working copy remains available as an independent recovery source.';
           }else if(kind==='importRecovery'){
-            var {id,checkpoint}=recoveryImport;
+            var {id,checkpoint,referenceImages}=recoveryImport;
+            if(row&&(row.collection.workspaces.some(item=>item.id===id)||
+              (row.collection.removed||[]).some(item=>item.id===id)))
+              throw Error('Animation draft identity is already used');
+            if(referenceImages){
+              // Validate all decodable originals before writing any asset.
+              // The existing collision-safe import preserves unrelated local
+              // rows; a later draft failure never deletes committed assets.
+              for(var record of referenceImages)await root.CurvatureModernReferenceImageImport.verify(record,root);
+              ctx.lease.check(true);
+              var mapping=await root.CurvatureModernReferenceImageLibrary.importAssets(
+                root.indexedDB,referenceImages,root.crypto);
+              ctx.lease.check(true);
+              checkpoint=studioDraftAutosave.remapRecoveryReferences(checkpoint,mapping);
+            }
             ctx.row=row?await store.createDraft(row,id,checkpoint):
               await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,checkpoint),root.localStorage);
             ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
