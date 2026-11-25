@@ -667,6 +667,82 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""",fixture)
         self.assertEqual(result, {'valid': True, 'fit': 5, 'snapshot': True})
 
+    def test_managed_object_store_coordinated_backup_roundtrip(self):
+        # Use the existing portable codec and empty-profile restore, with a
+        # real managed graph containing binary resources and compound keys.
+        def prepare(page):
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in ['ModernBackupWriteBarrier','ModernManagedObjectStore','ModernPortableBackup']:
+                page.add_script_tag(url='/src/storage/'+script+'.js')
+            page.evaluate("""()=>{
+                window.store=CurvatureModernManagedObjectStore.create(window,{types:[
+                    {type:'binary',version:1,validate:v=>v instanceof Blob,references:()=>[]},
+                    {type:'project',version:1,validate:v=>Array.isArray(v?.refs),references:v=>v.refs}
+                ]});
+            }""")
+        prepare(self.page)
+        self.assertEqual(self.page.evaluate('store.coordination'),'participating-writer')
+        ids=self.page.evaluate("""async()=>{
+            const asset=store.newObjectId(),project=store.newObjectId();
+            await store.writeDocument({documentId:'project',kind:'test',expectedRevision:0,metadata:{label:'exact'},
+                references:[{slot:'project',target:project,strength:'strong'}],
+                resources:[
+                    {id:asset,type:'binary',version:1,payload:new Blob([Uint8Array.from([0,17,255])])},
+                    {id:project,type:'project',version:1,payload:{refs:[
+                        {slot:'binary',target:asset,strength:'strong'}]}}
+                ]});
+            return {asset,project};
+        }""")
+        second=self.context.new_page()
+        target_context=self.browser.new_context()
+        try:
+            prepare(second)
+            self.page.evaluate("""()=>{
+                window.exclusive=false;
+                const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+                window.hold=gate.snapshot(()=>new Promise(resolve=>{
+                    window.release=resolve;window.exclusive=true;
+                }));
+            }""")
+            self.page.wait_for_function('window.exclusive===true')
+            second.evaluate("""()=>{
+                window.finished=false;
+                window.write=store.writeDocument({documentId:'another',kind:'test',expectedRevision:0,
+                    metadata:{label:'shared'},references:[]}).then(value=>{window.finished=true;return value;});
+            }""")
+            second.wait_for_function("""async()=>{
+                const state=await navigator.locks.query();
+                return state.pending.some(lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME);
+            }""")
+            self.assertFalse(second.evaluate('window.finished'))
+            self.page.evaluate('async()=>{window.release();await window.hold;}')
+            self.assertEqual(second.evaluate('async()=> (await window.write).revision'),1)
+            archive=self.page.evaluate("""async()=>{
+                const result=await CurvatureModernPortableBackup.captureCoordinated(window);
+                return result.archive;
+            }""")
+            target=target_context.new_page()
+            prepare(target)
+            result=target.evaluate("""async ({archive,ids})=>{
+                const backup=CurvatureModernPortableBackup;
+                const before=await indexedDB.databases();
+                if(before.length)throw Error('Store creation unexpectedly opened a database');
+                await backup.restoreEmpty(archive,window);
+                const graph=await store.readDocumentGraph('project');
+                const original=graph.resources.find(row=>row.id===ids.asset);
+                const bytes=[...new Uint8Array(await original.payload.arrayBuffer())];
+                const integrity=await store.verifyIntegrity();
+                return {bytes,valid:integrity.valid,refCount:original.refCount,
+                    root:graph.document.references[0].target,objects:integrity.liveObjects};
+            }""",{'archive':archive,'ids':ids})
+            self.assertEqual(result,{'bytes':[0,17,255],'valid':True,'refCount':1,
+                'root':ids['project'],'objects':2})
+        finally:
+            second.close()
+            target_context.close()
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.
@@ -9542,7 +9618,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                     optional:body.databases.filter(d=>A.ADDITIONAL_DATABASES.includes(d.name)).map(d=>d.status),
                     local:localStorage.getItem('curvature-test-legacy')};
             }""")
-            self.assertEqual(result,{'bytes':[0,17,255],'optional':['absent','absent'],'local':'exact'})
+            self.assertEqual(result,{'bytes':[0,17,255],'optional':['absent','absent','absent'],'local':'exact'})
         finally:
             target.close()
             source.close()

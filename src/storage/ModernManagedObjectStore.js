@@ -198,7 +198,16 @@
       const id=typeKey(type,version);check(!types.has(id),'duplicate type adapter');
       types.set(id,{validate,references});
     }
-    const run=(mode,fn)=>transaction(env.indexedDB,mode,fn);
+    // Schema-capable reads also participate: an otherwise read-only open
+    // can create the database. Test/standalone callers without the barrier
+    // remain explicitly uncoordinated, never eligible for live cutover.
+    const barrier=env.CurvatureModernBackupWriteBarrier;
+    const writer=barrier&&env.navigator?.locks?
+      barrier.create(env.navigator.locks).registerWriter('managed.objects'):null;
+    const run=(mode,fn)=>{
+      const action=()=>transaction(env.indexedDB,mode,fn);
+      return writer?writer.commit(action):action();
+    };
     const owned=(g,id,slot)=>g.refs.get(edgeId({ownerKind:'document',ownerId:id,slot}));
     function checkedDocument(g,id,expected){
       const doc=g.docs.get(id);
@@ -437,7 +446,8 @@
         return {collected:true};
       }));
     }
-    return Object.freeze({newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
+    return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
+      newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
       verifyIntegrity,recount,withRetained,collectGarbage});
   }
   return Object.freeze({DATABASE,VERSION,create});

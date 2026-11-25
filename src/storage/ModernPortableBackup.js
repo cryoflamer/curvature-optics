@@ -19,7 +19,8 @@
   // compatibility with existing backups. New captures explicitly inventory
   // the later UI registry and cache even if they are absent.
   const ADDITIONAL_DATABASES=Object.freeze([
-    'curvature-modern-ui-state','curvature-modern-keyframe-thumbnails'
+    'curvature-modern-ui-state','curvature-modern-keyframe-thumbnails',
+    'curvature-modern-managed-objects'
   ]);
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -498,7 +499,9 @@
       decoderVerified:true,eligibleForMigration:false,
       remaining:['live writer coordination and acknowledged revisions',
         'Animation drafts and legacy recovery payloads',
-        'full referential/schema qualification and user-held archive round-trip']});
+        'full referential/schema qualification and user-held archive round-trip',
+        ...(databases.get('curvature-modern-managed-objects')?.status==='present'?
+          ['managed object graph, typed payloads and derived reference counts']:[])]});
   }
   /* Restore only to newly created, namespaced databases.
    * There is deliberately no live replacement or existing-database merge API.
