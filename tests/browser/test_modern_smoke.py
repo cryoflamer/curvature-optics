@@ -2795,6 +2795,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
         self.page.goto(self.base_url,wait_until='load',timeout=30000)
         expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        self.assertTrue(self.page.evaluate('window.CurvatureModernStorageStartupBlocked===true'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
         seed=self.page.evaluate("""async()=>{
             const adapter=CurvatureModernManagedResources.create(window);
             const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,

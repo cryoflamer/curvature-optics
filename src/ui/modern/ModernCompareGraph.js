@@ -7,6 +7,8 @@
   var script=document.currentScript;
   var side=script&&script.getAttribute('data-compare-side');
   if(side!=='A'&&side!=='B')throw Error('Compare graph side A/B is required');
+  // The blocked storage route deliberately never mounts the app.
+  if(root.CurvatureModernStorageStartupBlocked===true)return;
   var app=root.CurvatureModernApp;
   if(!app||typeof app.registerCompareGraph!=='function')throw Error('Modern Compare bootstrap is unavailable');
   var graph=root.NewGraphX3D({Id:'ModernCompareGraph'+side,Width:'100%',Height:'66.67%',

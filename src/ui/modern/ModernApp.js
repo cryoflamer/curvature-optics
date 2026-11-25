@@ -44,6 +44,7 @@
       document.body.replaceChildren(main);
   }
   if(startupStorageError){
+    root.CurvatureModernStorageStartupBlocked=true;
     if(document.readyState==='loading')
       document.addEventListener('DOMContentLoaded',showStorageStartupRefusal,{once:true});
     else showStorageStartupRefusal();
