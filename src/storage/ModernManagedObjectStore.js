@@ -315,6 +315,43 @@
           .map(({slot,target,strength})=>({slot,target,strength}))}:null;
       });
     }
+    // Read a document and its entire strong closure from one IDB snapshot.
+    // Separate getDocument()/get() calls cannot provide revision consistency.
+    async function readDocumentGraph(id){
+      token(id,'document ID');
+      return run('readonly',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=g.docs.get(id);
+        if(!doc||doc.deleted)return null;
+        const byOwner=new Map();
+        for(const edge of g.refs.values()){
+          const k=JSON.stringify([edge.ownerKind,edge.ownerId]);
+          if(!byOwner.has(k))byOwner.set(k,[]);
+          byOwner.get(k).push(edge);
+        }
+        const edges=(kind,ownerId)=>byOwner.get(JSON.stringify([kind,ownerId]))||[];
+        const rootEdges=edges('document',id),seen=new Set(),queue=[];
+        function add(refs){
+          for(const ref of refs)if(ref.strength==='strong'&&!seen.has(ref.target)){
+            seen.add(ref.target);queue.push(ref.target);
+          }
+        }
+        add(rootEdges);
+        const resources=[];
+        for(let i=0;i<queue.length;i++){
+          const objectId=queue[i],obj=g.objects.get(objectId);
+          const row=await request(stores.payloads.get(objectId));
+          const adapter=types.get(typeKey(obj.type,obj.version));
+          check(row&&adapter.validate(clone(row.value))===true,'invalid or unsupported payload');
+          const actual=edges('object',objectId),expected=slots(adapter.references(clone(row.value)));
+          check(expected.length===actual.length&&expected.every(ref=>actual.some(e=>
+            e.slot===ref.slot&&e.target===ref.target&&e.strength===ref.strength)),'payload reference mismatch');
+          resources.push({...obj,payload:row.value});
+          add(actual);
+        }
+        return {document:{...doc,references:rootEdges.map(({slot,target,strength})=>({slot,target,strength}))},resources};
+      });
+    }
     async function inspectUsage(id){
       token(id,'object ID');
       return run('readonly',async stores=>{
@@ -400,7 +437,7 @@
         return {collected:true};
       }));
     }
-    return Object.freeze({newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,inspectUsage,
+    return Object.freeze({newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
       verifyIntegrity,recount,withRetained,collectGarbage});
   }
   return Object.freeze({DATABASE,VERSION,create});
