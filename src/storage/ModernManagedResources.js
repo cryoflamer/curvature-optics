@@ -1555,26 +1555,38 @@
       // A linked working checkpoint identifies an exact named Library revision.
       // Transfer retained resources from that owner, not a mutable gallery alias.
       // The inventory CAS protects the source until the new root is committed.
+      const priorWorkspaces=new Map((previous?.row.collection.workspaces||[]).map(w=>[w.id,w.checkpoint]));
+      const linked=animationHandoff?row.collection.workspaces.filter(w=>w.checkpoint.libraryId!==null).map(w=>{
+        const cp=w.checkpoint,prior=priorWorkspaces.get(w.id);
+        const origins=[cp.draft.contract?.referenceExperiment,...cp.draft.frames.map(frame=>frame.experiment)]
+          .map(experiment=>experiment?.calibrationOrigin).filter(Boolean);
+        return {cp,changed:prior?.libraryRevision!==cp.libraryRevision,
+          photos:new Set(cp.draft.frames.flatMap(frame=>frame.referenceImageIds||[])),origins};
+      }):[];
       let sources=null,sourceInventory=null;
       async function linkedSources(){
         if(sources)return sources;
         sources=[];
-        if(!animationHandoff)return sources;
-        const linked=row.collection.workspaces.map(w=>w.checkpoint).filter(cp=>cp.libraryId!==null);
         if(!linked.length)return sources;
         const named=await listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),
           v=>v,(a,b)=>byTime('updatedAt')(a.row,b.row));
         sourceInventory=animationExpected(named.map(v=>v.row));
-        for(const cp of linked){
+        for(const link of linked){
+          const {cp,changed}=link;
           const match=named.find(v=>v.row.row.id===cp.libraryId&&v.row.row.updatedAt===cp.libraryRevision);
-          if(match)sources.push(match.row);
+          check(!changed||match,'Named Animation revision changed or was removed; reopen the Library');
+          if(match)sources.push({source:match.row,link});
         }
         return sources;
       }
-      async function retainedFromAnimation(alias,kind,origins=[]){
+      async function retainedFromAnimation(alias,kind,changedOnly=false){
+        const relevant=link=>(!changedOnly||link.changed)&&(kind==='observations'?
+          link.photos.has(alias):link.origins.some(origin=>origin.resultId===alias));
+        if(!linked.some(relevant))return null;
         const matches=new Set();
-        for(const source of await linkedSources()){
-          if(kind==='evidence'&&!origins.every(origin=>
+        for(const {source,link} of await linkedSources()){
+          if(!relevant(link))continue;
+          if(kind==='evidence'&&!link.origins.filter(origin=>origin.resultId===alias).some(origin=>
             calibrationOrigins(source.row.project).some(v=>same(v,origin))))continue;
           const entries=source[kind];
           if(!Array.isArray(entries))continue;
@@ -1584,9 +1596,16 @@
         check(matches.size<=1,'ambiguous named Animation resource: '+alias);
         return matches.values().next().value??null;
       }
+      // The collection currently maps each alias to one immutable resource.
+      // Opening another exact named revision must never silently substitute
+      // an observation version retained by a different workspace.
+      if(linked.some(link=>link.changed))await linkedSources();
       for(const alias of inventory.photos){
         let target=oldPhotos.get(alias);
-        if(!target)target=await retainedFromAnimation(alias,'observations');
+        const retained=await retainedFromAnimation(alias,'observations',!!target);
+        check(!target||!retained||target===retained,
+          'Conflicting retained Animation observation: '+alias+'; retire the conflicting working copy and retry');
+        if(!target)target=retained;
         if(!target){
           const graph=await store.readDocumentGraph(observationId(alias));
           check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
@@ -1600,7 +1619,10 @@
       for(const alias of inventory.results){
         const origins=inventory.origins.filter(o=>o.resultId===alias);
         let target=oldResults.get(alias);
-        if(!target)target=await retainedFromAnimation(alias,'evidence',origins);
+        const retainedTarget=await retainedFromAnimation(alias,'evidence',!!target);
+        check(!target||!retainedTarget||target===retainedTarget,
+          'Conflicting retained Animation calibration evidence: '+alias+'; retire the conflicting working copy and retry');
+        if(!target)target=retainedTarget;
         if(!target){
           const saved=await readCalibrationResult(alias);
           target=saved?.resultId??null;

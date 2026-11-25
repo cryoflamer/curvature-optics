@@ -1701,7 +1701,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             const named=P.validate({...linked,keyframes:linked.keyframes.map((f,i)=>i?f:{...f,referenceImageIds:[retainedRecord.id]})});
             const namedRow=L.record(named,'auto',named.id,200,200,null);
             const namedOwner=await adapter.saveAnimation(namedRow);
-            await store.removeDocument({documentId:'observation:'+retainedRecord.id,expectedRevision:1});
+            const secondPhoto=await adapter.saveObservation({id:retainedRecord.id,revision:2,
+                record:{...retainedRecord,title:'Different historical attribution'}},
+                {expectedRevision:1,originalId:retainedPhoto.originalId});
+            const secondNamed=P.validate({...named,id:'working_project_other'});
+            const secondRow=L.record(secondNamed,'auto',secondNamed.id,202,202,null);
+            const secondOwner=await adapter.saveAnimation(secondRow);
+            await store.removeDocument({documentId:'observation:'+retainedRecord.id,expectedRevision:2});
             const namedDraft=CurvatureModernAnimationStudio.fromProject(named);
             const namedCp=A.checkpoint({...cp,draft:namedDraft,selectedKey:namedDraft.frames[0].key,
                 libraryId:named.id,libraryRevision:namedRow.updatedAt},201);
@@ -1710,6 +1716,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             const linkedOwner=await adapter.readAnimationWorkingCollection();
             ok(linkedOwner.observations.some(v=>v.alias===retainedRecord.id&&
                 v.target===retainedPhoto.observationId),'linked copy did not reuse named evidence');
+            const secondDraft=CurvatureModernAnimationStudio.fromProject(secondNamed);
+            const secondCp=A.checkpoint({...namedCp,draft:secondDraft,selectedKey:secondDraft.frames[0].key,
+                libraryId:secondNamed.id,libraryRevision:secondRow.updatedAt},203);
+            await rejects(()=>fresh.createLinkedWorkspace(row,secondCp),/Conflicting retained Animation observation/);
+            const unchanged=await adapter.readAnimationWorkingCollection();
+            ok(unchanged.row.digest===row.digest&&unchanged.observations.some(v=>v.target===retainedPhoto.observationId)&&
+                !unchanged.observations.some(v=>v.target===secondPhoto.observationId),'conflict substituted historical observation');
+            row=await fresh.read();
+            await store.removeDocument({documentId:'animation:'+secondNamed.id,expectedRevision:secondOwner.managedRevision});
             await store.removeDocument({documentId:'animation:'+named.id,expectedRevision:namedOwner.managedRevision});
             ok((await store.collectGarbage(namedOwner.projectId)).collected,'removed named owner still retained');
             ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
