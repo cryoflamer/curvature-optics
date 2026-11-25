@@ -2751,7 +2751,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 window.gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
                 window.legacy=gate.registerWriter('working.session');
                 window.ui=gate.registerWriter('ui.registry');
-                window.store=CurvatureModernManagedObjectStore.create(window,{types:[]});
+                window.store=CurvatureModernManagedObjectStore.create(window,{types:[
+                    {type:'test',version:1,validate:()=>true,references:()=>[]}
+                ]});
             }""")
         prepare(self.page)
         second=self.context.new_page()
