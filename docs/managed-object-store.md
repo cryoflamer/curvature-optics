@@ -627,3 +627,5 @@ observations seen during the workspace generation until a different workspace
 is bound or the tab terminates; exact Undo eviction/pruning and Calibration
 result/physical provenance retention are not yet integrated. Named roots and
 working journals remain durable owners. Production deletion remains disabled.
+
+Linked-photo rows and their details dialog read the exact retained editor observation, independently of the gallery picker. A new picker attachment checks the inspected gallery revision and refuses a conflicting historical alias instead of substituting a different observation. Undo continues to use the captured original version.

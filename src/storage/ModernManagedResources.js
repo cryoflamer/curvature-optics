@@ -1849,18 +1849,26 @@
           await scope.replace([...next.values()]);photos=next;owner=ref.id;
         }));
       }
-      function photograph(alias,workspace){
+      function linkedPhotograph(alias,workspace){
         return serialize(async()=>{
           check(owner&&owner===workspace,'Animation editor changed before photo retention');
-          if(photos.has(alias)){
-            const observation=await store.get(photos.get(alias));
-            check(observation?.type===OBSERVATION&&observation.payload.id===alias,'live editor observation missing');
-            const original=await store.get(observation.payload.originalId);
-            const record=await materializeObservation({resources:[observation,original]},observation);
-            return {id:alias,record};
-          }
+          const target=photos.get(alias);
+          check(target,'live editor observation was not retained: '+alias);
+          const observation=await store.get(target);
+          check(observation?.type===OBSERVATION&&observation.payload.id===alias,'live editor observation missing');
+          const original=await store.get(observation.payload.originalId);
+          const record=await materializeObservation({resources:[observation,original]},observation);
+          return {id:alias,record};
+        });
+      }
+      function photograph(alias,workspace,expectedRevision){
+        return serialize(async()=>{
+          check(owner&&owner===workspace,'Animation editor changed before photo retention');
           return store.withDocumentRetained(observationId(alias),async graph=>{
             const value=await loadObservation(graph,alias);
+            check(value.row.revision===expectedRevision,'Original image changed; reopen the picker');
+            check(!photos.has(alias)||photos.get(alias)===value.observationId,
+              'A different historical version is retained by this editor; reopen the workspace before attaching this observation');
             const next=new Map(photos);next.set(alias,value.observationId);
             await scope.replace([...next.values()]);photos=next;
             return value.row;
@@ -1870,7 +1878,7 @@
       function reset(){
         return serialize(async()=>{await scope.replace([]);photos=new Map();owner=null;});
       }
-      return Object.freeze({bind,photograph,reset,
+      return Object.freeze({bind,photograph,linkedPhotograph,reset,
         createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos))});
     }
     // One-shot Recovery import reuses the shared collection transition engine.

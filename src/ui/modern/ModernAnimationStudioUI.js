@@ -1086,8 +1086,8 @@
     }
   }
   // Stage 2: one shared picker; only explicit confirmation edits frame links.
-  function renderReferenceLinks(doc,panel,frame,actions,list,get){
-    var ids=frame.referenceImageIds||[],rows=null,busy=false;
+  function renderReferenceLinks(doc,panel,frame,actions,list,get,getLinked){
+    var ids=frame.referenceImageIds||[],rows=null,linkedRows=null,busy=false;
     var section=el(doc,'section','modern-studio-reference-links');
     section.appendChild(el(doc,'strong','','Reference photographs ('+ids.length+')'));
     section.appendChild(el(doc,'p','modern-studio-hint',
@@ -1101,19 +1101,20 @@
       else visual.textContent='No thumbnail';
       return visual;
     }
-    function inspect(id){if(refs&&get)refs.showReference(doc,section,id,get);}
+    function inspect(id){if(refs&&(getLinked||get))refs.showReference(doc,section,id,getLinked||get);}
     function change(next){if(section.isConnected===false)return;actions.frame(frame.key,'referenceImageIds',next);}
     function move(i,step){var next=ids.slice(),other=next[i+step];next[i+step]=next[i];next[i]=other;change(next);}
     function paint(){
       linked.textContent='';
       if(!ids.length)linked.appendChild(el(doc,'p','modern-studio-hint','No reference photographs linked.'));
       ids.forEach(function(id,i){
-        var row=rows&&rows.find(function(item){return item.id===id;});
+        var source=getLinked?linkedRows:rows;
+        var row=source&&source.find(function(item){return item.id===id;});
         var item=el(doc,'div','modern-studio-reference-row');
-        var label=el(doc,'span','',row?row.title:rows?'Missing local photograph: '+id:'Unresolved local photograph: '+id);
+        var label=el(doc,'span','',row?row.title:source?'Missing local photograph: '+id:'Unresolved local photograph: '+id);
         var visual=button(doc,'','View original photograph '+(i+1),function(){inspect(id);});
         visual.className+=' modern-reference-thumb-button';visual.appendChild(thumb(row));
-        visual.disabled=!row||typeof get!=='function';
+        visual.disabled=!row||typeof (getLinked||get)!=='function';
         item.appendChild(visual);label.title=id;item.appendChild(label);
         var up=button(doc,'↑','Move reference photograph '+(i+1)+' earlier',function(){move(i,-1);});
         up.disabled=i===0;item.appendChild(up);
@@ -1138,6 +1139,20 @@
         throw error;
       }finally{busy=false;if(section.isConnected!==false)paint();}
     }
+    async function loadLinked(){
+      busy=true;paint();status.textContent='Loading retained originals…';
+      try{
+        var found=await Promise.all(ids.map(async function(id){
+          var value=await getLinked(id);
+          if(!value||value.record?.id!==id)throw Error('Retained photograph unavailable: '+id);
+          return value.record;
+        }));
+        if(section.isConnected===false)return;
+        linkedRows=found;status.textContent='Retained originals loaded.';
+      }catch(error){
+        linkedRows=[];status.textContent='Cannot resolve retained originals: '+(error.message||error);
+      }finally{busy=false;if(section.isConnected!==false)paint();}
+    }
     async function browseImages(){
       if(busy||!imagePicker||ids.length>=100)return;
       try{
@@ -1160,7 +1175,9 @@
             if(selected.length+ids.length>100||new Set(selected.concat(ids)).size!==selected.length+ids.length)
               throw Error('Too many or duplicate reference images');
             for(var id of selected){
-              var row=await get(id);
+              var choice=available.find(function(item){return item.id===id;});
+              if(!choice)throw Error('Original image not in the inspected picker: '+id);
+              var row=await get(id,choice.revision);
               if(!row||row.id!==id||!row.record||row.record.id!==id)
                 throw Error('Original image missing or changed: '+id);
             }
@@ -1187,7 +1204,7 @@
     tools.appendChild(openLibrary);
     section.appendChild(status);section.appendChild(linked);section.appendChild(tools);
     panel.appendChild(section);paint();
-    if(ids.length)load().catch(function(){});
+    if(ids.length)(getLinked?loadLinked():load()).catch(function(){});
   }
   function render(doc,host,draft,result,actions,prepared,options){
     if(!host||!doc)return;
@@ -1497,7 +1514,7 @@
         fields.appendChild(easing);
       }
       panel.appendChild(fields);
-      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage);
+      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage,options.getLinkedReferenceImage);
       framePane.appendChild(panel);
     }
     timelinePane.appendChild(el(doc,'p','modern-studio-hint',

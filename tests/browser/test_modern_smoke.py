@@ -1851,6 +1851,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 record:{...importedPhoto.row.record,title:'Edited after unlink'}},
                 {expectedRevision:1,originalId:importedPhoto.originalId});
             ok(changed.observationId!==importedPhoto.observationId,'attribution did not create a new resource');
+            ok((await live.linkedPhotograph(alias,portableRecovery.id)).record.title===importedPhoto.row.record.title,
+                'linked editor display substituted current attribution');
+            await rejects(()=>live.photograph(alias,portableRecovery.id,1),/Original image changed/);
+            await rejects(()=>live.photograph(alias,portableRecovery.id,2),/different historical version/);
             await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
             ref=A.documentReference(edited,portableRecovery.id);
             const undo=A.normalize({...importedCp,savedAt:unlinked.savedAt+1});
@@ -3010,6 +3014,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewLibrary').click()
         self.page.locator('[data-shared-named-animation-id="managed_retained_animation"]').click()
         self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
+        links=self.page.locator('#ModernAnimationStudio .modern-studio-reference-links')
+        expect(links.locator('.modern-studio-reference-row')).to_contain_text('Retained animation original')
+        links.get_by_role('button',name='View original photograph 1').click()
+        expect(links.locator('dialog img')).to_have_attribute('alt','Retained animation original')
+        links.get_by_role('button',name='Close photograph').click()
         self.page.locator('#ModernAnimationViewPreview').click()
         expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
         self.page.locator('#ModernAnimationReferenceLayout').select_option('side')

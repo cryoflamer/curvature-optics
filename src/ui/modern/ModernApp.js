@@ -7286,10 +7286,13 @@
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
       listReferenceImages:function(){return referenceLibrary.list(root.indexedDB);},
-      getReferenceImage:function(id){
+      getReferenceImage:function(id,revision){
         var retention=experimentPreview.animationContext?.retention;
-        return retention&&!studioActiveDemo?retention.photograph(id,retentionWorkspace):referenceLibrary.get(root.indexedDB,id);
+        return retention&&!studioActiveDemo?retention.photograph(id,retentionWorkspace,revision):referenceLibrary.get(root.indexedDB,id);
       },
+      getLinkedReferenceImage:retentionWorkspace&&!studioActiveDemo?function(id){
+        return experimentPreview.animationContext.retention.linkedPhotograph(id,retentionWorkspace);
+      }:null,
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,
