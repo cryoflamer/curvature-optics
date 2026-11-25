@@ -803,6 +803,39 @@ class ModernBrowserSmoke(unittest.TestCase):
             const independent=await adapter.createObservation({...record,id:'independent_photo',title:'Independent attribution'});
             ok(independent.originalId===photo.originalId&&independent.observationId!==classified.observationId&&
                 independent.row.record.author==='Observer A','independent observation did not share exact original');
+            ctx.fillStyle='#002288';ctx.fillRect(0,0,3,2);
+            const otherOriginal={dataUrl:canvas.toDataURL('image/png'),width:3,height:2};
+            const incomingAssets=[{...record,id:'photo_b',title:'Imported conflict',original:otherOriginal},
+                {...record,id:'second_asset',title:'Second imported asset',original:otherOriginal}];
+            await rejects(()=>adapter.importObservationAssets(incomingAssets,
+                {guard:()=>{throw Error('stale asset import');}}),/stale asset import/);
+            ok((await adapter.listObservations()).length===2,'refused asset batch partially committed');
+            const assets=await adapter.importObservationAssets(incomingAssets);
+            ok(assets.get('photo_b')!=='photo_b'&&assets.get('second_asset')==='second_asset',
+                'conflicting image alias was overwritten');
+            const importedPhoto=await adapter.readObservation(assets.get('photo_b'));
+            const secondPhoto=await adapter.readObservation('second_asset');
+            ok(importedPhoto.originalId===secondPhoto.originalId&&importedPhoto.originalId!==photo.originalId&&
+                importedPhoto.observationId!==secondPhoto.observationId,'staged original was duplicated or observations merged');
+            ok((await adapter.readObservation('photo_b')).row.record.author==='Observer B edited',
+                'asset import changed local attribution');
+            const againAssets=await adapter.importObservationAssets(incomingAssets);
+            ok(againAssets.get('photo_b')===assets.get('photo_b')&&(await adapter.listObservations()).length===4,
+                'asset remapping was not idempotent');
+            const backup=await adapter.exportObservationBackup();
+            ok(backup.observations.length===4&&backup.annotations.length===1,'portable image backup incomplete');
+            const restore=await adapter.restoreObservationBackup({...backup,annotations:[...backup.annotations,
+                {id:'second_asset',revision:7,kind:'diagram',tags:['restored'],collections:[]}]});
+            ok(restore.created===0&&restore.annotationsAdded===1&&
+                (await adapter.readObservation('second_asset')).row.annotationRevision===1,
+                'portable classification merge failed');
+            const secondRestore=await adapter.restoreObservationBackup({...backup,annotations:[
+                {id:'second_asset',revision:8,kind:'map',tags:['overwrite'],collections:[]}]});
+            ok(secondRestore.annotationsAdded===0&&
+                (await adapter.readObservation('second_asset')).row.kind==='diagram','local classification overwritten');
+            const exported=await adapter.exportObservationBackup();
+            ok(exported.observations.find(v=>v.id==='second_asset').record.original.dataUrl===otherOriginal.dataUrl,
+                'portable export altered exact original');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};

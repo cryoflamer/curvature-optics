@@ -346,3 +346,17 @@ retain the exact observation resource. Original and classification revisions
 remain distinct and stale revisions or caller guards refuse the whole
 operation. This is not the active Image Library route. Bulk portable import,
 backup restore, Where used? integration and global activation remain open.
+
+Managed portable asset import and Image Library backup merge now share an
+atomic planner. All incoming originals pass the decoder before writing,
+including reused records. Existing records with conflicting aliases are
+preserved and imports receive stable remappings. Retired aliases are not
+recycled. Distinct observations of the same verified original share one
+binary resource, including originals staged together within one import.
+The library's existing backup format and merge rules remain available:
+missing classifications may be added, while existing local attribution
+and classification are not replaced. Distinct incoming aliases are not
+collapsed onto the same remapped observation. Whole-collection CAS guards
+both mutations and no-op reimports; quotas and all planned writes commit
+together. This is a portable merge, not a complete-profile restore or
+automatic production migration.

@@ -376,7 +376,7 @@
       const left=new Uint8Array(await a.arrayBuffer()),right=new Uint8Array(await b.arrayBuffer());
       return left.every((byte,i)=>byte===right[i]);
     }
-    async function prepareObservation(row,{expectedRevision=0,originalId,verified=null}={}){
+    async function prepareObservation(row,{expectedRevision=0,originalId,verified=null,stagedOriginals=null}={}){
       check(row&&row.record,'observation row required');
       const record=images.validate(row.record);
       check(record.id===row.id,'observation alias mismatch');
@@ -385,10 +385,13 @@
       const binaryId=originalId??store.newObjectId();
       const resources=[];
       if(originalId!==undefined){
-        const previous=await store.get(binaryId);
+        const previous=stagedOriginals?.get(binaryId)??await store.get(binaryId);
         check(previous&&previous.type===ORIGINAL&&same(previous.payload.identity,original.identity)&&
           await bytesEqual(previous.payload.blob,original.blob),'original reuse requires verified identical bytes');
-      }else resources.push({id:binaryId,type:ORIGINAL,version:1,payload:original});
+      }else{
+        const resource={id:binaryId,type:ORIGINAL,version:1,payload:original};
+        resources.push(resource);stagedOriginals?.set(binaryId,resource);
+      }
       const id=store.newObjectId();
       resources.push({id,type:OBSERVATION,version:1,payload:{id:record.id,attribution:attribution(record),
         originalId:binaryId,identity:original.identity,thumbnail:record.thumbnail??null}});
@@ -416,10 +419,10 @@
       library.annotationQuota(rows.filter(r=>r.annotationRevision>0).map(r=>({
         id:r.id,revision:r.annotationRevision,kind:r.kind,tags:r.tags,collections:r.collections})));
     }
-    async function matchingObservation(existing,original){
+    async function matchingObservation(existing,original,stagedOriginals=null){
       let found=null;
       for(const value of existing){
-        const resource=await store.get(value.originalId);
+        const resource=stagedOriginals?.get(value.originalId)??await store.get(value.originalId);
         check(resource?.type===ORIGINAL,'observation original unavailable');
         if(resource.payload.identity.sha256!==original.identity.sha256)continue;
         check(same(resource.payload.identity,original.identity)&&
@@ -494,6 +497,78 @@
       observationQuota(existing.map(v=>v.row.id===id?next.row:v.row));
       const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
       return {row:next.row,observationId:next.observationId,originalId:next.originalId,managedRevision:document.revision};
+    }
+    // Portable assets and library backups share one merge planner. Every
+    // incoming original is decoded and verified before any root mutation.
+    // Local aliases are never overwritten or recycled after retirement.
+    async function mergeObservationRecords(input,annotations,{guard=()=>{}}={}){
+      const incoming=images.validateCollection(input),verified=new Map();
+      for(const record of incoming)verified.set(record.id,await originalFrom(record));
+      const existing=await observationInventory(),expectedInventory=observationExpected(existing);
+      const all=[...existing],byId=new Map(all.map(v=>[v.row.id,v]));
+      const occupied=new Set((await store.listDocuments('observation',{includeDeleted:true})).map(v=>v.id));
+      const reserved=new Set(incoming.map(r=>r.id)),used=new Set(),mapping=new Map();
+      const created=new Map(),updates=new Map(),stagedOriginals=new Map();
+      function content(record){const {id,...rest}=record;return rest;}
+      function equalRecord(a,b){return same(content(a),content(b));}
+      for(const record of incoming){
+        let id=record.id,current=byId.get(id);
+        if(current&&!equalRecord(current.row.record,record)||!current&&occupied.has(observationId(id))){
+          const match=all.find(v=>!reserved.has(v.row.id)&&!used.has(v.row.id)&&equalRecord(v.row.record,record));
+          if(match)id=match.row.id;
+          else{
+            let attempts=0;
+            do{
+              check(++attempts<=100,'Cannot allocate reference image alias');
+              id=library.makeId(env.crypto);
+            }while(occupied.has(observationId(id))||reserved.has(id));
+          }
+        }
+        if(!byId.has(id)){
+          const original=verified.get(record.id),match=await matchingObservation(all,original,stagedOriginals);
+          const next=await prepareObservation({id,revision:1,record:{...record,id}},
+            {originalId:match?.originalId,verified:original,stagedOriginals});
+          all.push(next);byId.set(id,next);created.set(id,next);occupied.add(observationId(id));
+        }
+        mapping.set(record.id,id);used.add(id);
+      }
+      let annotationsAdded=0;
+      for(const [sourceId,value] of annotations){
+        const id=mapping.get(sourceId),current=byId.get(id);
+        check(current,'orphaned backup classification');
+        if(current.row.annotationRevision>0)continue;
+        const row={...current.row,...library.annotation({kind:value.kind,tags:value.tags,collections:value.collections}),
+          annotationRevision:1};
+        if(created.has(id)){
+          const metadata={id,revision:row.revision,...classification(row)};
+          const next={...current,row,plan:{...current.plan,metadata}};
+          created.set(id,next);byId.set(id,next);
+        }else{
+          const next=retainedObservationPlan(row,current);
+          updates.set(id,next);byId.set(id,next);
+        }
+        annotationsAdded++;
+      }
+      observationQuota([...byId.values()].map(v=>v.row));
+      const plans=[...created.values(),...updates.values()].map(v=>v.plan);
+      await store.writeDocuments(plans,{expectedInventory,guard});
+      return {mapping,created:created.size,annotationsAdded};
+    }
+    async function importObservationAssets(records,options){
+      return (await mergeObservationRecords(records,new Map(),options)).mapping;
+    }
+    async function exportObservationBackup(){
+      const existing=await observationInventory();
+      const backup={format:'curvature-image-library-backup',version:1,
+        observations:existing.map(({row:{id,revision,record}})=>({id,revision,record})),
+        annotations:existing.filter(v=>v.row.annotationRevision>0).map(({row:r})=>({
+          id:r.id,revision:r.annotationRevision,kind:r.kind,tags:r.tags,collections:r.collections}))};
+      library.validateBackup(backup);
+      return backup;
+    }
+    async function restoreObservationBackup(backup,options){
+      const {rows,annotations}=library.validateBackup(backup);
+      return mergeObservationRecords(rows.map(r=>r.record),annotations,options);
     }
     // A cache belongs to one immutable graph closure only. Never retain
     // verification across transactions or trust an alias as binary identity.
@@ -1005,6 +1080,7 @@
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
+      importObservationAssets,exportObservationBackup,restoreObservationBackup,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
   // One-way rehearsal from a verified portable archive into a disposable,
