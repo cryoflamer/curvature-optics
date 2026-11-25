@@ -12112,6 +12112,31 @@ class ModernBrowserSmoke(unittest.TestCase):
             second.wait_for_function(ready,timeout=30000)
             self.assertEqual(second.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
             self.assertEqual(second.url,url)
+            second.locator('#ModernAnimationTab').click()
+            second.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='animation'")
+            second.locator('#ModernAnimationViewLibrary').click()
+            pointer=second.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope')
+            recovery_file=second.locator('#ModernSharedAnimationRecoveryFile')
+            recovery_file.set_input_files({'name':'recovery.json','mimeType':'application/json',
+                'buffer':json.dumps(exported).encode('utf-8')})
+            recovered=second.locator('[data-shared-animation-id^="draft_imported_"]')
+            expect(recovered).to_have_count(1)
+            expect(recovered).to_contain_text('Unsent second tab edit')
+            self.assertEqual(second.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope'),pointer)
+            after=second.evaluate("""async()=>{
+                const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+                U.sharedDocumentSessions(D);
+                return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            }""")
+            self.assertEqual(after['collection']['workspaces'][0],expected['collection']['workspaces'][0])
+            self.assertEqual(after['revisions'][0],expected['revisions'][0])
+            self.assertIsNone(after['receipt'])
+            recovery_file.set_input_files({'name':'recovery.json','mimeType':'application/json',
+                'buffer':json.dumps(exported).encode('utf-8')})
+            expect(second.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+                'identity is already used')
+            expect(recovered).to_have_count(1)
         finally:
             second.close()
 

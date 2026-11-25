@@ -1046,3 +1046,48 @@ test('shared Animation linked workspace creation is independent of named Library
   assert.deepEqual(await a.read(),linked);
   await assert.rejects(async()=>a.createLinkedWorkspace(linked,f.cp),/Named Animation revision required/);
 });
+
+
+test('shared Animation recovery import detaches named ownership and does not replay old receipts',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const ref=autosave.documentReference(row,f.id);
+  const checkpoint=autosave.normalize({...f.cp,libraryId:'named_project',libraryRevision:123});
+  const envelope={format:'curvature-shared-animation-recovery',version:1,
+    recovery:{version:1,reference:ref,checkpoint,receipt:null}};
+  const imported=await autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto);
+  const reordered=structuredClone(envelope);
+  reordered.recovery.reference={revision:ref.revision,recovery:null,id:ref.id};
+  assert.deepEqual(await autosave.prepareRecoveryImport(JSON.stringify(reordered),crypto),imported);
+  assert.equal(imported.checkpoint.libraryId,null);
+  assert.equal(imported.checkpoint.libraryRevision,null);
+  assert.deepEqual(imported.checkpoint.draft,checkpoint.draft);
+  const added=await a.createDraft(row,imported.id,imported.checkpoint);
+  assert.equal(added.collection.activeId,row.collection.activeId);
+  assert.equal(added.receipt,null);
+  assert.deepEqual(autosave.documentReference(added,f.id),ref);
+  assert.deepEqual(autosave.getWorkspace(added.collection,f.id),f.cp);
+  await assert.rejects(a.createDraft(added,imported.id,imported.checkpoint),/identity is already used/);
+  assert.deepEqual(await a.read(),added);
+  envelope.recovery.receipt={version:1,base:{revision:1,digest:'sha256:'+'a'.repeat(64)},
+    previous:ref,current:{...ref,revision:'rev:2'},status:'updated'};
+  assert.deepEqual(await autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto),imported);
+});
+
+test('shared Animation recovery import rejects foreign formats, missing checkpoints and mismatched receipts',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const ref=autosave.documentReference(row,f.id);
+  const envelope={format:'curvature-shared-animation-recovery',version:1,
+    recovery:{version:1,reference:ref,checkpoint:f.cp,receipt:null}};
+  const parse=()=>autosave.prepareRecoveryImport(JSON.stringify(envelope),crypto);
+  envelope.version=2;await assert.rejects(parse(),/Unsupported/);envelope.version=1;
+  envelope.recovery.checkpoint=null;await assert.rejects(parse(),/no importable checkpoint/);
+  envelope.recovery.checkpoint={...f.cp,unknown:true};
+  await assert.rejects(parse(),/Noncanonical/);
+  envelope.recovery.checkpoint=f.cp;
+  envelope.recovery.receipt={version:1,base:{revision:1,digest:'sha256:'+'a'.repeat(64)},
+    previous:{...ref,id:'draft_foreign'},current:{...ref,id:'draft_foreign',revision:'rev:2'},status:'updated'};
+  await assert.rejects(parse(),/does not match/);
+  assert.deepEqual(await a.read(),row);
+});

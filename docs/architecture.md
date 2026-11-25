@@ -847,7 +847,13 @@ collection or unknown domain-write outcome blocks rebasing, retaining the
 latest in-memory checkpoint for explicit recovery/export. The mounted
 Library displays the acknowledged working drafts and exports recovery
 evidence as JSON; a stale writer cannot select a different workspace or
-silently replay the rejected edit. Additional historical variants can be explicitly recovered as independent
+silently replay the rejected edit. After reopening a clean shared session,
+an explicitly selected recovery JSON file can be imported into an
+independent, unlinked working draft. Its validated checkpoint and original
+workspace identity determine a stable SHA-256-based import ID; duplicate
+imports cannot replace an existing draft. The old reference and receipt
+are never replayed, the saved Library and shared selection remain unchanged,
+and invalid or unsupported files are rejected before the domain write. Additional historical variants can be explicitly recovered as independent
 unlinked drafts. A stable digest of the original workspace identity and
 normalized checkpoint prevents repeated recovery of the same variant
 across different source slots; no existing workspace or shared selection

@@ -2938,6 +2938,15 @@
     action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
       !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
       {'id':'ModernSharedAnimationNewDraft'});
+    var recoveryFile=element('input');recoveryFile.type='file';recoveryFile.hidden=true;
+    recoveryFile.id='ModernSharedAnimationRecoveryFile';recoveryFile.accept='.json,application/json';
+    controls.appendChild(recoveryFile);
+    action(controls,'Import recovery draft',()=>{recoveryFile.value='';recoveryFile.click();},
+      !!status.error||!ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
+      {'id':'ModernSharedAnimationImportRecovery'});
+    recoveryFile.addEventListener('change',()=>{
+      var file=recoveryFile.files?.[0];if(file)void runSharedAnimationAction('importRecovery',file);
+    });
     if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
       var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
       action(controls,(studioWorkspaceId===item.id?'Opened · ':'Open · ')+
@@ -3005,7 +3014,12 @@
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
     try{
       if(studioWorkspaceReady)await flushSharedAnimation();
-      var openRef=null,openNamed=null;
+      var openRef=null,openNamed=null,recoveryImport=null;
+      if(kind==='importRecovery'){
+        if(value.size>studioDraftAutosave.MAX_SHARED_RECOVERY_LENGTH)
+          throw Error('Animation recovery JSON is too large');
+        recoveryImport=await studioDraftAutosave.prepareRecoveryImport(await value.text(),root.crypto);
+      }
       if(kind==='open')openRef=value;
       else{
         await ctx.coordinate(async function(){
@@ -3033,6 +3047,11 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='importRecovery'){
+            var {id,checkpoint}=recoveryImport;
+            ctx.row=row?await store.createDraft(row,id,checkpoint):
+              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,checkpoint),root.localStorage);
+            ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
           }else if(kind==='new'){
             var id=studioDraftAutosave.makeWorkspaceId(root.crypto);
             var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,

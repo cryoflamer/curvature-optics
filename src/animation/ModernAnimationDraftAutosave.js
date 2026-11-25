@@ -700,6 +700,37 @@
       throw Error('Invalid Animation receipt transition');
     return {version:1,base,previous,current,status:'updated'};
   }
+  // A downloaded recovery file is a portable checkpoint, never a replay
+  // authority for another browser's session or pending transaction.
+  const MAX_SHARED_RECOVERY_LENGTH=80000000;
+  async function prepareRecoveryImport(text,crypto){
+    if(typeof text!=='string'||text.length>MAX_SHARED_RECOVERY_LENGTH)
+      throw Error('Animation recovery JSON is too large or invalid');
+    const envelope=JSON.parse(text);
+    if(!exact(envelope,['format','version','recovery'])||
+       envelope.format!=='curvature-shared-animation-recovery'||envelope.version!==1)
+      throw Error('Unsupported shared Animation recovery file');
+    const recovery=envelope.recovery;
+    if(!exact(recovery,['version','reference','checkpoint','receipt'])||recovery.version!==1||
+       recovery.checkpoint===null)throw Error('Animation recovery contains no importable checkpoint');
+    const ref=validateReference(recovery.reference),cp=normalize(recovery.checkpoint);
+    // Reject lossy normalization, including unknown future fields, but do
+    // not interpret JSON property ordering as a semantic change.
+    function canonical(value){
+      if(Array.isArray(value))return value.map(canonical);
+      if(object(value))return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));
+      return value;
+    }
+    if(!equal(canonical(cp),canonical(recovery.checkpoint)))
+      throw Error('Noncanonical Animation recovery checkpoint');
+    if(recovery.receipt!==null){
+      const receipt=validateReceipt(recovery.receipt);
+      if(!equal(receipt.previous,ref))throw Error('Animation recovery receipt does not match its reference');
+    }
+    const identity=await seal({id:ref.id,checkpoint:cp},crypto);
+    return {id:workspaceId('draft_imported_'+identity.digest.slice(7)),
+      checkpoint:normalize({...cp,libraryId:null,libraryRevision:null})};
+  }
   function documentReference(row,id){
     const item=row.revisions.find(x=>x.id===id);
     if(!item)throw Error('Animation workspace missing');
@@ -1015,5 +1046,6 @@
     writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
     SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
-    inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,documentReference});
+    inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,documentReference,
+    MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport});
 }));
