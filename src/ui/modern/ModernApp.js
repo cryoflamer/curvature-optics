@@ -3206,6 +3206,39 @@
       action(actions,'Open',open,blocked,{'data-shared-named-animation-id':record.id,
         'aria-label':'Open saved project · '+record.project.name});
       action(actions,'Export JSON',()=>void exportSharedNamedAnimations([record]));
+      // If a saved project already has a retained working copy, edit its
+      // metadata from that copy so its acknowledged revision can advance too.
+      var metadataBlocked=!!existing&&(!active||existing.checkpoint.libraryRevision!==record.updatedAt);
+      var metadataHint=metadataBlocked?'Open the matching working copy before editing its saved metadata':'';
+      action(actions,'Rename',()=>{
+        studioLibraryRenamingId=record.id;renderSharedAnimationLibrary();
+      },metadataBlocked,{'title':metadataHint,'aria-label':'Rename saved animation '+record.project.name});
+      var coverFile=element('input');coverFile.type='file';coverFile.hidden=true;
+      coverFile.accept='image/png,image/jpeg,image/webp';
+      coverFile.setAttribute('aria-label','Cover image for '+record.project.name);
+      coverFile.addEventListener('change',()=>{
+        var file=coverFile.files?.[0];if(file)void runSharedAnimationAction('metadata',{record,file});
+      });
+      actions.appendChild(coverFile);
+      action(actions,'Upload cover',()=>{coverFile.value='';coverFile.click();},metadataBlocked,{'title':metadataHint});
+      action(actions,'Capture frame',()=>{
+        try{void runSharedAnimationAction('metadata',{record,cover:captureStudioCover(record.id)});}
+        catch(error){ctx.error=true;ctx.message=error.message;renderSharedAnimationLibrary();}
+      },metadataBlocked||!active);
+      if(record.cover)action(actions,'Remove cover',()=>void runSharedAnimationAction('metadata',{record,cover:null}),metadataBlocked);
+      if(studioLibraryRenamingId===record.id&&!metadataBlocked){
+        var rename=element('div','modern-animation-library-rename'),name=element('input');
+        name.type='text';name.maxLength=120;name.value=record.project.name;
+        name.setAttribute('aria-label','New name for '+record.project.name);rename.appendChild(name);
+        var submit=()=>void runSharedAnimationAction('metadata',{record,name:name.value.trim()});
+        name.addEventListener('keydown',event=>{
+          if(event.key==='Enter'){event.preventDefault();submit();}
+          if(event.key==='Escape'){studioLibraryRenamingId='';renderSharedAnimationLibrary();}
+        });
+        action(rename,'Save name',submit);
+        action(rename,'Cancel',()=>{studioLibraryRenamingId='';renderSharedAnimationLibrary();});
+        card.appendChild(rename);
+      }
       action(actions,'Delete',()=>void runSharedAnimationAction('deleteNamed',record),false,
         {'data-shared-delete-animation-id':record.id,'aria-label':'Delete saved project · '+record.project.name});
       card.addEventListener('dblclick',event=>{
@@ -3411,7 +3444,7 @@
     if(kind==='abandonNamedSave'&&(!root.confirm||!root.confirm(
       'Abandon this pending Save Changes intent? This does not undo any named save that may already have committed. Download the evidence first if needed. The working draft is retained.')))return false;
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
-    var namedMutationStarted=false,relinkRef=null;
+    var namedMutationStarted=false,metadataCommitted=false,relinkRef=null;
     try{
       if(studioWorkspaceReady&&!ctx.row?.namedSave)await flushSharedAnimation();
       var openRef=null,openNamed=null,recoveryImport=null,namedContents=null;
@@ -3424,6 +3457,8 @@
           throw Error('Animation recovery JSON is too large');
         recoveryImport=await studioDraftAutosave.prepareRecoveryImport(await value.text(),root.crypto);
       }
+      if(kind==='metadata'&&value.file)
+        value={record:value.record,cover:await thumbnailApi.coverFromFile(document,value.file)};
       if(kind==='open')openRef=value;
       else{
         await ctx.coordinate(async function(){
@@ -3470,6 +3505,44 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='metadata'){
+            var original=await verifySharedNamedAnimation(value.record);
+            var id=studioDraftAutosave.projectWorkspaceId(original.id);
+            var existing=row?.collection.workspaces.find(item=>item.id===id);
+            var ref=ctx.writer.state().reference,base=null;
+            if(existing){
+              if(!studioWorkspaceReady||studioWorkspaceId!==id||!ref||
+                 existing.checkpoint.libraryRevision!==original.updatedAt||
+                 JSON.stringify(studioDraftAutosave.documentReference(row,id))!==JSON.stringify(ref))
+                throw Error('Open the exact linked working copy before editing saved metadata');
+              base=await c.captureSelectionBase('animation',ref);
+            }
+            var renamed=Object.hasOwn(value,'name');
+            ctx.lease.check(true);
+            var updated=renamed?
+              await studioLibrary.rename(root.indexedDB,original.id,value.name,original.updatedAt):
+              await studioLibrary.setCover(root.indexedDB,original.id,value.cover,original.updatedAt);
+            metadataCommitted=true;
+            ctx.lease.check(true);
+            await verifySharedNamedAnimation(updated);
+            if(existing){
+              var prior=existing.checkpoint,draft=prior.draft;
+              // Preserve a separately edited title and all unsaved physics.
+              if(renamed&&draft.name===original.project.name)
+                draft=studioApi.edit(draft,'name',updated.project.name);
+              var next=studioDraftAutosave.normalize({...prior,draft,
+                libraryRevision:updated.updatedAt,savedAt:Math.max(Date.now(),prior.savedAt+1)});
+              ctx.row=await store.saveSelected(row,ref,next,base);
+              var result=await c.acknowledgeDocumentRevision('animation',ctx.row.receipt);
+              experimentPreview.status=result.status;
+              ctx.row=await store.retire(ctx.row,ctx.row.receipt);
+              relinkRef=studioDraftAutosave.documentReference(ctx.row,id);
+            }
+            ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;
+            if(!ctx.named.some(record=>JSON.stringify(record)===JSON.stringify(updated)))
+              throw Error('Saved metadata changed during readback');
+            studioLibraryRenamingId='';
+            ctx.message=renamed?'Project renamed.':'Project cover updated.';
           }else if(kind==='saveChanges'){
             var ref=ctx.writer.state().reference;
             if(!studioWorkspaceReady||!ref||!row||!studioLibraryActive||
@@ -3584,7 +3657,11 @@
       return true;
     }catch(error){
       ctx.error=true;ctx.message=error.message;
-      if(namedMutationStarted){
+      if(metadataCommitted){
+        // The named metadata may be durable before the working-copy receipt.
+        // Never continue editing against an unverified revision after failure.
+        if(experimentPreview.status!=='suspended')previewFailure(Error('Saved metadata requires reload and readback: '+error.message));
+      }else if(namedMutationStarted){
         // An exception may be a lost transaction acknowledgement. Continue
         // only from an exact durable pending intent; otherwise reload and
         // let the existing selection-receipt recovery own the transition.

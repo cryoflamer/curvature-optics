@@ -12358,6 +12358,55 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewLibrary').click()
         expect(card).to_have_count(2)
 
+    def test_shared_animation_named_metadata_preserves_working_copy(self):
+        """Rename/cover use the exact saved revision and retain unsaved frame edits."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        original=self.page.evaluate("""async()=>{
+            const p=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            p.name='Metadata original';
+            return CurvatureModernAnimationLibrary.create(indexedDB,p,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+original['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        editor=self.page.locator('#ModernAnimationStudio')
+        frame=editor.get_by_label('Frame name',exact=True)
+        frame.fill('Unsaved local frame name')
+        frame.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        card=self.page.locator('.modern-my-projects-category [data-animation-id="'+original['id']+'"]')
+        card.get_by_role('button',name='Rename saved animation Metadata original').click()
+        card.get_by_label('New name for Metadata original').fill('Metadata renamed')
+        card.get_by_role('button',name='Save name').click()
+        expect(card.locator('.modern-animation-library-card-title')).to_have_text('Metadata renamed')
+        import base64
+        cover_png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgFlP8DwABtAFCmNjeNAAAAABJRU5ErkJggg==')
+        card.locator('input[type=file]').set_input_files({
+            'name':'cover.png','mimeType':'image/png','buffer':cover_png})
+        expect(card.locator('.modern-animation-library-cover-image')).to_be_visible(timeout=30000)
+        saved=self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",original['id'])
+        cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(cp['libraryRevision'],saved['updatedAt'])
+        self.assertEqual(cp['draft']['name'],'Metadata renamed')
+        self.assertEqual(cp['draft']['frames'][0]['name'],'Unsaved local frame name')
+        self.assertEqual(saved['project']['keyframes'],original['project']['keyframes'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].name'),
+            'Unsaved local frame name')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(card.locator('.modern-animation-library-cover-image')).to_be_visible()
+        card.get_by_role('button',name='Remove cover').click()
+        expect(card.locator('.modern-animation-library-cover-image')).to_have_count(0)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.frames[0].name'),
+            'Unsaved local frame name')
+
     def test_shared_animation_equivalent_legacy_sources_adopt_without_prompt(self):
         """Identical legacy collections migrate once, preserving source bytes and normal navigation."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
