@@ -362,6 +362,7 @@
       return acquire(0,()=>run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
+        await verifyPayloads(g,stores,types);
         for(const edge of [...g.refs.values()]){
           if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
         }

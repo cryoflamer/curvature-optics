@@ -418,6 +418,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             });db.close();
             await rejects(()=>s.verifyIntegrity(),/payload reference mismatch/);
             await rejects(()=>s.recount(),/payload reference mismatch/);
+            await rejects(()=>s.removeDocument({documentId:'doc',expectedRevision:2}),/payload reference mismatch/);
             await rejects(()=>s.collectGarbage(initial.id),/payload reference mismatch/);
             ok(!!await s.get(initial.id),'corrupt graph permitted reclamation');
             return {revision:(await s.getDocument('doc')).revision,retained:true};
