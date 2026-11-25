@@ -2644,8 +2644,9 @@
     catch(error){return false;}
   }
   function openStudioWizard(){
-    if(experimentPreview.live)return;
-    if(!studioWizardApi||!studioWizardUI||studioLibraryBusy||!studioWorkspaceReady){
+    var shared=experimentPreview.live&&experimentPreview.animationContext;
+    if(!studioWizardApi||!studioWizardUI||studioLibraryBusy||
+       (shared?shared.busy||experimentPreview.calibrationBusy:!studioWorkspaceReady)){
       studioLibraryNotice('Project wizard is not available until the workspace has loaded.',true);
       return;
     }
@@ -2711,10 +2712,18 @@
         if(studioLibraryBusy||!studioWizard)return;
         try{
           var project=studioWizardApi.build(studioWizard,studioHistoryEntries);
-          studioWizardError='';requestStudioSwitch('wizard',project);
+          studioWizardError='';
+          if(experimentPreview.live){
+            if(experimentPreview.animationContext?.busy)return;
+            void runSharedAnimationAction('wizard',project).then(ok=>{
+              if(ok)studioWizard=null;
+              else studioWizardError=experimentPreview.animationContext?.message||'Project creation failed';
+              renderStudioWizard();
+            });
+          }else requestStudioSwitch('wizard',project);
         }catch(error){studioWizardError=error.message;renderStudioWizard();}
       }
-    },{error:studioWizardError,busy:studioLibraryBusy});
+    },{error:studioWizardError,busy:studioLibraryBusy||!!experimentPreview.animationContext?.busy});
     if(studioWizard&&studioWizard.step===3&&studioUI&&studioUI.renderPicker){
       var picker=host.querySelector&&host.querySelector('[data-wizard-picker]');
       if(picker){
@@ -3140,9 +3149,33 @@
     namedFile.addEventListener('change',()=>{
       var file=namedFile.files?.[0];if(file)void runSharedAnimationAction('importNamed',file);
     });
-    action(named,'New project',()=>void runSharedAnimationAction('new'),
-      !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
-      {'id':'ModernSharedAnimationNewDraft'});
+    var initializationBlocked=!ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0);
+    action(named,'New project',openStudioWizard,initializationBlocked||!!status.error,
+      {'id':'ModernSharedAnimationProjectWizard'});
+    action(named,'New blank draft',()=>void runSharedAnimationAction('new'),
+      initializationBlocked,{'id':'ModernSharedAnimationNewDraft'});
+    action(named,'Export all',()=>void exportSharedNamedAnimations(allNamed),!allNamed.length);
+    var demos=element('section','modern-animation-library-category modern-demo-category');
+    demos.appendChild(element('strong','modern-animation-library-category-title','Built-in Demos'));
+    var demoGallery=element('div','modern-animation-library-gallery modern-demo-gallery');
+    demoGallery.setAttribute('aria-label','Built-in demo projects');
+    try{
+      builtInStudioDemos().forEach(demo=>{
+        var card=element('article','modern-animation-library-card modern-demo-card');
+        card.setAttribute('data-demo-id',demo.id);
+        card.appendChild(studioUI.libraryCardVisual(document,demo,demo.cover?'demos/modern/'+demo.cover.asset:null,'Reference image'));
+        var info=element('div','modern-animation-library-card-info');
+        info.appendChild(element('strong','modern-animation-library-card-title',demo.project.name));
+        info.appendChild(element('small','modern-demo-card-status','Built-in · Read-only'));
+        info.appendChild(element('small','modern-animation-library-card-meta',studioUI.libraryCardMeta(demo.project)));
+        card.appendChild(info);
+        var controls=element('div','modern-animation-library-card-actions');
+        action(controls,'Create copy',()=>void runSharedAnimationAction('copyDemo',demo.id),initializationBlocked||!!status.error);
+        action(controls,'Export demo',()=>void exportSharedDemo(demo.id));
+        card.appendChild(controls);demoGallery.appendChild(card);
+      });
+    }catch(error){demos.appendChild(element('p','modern-animation-library-message is-error',error.message));}
+    demos.appendChild(demoGallery);host.appendChild(demos);
     var section=element('section','modern-animation-library-category modern-my-projects-category');
     section.appendChild(element('strong','modern-animation-library-category-title','My Projects · '+allNamed.length));
     if(ctx.namedError)section.appendChild(element('p','modern-animation-library-message is-error',ctx.namedError));
@@ -3172,6 +3205,7 @@
       var blocked=!ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0);
       action(actions,'Open',open,blocked,{'data-shared-named-animation-id':record.id,
         'aria-label':'Open saved project · '+record.project.name});
+      action(actions,'Export JSON',()=>void exportSharedNamedAnimations([record]));
       action(actions,'Delete',()=>void runSharedAnimationAction('deleteNamed',record),false,
         {'data-shared-delete-animation-id':record.id,'aria-label':'Delete saved project · '+record.project.name});
       card.addEventListener('dblclick',event=>{
@@ -3204,6 +3238,34 @@
       var file=recoveryFile.files?.[0];if(file)void runSharedAnimationAction('importRecovery',file);
     });
     host.appendChild(maintenance);
+    renderStudioWizard();
+  }
+  async function exportSharedNamedAnimations(entries){
+    var ctx=experimentPreview.animationContext;
+    if(!ctx||ctx.busy||!entries.length)return;
+    ctx.busy=true;ctx.error=false;ctx.message='Preparing portable JSON…';previewControls();renderSharedAnimationLibrary();
+    try{
+      var checked=[];
+      for(var entry of entries)checked.push(await verifySharedNamedAnimation(entry));
+      var originals=await studioLibrary.collectReferences(checked,
+        id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+      for(var original of originals)await root.CurvatureModernReferenceImageImport.verify(original,root);
+      var json=studioLibrary.exportPortable(checked,experiment=>studioKeyframeThumbnails?.get(experiment),
+        {referenceImages:originals});
+      downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json,undefined,checked.length!==1));
+      ctx.message='Exported '+checked.length+' saved animation project(s).';
+    }catch(error){ctx.error=true;ctx.message='Animation export failed: '+error.message;}
+    finally{ctx.busy=false;previewControls();renderSharedAnimationLibrary();}
+  }
+  function exportSharedDemo(id){
+    var ctx=experimentPreview.animationContext;
+    if(!ctx||ctx.busy)return;
+    try{
+      var json=studioDemoCatalog.exportDemo(id,experiment=>studioKeyframeThumbnails?.get(experiment));
+      downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json));
+      ctx.message='Built-in demo exported.';ctx.error=false;
+    }catch(error){ctx.error=true;ctx.message='Demo export failed: '+error.message;}
+    renderSharedAnimationLibrary();
   }
   async function downloadSharedAnimationRecovery(ctx){
     if(ctx.busy)return;
@@ -3375,8 +3437,27 @@
           }else if(kind==='recover'){
             ctx.row=await store.adoptLegacyVariant(row,ctx.inventory,value,root.localStorage);
             ctx.message='Historical variant recovered as an independent draft.';
-          }else if(kind==='openNamed'){
-            openNamed=await verifySharedNamedAnimation(value);
+          }else if(['openNamed','wizard','copyDemo'].includes(kind)){
+            if(kind==='wizard'||kind==='copyDemo'){
+              // New named documents are independent of the old working copy.
+              // Only select the new revision after its durable readback.
+              if(!row&&(!ctx.inventory||ctx.inventory.sources.length||ctx.inventory.issues.length))
+                throw Error('Resolve existing Animation migration before creating a project');
+              if(kind==='wizard'){
+                var project=studioProjects.validate({...value,id:studioLibrary.makeId(root.crypto)});
+                await verifySharedAnimationOriginals(project,ctx);
+                openNamed=await studioLibrary.create(root.indexedDB,project,'canvas-direct',Date.now(),null,true);
+              }else{
+                var demo=builtInStudioDemos().find(item=>item.id===value);
+                if(!demo)throw Error('Built-in demo not found');
+                for(var original of demo.referenceImages)await root.CurvatureModernReferenceImageImport.verify(original,root);
+                ctx.lease.check(true);
+                openNamed=await studioDemoCatalog.copyToLibrary(root.indexedDB,value,undefined,root.crypto);
+              }
+              ctx.lease.check(true);
+              openNamed=await verifySharedNamedAnimation(openNamed);
+              ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;
+            }else openNamed=await verifySharedNamedAnimation(value);
             var id=studioDraftAutosave.projectWorkspaceId(openNamed.id);
             var draft=studioApi.fromProject(openNamed.project);
             var cp=studioDraftAutosave.checkpoint({draft,selectedKey:draft.frames[0]?.key??null,
@@ -3517,7 +3598,7 @@
           if(experimentPreview.status!=='suspended')
             previewFailure(Error(recoveryError.message+': '+error.message));
         }
-      }else if(kind==='openNamed'&&studioWorkspaceReady&&ctx.row&&
+      }else if(['openNamed','wizard','copyDemo'].includes(kind)&&studioWorkspaceReady&&ctx.row&&
          JSON.stringify(ctx.writer.acknowledgedRow())!==JSON.stringify(ctx.row))
         previewFailure(Error('Working copy creation requires reload and readback: '+error.message));
       else if(c.state().status==='failed'&&!ctx.writer.state().error)previewFailure(error);

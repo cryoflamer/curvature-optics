@@ -12312,6 +12312,52 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(after['row']['receipt'])
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_wizard_demo_copy_and_portable_export(self):
+        """Normal library actions use the shared document owner, not old autosave."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        library=self.page.locator('#ModernAnimationLibrary')
+        wizard=self.page.locator('#ModernAnimationProjectWizard')
+        library.get_by_role('button',name='New project',exact=True).click()
+        expect(wizard).to_be_visible()
+        wizard.get_by_role('button',name='Cancel').click()
+        expect(wizard).to_be_hidden()
+        library.get_by_role('button',name='New project',exact=True).click()
+        wizard.get_by_role('button',name='Next').click()
+        wizard.get_by_role('button',name='Use current Scene/Compare as reference').click()
+        wizard.get_by_role('button',name='Next').click()
+        wizard.get_by_role('button',name='Next').click()
+        wizard.get_by_label('Include reference as first keyframe').check()
+        wizard.get_by_role('button',name='Next').click()
+        wizard.get_by_label('Project name').fill('Shared wizard project')
+        wizard.get_by_role('button',name='Create project').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getAnimationStudioView()==='editor'&&
+            CurvatureModernApp.getAnimationStudioDraft()?.draft.name==='Shared wizard project'""",timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        card=library.locator('.modern-my-projects-category .modern-animation-library-card')
+        expect(card).to_have_count(1)
+        with self.page.expect_download() as dl:
+            card.get_by_role('button',name='Export JSON').click()
+        bundle=json.loads(Path(dl.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(bundle['animations'][0]['project']['name'],'Shared wizard project')
+        demo=library.locator('[data-demo-id]').first
+        with self.page.expect_download() as dl:
+            demo.get_by_role('button',name='Export demo').click()
+        self.assertTrue(json.loads(Path(dl.value.path()).read_text(encoding='utf-8'))['animations'])
+        demo.get_by_role('button',name='Create copy').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getAnimationStudioView()==='editor'&&
+            CurvatureModernApp.getAnimationStudioDraft()?.draft.name.endsWith('(copy)')""",timeout=30000)
+        opened=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),opened)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(card).to_have_count(2)
+
     def test_shared_animation_equivalent_legacy_sources_adopt_without_prompt(self):
         """Identical legacy collections migrate once, preserving source bytes and normal navigation."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

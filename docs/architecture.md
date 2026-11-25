@@ -1023,7 +1023,7 @@ or conflicting evidence fails closed without a repeated project write.
 This is a two-database recovery protocol, not a cross-database atomic
 transaction.
 
-In the shared Animation Library, the normal saved-project gallery uses the existing cover/thumbnail cards and verified shared open/save/delete operations. Historical variant adoption and recovery imports are grouped under a collapsed Recovery and migration disclosure after initialization; unresolved write intents remain visible. Identical complete legacy sources (or a single validated source) can be adopted automatically under the same exact-source CAS/readback contract; divergent or unreadable evidence still requires an explicit choice. No source bytes are removed.
+In the shared Animation Library, the normal saved-project gallery uses the existing cover/thumbnail cards and verified shared open/save/delete operations. The existing project wizard creates a named project and a verified linked working copy through the shared owner. The built-in catalog offers independent editable copies and portable exports; saved project JSON export includes verified linked originals without changing the current working copy. Historical variant adoption and recovery imports are grouped under a collapsed Recovery and migration disclosure after initialization; unresolved write intents remain visible. Identical complete legacy sources (or a single validated source) can be adopted automatically under the same exact-source CAS/readback contract; divergent or unreadable evidence still requires an explicit choice. No source bytes are removed.
 
 The document-session controller accepts distinct receipt owners for
 Calibration and Animation. Startup inspects every configured owner before
