@@ -739,3 +739,17 @@ This design deliberately defers the storage schema, metadata migration,
 shared visual picker and deletion enablement until the corresponding
 targeted implementation stages can enforce these contracts.
 
+### Shared Animation recovery inventory
+
+The usage inspector also reads the existing shared Animation collection through
+a read-only verified reader. It reports exact workspace revisions (`rev:n`),
+including inactive shared workspaces, and both the before and after projects of
+an unresolved named-save intent. Pending intent evidence is separate from an
+ordinary saved project. Missing shared storage is not initialized by inspection;
+corruption and read failures mark the scan incomplete. Legacy workspace and
+recovery sources remain in the inventory rather than being silently discarded.
+
+Shared checkpoint and pending-save usage rows are informational at this stage:
+no direct owner navigation is offered until exact-revision opening is wired to
+the shared document selection guards. None of these reads authorizes deletion
+of an original, or writes to the Animation collection.

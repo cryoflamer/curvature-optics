@@ -595,3 +595,26 @@ duration. Compatible Fast optical modes are explicitly labeled approximate;
 other profiles use Accurate CPU optics and may be slow. Background tabs and
 workspace switches pause the player. Animation of one physical parameter,
 permanent Animation Project saving, and video export remain future stages.
+
+## Shared document session: History integration
+
+The opt-in shared session (`document-session=shared&ui-state-registry=preview`)
+uses the existing History database. History panel visibility, gallery size and
+filters are presentation preferences, not experiment revisions. A reload must
+not restore an experiment merely because the History panel is open.
+
+Manual Save snapshot and Restore are restricted to acknowledged, clean Scene
+or Compare checkpoints. Temporary keyframe editing, dirty physical drafts and
+auxiliary workspaces cannot use physical Restore. Under the shared operation
+lock, Restore verifies the current checkpoint, records and verifies a pinned
+recovery snapshot, then replaces the physical payload and workspace through one
+checkpoint CAS. Calibration and Animation document references are preserved.
+The mounted editor hydrates only after durable acknowledgement. A stale writer
+must not overwrite a newer revision. History and the checkpoint are separate
+stores: a recovery record may survive a failed Restore; it is not rolled back.
+
+Shared History browsing and export do not grant permission to manage or delete
+records. Pin/unpin, editing metadata, import, bulk cleanup and automatic History
+capture remain deferred in the shared route. Legacy History migration markers
+are not yet retired. Manual Opera acceptance and wider regression verification
+remain separate from targeted automated verification.
