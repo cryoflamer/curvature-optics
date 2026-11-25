@@ -696,6 +696,15 @@ a stronger cross-store ownership/writer protocol and validated migration
 plan. Failed/stale scans and changes to the selected original are reported
 explicitly, never converted to deletion authorization.
 
+The main IndexedDB document, archive and original-image writers now participate
+in the common origin-wide backup Web Lock. This strengthens the transaction
+boundary but does not make the usage graph globally authoritative: the lock
+covers acknowledged participating transactions, not an entire multi-database
+operation, old clients, Web Storage or foreign-tab memory. Existing-only
+inspectors can read known supported databases without creating/upgrading
+them. The deletion review remains informational; physical deletion is still
+disabled. See [writer coordination](architecture.md#cross-tab-writer-barrier-for-participating-indexeddb-adapters).
+
 **Delete remains disabled** until the system has a defensible deletion
 protocol across all durable stores *and* pending/in-memory/recoverable state
 in other tabs. Different IndexedDB databases do not share a transaction.
