@@ -137,6 +137,20 @@
     check(allowCountMismatch||!mismatches.length,'reference count mismatch');
     return {counts,mismatches};
   }
+  async function verifyPayloads(g,stores,types){
+    const rows=await request(stores.payloads.getAll());
+    for(const row of rows){
+      const obj=g.objects.get(row.id);
+      const adapter=obj&&!obj.deleted&&types.get(typeKey(obj.type,obj.version));
+      check(adapter&&adapter.validate(clone(row.value))===true,'invalid or unsupported payload');
+      const expected=slots(adapter.references(clone(row.value)));
+      const actual=[...g.refs.values()].filter(e=>e.ownerKind==='object'&&e.ownerId===row.id);
+      check(expected.length===actual.length&&expected.every(ref=>{
+        const edge=g.refs.get(edgeId({ownerKind:'object',ownerId:row.id,slot:ref.slot}));
+        return edge&&edge.target===ref.target&&edge.strength===ref.strength;
+      }),'payload reference mismatch');
+    }
+  }
   function setEdge(g,stores,edge){
     const id=edgeId(edge);
     g.refs.set(id,edge);
@@ -257,13 +271,15 @@
     async function verifyIntegrity(){
       return run('readonly',async stores=>{
         const g=await graph(stores),{counts,mismatches}=inspect(g,types,true);
+        await verifyPayloads(g,stores,types);
         return {valid:!mismatches.length,liveObjects:counts.size,mismatches,
           eligible:[...counts].filter(([,n])=>n===0).map(([id])=>id)};
       });
     }
     async function recount(){
       return run('readwrite',async stores=>{
-        const g=await graph(stores);
+        const g=await graph(stores);inspect(g,types,true);
+        await verifyPayloads(g,stores,types);
         return {repaired:updateCounts(g,stores,types)};
       });
     }
@@ -288,6 +304,7 @@
     async function collectGarbage(id){
       return underResourceLock(id,'exclusive',()=>run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
+        await verifyPayloads(g,stores,types);
         const row=g.objects.get(id);
         if(!row||row.deleted)return {collected:false,reason:'missing'};
         if(row.refCount!==0)return {collected:false,reason:'durable-reference'};

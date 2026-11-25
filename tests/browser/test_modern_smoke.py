@@ -178,6 +178,137 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(result, {'ids': ['soundly'], 'frames': 9,
                                   'duration': 59100, 'frozen': True, 'display': 'compare'})
 
+    def test_managed_object_store_transactional_graph(self):
+        # Isolated origin document: the opt-in core must not alter live app stores.
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedObjectStore;
+            const types=[
+                {type:'photo',version:1,validate:v=>v instanceof Blob,references:()=>[]},
+                {type:'snapshot',version:1,validate:v=>!!v&&Array.isArray(v.refs),references:v=>v.refs},
+                {type:'future-geometry',version:1,validate:v=>v instanceof ArrayBuffer,references:()=>[]}
+            ];
+            const s=api.create(window,{types});
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const photo=await s.createAndAttach({documentId:'library',kind:'library',
+                expectedRevision:0,metadata:{name:'original'},slot:'photo',type:'photo',version:1,
+                payload:new Blob([Uint8Array.from([0,42,255])],{type:'image/png'})});
+            const payload={refs:[{slot:'evidence',target:photo.id,strength:'strong'}],value:123};
+            const snap=await s.createAndAttach({documentId:'animation',kind:'animation',
+                expectedRevision:0,metadata:{name:'scene'},slot:'base',type:'snapshot',version:1,payload});
+            payload.value=999;
+            ok((await s.get(snap.id)).payload.value===123,'mutable alias');
+            const bytes=new Uint8Array(await (await s.get(photo.id)).payload.arrayBuffer());
+            ok(bytes.join(',')==='0,42,255','original bytes');
+            let doc=await s.setReference({documentId:'animation',expectedRevision:1,slot:'frame',target:snap.id});
+            ok(doc.revision===2&&(await s.get(snap.id)).refCount===2,'multiple slots');
+            doc=await s.setReference({documentId:'animation',expectedRevision:2,slot:'frame',target:snap.id});
+            ok(doc.revision===2,'idempotent attach');
+            await rejects(()=>s.detach({documentId:'animation',expectedRevision:1,slot:'base'}),/stale document/);
+            const geometry=await s.createAndAttach({documentId:'other',kind:'test',
+                expectedRevision:0,metadata:{},slot:'asset',type:'future-geometry',version:1,
+                payload:Uint8Array.from([2,4,8]).buffer});
+            ok(new Uint8Array((await s.get(geometry.id)).payload).join(',')==='2,4,8','future type');
+            await s.setReference({documentId:'other',expectedRevision:1,slot:'scene',target:snap.id});
+            ok((await s.get(snap.id)).refCount===3,'second document shares snapshot');
+            await s.setReference({documentId:'library',expectedRevision:1,slot:'provenance',target:snap.id,strength:'weak'});
+            ok((await s.get(snap.id)).refCount===3,'weak link does not retain');
+            await rejects(()=>s.createAndAttach({documentId:'animation',kind:'animation',
+                expectedRevision:2,metadata:{},slot:'invalid',type:'snapshot',version:1,
+                payload:{refs:[{slot:'bad',target:'missing',strength:'strong'}]}}),/unknown reference target/);
+            ok((await s.getDocument('animation')).revision===2,'failed transaction advanced revision');
+            ok((await s.verifyIntegrity()).liveObjects===3,'failed transaction leaked object');
+            const next=await s.createAndAttach({documentId:'animation',kind:'animation',
+                expectedRevision:2,metadata:{name:'new'},slot:'base',type:'snapshot',version:1,
+                payload:{refs:[],value:321}});
+            ok(next.id!==snap.id&&(await s.get(snap.id)).payload.value===123,'copy on write');
+            await s.detach({documentId:'animation',expectedRevision:3,slot:'frame'});
+            ok((await s.detach({documentId:'animation',expectedRevision:4,slot:'frame'})).revision===4,'idempotent detach');
+            ok(!(await s.collectGarbage(snap.id)).collected,'shared resource reclaimed');
+            await s.detach({documentId:'other',expectedRevision:2,slot:'scene'});
+            await s.detach({documentId:'library',expectedRevision:2,slot:'photo'});
+            ok((await s.get(photo.id)).refCount===1,'child retained by snapshot');
+            ok((await s.collectGarbage(snap.id)).collected,'last reference did not permit GC');
+            ok(await s.get(snap.id)===null,'collected payload still present');
+            ok((await s.inspectUsage(snap.id)).references[0].strength==='weak','weak provenance lost');
+            ok((await s.get(photo.id)).refCount===0,'outgoing count not released');
+            ok((await s.collectGarbage(photo.id)).collected,'child GC');
+            const state=await s.verifyIntegrity();
+            ok(state.valid&&state.liveObjects===2,'graph invalid after cascade');
+            // Direct corruption of a derived count: fail closed, then recount.
+            const db=await new Promise((resolve,reject)=>{
+                const q=indexedDB.open(api.DATABASE);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
+            });
+            await new Promise((resolve,reject)=>{
+                const tx=db.transaction('objects','readwrite'),objects=tx.objectStore('objects');
+                const q=objects.get(next.id);q.onsuccess=()=>objects.put({...q.result,refCount:0});
+                tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);
+            });db.close();
+            ok(!(await s.verifyIntegrity()).valid,'corrupt count not reported');
+            await rejects(()=>s.collectGarbage(next.id),/reference count mismatch/);
+            ok((await s.recount()).repaired===1,'recount failed');
+            ok((await s.get(next.id)).refCount===1,'recount incorrect');
+            const limited=api.create(window,{types:types.slice(0,2)});
+            await rejects(()=>limited.verifyIntegrity(),/unsupported resource type/);
+            const collision=api.create({indexedDB,crypto:{randomUUID:()=>snap.id},navigator},{types});
+            await rejects(()=>collision.createAndAttach({documentId:'animation',kind:'animation',
+                expectedRevision:4,metadata:{},slot:'collision',type:'snapshot',version:1,payload:{refs:[]}}),
+                /object ID collision/);
+            return {valid:(await s.verifyIntegrity()).valid,revision:(await s.getDocument('animation')).revision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 4})
+
+    def test_managed_object_store_cross_tab_retention(self):
+        # Both tabs remain active. An editor's shared resource lock blocks only
+        # the conflicting GC, not unrelated writes or the whole application.
+        def prepare(page):
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+            page.evaluate("""()=>{
+                window.store=CurvatureModernManagedObjectStore.create(window,{types:[
+                    {type:'test',version:1,validate:v=>typeof v==='string',references:()=>[]}
+                ]});
+            }""")
+        prepare(self.page)
+        resource=self.page.evaluate("""async()=>{
+            const row=await store.createAndAttach({documentId:'doc',kind:'test',
+                expectedRevision:0,metadata:{},slot:'value',type:'test',version:1,payload:'original'});
+            window.objectId=row.id;
+            window.holding=false;
+            window.holdTask=store.withRetained(row.id,async value=>{
+                await new Promise(resolve=>{window.releaseHold=resolve;window.holding=true;});
+                return value.payload;
+            });
+            return row.id;
+        }""")
+        self.page.wait_for_function('window.holding === true')
+        second=self.context.new_page()
+        try:
+            prepare(second)
+            result=second.evaluate("""async id=>{
+                await store.detach({documentId:'doc',expectedRevision:1,slot:'value'});
+                let refused=false;
+                try{await store.collectGarbage(id);}catch(error){refused=/close the corresponding editor/.test(error.message);}
+                const other=await store.createAndAttach({documentId:'another',kind:'test',expectedRevision:0,
+                    metadata:{},slot:'value',type:'test',version:1,payload:'unrelated'});
+                return {refused,original:(await store.get(id)).payload,other:(await store.get(other.id)).payload};
+            }""",resource)
+            self.assertEqual(result, {'refused': True, 'original': 'original', 'other': 'unrelated'})
+            self.assertEqual(self.page.evaluate("""async()=>{window.releaseHold();return holdTask;}"""),'original')
+            self.assertEqual(second.evaluate('id=>store.collectGarbage(id)',resource),{'collected':True})
+            self.assertIsNone(second.evaluate('id=>store.get(id)',resource))
+        finally:
+            second.close()
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.
