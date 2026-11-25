@@ -64,6 +64,28 @@
         draft.name||row.id,row.checkpoint.savedAt,row.source||'recoverable')
         .forEach(function(use){use.draftContent=content;add(use);});
     });
+    // The verified shared row is independent of the old recovery collection.
+    // Its durable revision is not a legacy savedAt timestamp or a navigation
+    // authority. Keep it visible even if the same draft exists in legacy data.
+    var shared=sources.sharedAnimation;
+    if(shared){
+      shared.collection.workspaces.forEach(function(row,index){
+        var draft=row.checkpoint.draft;
+        imagesFromFrames(draft.frames,selectedId,'draft',row.id,
+          draft.name||row.id,'rev:'+shared.revisions[index].revision,'shared checkpoint')
+          .forEach(function(use){use.draftContent=JSON.stringify(draft);add(use);});
+      });
+      // An interrupted named save owns both exact versions until it is
+      // resolved; neither can be inferred solely from the current Library.
+      if(shared.namedSave){
+        ['before','after'].forEach(function(side){
+          var row=shared.namedSave.plan[side];
+          imagesFromFrames(row.project.keyframes,selectedId,'animation-intent',row.id,
+            row.project.name||row.id,row.updatedAt,'pending Save Changes · '+side)
+            .forEach(add);
+        });
+      }
+    }
     var target=identityKey(selectedIdentity);
     if(target){
       (sources.calibrations||[]).forEach(function(row){
@@ -88,7 +110,7 @@
         'current').forEach(function(use){use.draftContent=draftContent;add(use);});
     }
     uses.sort(function(a,b){
-      var groups=['animation','calibration','archive','draft','calibration-draft'];
+      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });
@@ -109,6 +131,9 @@
       read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.list(db);},v=>{sources.animations=v;}),
       read('Calibration Projects',function(){return env.CurvatureModernCalibrationProjectStore.list(db);},v=>{sources.calibrations=v;}),
       read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.list(db);},v=>{sources.archives=v;}),
+      read('Shared Animation recovery',function(){
+        return env.CurvatureModernAnimationDraftAutosave.inspectSharedCollection(db,env.crypto);
+      },v=>{sources.sharedAnimation=v;}),
       read('Recoverable Storyboards',function(){return env.CurvatureModernAnimationDraftAutosave.readCollection(db);},
         v=>{sources.drafts=v?v.workspaces.map(function(w){return {...w,source:'recoverable'};}):[];})
     ]);

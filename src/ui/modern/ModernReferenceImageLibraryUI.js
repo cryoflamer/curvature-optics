@@ -236,6 +236,7 @@
         var groups=[
           ['animation','Saved animations'],['calibration','Calibration projects'],
           ['archive','Archived results'],['draft','Recoverable Storyboards'],
+          ['animation-intent','Interrupted Animation saves'],
           ['calibration-draft','Current Calibration']
         ];
         groups.forEach(function(group){
@@ -253,6 +254,10 @@
             detail.title=use.ownerId;
             if(use.type==='draft'&&use.source==='recoverable local backup'){
               el('small','Unsent local recovery snapshot · open Animation Studio recovery to restore it before navigating. This snapshot is not the currently loaded workspace.',item);
+            }else if(use.type==='draft'&&use.source==='shared checkpoint'){
+              el('small','Verified shared recovery checkpoint · direct navigation is not yet available.',item);
+            }else if(use.type==='animation-intent'){
+              el('small','Pending save evidence · resolve the interrupted save in Animation Studio.',item);
             }else if(sharedPreview()&&use.type!=='calibration'){
               if(['animation','draft','calibration-draft'].includes(use.type))
                 el('small','Direct navigation is not yet available in the shared session.',item);

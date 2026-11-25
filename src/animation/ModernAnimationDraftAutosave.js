@@ -886,6 +886,16 @@
       };
     });
   }
+  // Bounded observational read for the Image Library, including the ordinary
+  // route. Reuse the verified reader without acquiring a document selection
+  // or granting a mutation capability.
+  async function inspectSharedCollection(db,crypto){
+    const lease=Object.freeze({sessionId:'shared',
+      check(write=false){if(write)throw Error('Shared Animation inspection is read-only');},
+      track(_tx,write=false){if(write)throw Error('Shared Animation inspection is read-only');return ()=>{};}
+    });
+    return openSharedCollection(db,{lease,crypto}).read();
+  }
   function openSharedCollection(db,{lease,crypto}={}){
     requireLease(lease);
     if(!db||typeof db.databases!=='function')throw Error('Shared Animation inventory unavailable');
@@ -1255,6 +1265,6 @@
     writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
     SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
-    inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,documentReference,
+    inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,inspectSharedCollection,documentReference,
     MAX_SHARED_RECOVERY_LENGTH,prepareRecoveryImport});
 }));

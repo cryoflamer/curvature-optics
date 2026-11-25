@@ -524,7 +524,7 @@ test('Where used reports an unreadable calibration archive rather than asserting
       throw Error('Result store blocked in another tab');
     }},
     CurvatureModernAnimationDraftAutosave:{
-      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
     },
     CurvatureModernReferenceImageImport:{identify:async()=>identity}
   };
@@ -629,7 +629,7 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'curvature-modern-animation-workspaces-v2',
       SESSION_LOCAL_PREFIX:'curvature-modern-animation-workspaces-v2-session-',
-      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
     },
     CurvatureModernReferenceImageImport:{identify:async()=>identity}};
   const found=await usageGraph.discover(env,{id:imgId,record:{}});
@@ -656,7 +656,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'a'.repeat(64),width:1,height:1})}
@@ -696,7 +696,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'a'.repeat(64),width:1,height:1})}
@@ -726,7 +726,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'b'.repeat(64),width:1,height:1})}
@@ -740,4 +740,33 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
   assert.equal(after.record.title,'New title from second tab');
   assert.deepEqual(after.record.original,preserved);
   await assert.rejects(library.remove(db,'concurrent_image',2),/deletion is disabled/);
+});
+
+test('Where used includes verified shared workspace revisions and both pending named save versions',async()=>{
+  const id='photo',draft={name:'Shared draft',frames:[{key:'kf',referenceImageIds:[id]}]};
+  const named=updatedAt=>({id:'named',updatedAt,project:{name:'Saved',keyframes:[{referenceImageIds:[id]}]}});
+  const shared={collection:{workspaces:[{id:'workspace',checkpoint:{savedAt:44,draft}}]},
+    revisions:[{id:'workspace',revision:9}],namedSave:{plan:{before:named(10),after:named(11)}}};
+  const env={indexedDB:{},localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{
+      COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
+      inspectSharedCollection:async()=>shared,readCollection:async()=>null,
+      readCollectionLocal:()=>null,readSessionLocals:()=>[]},
+    CurvatureModernReferenceImageImport:{identify:async()=>({
+      version:1,sha256:'a'.repeat(64),width:1,height:1})}
+  };
+  const found=await usageGraph.discover(env,{id,record:{}});
+  assert.equal(found.complete,true);
+  assert.equal(found.count,3);
+  assert.deepEqual(found.uses.filter(u=>u.type==='draft').map(u=>[u.ownerId,u.revision,u.source,u.frameKey]),
+    [['workspace','rev:9','shared checkpoint','kf']]);
+  assert.deepEqual(found.uses.filter(u=>u.type==='animation-intent').map(u=>[u.revision,u.source]),
+    [[10,'pending Save Changes · before'],[11,'pending Save Changes · after']]);
+  env.CurvatureModernAnimationDraftAutosave.inspectSharedCollection=async()=>{throw Error('digest mismatch');};
+  const failed=await usageGraph.discover(env,{id,record:{}});
+  assert.equal(failed.complete,false);
+  assert.match(failed.unavailable.join('; '),/Shared Animation recovery.*digest mismatch/);
 });

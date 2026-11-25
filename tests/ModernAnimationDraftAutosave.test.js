@@ -1261,3 +1261,18 @@ test('pending keyframe History intent can be explicitly discarded without changi
   assert.equal(cleared.receipt,null);
   assert.equal(Object.hasOwn(cleared,'keyframeEdit'),false);
 });
+
+test('read-only shared Animation inspection verifies rows without creating or replacing evidence',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();
+  assert.equal(await autosave.inspectSharedCollection(f.db,f.crypto),null);
+  assert.equal(f.db.records.size,0);
+  await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const before=structuredClone(f.db.records.get(autosave.SHARED_COLLECTION_KEY));
+  assert.deepEqual(await autosave.inspectSharedCollection(f.db,f.crypto),row);
+  assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),before);
+  const bad={...before,digest:'sha256:'+'0'.repeat(64)};
+  f.db.records.set(autosave.SHARED_COLLECTION_KEY,bad);
+  await assert.rejects(autosave.inspectSharedCollection(f.db,f.crypto),/digest mismatch/);
+  assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),bad);
+});
