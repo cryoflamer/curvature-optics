@@ -1084,7 +1084,7 @@
          studioPlaybackRenderedAt!==studioPlayback.status().positionMs))
         scheduleStudioInitialPaint('view');
     }
-    if(previous!==view&&!hydrating){
+    if(previous!==view&&!hydrating&&!(experimentPreview.live&&studioActiveDemo)){
       var trial=workspaceUiRegistryPreview;
       if(trial.status==='ready'&&trial.bridge)
         trial.bridge.setView('animation',view).catch(function(error){
@@ -2837,6 +2837,12 @@
     if(!name||!details)return;
     if(experimentPreview.live&&experimentPreview.animationContext){
       var shared=experimentPreview.animationContext.writer.state();
+      if(studioActiveDemo){
+        name.textContent=studioActiveDemo.project.name;
+        details.textContent='Built-in demo · Read-only · Not saved to your Library';
+        if(show){show.hidden=true;show.disabled=true;}
+        return;
+      }
       name.textContent=studioWorkspaceReady?studioDraft.name:'No shared working draft selected';
       details.textContent=!studioWorkspaceReady?'Select or create a verified working draft':
         shared.error?'Shared draft not acknowledged · recovery available':
@@ -3137,10 +3143,10 @@
     }
     var named=group('Projects');
     action(named,'Save Changes',()=>void runSharedAnimationAction('saveChanges'),
-      !studioWorkspaceReady||!studioLibraryActive||!!status.error,
+      !studioWorkspaceReady||!studioLibraryActive||!!studioActiveDemo||!!status.error,
       {'id':'ModernSharedNamedAnimationSaveChanges'});
     action(named,'Save as new project',()=>void runSharedAnimationAction('saveAs'),
-      !studioWorkspaceReady||!!status.error,{'id':'ModernSharedNamedAnimationSaveAs'});
+      !studioWorkspaceReady||!!studioActiveDemo||!!status.error,{'id':'ModernSharedNamedAnimationSaveAs'});
     var namedFile=element('input');namedFile.type='file';namedFile.hidden=true;
     namedFile.id='ModernSharedNamedAnimationImportFile';namedFile.accept='.json,application/json';
     named.appendChild(namedFile);
@@ -3155,13 +3161,15 @@
     action(named,'New blank draft',()=>void runSharedAnimationAction('new'),
       initializationBlocked,{'id':'ModernSharedAnimationNewDraft'});
     action(named,'Export all',()=>void exportSharedNamedAnimations(allNamed),!allNamed.length);
+    if(studioActiveDemo)action(named,'Close demo',()=>void switchSharedDemo(null));
     var demos=element('section','modern-animation-library-category modern-demo-category');
     demos.appendChild(element('strong','modern-animation-library-category-title','Built-in Demos'));
     var demoGallery=element('div','modern-animation-library-gallery modern-demo-gallery');
     demoGallery.setAttribute('aria-label','Built-in demo projects');
     try{
       builtInStudioDemos().forEach(demo=>{
-        var card=element('article','modern-animation-library-card modern-demo-card');
+        var active=studioActiveDemo?.id===demo.id;
+        var card=element('article','modern-animation-library-card modern-demo-card'+(active?' is-editing':''));
         card.setAttribute('data-demo-id',demo.id);
         card.appendChild(studioUI.libraryCardVisual(document,demo,demo.cover?'demos/modern/'+demo.cover.asset:null,'Reference image'));
         var info=element('div','modern-animation-library-card-info');
@@ -3170,6 +3178,7 @@
         info.appendChild(element('small','modern-animation-library-card-meta',studioUI.libraryCardMeta(demo.project)));
         card.appendChild(info);
         var controls=element('div','modern-animation-library-card-actions');
+        action(controls,active?'Opened':'Open demo',()=>void switchSharedDemo(demo.id),active||!!status.error);
         action(controls,'Create copy',()=>void runSharedAnimationAction('copyDemo',demo.id),initializationBlocked||!!status.error);
         action(controls,'Export demo',()=>void exportSharedDemo(demo.id));
         card.appendChild(controls);demoGallery.appendChild(card);
@@ -3186,7 +3195,7 @@
     visibleNamed.forEach(record=>{
       var id=studioDraftAutosave.projectWorkspaceId(record.id);
       var existing=ctx.row?.collection.workspaces.find(item=>item.id===id);
-      var active=studioWorkspaceReady&&studioWorkspaceId===id;
+      var active=!studioActiveDemo&&studioWorkspaceReady&&studioWorkspaceId===id;
       var card=element('article','modern-animation-library-card'+(active?' is-editing':''));
       card.setAttribute('data-animation-id',record.id);
       card.appendChild(studioUI.libraryCardVisual(document,record,record.cover,'Project cover'));
@@ -3251,7 +3260,7 @@
     drafts.appendChild(element('strong','','Working drafts ('+(ctx.row?.collection.workspaces.length||0)+')'));
     if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
       var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
-      var active=studioWorkspaceReady&&studioWorkspaceId===item.id;
+      var active=!studioActiveDemo&&studioWorkspaceReady&&studioWorkspaceId===item.id;
       var line=element('div','modern-animation-workspace-item'+(active?' is-active':''));
       line.appendChild(element('span','',item.checkpoint.draft.name+' · '+
         item.checkpoint.draft.frames.length+' frames · '+new Date(item.checkpoint.savedAt).toLocaleString()));
@@ -3420,11 +3429,52 @@
       throw error;
     }
   }
+  // Shipped demos are detached, read-only presentation. The shared
+  // document pointer continues to identify the last user's working copy.
+  async function closeSharedDemo(showEditor){
+    if(!studioActiveDemo)return;
+    var c=experimentPreview.controller,ctx=experimentPreview.animationContext;
+    stopStudioPlayback(true);
+    var ref=c.state().row.envelope.workspace==='animation'?
+      c.state().row.envelope.documents.animation:null;
+    if(ref){
+      await bindSharedAnimation(ref,true);
+      if(showEditor)setStudioView('editor',true);
+      else setStudioView('library',false,null,true);
+    }else{
+      studioActiveDemo=null;studioWorkspaceReady=false;studioWorkspaceId=null;
+      studioDraft=studioApi.blank();studioSelectedKey=null;studioPrepared=null;
+      studioLibraryActive=null;studioLibraryPending=null;
+      studioWorkspaces=ctx.row?.collection||null;
+      setStudioView('library',false,null,true);syncStudioPlaybackControls();renderStudioLibrary();
+    }
+  }
+  async function switchSharedDemo(id){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!ctx||ctx.busy||!animationWorkspaceOpen||experimentPreview.calibrationBusy||
+       ctx.row?.namedSave||ctx.row?.keyframeEdit||!['clean','committed'].includes(experimentPreview.status))return;
+    ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
+    try{
+      if(id===null){await closeSharedDemo(true);return;}
+      var demo=builtInStudioDemos().find(item=>item.id===id);
+      if(!demo)throw Error('Built-in demo not found');
+      if(!studioActiveDemo)await flushSharedAnimation();
+      await ctx.coordinate(()=>c.assertCleanCheckpoint());
+      studioWorkspaceReady=true;
+      performStudioSwitch('demo',demo);
+      ctx.message='Built-in demo · Read-only';
+      studioDraftStatus('Built-in demo · Read-only',false);
+    }catch(error){
+      ctx.error=true;ctx.message=error.message;
+      if(c.state().status==='failed'||studioActiveDemo)previewFailure(error);
+    }finally{ctx.busy=false;previewControls();renderStudioLibrary();}
+  }
   async function flushSharedAnimation(){
     if(experimentPreview.animationContext?.row?.namedSave)
       throw Error('Complete or abandon the pending named Animation save before leaving');
     if(experimentPreview.animationContext?.row?.keyframeEdit)
       throw Error('Resolve the temporary keyframe edit before leaving Animation');
+    if(studioActiveDemo){await closeSharedDemo(false);return true;}
     if(!studioWorkspaceReady)return true;
     stopStudioPlayback(false);
     if(!saveStudioDraft(false)||!await persistStudioWorkspace({requireDurable:true}))
@@ -4256,6 +4306,7 @@
   }
   function persistStudioWorkspace(settings){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
+    if(experimentPreview.live&&studioActiveDemo)return Promise.resolve(true);
     if(experimentPreview.live){
       var ctx=experimentPreview.animationContext;
       if(!ctx||!studioWorkspaceReady)return Promise.resolve(false);
@@ -4324,6 +4375,7 @@
     studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
   }
   function saveStudioDraft(throttled){
+    if(experimentPreview.live&&studioActiveDemo)return true;
     if(experimentPreview.live){
       var ctx=experimentPreview.animationContext;
       if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady||ctx.row?.namedSave||ctx.row?.keyframeEdit||keyframeEditSession)return false;

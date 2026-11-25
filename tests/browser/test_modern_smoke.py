@@ -12358,6 +12358,55 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewLibrary').click()
         expect(card).to_have_count(2)
 
+    def test_shared_animation_readonly_demo_never_replaces_user_draft(self):
+        """Shipped demos are detached presentation, even with no user draft."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        library=self.page.locator('#ModernAnimationLibrary')
+        demo=library.locator('[data-demo-id="soundly"]')
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+        }"""
+        demo.get_by_role('button',name='Open demo').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getBuiltInDemo()==='soundly'")
+        expect(self.page.locator('#ModernAnimationStoryboard .modern-animation-storyboard-card')).to_have_count(9)
+        self.assertIsNone(self.page.evaluate(read))
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        library.get_by_role('button',name='Close demo').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getBuiltInDemo()===null")
+        self.assertIsNone(self.page.evaluate(read))
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        studio=self.page.locator('#ModernAnimationStudio')
+        studio.get_by_role('button',name='Inspect project settings').click()
+        field=studio.get_by_label('Project name',exact=True)
+        field.fill('Retained shared user draft')
+        field.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        demo.get_by_role('button',name='Open demo').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getBuiltInDemo()==='soundly'")
+        row=self.page.evaluate(read)
+        self.assertEqual(row['collection']['workspaces'][0]['checkpoint']['draft']['name'],
+            'Retained shared user draft')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernAnimationViewPreview').click()
+        self.assertEqual(self.page.evaluate(read),row)
+        self.assertEqual(self.page.evaluate("async()=> (await CurvatureModernAnimationLibrary.list(indexedDB)).length"),0)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getBuiltInDemo()'))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+            'Retained shared user draft')
+
     def test_shared_animation_named_metadata_preserves_working_copy(self):
         """Rename/cover use the exact saved revision and retain unsaved frame edits."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
