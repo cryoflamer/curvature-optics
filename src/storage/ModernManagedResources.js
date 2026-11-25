@@ -1305,11 +1305,13 @@
         await materializeObservation(graph,value);
         observations.push({alias,target:value.id});
       }
-      const payload={project,observations,evidence};
-      const id=store.newObjectId();
+      return animationPlan(project,metadata,expectedRevision,observations,evidence);
+    }
+    function animationPlan(project,metadata,expectedRevision,observations,evidence,resources=[]){
+      const payload={project,observations,evidence},id=store.newObjectId();
       return {projectId:id,plan:{documentId:'animation:'+project.id,kind:'animation',
         expectedRevision,metadata,references:[strong('project',id)],
-        resources:[{id,type:ANIMATION,version:1,payload}]}};
+        resources:[...resources,{id,type:ANIMATION,version:1,payload}]}};
     }
     async function readAnimation(id){
       check(projects&&animations,'Animation adapters unavailable');
@@ -1330,16 +1332,18 @@
         check(image?.type===OBSERVATION&&image.payload.id===entry.alias,'Animation observation mismatch');
         referenceImages.push(await materializeObservation(graph,image));
       }
+      const portableEvidence=Array.isArray(v.evidence)?[]:v.evidence;
       if(Array.isArray(v.evidence)){
         for(const entry of v.evidence){
           const result=graph.resources.find(r=>r.id===entry.target);
           for(const origin of calibrationOrigins(row.project).filter(origin=>origin.resultId===entry.alias))
             checkOrigin(origin,result);
-          await verifyResultOriginal(graph,result);
+          const original=await verifyResultOriginal(graph,result);
+          portableEvidence.push({record:result.payload.record,original});
         }
       }
       return {row,projectId:resource.id,managedRevision:graph.document.revision,
-        evidence:v.evidence,observations:v.observations,referenceImages};
+        evidence:v.evidence,observations:v.observations,referenceImages,portableEvidence};
     }
     async function animationInventory(){
       return (await listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),v=>v,
@@ -1445,13 +1449,107 @@
         {expectedInventory:assetPlan?[assetPlan.expectedInventory,expectedInventory]:expectedInventory,guard});
       return {created:createdIds.length,reused:reusedIds.length,createdIds,reusedIds};
     }
+    // V3 extends the existing portable envelope only for managed exports
+    // carrying calibration provenance. Older V1/V2 and Legacy remain intact.
+    function parseManagedAnimationBundle(text){
+      check(typeof text==='string'&&text.length<=animations.MAX_PORTABLE_LENGTH,'Animation JSON file too large');
+      const payload=JSON.parse(text);
+      if(payload?.format!==animations.PORTABLE_FORMAT||payload.version!==3)
+        return animations.parseBundle(text);
+      check(exact(payload,['format','version','animations','referenceImages','calibrationEvidence'])&&
+        Array.isArray(payload.referenceImages),'Invalid managed Animation evidence bundle');
+      const {format,animations:items,referenceImages,calibrationEvidence}=payload;
+      const bundle=animations.parseBundle(JSON.stringify(referenceImages.length?
+        {format,version:2,animations:items,referenceImages}:{format,version:1,animations:items}));
+      check(Array.isArray(calibrationEvidence)&&calibrationEvidence.length===bundle.animations.length,
+        'Calibration evidence must match each portable Animation');
+      const evidence=calibrationEvidence.map((value,index)=>{
+        const project=bundle.animations[index].project,ids=calibrationAliases(project);
+        if(!ids.length){check(value==='none','Unexpected portable Calibration evidence');return value;}
+        if(value==='standalone')return value;
+        check(results&&Array.isArray(value)&&value.length===ids.length,'Missing portable Calibration evidence');
+        return value.map((item,i)=>{
+          check(exact(item,['record','original']),'Invalid portable Calibration evidence record');
+          const record=results.validate(item.record),original=images.validate(item.original);
+          check(record.id===ids[i]&&same(record,item.record)&&same(original,item.original)&&
+            original.id==='calibration_evidence'&&same(attribution(original),record.provenance.attribution),
+            'Portable Calibration evidence identity or attribution mismatch');
+          for(const origin of calibrationOrigins(project).filter(o=>o.resultId===record.id))
+            checkOrigin(origin,{type:RESULT,payload:{record}});
+          return {record,original};
+        });
+      });
+      return {...bundle,calibrationEvidence:evidence};
+    }
+    // Imported proof belongs to the new Animation, not a fabricated gallery
+    // entry. Verify every original before planning, then publish private
+    // immutable resources and all named roots in one existing transaction.
+    async function importEvidenceAnimationBundle(items,proofs,now,crypto,assetPlan,guard){
+      const checked=new Map();
+      for(const proof of proofs)if(Array.isArray(proof))for(const item of proof){
+        const key=stable(item);
+        if(checked.has(key))continue;
+        const original=await originalFrom(item.original);
+        check(same(original.identity,item.record.payload.photo),'Portable Calibration original identity mismatch');
+        checked.set(key,original);
+      }
+      const existing=await animationInventory(),seen=new Map(),reusable=new Map(),stagedOriginals=new Map(),ids=new Set();
+      for(const doc of await store.listDocuments('animation',{includeDeleted:true}))
+        ids.add(doc.id.slice('animation:'.length));
+      const identity=(project,observations,proof)=>stable([
+        animations.fingerprint(project),calibrationOrigins(project),observations,proof]);
+      for(const value of existing){
+        const key=identity(value.row.project,value.observations,value.portableEvidence);
+        if(!seen.has(key))seen.set(key,value.row.id);
+        if(Array.isArray(value.portableEvidence))for(const item of value.portableEvidence)
+          reusable.set(stable(item),value.evidence.find(v=>v.alias===item.record.id).target);
+      }
+      const time=now||Date.now(),plans=[],createdIds=[],reusedIds=[];
+      for(let i=0;i<items.length;i++){
+        const item=items[i],proof=proofs[i];
+        const observations=aliases(item.project).map(alias=>{
+          const value=assetPlan?.byId.get(alias);
+          check(value,'portable observation mapping missing: '+alias);
+          return {alias,target:value.observationId};
+        });
+        const key=identity(item.project,observations,proof);
+        if(seen.has(key)){reusedIds.push(seen.get(key));continue;}
+        let id,attempt=0;
+        do{check(++attempt<=100,'Cannot allocate a unique animation ID');id=animations.makeId(crypto,time+attempt);}while(ids.has(id));
+        const project=projects.validate({...item.project,id,keyframes:item.project.keyframes.map(f=>({...f,sourceSnapshotId:null}))});
+        const row=animations.record(project,item.quality,id,item.createdAt??time,item.updatedAt??time,item.thumbnail,item.cover);
+        const {metadata}=animationFields(row),resources=[];
+        const evidence=Array.isArray(proof)?proof.map(item=>{
+          const key=stable(item);
+          let target=reusable.get(key);
+          if(!target){
+            const original=checked.get(key),originalKey=stable(item.original.original);
+            let originalId=stagedOriginals.get(originalKey);
+            if(!originalId){
+              originalId=store.newObjectId();stagedOriginals.set(originalKey,originalId);
+              resources.push({id:originalId,type:ORIGINAL,version:1,payload:original});
+            }
+            target=store.newObjectId();reusable.set(key,target);
+            resources.push({id:target,type:RESULT,version:1,payload:{record:item.record,originalId}});
+          }
+          return {alias:item.record.id,target};
+        }):proof;
+        plans.push(animationPlan(project,metadata,0,observations,evidence,resources).plan);
+        ids.add(id);seen.set(key,id);createdIds.push(id);
+      }
+      await store.writeDocuments([...(assetPlan?.plans??[]),...plans],{
+        expectedInventory:[animationExpected(existing),...(assetPlan?[assetPlan.expectedInventory]:[])],guard});
+      return {created:createdIds.length,reused:reusedIds.length,createdIds,reusedIds};
+    }
     async function importApplicationAnimationBundle(text,now,crypto,guard=()=>{}){
-      const bundle=animations.parseBundle(text),linked=animations.referenceIds(bundle.animations).length;
+      const bundle=parseManagedAnimationBundle(text),linked=animations.referenceIds(bundle.animations).length;
       check(!linked||bundle.referenceImages.length,
         'Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
       guard();
       const assetPlan=linked?await planObservationRecords(bundle.referenceImages,new Map()):null;
       const resolved=assetPlan?bundle.animations.map(entry=>animations.remapReferences(entry,assetPlan.mapping)):bundle.animations;
+      if(bundle.calibrationEvidence)
+        return importEvidenceAnimationBundle(resolved,bundle.calibrationEvidence,now,crypto,assetPlan,guard);
       return importApplicationAnimations(resolved,now,crypto,{assetPlan,guard});
     }
     // A V2 portable bundle has one asset record per alias. Preserve
@@ -1494,13 +1592,20 @@
         }
         portable.push(animations.remapReferences(value.row,mapping));
       }
-      return animations.exportPortable(portable,lookup,{...options,referenceImages:assets});
+      const text=animations.exportPortable(portable,lookup,{...options,referenceImages:assets});
+      if(verified.every(value=>value.portableEvidence==='none'))return text;
+      const payload={...JSON.parse(text),version:3,referenceImages:assets,
+        calibrationEvidence:verified.map(value=>value.portableEvidence)};
+      const result=JSON.stringify(payload,null,2)+'\n';
+      check(result.length<=animations.MAX_PORTABLE_LENGTH,'Animation JSON export is too large');
+      return result;
     }
     function createAnimationLibraryPort(){
       check(projects&&animations,'Animation adapters unavailable');
       function bound(db){check(db===env.indexedDB,'Animation Library database context mismatch');}
       const rejectDelete=async()=>{throw Error('Managed Animation deletion is disabled until coordinated cutover');};
       return Object.freeze({...animations,storageKind:'managed',coordination:store.coordination,
+        parseBundle:parseManagedAnimationBundle,
         list:async db=>{bound(db);return (await listAnimations()).map(v=>v.row);},
         get:async(db,id)=>{bound(db);return (await readAnimation(id))?.row??null;},
         inspectUsage:async db=>{

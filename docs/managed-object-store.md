@@ -706,3 +706,28 @@ lookup that may accidentally become verified. The collection refuses conflicting
 verified/standalone mappings for one alias. The existing named-project schema
 supports wholly standalone or wholly verified evidence; a mixed named save
 is refused rather than dropping any verified evidence.
+
+### Portable named Animation calibration evidence
+
+Managed named Animation export emits the existing V1/V2 envelope for projects
+without calibration origins. When at least one exported project has an origin,
+the same envelope uses version 3 and adds an always-present referenceImages
+array and a calibrationEvidence array aligned with animations. Each entry is
+"none", "standalone", or a sorted exact list of {record, original} pairs for
+all referenced Calibration result IDs. The record retains full scientific
+content and original attribution; the original is the verified image record
+with the portable alias calibration_evidence. This alias is not a gallery
+identity. No managed object IDs are exported. Older/Legacy readers deliberately
+refuse V3 instead of silently dropping evidence; V1/V2 remain unchanged.
+
+The managed importer validates origin, result content/digest and original
+bytes before publication, then stages private result/original resources with
+all named owners and any remapped frame observations in one transaction.
+An import does not recreate Calibration Gallery or Image Library roots for
+private calibration originals. Deduplication includes exact calibration origins,
+evidence status, full result attribution and original bytes in addition to
+animation content and observation mappings; retries reuse matching owners.
+Verified and standalone copies of the same physical project remain distinct.
+The existing file-size bound applies to the entire V3 envelope. Working
+Recovery and direct Storyboard export are separate consumers and do not yet
+carry this full evidence extension.

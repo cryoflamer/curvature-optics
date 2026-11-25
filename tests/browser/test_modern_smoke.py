@@ -2697,6 +2697,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             const contractedCp=A.normalize({...cp,draft:contracted,selectedKey:contracted.frames[0].key,savedAt:205});
             animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),contractedCp,base);
             animationRow=await animation.retire(animationRow,animationRow.receipt);
+            const verifiedProject=Studio.buildSaved(contracted,'portable_verified');
+            const verifiedRow=await adapter.createAnimationLibraryPort().createFromWorking(indexedDB,verifiedProject,
+                'auto',206,null,null,A.documentReference(animationRow,id),()=>{});
             await port.replaceFromHistory(final.experiment,uncalibrated,final.revision,{isCurrent:()=>true});
             await live.reset();
             await adapter.store.removeDocument({documentId:'history:'+recorded.entry.id,
@@ -2797,9 +2800,67 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok((await animation.read()).digest===animationRow.digest,'conflicting journal changed standalone collection');
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
-            return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};
+            const portableText=await libraryPort.exportRetainedPortable(indexedDB,[verifiedRow,renamed]);
+            const portable=libraryPort.parseBundle(portableText);
+            ok(JSON.parse(portableText).version===3&&portable.calibrationEvidence[1]==='standalone'&&
+                canonical(portable.calibrationEvidence[0][0].record)===canonical(archived)&&
+                portable.calibrationEvidence[0][0].original.original.dataUrl===record.original.dataUrl,
+                'portable export lost exact Calibration evidence');
+            await rejects(async()=>L.parseBundle(portableText),/Unsupported animation JSON format/);
+            return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length,portableText};
         }""",fixture)
+        portable=result.pop('portableText')
         self.assertEqual(result, {'valid': True, 'history': 1})
+        # An independent browser context has no source managed objects.
+        destination=self.browser.new_context()
+        try:
+            page=destination.new_page()
+            page.goto(self.base_url,wait_until='load',timeout=30000)
+            for script in ['ModernManagedObjectStore.js','ModernManagedResources.js']:
+                page.add_script_tag(url='/src/storage/'+script)
+            restored=page.evaluate("""async text=>{
+                const adapter=CurvatureModernManagedResources.create(window),port=adapter.createAnimationLibraryPort();
+                const ok=(value,msg)=>{if(!value)throw Error(msg);};
+                const rejects=async(action,pattern)=>{
+                    try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                    throw Error('Expected refusal: '+pattern);
+                };
+                const parsed=port.parseBundle(text),expected=parsed.calibrationEvidence[0][0];
+                ok(!(await port.list(indexedDB)).length,'destination Animation was not empty');
+                const missing=JSON.parse(text);missing.calibrationEvidence[0]=[];
+                await rejects(()=>port.importPortableBundle(indexedDB,JSON.stringify(missing),400,crypto),/Missing portable Calibration evidence/);
+                const bad=JSON.parse(text),canvas=document.createElement('canvas');
+                canvas.width=expected.original.original.width;canvas.height=expected.original.original.height;
+                bad.calibrationEvidence[0][0].original.original.dataUrl=canvas.toDataURL('image/png');
+                await rejects(()=>port.importPortableBundle(indexedDB,JSON.stringify(bad),400,crypto),/original identity mismatch/);
+                let guards=0;
+                await rejects(()=>port.importPortableBundle(indexedDB,text,400,crypto,()=>{
+                    if(++guards===2)throw Error('Injected Calibration bundle guard');
+                }),/Injected Calibration bundle guard/);
+                ok(!(await port.list(indexedDB)).length&&
+                    (await adapter.store.verifyIntegrity()).liveObjects===0,'failed evidence import was partially published');
+                const actions=CurvatureModernAnimationLibraryActions;
+                const options={crypto:()=>crypto,importReferenceImages(){throw Error('Separate legacy import used');}};
+                const imported=await actions.importPortable(port,indexedDB,text,options);
+                ok(imported.created===2&&imported.reused===0,'verified and standalone owners were merged');
+                const [verified,standalone]=await Promise.all(imported.createdIds.map(id=>adapter.readAnimation(id)));
+                const actual=verified.portableEvidence[0],canonical=value=>JSON.stringify(value,(_,v)=>
+                    v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
+                ok(canonical(actual.record)===canonical(expected.record)&&
+                    actual.original.original.dataUrl===expected.original.original.dataUrl&&standalone.evidence==='standalone',
+                    'destination changed physical evidence');
+                ok(verified.row.project.keyframes.every(f=>f.sourceSnapshotId===null),'foreign History alias was retained');
+                const retry=await actions.importPortable(port,indexedDB,text,options);
+                ok(retry.created===0&&retry.reused===2,'evidence bundle retry duplicated owners');
+                ok(!(await adapter.listCalibrationResults()).length&&!(await adapter.listObservations()).length,
+                    'private imported proof fabricated gallery entries');
+                const exported=port.parseBundle(await port.exportRetainedPortable(indexedDB,[verified.row,standalone.row]));
+                ok(canonical(exported.calibrationEvidence)===canonical(parsed.calibrationEvidence),'re-export changed evidence');
+                return {valid:(await adapter.store.verifyIntegrity()).valid,count:(await port.list(indexedDB)).length};
+            }""",portable)
+            self.assertEqual(restored, {'valid': True, 'count': 2})
+        finally:
+            destination.close()
 
     def test_managed_calibration_result_snapshot_evidence(self):
         # Use the existing Modern script dependency order, but create only
