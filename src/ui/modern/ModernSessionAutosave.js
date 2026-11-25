@@ -364,6 +364,33 @@
             experiment:before.experiment,draft:null};
         },[],guard,false,verify);
       }
+      // The old physical payload has already been protected by the caller.
+      // Keep both auxiliary document slots unchanged, and commit the new
+      // physical payload and its workspace/reference as one checksum row.
+      function replaceFromCalibration(reference,expected,next,expectedRevision,{readDocument,readRecovery,isCurrent}={}){
+        ensure(typeof isCurrent==='function','Calibration Apply generation guard required');
+        const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale Calibration Apply generation');};
+        const prior=normalizeExperiment(expected),value=normalizeExperiment(next);
+        const verify=async frame=>{
+          guard();
+          const plan=await contract.planRestore(contract.select(frame,'calibration'),{
+            readDocument,readRecovery,isCurrent});
+          ensure(plan.source==='session'&&canonical(plan.document)===canonical(reference),
+            'verified Calibration Apply reference required');
+          guard();
+        };
+        return mutate(expectedRevision,(before,revision)=>{
+          guard();
+          ensure(before&&before.draft===null&&before.envelope.workspace==='calibration'&&
+            reference&&reference.recovery===null&&
+            canonical(before.envelope.documents.calibration)===canonical(reference),
+            'active clean Calibration Apply reference required');
+          ensure(canonical(before.experiment)===canonical(prior),
+            'outgoing physical experiment changed before Calibration Apply');
+          const physical=contract.select(before.envelope,before.experiment.display.mode);
+          return {envelope:envelopeFor(physical,value,revision),experiment:value,draft:null};
+        },[],guard,false,verify);
+      }
       function detachDocument(kind,reference,expectedRevision,{isCurrent}={}){
         ensure(typeof isCurrent==='function','removal generation guard required');
         const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale removal generation');};
@@ -547,7 +574,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){

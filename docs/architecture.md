@@ -797,6 +797,18 @@ but cannot navigate until their document owners are migrated. Original
 deletion remains blocked. Apply and mounted Animation are not enabled by
 this contract.
 
+The headless Calibration Apply checkpoint adapter supports a single CAS
+from an acknowledged Calibration selection to a new physical experiment.
+It checks the entire outgoing physical payload, exact selected domain
+revision, clean session and current operation generation. Both auxiliary
+document slots are preserved. The mounted caller must first verify the
+immutable archived result, link it to the project and pin the outgoing
+experiment in History; it must hold the shared operation lock during the
+final CAS. Live physics must not be mutated until durable acknowledgement.
+An ambiguous postflight failure requires reload/readback, not a second
+write or a rollback of the durable row. The adapter is not yet mounted in
+the Apply UI.
+
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
 project transaction (including a domain conflict copy) commits first. The

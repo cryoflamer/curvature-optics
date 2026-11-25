@@ -727,3 +727,58 @@ test('auxiliary postflight failure retains the selected pointer but rejects ackn
   assert.deepEqual(saved.experiment,first.experiment);
   assert.equal(saved.draft,null);
 });
+
+test('atomic Calibration Apply replaces physical payload and workspace without intermediate departure',async()=>{
+  const f=atomicFixture(),a=f.open();
+  const animation={id:'animation-project',revision:'rev:3',recovery:null};
+  const envelope=f.contract.select(f.contract.select(f.contract.emptyShared(),'animation',animation),'scene');
+  await a.read();const first=await a.initialize(f.base,envelope);
+  const reference={id:'calibration-project',revision:'rev:7',recovery:null};
+  let reads=0;
+  const readDocument=async(kind,id)=>{reads++;return {kind,id,revision:'rev:7'};};
+  const selected=await a.selectWorkspace('calibration',reference,first.revision,{readDocument,isCurrent:()=>true});
+  const controller=f.contract.createAtomicExperimentController({lease:f.lease,checkpoint:f.open(),
+    prepare:()=>{throw Error('Unexpected initialization');},isCurrent:()=>true,readDocument});
+  await controller.open();reads=0;
+  const next={display:{mode:'compare'},height:4};
+  const committed=await controller.replaceFromCalibration(reference,f.base,next,()=>true);
+  assert.equal(reads,2,'verify the exact domain reference before and after CAS');
+  assert.equal(committed.status,'committed');
+  const durable=await f.open().read();
+  assert.equal(durable.revision,selected.revision+1);
+  assert.equal(durable.envelope.workspace,'compare');
+  assert.deepEqual(durable.envelope.documents.calibration,reference);
+  assert.deepEqual(durable.envelope.documents.animation,animation);
+  assert.equal(durable.envelope.documents.experiment.revision,'checkpoint:'+durable.revision);
+  assert.deepEqual(durable.experiment,next);assert.equal(durable.draft,null);
+  assert.deepEqual(committed.bound.experiment,next);
+  await assert.rejects(controller.replaceFromCalibration(reference,f.base,next,()=>true),/active clean Calibration/);
+});
+test('atomic Calibration Apply fails closed on stale data, competing revisions and lost acknowledgement',async()=>{
+  for(const fault of ['outgoing','reference','generation','stale','postflight']){
+    const f=atomicFixture(),a=f.open();await a.read();const first=await a.initialize(f.base);
+    const reference={id:'calibration-project',revision:'rev:7',recovery:null};
+    const readDocument=async(kind,id)=>({kind,id,revision:'rev:7'});
+    const selected=await a.selectWorkspace('calibration',reference,first.revision,{readDocument,isCurrent:()=>true});
+    const b=f.open();await b.read();
+    let expected=f.base,current=true,reads=0;
+    const next={display:{mode:'compare'},height:9};
+    const opts={isCurrent:()=>current,readDocument:async(kind,id)=>{
+      reads++;
+      if(fault==='generation')current=false;
+      return {kind,id,revision:fault==='reference'||fault==='postflight'&&reads>1?'rev:8':'rev:7'};
+    }};
+    if(fault==='outgoing')expected={...f.base,height:8};
+    let before=selected;
+    if(fault==='stale')before=await b.selectWorkspace('scene',undefined,selected.revision,{isCurrent:()=>true});
+    await assert.rejects(a.replaceFromCalibration(reference,expected,next,selected.revision,opts),
+      /outgoing physical experiment changed|missing or revision changed|stale restore generation|stale Calibration Apply generation|CAS conflict/);
+    const durable=await f.open().read();
+    if(fault==='postflight'){
+      assert.equal(durable.revision,selected.revision+1);
+      assert.equal(durable.envelope.workspace,'compare');
+      assert.deepEqual(durable.experiment,next);
+      assert.deepEqual(durable.envelope.documents.calibration,reference);
+    }else assert.deepEqual(durable,before,fault);
+  }
+});

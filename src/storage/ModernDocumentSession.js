@@ -324,6 +324,34 @@
       check(!selected||selected.id!==ref.id,'open the retained selected document before renaming');
       return true;
     }
+    // Apply has already verified the archived result, linked project and
+    // pinned History recovery. Under the same operation lock, replace the
+    // physical experiment and workspace in ONE durable CAS, not a separate
+    // departure followed by stage/promote. No live model mutation here.
+    async function replaceFromCalibration(reference,before,after,verifyCurrent){
+      guard(true);
+      const ref=binding(reference);
+      check(ref&&ref.recovery===null&&typeof verifyCurrent==='function',
+        'verified Calibration Apply reference and guard required');
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&!selectionAttempt&&!recoveryReceipt&&
+        row.draft===null&&['clean','committed'].includes(status)&&
+        row.envelope.workspace==='calibration'&&same(binding(row.envelope.documents.calibration),ref),
+        'active clean Calibration selection required for Apply');
+      check(typeof checkpoint.replaceFromCalibration==='function','Calibration Apply adapter required');
+      const current=()=>isCurrent()===true&&verifyCurrent()===true;
+      const expected=clone(before),next=clone(after);
+      busy=true;selecting=true;
+      try{
+        check(current(),'stale Calibration Apply generation');
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'Calibration Apply CAS conflict; reload required');
+        row=await checkpoint.replaceFromCalibration(ref,expected,next,row.revision,{
+          readDocument,readRecovery,isCurrent:current});
+        guard(true);status='committed';
+        return state();
+      }catch(e){fail(e);throw e;}
+      finally{busy=false;selecting=false;}
+    }
     // Must be called inside the same mounted auxiliary-operation lock as
     // selection and domain saves. Clear the durable pointer before allowing
     // destructive domain CRUD, never the other way around.
@@ -387,7 +415,7 @@
       return state();
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
-      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,assertCleanCheckpoint,assertUnselectedDocument,detachDocument,recoverDocumentSelection,state});
+      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,assertCleanCheckpoint,assertUnselectedDocument,replaceFromCalibration,detachDocument,recoverDocumentSelection,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,
