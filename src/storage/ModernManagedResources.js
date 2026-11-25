@@ -1555,7 +1555,7 @@
       return new Set(ids);
     }
     async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null,historyHandoff=false}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,historyHandoff=false,editorEvidence=null}={}){
       workingContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
@@ -1583,8 +1583,13 @@
             const target=archived.payload.evidence.result;
             checkOrigin(origin,await store.get(target));
             evidence={result:target};
+          }else if(editorEvidence?.results.has(origin.resultId)){
+            const target=editorEvidence.results.get(origin.resultId);
+            checkOrigin(origin,await store.get(target));
+            evidence={result:target};
           }else if(standalone===true||allowedStandalone.has(origin.resultId)||retained.some(r=>r.payload.evidence==='standalone'&&
-            same(r.payload.experiment.calibrationOrigin,origin)))evidence='standalone';
+            same(r.payload.experiment.calibrationOrigin,origin))||
+            editorEvidence?.standalone.some(old=>same(old,origin)))evidence='standalone';
           else{
             let handoff=null;
             if(historyHandoff){
@@ -1621,7 +1626,7 @@
         expectedRevision,metadata,references,resources}],{expectedInventory:inventories.length?inventories:null,guard,lease});
       return {managedRevision:saved.revision};
     }
-    function createWorkingCheckpointPort(db,lease){
+    function createWorkingCheckpointPort(db,lease,editor=null){
       workingContracts();
       check(db===env.indexedDB,'working checkpoint database context mismatch');
       check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
@@ -1630,7 +1635,7 @@
       return Object.freeze({
         async read(){
           lease.check();
-          const value=await loadWorkingCheckpoint(store.inspectDocumentGraph);
+          const value=editor?await editor.read():await loadWorkingCheckpoint(store.inspectDocumentGraph);
           lease.check();return value?.row??null;
         },
         async commit(before,row,guard){
@@ -1639,9 +1644,45 @@
           check(same(previous?.row??null,before),'shared checkpoint CAS conflict; evidence retained');
           check(previous||row.revision===1,'initial working checkpoint revision must be one');
           await saveWorkingCheckpoint(row,{expectedRevision:previous?.managedRevision??0,
-            expectedRow:before,guard,lease,historyHandoff:true});
+            expectedRow:before,guard,lease,historyHandoff:true,editorEvidence:editor?.inventory()??null});
         }
       });
+    }
+    // Live physical state owns verified calibration evidence, not every
+    // intermediate immutable camera snapshot. Retain observed origins for
+    // the lifetime of this controller, including its dirty/recovery state.
+    function createPhysicalEditorRetention(){
+      const scope=store.createRetentionScope();
+      let archived=new Map(),standalone=[],tail=Promise.resolve();
+      function serialize(operation){
+        const next=tail.then(operation);tail=next.catch(()=>{});return next;
+      }
+      function read(){
+        return serialize(async()=>{
+          const value=await loadWorkingCheckpoint(store.inspectDocumentGraph);
+          if(!value)return null;
+          const next=new Map(archived),foreign=standalone.slice();
+          for(const [slot,experiment] of [['committed',value.row.experiment],['draft',value.row.draft]]){
+            const origin=experiment?.calibrationOrigin;
+            if(!origin)continue;
+            const evidence=value.snapshots[slot].evidence;
+            if(typeof evidence==='object'){
+              check(!next.has(origin.resultId)||next.get(origin.resultId)===evidence.result,
+                'Conflicting retained physical calibration evidence');
+              next.set(origin.resultId,evidence.result);
+            }else if(evidence==='standalone'&&!foreign.some(old=>same(old,origin)))foreign.push(origin);
+          }
+          // A concurrent collection between inspection and acquisition is a
+          // failed read, never an unprotected live activation.
+          await scope.replace([...next.values()]);
+          archived=next;standalone=foreign;return value;
+        });
+      }
+      function reset(){
+        return serialize(async()=>{await scope.replace([]);archived=new Map();standalone=[];});
+      }
+      const editor={read,inventory:()=>({results:new Map(archived),standalone:structuredClone(standalone)})};
+      return Object.freeze({reset,createWorkingCheckpointPort:(db,lease)=>createWorkingCheckpointPort(db,lease,editor)});
     }
     const draftsId='animation-working:shared';
     function draftContracts(){
@@ -2126,7 +2167,7 @@
       }
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
-    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,
+    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,createPhysicalEditorRetention,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,createAnimationEditorRetention,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,

@@ -2075,9 +2075,10 @@
     var ui=store.create(root),sessions=ui.sharedDocumentSessions(api),
       lease=ui.captureSharedDocumentLifetime(),
       coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
+    var physicalRetention=managedResources?managedResources.createPhysicalEditorRetention():null;
     var checkpoint=sessionAutosave.openSharedCheckpoint(root.indexedDB,
       {lease:lease,codec:experiments,crypto:root.crypto,contract:api,
-        ...(managedResources?{managedResources}:{})});
+        ...(managedResources?{managedResources:physicalRetention}:{})});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
     var calibrationApi=root.CurvatureModernCalibrationProjectPersistence;
     var calibrationEnabled=sharedPresentationRequested;

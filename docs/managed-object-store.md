@@ -654,3 +654,14 @@ resolving a mutable gallery at save/fork time. A committed conflict fork is
 adopted before shared selection acknowledgement and receipt retirement.
 To preserve queued captured drafts, the Calibration scope keeps all evidence
 acquired in one generation until a verified replacement or tab termination.
+
+The live shared physical checkpoint port retains verified Calibration result
+objects before returning committed or recovery snapshots to the controller.
+The scope preserves exact archived evidence across subsequent edits even
+when the origin temporarily disappears from the working checkpoint and its
+archive root is absent. Previously acknowledged standalone origins remain
+explicit and are matched by their complete origin, not just result alias.
+Intermediate physical snapshots are not pinned by the live evidence scope.
+The scope conservatively lasts for the controller lifetime; it is not a
+second checkpoint writer. Missing evidence during acquisition refuses the
+read rather than exposing an unprotected snapshot.

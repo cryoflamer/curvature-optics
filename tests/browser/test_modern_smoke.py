@@ -2614,7 +2614,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             await adapter.store.removeDocument({documentId:'result:'+archived.id,expectedRevision:1});
             const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
             const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
-            const port=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D,managedResources:adapter});
+            const live=adapter.createPhysicalEditorRetention();
+            const port=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D,managedResources:live});
             const uncalibrated=structuredClone(experiment);delete uncalibrated.calibrationOrigin;
             await port.read();
             const initial=await port.initialize(uncalibrated);
@@ -2631,9 +2632,22 @@ class ModernBrowserSmoke(unittest.TestCase):
             const recorded=await historyPort.record(edited,'manual',null);
             const retained=await adapter.readHistory(recorded.entry.id);
             ok(retained.snapshotId===draft.snapshots.draft.id&&retained.evidence.result===saved.resultId,'History save lost working evidence');
-            await port.promote(staged.revision);
-            ok(!(await adapter.store.collectGarbage(saved.resultId)).collected&&
-                !(await adapter.store.collectGarbage(photo.originalId)).collected,'handoff did not protect archive');
+            const promoted=await port.promote(staged.revision);
+            await rejects(()=>adapter.store.collectGarbage(saved.resultId),/close the corresponding editor/);
+            ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'handoff did not protect original');
+            const reset=await port.replaceFromHistory(edited,uncalibrated,promoted.revision,{isCurrent:()=>true});
+            const revived=structuredClone(edited);revived.scene.camera.Height+=2;
+            // The archive is absent and no History row matches this edited
+            // snapshot. The current physical checkpoint is uncalibrated.
+            // Only the live retained exact result can supply its provenance.
+            const recovered=await port.stage(revived,reset.revision);
+            const restoredEvidence=await adapter.readWorkingCheckpoint();
+            ok(restoredEvidence.snapshots.draft.evidence.result===saved.resultId,
+                'live physical evidence was lost after dropping the origin');
+            const final=await port.promote(recovered.revision);
+            ok(JSON.stringify(final.experiment)===JSON.stringify(recovered.draft),'physical evidence changed on promotion');
+            await live.reset();
+            ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'durable checkpoint lost archive on scope release');
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};
