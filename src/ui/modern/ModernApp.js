@@ -3012,7 +3012,7 @@
     heading.appendChild(element('small','',(ctx.named||[]).length+' saved projects'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
       'Working drafts are autosaved. Save changes updates the linked saved project; Save as new project keeps the original.'));
-    var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
+    var message=element('p','modern-animation-library-message'+(ctx.error||ctx.inventoryError?' is-error':''),ctx.inventoryError||ctx.message||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
     views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady||!!ctx.row?.namedSave||!!ctx.row?.keyframeEdit;});
@@ -3224,6 +3224,7 @@
   async function loadSharedAnimationLibrary(){
     var ctx=experimentPreview.animationContext,store=ctx.makeStore();
     ctx.row=await store.read();
+    ctx.inventory=null;
     try{
       ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;
       // Only equivalent complete sources are unambiguous. Never infer that a
@@ -3234,11 +3235,13 @@
          sources.every(source=>source.kind===first.kind&&JSON.stringify(source.value)===JSON.stringify(first.value))){
         await ctx.coordinate(async()=>{
           await experimentPreview.controller.assertCleanCheckpoint();ctx.lease.check(true);
-          ctx.row=await ctx.makeStore().initializeFromLegacy(ctx.inventory,first.source,root.localStorage);
+          var fresh=ctx.makeStore();
+          if(await fresh.read()!==null)throw Error('Shared Animation was initialized elsewhere; reopen Library');
+          ctx.row=await fresh.initializeFromLegacy(ctx.inventory,first.source,root.localStorage);
         });
         ctx.message='Previous working drafts restored.';
       }
-    }catch(error){ctx.inventoryError='Legacy draft inspection or migration failed: '+error.message;}
+    }catch(error){ctx.inventory=null;ctx.inventoryError='Legacy draft inspection or migration failed: '+error.message;}
     try{ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;}
     catch(error){ctx.named=null;ctx.namedError='Saved Animation Library unavailable: '+error.message;}
   }
