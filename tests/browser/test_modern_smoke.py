@@ -13731,6 +13731,32 @@ class ModernBrowserSmoke(unittest.TestCase):
             after=self.page.evaluate(read,project['id'])
             for key in ['project','row','bound','receipt','archive']:
                 self.assertEqual(after[key],saved[key],key)
+            if target=='Scene':
+                # Archive-only transfer must retain the exact project and archive,
+                # replace only the physical checkpoint, and survive ordinary F5.
+                to_b=self.page.locator('#ModernCalibrationSceneToB')
+                expect(to_b).to_be_enabled(timeout=30000)
+                self.page.once('dialog',lambda dialog:dialog.dismiss())
+                to_b.click()
+                self.assertEqual(self.page.evaluate(read,project['id']),after)
+                self.page.once('dialog',lambda dialog:dialog.accept())
+                to_b.click()
+                expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
+                    'Calibration applied and document session saved',timeout=30000)
+                transferred=self.page.evaluate(read,project['id'])
+                self.assertEqual(transferred['row']['revision'],after['row']['revision']+1)
+                self.assertEqual(transferred['row']['envelope']['documents']['calibration'],
+                    after['row']['envelope']['documents']['calibration'])
+                for key in ['project','archive','receipt']:
+                    self.assertEqual(transferred[key],after[key],key)
+                self.assertEqual(transferred['bound']['experiment'],self.page.evaluate(
+                    "args=>CurvatureModernCalibrationTransfer.transfer(args.archive.record,args.previous,'B')",
+                    {'archive':after['archive'],'previous':after['bound']['experiment']}))
+                self.assertTrue(any(row['pinned'] and row['experiment']==after['bound']['experiment']
+                    for row in transferred['history']))
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function(ready,timeout=30000)
+                self.assertEqual(self.page.evaluate(read,project['id']),transferred)
             if target!='B':
                 self.page.locator('#ModernPhotoCalibrationOpen').click()
 

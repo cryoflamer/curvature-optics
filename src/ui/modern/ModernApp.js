@@ -1803,7 +1803,7 @@
       var button=newUiEl('ModernCalibrationSceneTo'+side);
       if(button){
         button.hidden=origin.target!=='Scene';
-        button.disabled=experimentPreview.live||!verified||!sceneVisible||calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy;
+        button.disabled=experimentPreview.live&&!sharedHistoryPhysicalReady()||!verified||!sceneVisible||calibrationApplyBusy||presetSwitchBusy||historyRestoreBusy;
       }
     }
     if((reload||lookup.status==='idle')&&!lookup.pending&&archive&&root.indexedDB){
@@ -1910,7 +1910,7 @@
     var historyToggle=newUiEl('ModernHistoryToggle');
     if(historyToggle)historyToggle.disabled=!sharedHistoryAvailable()||experimentPreview.calibrationBusy||animationBusy;
     if(sharedPresentationActive()){
-      syncSharedHistoryPanel();updateSnapshotSaveAction();
+      syncSharedHistoryPanel();updateSnapshotSaveAction();refreshCalibrationApplicability();
     }
     if(sharedPresentationActive()){
       var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=!usable||!presentationReady||!sharedPreferencesRestored;
@@ -8011,8 +8011,10 @@
   }
   async function runCalibrationApply(editor,target,archived){
     var shared=sharedPresentationActive()&&!!experimentPreview.calibrationContext;
-    if(experimentPreview.live&&(!shared||archived))
+    if(experimentPreview.live&&!shared)
       throw Error('This Calibration Apply route is not yet enabled in shared-session preview');
+    if(shared&&archived&&!sharedHistoryPhysicalReady())
+      throw Error('Finish saving the current shared Scene before archived Calibration Apply');
     if(shared&&(experimentPreview.calibrationBusy||!['clean','committed'].includes(experimentPreview.status)))
       throw Error('Resolve the shared session before Calibration Apply');
     if(!['Scene','A','B'].includes(target))
@@ -8055,21 +8057,47 @@
         protect:previous=>experimentHistory.record(previous,'recovery',historyThumbnail(previous),
           shared?{retainAuto:true,guard:()=>experimentPreview.calibrationContext.lease.check(true)}:undefined),
         ...(shared?{async commitDurable(next,before,current,info){
-          var mounted=experimentPreview.calibrationEditor;
-          function guard(){
-            current();
-            var s=mounted.projectPersistenceStatus(),binding=editor.projectBinding();
-            if(!s||!binding||!archivedProjectBinding||
-               binding.projectId!==archivedProjectBinding.projectId||
-               binding.generation!==archivedProjectBinding.generation||
-               s.pending||s.unsaved||s.error||s.selectionPending)
-              throw Error('Calibration Project changed or has unsaved work before Apply');
-            return true;
+          if(archived){
+            // Archive-only transfer replaces the clean physical checkpoint,
+            // never opens, rewrites or requires an editable Calibration Project.
+            var ctx=experimentPreview.calibrationContext,c=experimentPreview.controller;
+            function archiveGuard(){ctx.lease.check(true);current();return true;}
+            try{
+              var view=await ctx.coordinate(async function(){
+                archiveGuard();await c.assertCleanCheckpoint();
+                var archive=await root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,info.resultId);
+                if(!archive||archive.id!==info.resultId||
+                   historyFingerprint.exactSignature(root.CurvatureModernCalibrationTransfer.transfer(archive.record,before,info.target))!==
+                   historyFingerprint.exactSignature(next))
+                  throw Error('Archived calibration transfer changed before Apply');
+                var recovery=await experimentHistory.get(info.recoveryId);
+                if(!recovery?.pinned||
+                   historyFingerprint.exactSignature(recovery.experiment)!==historyFingerprint.exactSignature(before))
+                  throw Error('Outgoing History recovery changed before Apply');
+                archiveGuard();return c.replaceFromHistory(before,next,archiveGuard);
+              });
+              experimentPreview.status=view.status;
+            }catch(error){
+              if(c.state().status==='failed'&&experimentPreview.status!=='suspended')previewFailure(error);
+              throw error;
+            }
+          }else{
+            var mounted=experimentPreview.calibrationEditor;
+            function guard(){
+              current();
+              var s=mounted.projectPersistenceStatus(),binding=editor.projectBinding();
+              if(!s||!binding||!archivedProjectBinding||
+                 binding.projectId!==archivedProjectBinding.projectId||
+                 binding.generation!==archivedProjectBinding.generation||
+                 s.pending||s.unsaved||s.error||s.selectionPending)
+                throw Error('Calibration Project changed or has unsaved work before Apply');
+              return true;
+            }
+            guard();
+            var s=mounted.projectPersistenceStatus();
+            await experimentPreview.calibrationContext.commitApply(
+              {id:s.projectId,revision:'rev:'+s.revision,recovery:null},before,next,guard,info);
           }
-          guard();
-          var s=mounted.projectPersistenceStatus();
-          await experimentPreview.calibrationContext.commitApply(
-            {id:s.projectId,revision:'rev:'+s.revision,recovery:null},before,next,guard,info);
           persistence.dirty=false;
           if(persistence.timer!==null){clearTimeout(persistence.timer);persistence.timer=null;}
           persistenceStatus('Document session saved');
