@@ -865,3 +865,56 @@ test('History retains its writer lock between request error and transaction abor
   await failed;
   assert.equal(held,false);
 });
+
+test('History link inventory retains all numeric source dependencies and excludes string aliases',()=>{
+  const frame=(sourceSnapshotId,key)=>({sourceSnapshotId,key,name:key});
+  const draft=(id,key='first')=>({draft:{name:'Draft',frames:[frame(id,key)]}});
+  const project=(id,source)=>({id,project:{name:id,keyframes:[frame(source,'first')]}});
+  const report=history.usageReport(41,{
+    named:[project('named',41),project('demo-like','41')],
+    shared:{collection:{workspaces:[{id:'shared',checkpoint:draft(41)}]},
+      namedSave:{plan:{before:project('pending',41),after:project('pending',42)}}},
+    legacy:[{id:'legacy',checkpoint:draft(41),sources:['idb:workspaces','local:copy']},
+      {id:'legacy',checkpoint:draft(41,'other'),sources:['local:variant']}],
+    legacyKeyframe:{session:{projectId:'temporary'},draft:draft(41).draft},
+    live:{drafts:[{id:'live',source:'Studio past 1',draft:draft(41).draft}],
+      queues:[{source:'project wizard',ids:[41,'demo-41']}]},
+    legacyQueue:[41,42],registryQueue:[41]
+  });
+  assert.equal(report.count,10);
+  assert.equal(report.localScanComplete,true);
+  assert.equal(report.safe,false);
+  assert.ok(report.uses.some(use=>use.source==='pending Save Changes · before'));
+  assert.ok(!report.uses.some(use=>use.owner==='demo-like'||use.source.endsWith('after')));
+  const partial=history.usageReport(41,{legacyQueue:[41,'bad']},['Foreign evidence unreadable']);
+  assert.equal(partial.count,1);
+  assert.equal(partial.localScanComplete,false);
+  assert.equal(partial.issues.length,2);
+  assert.equal(history.usageReport(41,{}).safe,false);
+  assert.throws(()=>history.usageReport('41',{}),/Invalid local History/);
+});
+test('History inspection reports partial sources without using missing data as deletion permission',async()=>{
+  const env={
+    navigator:{locks:{request:async(name,options,fn)=>fn({name,mode:options.mode})}},
+    CurvatureModernBackupWriteBarrier:require('../src/storage/ModernBackupWriteBarrier'),
+    CurvatureModernAnimationLibrary:{inspectUsage:async()=>[{id:'saved',project:{name:'Saved',
+      keyframes:[{sourceSnapshotId:3,name:'frame'}]}}]},
+    CurvatureModernAnimationDraftAutosave:{
+      inspectSharedCollection:async()=>{throw Error('corrupt shared row');},
+      inspectLegacySources:async()=>({issues:[],variants:[]})},
+    CurvatureModernImageUsageGraph:{inspectLegacyKeyframe:()=>null},
+    CurvatureModernApplicationPreferences:{STORAGE_KEY:'prefs'},
+    localStorage:{getItem:()=>JSON.stringify({version:1,historyStoryboardQueue:[3]})},
+    CurvatureModernUiSessionStore:{create:()=>({inspectExisting:async()=>({preferences:[
+      {id:'global',version:1,revision:2,envelope:{format:'curvature-modern-ui-state',
+        version:1,scope:'global',values:{'application.historyStoryboardQueue':{version:1,value:[3]}}}}
+    ]})})},
+    CurvatureModernApp:{getHistoryUsageEvidence:()=>({drafts:[],queues:[]})}
+  };
+  const review=await history.inspectUsage(env,3);
+  assert.equal(review.count,3);
+  assert.equal(review.coordinated,true);
+  assert.equal(review.localScanComplete,false);
+  assert.equal(review.safe,false);
+  assert.match(review.issues.join(' '),/corrupt shared row/);
+});

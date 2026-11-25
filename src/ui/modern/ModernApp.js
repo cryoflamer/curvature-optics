@@ -11251,6 +11251,40 @@
     getNavigationPrefs:function(){return Object.assign({},navigationPrefs);},
     getCameraHudVisible:function(){return cameraHudVisible;},
     getHistoryStore:function(){return experimentHistory;},
+    // Expose only local provenance/selection evidence, not mutable live
+    // drafts or the full physical Undo timeline. Shipped demos are separate.
+    getHistoryUsageEvidence:function(){
+      var drafts=[],queues=[];
+      function add(id,source,draft){
+        if(!draft)return;
+        drafts.push({id:id||'current',source:source,draft:{name:draft.name,
+          frames:draft.frames.map(function(frame){
+            return {sourceSnapshotId:frame.sourceSnapshotId,key:frame.key,name:frame.name};
+          })}});
+      }
+      if(!studioActiveDemo){
+        add(studioWorkspaceId,'current Studio',studioDraft);
+        ['past','future'].forEach(function(side){
+          (studioEditHistory?.[side]||[]).forEach(function(item,index){
+            add(studioWorkspaceId,'Studio '+side+' '+(index+1),item.draft);
+          });
+        });
+        if(keyframeEditDraftAtEntry)
+          add(studioWorkspaceId,'temporary editor entry draft',JSON.parse(keyframeEditDraftAtEntry));
+        var recovery=experimentPreview.animationContext?.writer.recovery();
+        if(recovery?.checkpoint)
+          add(recovery.reference?.id,'unacknowledged shared checkpoint',recovery.checkpoint.draft);
+        if(studioWizard)queues.push({source:'project wizard',
+          ids:[studioWizard.referenceId,...studioWizard.selectedIds].filter(id=>id!==null)});
+        queues.push({source:'Snapshot Picker',ids:studioHistoryEntries.filter(
+          row=>studioPickerChecked[row.id]).map(row=>row.id)});
+      }
+      (studioWorkspaces?.workspaces||[]).forEach(function(row){
+        add(row.id,'in-memory workspace collection',row.checkpoint.draft);
+      });
+      queues.push({source:'live retained History selection',ids:historyStoryboardQueue.slice()});
+      return {drafts:drafts,queues:queues};
+    },
     applyCalibrationToScene:applyCalibrationToScene,
     applyCalibrationToTarget:applyCalibrationToTarget,
     applyArchivedCalibrationToCompare:applyArchivedCalibrationToCompare,

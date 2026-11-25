@@ -130,6 +130,127 @@
       };
     });
   }
+  // Numeric History IDs are local provenance, not portable experiment
+  // identity. A matching number is a possible dependency even if the
+  // experiment has since diverged; string/demo IDs never alias local rows.
+  function localSnapshotId(id){return Number.isSafeInteger(id)&&id>0;}
+  function usageReport(id,sources,failures=[]){
+    if(!localSnapshotId(id))throw RangeError('Invalid local History snapshot ID');
+    const uses=[],issues=failures.slice();
+    function frames(owner,source,kind,items,title){
+      if(!Array.isArray(items)){issues.push(source+': invalid frame inventory');return;}
+      items.forEach((frame,index)=>{
+        if(!frame||!Object.hasOwn(frame,'sourceSnapshotId')){
+          issues.push(source+': invalid frame '+(index+1));return;
+        }
+        if(frame.sourceSnapshotId===id)uses.push({kind,owner,source,title,
+          frameIndex:index+1,frameKey:frame.key??null,frameName:frame.name??null});
+      });
+    }
+    function draft(owner,source,cp){
+      frames(owner,source,'working-draft',cp?.draft?.frames,cp?.draft?.name||owner);
+    }
+    function project(row,source){
+      frames(row.id,source,'named-animation',row.project?.keyframes,row.project?.name||row.id);
+    }
+    function queue(ids,source,strict=true){
+      if(!Array.isArray(ids)){issues.push(source+': invalid History selection');return;}
+      if(strict&&ids.some(value=>!localSnapshotId(value)))issues.push(source+': invalid local History ID');
+      if(ids.includes(id))uses.push({kind:'selection',owner:null,source,title:source});
+    }
+    for(const row of sources.named||[])project(row,'saved Animation');
+    const shared=sources.shared;
+    if(shared){
+      for(const row of shared.collection.workspaces)draft(row.id,'shared checkpoint',row.checkpoint);
+      if(shared.namedSave)for(const side of ['before','after'])
+        project(shared.namedSave.plan[side],'pending Save Changes · '+side);
+      // The temporary editor references the exact entry frame in the
+      // collection already scanned above; its physical candidates carry
+      // no separate History ID until the final History receipt is committed.
+    }
+    for(const variant of sources.legacy||[]){
+      const owner=variant.id||'legacy-single';
+      draft(owner,'retained '+variant.sources.join(' / '),variant.checkpoint);
+    }
+    if(sources.legacyKeyframe)draft('legacy-keyframe:'+sources.legacyKeyframe.session.projectId,
+      'retained temporary editor',{draft:sources.legacyKeyframe.draft});
+    for(const row of sources.live?.drafts||[])draft(row.id,row.source,{draft:row.draft});
+    for(const row of sources.live?.queues||[])queue(row.ids,row.source,false);
+    if(sources.legacyQueue!==undefined)queue(sources.legacyQueue,'retained application preferences');
+    if(sources.registryQueue!==undefined)queue(sources.registryQueue,'shared UI Registry selection');
+    // Local completeness is observational only. Never grant a destructive
+    // capability from a numeric match, an empty list or a successful lock.
+    return {id,uses,count:uses.length,localScanComplete:issues.length===0,issues,safe:false,
+      note:'Known local History links only. Foreign-tab memory, old clients, external files and unacknowledged multi-database operations are outside this inventory.'};
+  }
+  function legacyHistoryQueue(storage,key){
+    const raw=storage.getItem(key);
+    if(raw===null)return [];
+    const row=JSON.parse(raw);
+    if(!row||typeof row!=='object'||Array.isArray(row)||
+       (row.version!==undefined&&row.version!==1))
+      throw Error('Unsupported legacy preferences; original evidence retained');
+    return Object.hasOwn(row,'historyStoryboardQueue')?row.historyStoryboardQueue:[];
+  }
+  function registryHistoryQueue(inventory){
+    const rows=inventory.preferences.filter(row=>row?.id==='global');
+    if(!rows.length)return [];
+    const row=rows[0],envelope=row.envelope;
+    if(rows.length!==1||row.version!==1||!Number.isSafeInteger(row.revision)||row.revision<1||
+       envelope?.format!=='curvature-modern-ui-state'||envelope.version!==1||
+       envelope.scope!=='global'||!envelope.values||typeof envelope.values!=='object'||
+       Array.isArray(envelope.values))
+      throw Error('Unsupported global UI Registry record; evidence retained');
+    const key='application.historyStoryboardQueue';
+    if(!Object.hasOwn(envelope.values,key))return [];
+    const item=envelope.values[key];
+    if(item?.version!==1||!Object.hasOwn(item,'value'))
+      throw Error('Unsupported History selection version; evidence retained');
+    return item.value;
+  }
+  async function inspectUsage(env,id){
+    if(!localSnapshotId(id))throw RangeError('Invalid local History snapshot ID');
+    const issues=[],sources={};
+    const read=async(source,key,fn)=>{
+      try{sources[key]=await fn();}
+      catch(error){issues.push(source+': '+String(error.message||error));}
+    };
+    const inspect=async()=>{
+      const db=env.indexedDB,A=env.CurvatureModernAnimationDraftAutosave;
+      await Promise.all([
+        read('Saved Animation','named',()=>env.CurvatureModernAnimationLibrary.inspectUsage(db)),
+        read('Shared Animation','shared',()=>A.inspectSharedCollection(db,env.crypto)),
+        read('Retained Animation','legacy',async()=>{
+          const inventory=await A.inspectLegacySources(env);
+          inventory.issues.forEach(row=>issues.push(row.source+': '+row.message));
+          return inventory.variants;
+        }),
+        read('Legacy temporary editor','legacyKeyframe',()=>env.CurvatureModernImageUsageGraph.inspectLegacyKeyframe(env)),
+        read('Legacy selection','legacyQueue',()=>legacyHistoryQueue(env.localStorage,
+          env.CurvatureModernApplicationPreferences.STORAGE_KEY)),
+        read('UI Registry selection','registryQueue',async()=>registryHistoryQueue(
+          await env.CurvatureModernUiSessionStore.create(env).inspectExisting())),
+        read('Current Studio and Undo/Redo','live',()=>{
+          const app=env.CurvatureModernApp;
+          if(typeof app?.getHistoryUsageEvidence!=='function')throw Error('Live evidence unavailable');
+          return app.getHistoryUsageEvidence();
+        })
+      ]);
+      return usageReport(id,sources,issues);
+    };
+    try{
+      const locks=env.navigator?.locks,barrier=env.CurvatureModernBackupWriteBarrier;
+      if(!locks||!barrier){
+        issues.push('Coordinated inspection unavailable');
+        return {...await inspect(),coordinated:false};
+      }
+      const result=await barrier.create(locks).snapshot(inspect);
+      return {...result.value,coordinated:true};
+    }catch(error){
+      issues.push('History inspection failed: '+String(error.message||error));
+      return {...usageReport(id,sources,issues),coordinated:false};
+    }
+  }
   function create(options){
     options=options||{};
     var factory=options.indexedDB,now=options.now||Date.now;
@@ -459,5 +580,5 @@
     MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,
     PORTABLE_FORMAT:PORTABLE_FORMAT,MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,
     MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,parsePortable:parsePortable,
-    exportPortable:exportPortable,inspectProvenance,create:create});
+    exportPortable:exportPortable,inspectProvenance,usageReport,inspectUsage,create:create});
 }));

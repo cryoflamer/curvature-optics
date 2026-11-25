@@ -14113,6 +14113,47 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_history_usage_inventory_preserves_named_draft_and_selection_links(self):
+        """The History inspector reads actual retained stores without deleting or creating data."""
+        self.open_modern()
+        result=self.page.evaluate("""async()=>{
+            const H=CurvatureModernApp.getHistoryStore(),A=CurvatureModernAnimationDraftAutosave,
+                L=CurvatureModernAnimationLibrary,S=CurvatureModernAnimationStudio,
+                U=CurvatureModernUiSessionStore.create(window);
+            const experiment=CurvatureModernDemoCatalog.load()[0].project.baseExperiment;
+            const saved=(await H.record(experiment,'manual')).entry;
+            const draft=S.history([saved.id],[saved]);
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'experimental'});
+            const project=CurvatureModernAnimationProject.createV2(contract,[saved],
+                {id:'history_inventory_named',name:'History inventory'});
+            await L.create(indexedDB,project,'auto',100,null,true);
+            const checkpoint=A.checkpoint({draft,selectedKey:null,quality:'auto',prepared:false,positionMs:0},200);
+            A.writeLocal(localStorage,checkpoint);
+            const key=CurvatureModernApplicationPreferences.STORAGE_KEY;
+            const prefs=JSON.stringify({version:1,historyStoryboardQueue:[saved.id]});
+            localStorage.setItem(key,prefs);
+            await U.write('global',{},{
+                format:'curvature-modern-ui-state',version:1,scope:'global',
+                values:{'application.historyStoryboardQueue':{version:1,value:[saved.id]}}},0);
+            const before=(await indexedDB.databases()).sort((a,b)=>a.name.localeCompare(b.name));
+            const report=await CurvatureModernExperimentHistory.inspectUsage(window,saved.id);
+            const after=(await indexedDB.databases()).sort((a,b)=>a.name.localeCompare(b.name));
+            return {report,unchanged:JSON.stringify(before)===JSON.stringify(after),
+                prefsUnchanged:localStorage.getItem(key)===prefs,
+                snapshotUnchanged:JSON.stringify(await H.get(saved.id))===JSON.stringify(saved)};
+        }""")
+        self.assertTrue(result['report']['coordinated'])
+        self.assertTrue(result['report']['localScanComplete'],result['report']['issues'])
+        self.assertFalse(result['report']['safe'])
+        sources=[row['source'] for row in result['report']['uses']]
+        self.assertIn('saved Animation',sources)
+        self.assertTrue(any(source.startswith('retained local:') for source in sources))
+        self.assertIn('retained application preferences',sources)
+        self.assertIn('shared UI Registry selection',sources)
+        self.assertTrue(result['unchanged'])
+        self.assertTrue(result['prefsUnchanged'])
+        self.assertTrue(result['snapshotUnchanged'])
+
     def test_ui_registry_writer_waits_for_exclusive_backup_barrier(self):
         """Global UI CAS waits without minting a tab identity or blocking the inspector."""
         self.open_modern()
