@@ -363,6 +363,9 @@ Image Library's **Where used?** inspector queries the existing **Animation
 Library** project store, **Calibration Projects** metadata store, and
 **Animation Studio** recoverable workspace collection. Browser-local recovery
 copies and the live Studio/Calibration state are included when accessible.
+Current-tab Studio Undo/Redo, temporary editor entry drafts and divergent
+unacknowledged shared drafts are read-only recovery evidence, not live
+navigation targets.
 This is a bounded, on-demand read, not a second authoritative cross-project
 index. The inspector groups linked saved animation keyframes, Calibration
 Projects, recoverable Storyboards and currently mounted editing contexts.
@@ -372,15 +375,17 @@ keyframe; multiple owners may reference the same original.
 **Identity rules:** animation keyframes reference local image IDs; saved
 Calibration Projects instead store verified SHA-256 original identity **plus
 oriented width/height**. Calibration matching must compare those values, not
-an arbitrary matching alias ID or a demo's bare ID. Saved animation navigation
+an arbitrary matching alias ID or a demo's bare ID. Current Calibration is
+inspected without mounting the editor, using the verified original identity;
+a matching original with a different alias is read-only evidence. Saved animation navigation
 opens the actual project through the existing guarded switch and selects its
 exact keyframe; Calibration navigation uses the project's guarded open
 operation. Neither path silently imports or replaces original bytes.
 
 **Honest coverage and deletion safety:** the inspector only reports discoverable
 local records. It cannot authoritatively prove the absence of references in
-other browsers, unreachable tabs, portable files, exported archives, stale
-Undo/Redo records or inaccessible stores. Failed reads, inaccessible localStorage and malformed retained recovery
+other browsers, unreachable tabs, portable files, exported archives,
+foreign-tab Undo/Redo records or inaccessible stores. Failed reads, inaccessible localStorage and malformed retained recovery
 snapshots are reported as **incomplete**; they are never interpreted as an
 empty list. Recovery helpers may skip unreadable backups to let the editor
 load, but the inspector counts skipped slots and does not claim full coverage. Recoverable
@@ -655,6 +660,9 @@ before/after values, temporary keyframe editor and its Undo/Redo and pending
 History evidence. It also reads History snapshots, the shared physical
 committed/draft checkpoint, retained physical revisions and recovery sources,
 the old named Library and the current tab's legacy temporary editor journal.
+Current-tab Studio Undo/Redo and the live temporary keyframe editor also
+contribute original provenance; active shipped demo aliases do not match
+local image IDs by coincidence.
 Historical evidence is read-only and never supplies a substitute navigation
 target. History inspection opens only existing supported database versions,
 without creation, upgrade or migration. Corrupt or unreadable sources make
@@ -674,7 +682,9 @@ error states; no title-based or nearest-match substitution.
 The Image Library offers **Check deletion safety** as a read-only diagnostic
 on a selected original. It re-reads the original record, scans the supported
 accessible ownership sources, and re-reads the original revision to detect
-interleaved changes. The review reports the known local link count, missing
+interleaved changes. With Web Locks available, both revision reads and the
+ownership scan run inside one exclusive origin-wide barrier. Ordinary usage
+discovery also acquires that barrier. The review reports the known local link count, missing
 sources and concrete reasons deletion is still blocked. It does **not** grant
 a deletion token, weaken the protected `ReferenceImageLibrary.remove()` API,
 or mutate linked projects, backed-up photos, Undo history or recovery records.
@@ -689,8 +699,9 @@ The API deliberately names the available-record flag `localScanComplete`,
 not `complete`: it is distinct from the permanent `safe: false` deletion
 policy. An empty and complete read of accessible local sources means **zero known
 local uses at that moment**, not globally unreferenced or safe to delete.
-Even two identical scans are non-atomic against other IndexedDB databases
-and open tabs; older Undo buffers and exported copies remain inaccessible.
+The exclusive barrier excludes participating transactions, not whole
+multi-database operations or old clients. Foreign-tab Undo buffers and
+exported copies remain inaccessible.
 Consequently no original-delete operation is enabled in this stage without
 a stronger cross-store ownership/writer protocol and validated migration
 plan. Failed/stale scans and changes to the selected original are reported
@@ -702,7 +713,10 @@ boundary but does not make the usage graph globally authoritative: the lock
 covers acknowledged participating transactions, not an entire multi-database
 operation, old clients, Web Storage or foreign-tab memory. Existing-only
 inspectors can read known supported databases without creating/upgrading
-them. The deletion review remains informational; physical deletion is still
+them. `coordinated` reports whether the exclusive barrier was held, separately
+from `localScanComplete`. Missing Web Locks permit only an explicitly
+uncoordinated read-only compatibility scan; failure to acquire an available
+lock fails closed. The deletion review remains informational; physical deletion is still
 disabled. See [writer coordination](architecture.md#cross-tab-writer-barrier-for-participating-indexeddb-adapters).
 
 **Delete remains disabled** until the system has a defensible deletion
