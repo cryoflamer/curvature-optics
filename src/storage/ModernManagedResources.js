@@ -146,11 +146,21 @@
     }
     async function saveHistory(row,{expectedRevision=0,snapshotId,standalone=false}={}){
       const {item,metadata}=historyFields(row),experiment=item.experiment;
+      const prior=expectedRevision===0?null:await readHistory(row.id);
+      check(expectedRevision===0||prior?.managedRevision===expectedRevision,'History revision conflict');
       let evidence='none';
       if(experiment.calibrationOrigin){
-        evidence=standalone===true?'standalone':{result:await resolveOrigin(experiment.calibrationOrigin)};
+        const retained=prior&&same(prior.row.experiment.calibrationOrigin,experiment.calibrationOrigin);
+        if(retained&&typeof prior.evidence==='object'){
+          check(standalone!==true,'verified calibration evidence cannot be downgraded');
+          evidence=prior.evidence;
+        }else if(retained&&prior.evidence==='standalone')evidence='standalone';
+        else evidence=standalone===true?'standalone':{result:await resolveOrigin(experiment.calibrationOrigin)};
       }
       const payload={experiment,evidence};
+      // A metadata-only edit does not allocate another immutable snapshot.
+      if(snapshotId===undefined&&prior&&same(prior.row.experiment,experiment)&&same(prior.evidence,evidence))
+        snapshotId=prior.snapshotId;
       const id=snapshotId??store.newObjectId();
       let resources=[];
       if(snapshotId!==undefined){
@@ -334,11 +344,20 @@
     async function saveCalibrationProject(input,{expectedRevision=0,originalId=null}={}){
       check(calibrations&&checkpoints,'Calibration Project adapters unavailable');
       const project=calibrations.normalize(input);
+      const previous=expectedRevision===0?null:await readCalibrationProject(project.id);
+      check(expectedRevision===0||previous?.managedRevision===expectedRevision,'Calibration Project revision conflict');
+      // Editing an owner does not require its archived evidence to remain
+      // listed in the gallery. Preserve exact existing resource mappings.
+      if(previous&&originalId===null&&project.photo&&
+        same(project.photo.identity,previous.project.photo?.identity))originalId=previous.originalId;
       check(project.photo?objectId(originalId):originalId===null,'Calibration Project photo mapping required');
       const original=originalId?await store.get(originalId):null;
       await prepareCalibration(project,original);
+      const retained=new Map((previous?.results||[]).map(entry=>[entry.alias,entry.target]));
       const references=[];
       for(const alias of project.resultIds){
+        const target=retained.get(alias);
+        if(target){references.push({alias,target});continue;}
         const result=await readCalibrationResult(alias);
         check(result,'Calibration Project result missing: '+alias);
         references.push({alias,target:result.resultId});

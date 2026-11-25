@@ -1495,6 +1495,21 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(reopenedProject.originalId===photo.originalId&&reopenedProject.projectId===project.projectId,
                 'Calibration Project lost original ownership');
             ok(reopenedProject.photo.original.dataUrl===record.original.dataUrl,'checkpoint original lost');
+            const renamed=await adapter.saveHistory({...history,name:'Renamed retained snapshot',pinned:false},
+                {expectedRevision:1});
+            ok(renamed.snapshotId===snap.snapshotId,'metadata edit duplicated or lost snapshot');
+            const renamedRead=await adapter.readHistory(71);
+            ok(renamedRead.row.name==='Renamed retained snapshot'&&!renamedRead.row.pinned&&
+                renamedRead.evidence.result===saved.resultId,'History metadata/evidence changed');
+            await rejects(()=>adapter.saveHistory(history,{expectedRevision:1}),/revision conflict/);
+            await rejects(()=>adapter.saveHistory(history,{expectedRevision:2,standalone:true}),/cannot be downgraded/);
+            const revised=projectApi.revise(calibration,{title:'Renamed retained Calibration'},47);
+            const revisedSaved=await adapter.saveCalibrationProject(revised,{expectedRevision:1});
+            const revisedRead=await adapter.readCalibrationProject(calibration.id);
+            ok(revisedRead.projectId===revisedSaved.projectId&&revisedRead.originalId===photo.originalId&&
+                revisedRead.results[0].target===saved.resultId&&
+                JSON.stringify(revisedRead.project)===JSON.stringify(revised),'Calibration edit lost historical evidence');
+            await rejects(()=>adapter.saveCalibrationProject(revised,{expectedRevision:1}),/revision conflict/);
             const reopenedAnimation=await adapter.readAnimation(animationProject.id);
             ok(reopenedAnimation.projectId===animation.projectId&&reopenedAnimation.evidence[0].target===saved.resultId,
                 'calibrated Animation lost result after archive removal');
