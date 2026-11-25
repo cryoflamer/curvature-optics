@@ -1647,6 +1647,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const namedDraft=CurvatureModernAnimationStudio.fromProject(named);
             const namedCp=A.checkpoint({...cp,draft:namedDraft,selectedKey:namedDraft.frames[0].key,
                 libraryId:named.id,libraryRevision:namedRow.updatedAt},201);
+            row=await fresh.read(); // A rejected guard invalidates the observed row.
             row=await fresh.createLinkedWorkspace(row,namedCp);
             const linkedOwner=await adapter.readAnimationWorkingCollection();
             ok(linkedOwner.observations.some(v=>v.alias===retainedRecord.id&&
