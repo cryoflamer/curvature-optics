@@ -14,10 +14,14 @@
     contracts=require('./ModernAnimationContract');
     projects=require('./ModernAnimationProject');
   }
-  var api=factory(experiment,hud,contracts,projects);
+  // Library is loaded after this module by the browser entry point. Resolve
+  // it lazily only when validating a shared named-save intent.
+  var getLibrary=()=>typeof module==='object'&&module.exports?
+    require('./ModernAnimationLibrary'):root.CurvatureModernAnimationLibrary;
+  var api=factory(experiment,hud,contracts,projects,getLibrary);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects){
+}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects,getLibrary){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -736,8 +740,22 @@
     if(!item)throw Error('Animation workspace missing');
     return reference(item.id,item.revision);
   }
+  function validateNamedSave(value,row){
+    if(!exact(value,['version','reference','plan'])||value.version!==1)
+      throw Error('Invalid shared named Animation save intent');
+    const ref=validateReference(value.reference),api=getLibrary();
+    if(!api)throw Error('Named Animation Library validator unavailable');
+    const plan=api.validateUpdatePlan(value.plan);
+    const cp=getWorkspace(row.collection,ref.id);
+    if(row.receipt||!equal(documentReference(row,ref.id),ref)||!cp||
+       cp.libraryId!==plan.before.id||cp.libraryRevision!==plan.before.updatedAt)
+      throw Error('Named Animation save intent does not match the working checkpoint');
+    return {version:1,reference:ref,plan};
+  }
   function normalizeSharedRow(raw){
-    if(!exact(raw,['version','revision','collection','revisions','receipt','digest'])||
+    const keys=['version','revision','collection','revisions','receipt','digest'];
+    if(object(raw)&&Object.hasOwn(raw,'namedSave'))keys.push('namedSave');
+    if(!exact(raw,keys)||
        raw.version!==1||!positive(raw.revision)||!Array.isArray(raw.revisions)||
        typeof raw.digest!=='string'||!/^sha256:[0-9a-f]{64}$/.test(raw.digest))
       throw Error('Invalid shared Animation collection');
@@ -751,7 +769,9 @@
       return {id:item.id,revision:item.revision};
     });
     const receipt=raw.receipt===null?null:validateReceipt(raw.receipt);
-    const row={version:1,revision:raw.revision,collection,revisions,receipt,digest:raw.digest};
+    const row={version:1,revision:raw.revision,collection,revisions,receipt};
+    if(Object.hasOwn(raw,'namedSave'))row.namedSave=validateNamedSave(raw.namedSave,row);
+    row.digest=raw.digest;
     if(receipt&&!equal(documentReference(row,receipt.current.id),receipt.current))
       throw Error('Animation receipt does not match durable workspace');
     if(!equal(row,raw))throw Error('Noncanonical shared Animation row');
@@ -911,6 +931,7 @@
     function nextRevision(row){
       if(!row||row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
       if(row.receipt)throw Error('Resolve pending Animation selection receipt before writing');
+      if(row.namedSave)throw Error('Resolve pending named Animation save before writing');
       return row.revision+1;
     }
     // An explicitly chosen alternative becomes an independent working
@@ -979,6 +1000,52 @@
             row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
       },guard);
     }
+    // The shared row stores an exact write-ahead intent without changing
+    // any workspace revision or the shared session reference. Ordinary draft
+    // writes cannot discard or overwrite it. Old rows without an intent
+    // retain their original shape and digest.
+    function stageNamedSave(expected,ref,plan,guard){
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        const namedSave=validateNamedSave({version:1,reference:ref,plan},row);
+        return {version:1,revision,collection:row.collection,revisions:row.revisions,
+          receipt:null,namedSave};
+      },guard);
+    }
+    // The caller must have read back the exact named target under the shared
+    // operation lock. Convert the intent to the existing selection receipt
+    // atomically with relinking only the checkpoint's Library revision.
+    function finishNamedSave(expected,intent,confirmed,base,guard){
+      const bound=selectionBase(base);
+      return commit(expected,row=>{
+        if(!row?.namedSave||!equal(row.namedSave,intent)||
+           !equal(intent.plan.after,confirmed))
+          throw Error('Exact named Animation save readback required');
+        if(row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
+        const previous=intent.reference,revision=row.revision+1;
+        const prior=getWorkspace(row.collection,previous.id);
+        const value=normalize({...prior,savedAt:prior.savedAt+1,
+          libraryRevision:intent.plan.after.updatedAt});
+        const next=withWorkspace(row.collection,previous.id,value,value.savedAt);
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        const current=reference(previous.id,revision);
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===previous.id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),
+          receipt:{version:1,base:bound,previous,current,status:'updated'}};
+      },guard);
+    }
+    // Explicit abandonment is a metadata-only operation. The caller may
+    // export the intent first; no named record or checkpoint is rolled back.
+    function abandonNamedSave(expected,intent,guard){
+      return commit(expected,row=>{
+        if(!row?.namedSave||!equal(row.namedSave,intent))
+          throw Error('Named Animation save intent changed; evidence retained');
+        if(row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
+        return {version:1,revision:row.revision+1,collection:row.collection,
+          revisions:row.revisions,receipt:null};
+      },guard);
+    }
     function saveSelected(expected,ref,checkpoint,base,guard){
       const previous=validateReference(ref),bound=selectionBase(base),value=normalize(checkpoint);
       return commit(expected,row=>{
@@ -1015,7 +1082,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

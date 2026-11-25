@@ -848,6 +848,17 @@ The named store also exposes an exact-record compare-and-update operation,
 which checks identity and the complete inspected normalized record within
 one readwrite transaction. Save Changes UI and the temporary keyframe editor
 remain disabled until their cross-store recovery and edit lifecycle are ready.
+The headless named-save protocol first seals a write-ahead intent in the
+existing shared Animation row: exact working reference and a deterministic
+before/after named record (including one fixed target timestamp). Ordinary
+collection writes refuse a pending intent. The named transaction accepts
+only the exact before record or the already committed exact after record;
+a divergent row is never overwritten or rebased. After named readback,
+the domain transaction removes the intent and relinks only the working
+checkpoint's Library revision while emitting the existing selection receipt.
+The shared session acknowledges that receipt before retirement. Abandoning
+an intent is explicit and metadata-only, never a rollback of named or draft
+bytes. Rows without an intent retain the existing version and digest shape.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

@@ -1091,3 +1091,55 @@ test('shared Animation recovery import rejects foreign formats, missing checkpoi
   await assert.rejects(parse(),/does not match/);
   assert.deepEqual(await a.read(),row);
 });
+
+
+async function namedSaveFixture(){
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const library=require('../src/animation/ModernAnimationLibrary');
+  const studio=require('../src/animation/ModernAnimationStudio');
+  const project=studio.buildSaved(f.cp.draft,'named_fixture');
+  const before=library.record(project,'auto',project.id,10,20);
+  const changed=studio.buildSaved({...f.cp.draft,name:'New named version'},project.id);
+  const plan=library.planExactUpdate(changed,'auto',before,30);
+  const cp=autosave.normalize({...f.cp,libraryId:before.id,libraryRevision:before.updatedAt,
+    draft:{...f.cp.draft,name:'New named version'}});
+  const id=autosave.projectWorkspaceId(before.id);
+  const collection=autosave.withWorkspace(f.collection,id,cp,102);
+  const row=await a.initializeEmpty(await f.inspect(),collection,f.local);
+  const ref=autosave.documentReference(row,id);
+  return {...f,a,row,ref,cp,plan};
+}
+test('shared named save intent survives reload, blocks edits and becomes exact selection receipt',async()=>{
+  const h=await namedSaveFixture(),staged=await h.a.stageNamedSave(h.row,h.ref,h.plan);
+  assert.deepEqual(staged.collection,h.row.collection);
+  assert.deepEqual(staged.revisions,h.row.revisions);
+  assert.equal(staged.receipt,null);
+  const reopened=h.open();assert.deepEqual(await reopened.read(),staged);
+  assert.deepEqual(await h.open().prepareReference(h.ref),{reference:h.ref,checkpoint:h.cp});
+  await assert.rejects(reopened.saveSelected(staged,h.ref,{...h.cp,savedAt:200},h.base),/pending named Animation/);
+  await reopened.read();
+  await assert.rejects(reopened.finishNamedSave(staged,staged.namedSave,h.plan.before,h.base),/readback required/);
+  await reopened.read();
+  const saved=await reopened.finishNamedSave(staged,staged.namedSave,h.plan.after,h.base);
+  assert.equal(Object.hasOwn(saved,'namedSave'),false);
+  assert.deepEqual(saved.receipt.previous,h.ref);
+  assert.deepEqual(saved.receipt.base,h.base);
+  assert.deepEqual(autosave.getWorkspace(saved.collection,h.ref.id),
+    {...h.cp,savedAt:h.cp.savedAt+1,libraryRevision:h.plan.after.updatedAt});
+  assert.deepEqual(autosave.documentReference(saved,h.other),autosave.documentReference(h.row,h.other));
+  const retired=await reopened.retire(saved,saved.receipt);
+  assert.equal(retired.receipt,null);
+  assert.deepEqual(await h.open().read(),retired);
+});
+test('shared named save intent refuses a wrong checkpoint and can be explicitly abandoned without relinking',async()=>{
+  const h=await namedSaveFixture(),other=autosave.documentReference(h.row,h.other);
+  await assert.rejects(h.a.stageNamedSave(h.row,other,h.plan),/does not match/);
+  await h.a.read();
+  const staged=await h.a.stageNamedSave(h.row,h.ref,h.plan);
+  await assert.rejects(h.a.abandonNamedSave(staged,{...staged.namedSave,reference:other}),/intent changed/);
+  await h.a.read();
+  const retired=await h.a.abandonNamedSave(staged,staged.namedSave);
+  assert.deepEqual(retired.collection,h.row.collection);
+  assert.deepEqual(retired.revisions,h.row.revisions);
+  assert.equal(Object.hasOwn(retired,'namedSave'),false);
+});

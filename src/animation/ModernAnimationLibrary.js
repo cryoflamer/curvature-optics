@@ -373,6 +373,46 @@
     if(valid.id!==wanted.id)throw Error('Saved Animation identity does not match the inspected record');
     return updateRecord(indexedDB,valid,optics,wanted.updatedAt,now,thumbnail,wanted);
   }
+  function nextRecord(old,valid,optics,now,thumbnail){
+    // Preserve a screenshot only when its first physical frame still matches.
+    var image=thumbnail||(sameFirstFrame(valid,old.project)?old.thumbnail:null);
+    return record(valid,optics,valid.id,old.createdAt,
+      Math.max(stamp(now||Date.now()),old.updatedAt+1),image,old.cover);
+  }
+  // Fix the target timestamp and full bytes before entering the named DB.
+  // Recovery may recognize exactly those bytes, never generate a later revision.
+  function planExactUpdate(project,optics,expected,now,thumbnail){
+    var before=normalize(expected),valid=projects.validate(project);
+    if(valid.id!==before.id)throw Error('Saved Animation identity does not match the inspected record');
+    return validateUpdatePlan({version:1,before,after:nextRecord(before,valid,optics,now,thumbnail)});
+  }
+  function validateUpdatePlan(value){
+    if(!value||Object.keys(value).sort().join(',')!=='after,before,version'||value.version!==1)
+      throw Error('Invalid named Animation update plan');
+    var before=normalize(value.before),after=normalize(value.after);
+    if(JSON.stringify(before)!==JSON.stringify(value.before)||
+       JSON.stringify(after)!==JSON.stringify(value.after)||before.id!==after.id||
+       before.createdAt!==after.createdAt||after.updatedAt<=before.updatedAt||
+       (before.cover||null)!==(after.cover||null))
+      throw Error('Invalid named Animation update transition');
+    return {version:1,before,after};
+  }
+  function commitPlannedUpdate(indexedDB,plan,guard=()=>{}){
+    var wanted=validateUpdatePlan(plan),before=wanted.before,after=wanted.after;
+    guard();
+    return transaction(indexedDB,'readwrite',function(store,finish,abort){
+      var read=store.get(before.id);
+      read.onsuccess=function(){try{
+        guard();
+        if(!read.result)throw Error('Saved Animation was deleted; update plan retained');
+        var current=normalize(read.result),bytes=JSON.stringify(current);
+        if(bytes===JSON.stringify(after)){finish(after);return;}
+        if(bytes!==JSON.stringify(before))
+          throw Error('Saved Animation changed since update was prepared; update plan retained');
+        store.put(after);finish(after);
+      }catch(error){abort(error);}};
+    });
+  }
   function updateRecord(indexedDB,project,optics,expectedRevision,now,thumbnail,wanted){
     var valid=projects.validate(project);stamp(expectedRevision);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
@@ -385,9 +425,7 @@
           throw Error('Animation Library project changed in another tab; reopen it or use Save As');
         // Preserve the old screenshot only while the initial physical state
         // is identical. An edited first frame must not retain a misleading image.
-        var image=thumbnail||(sameFirstFrame(valid,old.project)?old.thumbnail:null);
-        var next=record(valid,optics,valid.id,old.createdAt,
-          Math.max(stamp(now||Date.now()),old.updatedAt+1),image,old.cover);
+        var next=nextRecord(old,valid,optics,now,thumbnail);
         store.put(next);finish(next);
       }catch(error){abort(error);}};
     });
@@ -455,5 +493,5 @@
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,parseBundle:parseBundle,referenceIds:referenceIds,
     collectReferences:collectReferences,remapReferences:remapReferences,importEntries:importEntries,
-    list:list,get:get,create:create,update:update,updateExact:updateExact,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
+    list:list,get:get,create:create,update:update,updateExact:updateExact,planExactUpdate,validateUpdatePlan,commitPlannedUpdate,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
 }));

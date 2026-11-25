@@ -1553,3 +1553,26 @@ test('exact named Animation update rejects mismatched identity, stale revision a
   await library.removeExact(db,updated);
   await assert.rejects(library.updateExact(db,edited,'auto',updated,106),/deleted/);
 });
+
+
+test('planned named Animation update is exact and idempotent across a lost acknowledgement',async()=>{
+  const db=memoryIndexedDB(),draft=source();
+  const original=await library.create(db,studio.build(draft,'animation_plan'),'auto',100);
+  const edited=studio.build(studio.edit(draft,'name','Planned revision'),original.id);
+  const plan=library.planExactUpdate(edited,'accurate',original,110);
+  assert.deepEqual(plan.before,original);
+  assert.equal(plan.after.updatedAt,110);
+  assert.equal(plan.after.project.name,'Planned revision');
+  assert.deepEqual(await library.get(db,original.id),original);
+  assert.deepEqual(await library.commitPlannedUpdate(db,plan),plan.after);
+  assert.deepEqual(await library.commitPlannedUpdate(db,plan),plan.after);
+  assert.deepEqual(await library.get(db,original.id),plan.after);
+  const changed=await library.rename(db,original.id,'Foreign change',110,111);
+  await assert.rejects(library.commitPlannedUpdate(db,plan),/changed since update/);
+  assert.deepEqual(await library.get(db,original.id),changed);
+  assert.throws(()=>library.validateUpdatePlan({...plan,after:{...plan.after,updatedAt:100}}),/Invalid/);
+  const later=library.planExactUpdate(edited,'auto',changed,112);
+  let calls=0;
+  await assert.rejects(library.commitPlannedUpdate(db,later,()=>{if(++calls>1)throw Error('expired');}),/expired/);
+  assert.deepEqual(await library.get(db,original.id),changed);
+});
