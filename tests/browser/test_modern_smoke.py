@@ -9068,7 +9068,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             source_page.locator('#backup-export').click()
             expect(source_page.locator('#backup-export-status')).to_contain_text('fixture lock denied')
             expect(source_page.locator('#backup-export')).to_be_enabled()
-            source_page.evaluate('navigator.locks.request=window.__originalLockRequest')
+            source_page.evaluate('()=>{navigator.locks.request=window.__originalLockRequest;}')
 
             # The populated source profile must be refused as an import target.
             source_page.locator('#backup-file').set_input_files({
