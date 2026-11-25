@@ -24,7 +24,8 @@
       library=deps.CurvatureModernReferenceImageLibrary,
       projects=deps.CurvatureModernAnimationProject,animations=deps.CurvatureModernAnimationLibrary,
       results=deps.CurvatureModernCalibrationResult,calibrations=deps.CurvatureModernCalibrationProject,
-      checkpoints=deps.CurvatureModernCalibrationProjectCheckpoint;
+      checkpoints=deps.CurvatureModernCalibrationProjectCheckpoint,
+      session=deps.CurvatureModernSessionAutosave,sessionContract=deps.CurvatureModernDocumentSession;
     check(core&&state&&history&&fp&&images&&importer&&library,'domain dependencies required');
     const types=[
       {type:SNAPSHOT,version:1,validate:v=>{
@@ -395,7 +396,78 @@
       return {row,projectId:resource.id,managedRevision:graph.document.revision,
         evidence:v.evidence,observations:v.observations,referenceImages};
     }
-    return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
+    const workingId='working:shared-experiment';
+    function workingContracts(){
+      check(session&&sessionContract&&typeof session.validateSharedCheckpoint==='function',
+        'working checkpoint adapter unavailable');
+    }
+    async function readWorkingCheckpoint(){
+      workingContracts();
+      const graph=await store.readDocumentGraph(workingId);
+      if(!graph)return null;
+      const meta=graph.document.metadata;
+      check(graph.document.kind==='working-checkpoint'&&
+        exact(meta,['format','version','revision','envelope','digest']),'invalid working checkpoint root');
+      const hasDraft=graph.document.references.some(ref=>ref.slot==='draft');
+      check(graph.document.references.length===(hasDraft?2:1),'invalid working checkpoint slots');
+      async function load(slot){
+        const snapshot=pick(graph,slot,SNAPSHOT),{experiment,evidence}=snapshot.payload;
+        if(typeof evidence==='object'){
+          const result=graph.resources.find(r=>r.id===evidence.result);
+          checkOrigin(experiment.calibrationOrigin,result);
+          await verifyResultOriginal(graph,result);
+        }
+        return {experiment,ref:{id:snapshot.id,evidence}};
+      }
+      const committed=await load('committed'),draft=hasDraft?await load('draft'):null;
+      const row=await session.validateSharedCheckpoint({...meta,experiment:committed.experiment,
+        draft:draft?draft.experiment:null},state,env.crypto,sessionContract);
+      return {row,managedRevision:graph.document.revision,
+        snapshots:{committed:committed.ref,draft:draft?draft.ref:null}};
+    }
+    async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false}={}){
+      workingContracts();
+      const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
+      const previous=expectedRevision===0?null:await readWorkingCheckpoint();
+      check(expectedRevision===0||previous?.managedRevision===expectedRevision,
+        'working checkpoint revision conflict');
+      check(!previous||row.revision===previous.row.revision+1,'working checkpoint source revision must advance once');
+      const retained=[];
+      if(previous)for(const [slot,experiment] of [['committed',previous.row.experiment],['draft',previous.row.draft]]){
+        if(experiment)retained.push({id:previous.snapshots[slot].id,
+          payload:{experiment,evidence:previous.snapshots[slot].evidence}});
+      }
+      const resources=[],references=[];
+      for(const [slot,experiment] of [['committed',row.experiment],['draft',row.draft]]){
+        if(!experiment)continue;
+        const origin=experiment.calibrationOrigin;
+        let evidence='none';
+        if(origin){
+          const archived=retained.find(r=>typeof r.payload.evidence==='object'&&
+            r.payload.experiment.calibrationOrigin?.resultId===origin.resultId);
+          if(archived){
+            const target=archived.payload.evidence.result;
+            checkOrigin(origin,await store.get(target));
+            evidence={result:target};
+          }else if(standalone===true||retained.some(r=>r.payload.evidence==='standalone'&&
+            same(r.payload.experiment.calibrationOrigin,origin)))evidence='standalone';
+          else evidence={result:await resolveOrigin(origin)};
+        }
+        const payload={experiment,evidence};
+        let snapshot=[...retained,...resources].find(r=>same(r.payload,payload));
+        if(!snapshot){
+          snapshot={id:store.newObjectId(),type:SNAPSHOT,version:1,payload};
+          resources.push(snapshot);
+        }
+        references.push(strong(slot,snapshot.id));
+      }
+      const {experiment,draft,...metadata}=row;
+      const saved=await store.writeDocument({documentId:workingId,kind:'working-checkpoint',
+        expectedRevision,metadata,references,resources});
+      return {managedRevision:saved.revision};
+    }
+    return Object.freeze({store,saveWorkingCheckpoint,readWorkingCheckpoint,
+      saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
   }
   // One-way rehearsal from a verified portable archive into a disposable,

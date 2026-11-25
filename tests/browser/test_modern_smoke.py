@@ -587,6 +587,83 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
 
+    def test_managed_working_checkpoint_preserves_compare_and_recovery(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const legacy=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease:{sessionId:'shared',check(){},track(){return ()=>{};}},
+                codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession});
+            ok(await legacy.read()===null,'legacy fixture not empty');
+            const initial=await legacy.initialize(experiment);
+            await adapter.saveWorkingCheckpoint(initial);
+            const first=await adapter.readWorkingCheckpoint();
+            ok(first.row.digest===initial.digest&&first.row.experiment.compare.selected==='B','committed Compare changed');
+            const edited=structuredClone(experiment);edited.compare.selected='A';
+            const staged=await legacy.stage(edited,initial.revision);
+            await adapter.saveWorkingCheckpoint(staged,{expectedRevision:1});
+            const second=await adapter.readWorkingCheckpoint();
+            ok(second.row.digest===staged.digest&&second.row.experiment.compare.selected==='B'&&
+                second.row.draft.compare.selected==='A','committed/draft independence lost');
+            ok(second.snapshots.committed.id===first.snapshots.committed.id&&
+                second.snapshots.draft.id!==second.snapshots.committed.id,'snapshot reuse incorrect');
+            await rejects(()=>adapter.saveWorkingCheckpoint(staged,{expectedRevision:1}),/revision conflict/);
+            await rejects(()=>adapter.saveWorkingCheckpoint({...staged,digest:'wrong'},{expectedRevision:2}),
+                /digest mismatch/);
+            const promoted=await legacy.promote(staged.revision);
+            await adapter.saveWorkingCheckpoint(promoted,{expectedRevision:2});
+            const last=await adapter.readWorkingCheckpoint();
+            ok(last.row.digest===promoted.digest&&last.row.draft===null&&last.row.experiment.compare.selected==='A',
+                'promotion changed acknowledged state');
+            ok(last.snapshots.committed.id===second.snapshots.draft.id,'promotion duplicated snapshot');
+            ok((await adapter.store.get(first.snapshots.committed.id)).refCount===0,'old committed root leaked');
+            ok((await legacy.read()).digest===promoted.digest,'managed adoption changed legacy checkpoint');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,revision:last.managedRevision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 3})
+
     def test_managed_calibration_result_snapshot_evidence(self):
         # Use the existing Modern script dependency order, but create only
         # synthetic managed records. No production routing is changed.

@@ -164,6 +164,38 @@
     return {kind:'experiment',id,revision,experiment:source.normalized,
       sourceSavedAt:row.source.savedAt};
   }
+  const SHARED_CHECKPOINT_FORMAT='curvature-modern-shared-checkpoint';
+  function normalizeSharedExperiment(value,codec){
+    const clone=v=>JSON.parse(canonical(v));
+    const experiment=clone(codec.validate(clone(value)));
+    ensure(['scene','compare'].includes(experiment.display?.mode),'invalid checkpoint workspace');
+    return experiment;
+  }
+  // Storage-independent validation of the exact acknowledged checkpoint.
+  // Managed adoption and the existing shared writer use the same digest,
+  // physical mode and selection-binding rules.
+  async function validateSharedCheckpoint(row,codec,crypto,contract){
+    ensure(row&&Object.keys(row).length===7&&row.format===SHARED_CHECKPOINT_FORMAT&&row.version===1&&
+      Number.isSafeInteger(row.revision)&&row.revision>=1,'invalid shared checkpoint');
+    const {digest:checksum,...data}=row;
+    ensure(typeof checksum==='string'&&checksum===await digest(canonical(data),crypto),
+      'shared checkpoint digest mismatch; evidence retained');
+    const experiment=normalizeSharedExperiment(row.experiment,codec),frame=contract.normalize(row.envelope);
+    const ref=frame.documents.experiment;
+    const match=ref&&/^checkpoint:([1-9][0-9]*)$/.exec(ref.revision);
+    const sequence=match&&Number(match[1]);
+    const physical=['scene','compare'].includes(frame.workspace);
+    const auxiliary=['calibration','animation'].includes(frame.workspace);
+    ensure(frame.sessionId===contract.SHARED_ID&&
+      ((physical&&frame.workspace===experiment.display.mode)||
+       (auxiliary&&frame.documents[frame.workspace]&&row.draft===null))&&
+      ref&&ref.id===SHARED_COPY_ID&&ref.recovery===null&&Number.isSafeInteger(sequence)&&
+      sequence<=row.revision&&canonical(experiment)===canonical(row.experiment),
+      'invalid shared checkpoint binding');
+    ensure(row.draft===null||canonical(normalizeSharedExperiment(row.draft,codec))===canonical(row.draft),
+      'invalid shared checkpoint draft');
+    return JSON.parse(canonical(row));
+  }
   async function existingDatabase(indexedDB){
     ensure(indexedDB&&typeof indexedDB.databases==='function','working-session inventory unavailable');
     const existing=(await indexedDB.databases()).find(item=>item.name===DATABASE);
@@ -216,13 +248,11 @@
         typeof contract.select==='function'&&typeof contract.emptyShared==='function',
         'shared checkpoint contracts required');
       lease.check();
-      const key='shared-checkpoint',format='curvature-modern-shared-checkpoint';
+      const key='shared-checkpoint',format=SHARED_CHECKPOINT_FORMAT;
       let observed=null,busy=false;
       const clone=value=>JSON.parse(canonical(value));
       function normalizeExperiment(value){
-        const experiment=clone(codec.validate(clone(value)));
-        ensure(['scene','compare'].includes(experiment.display?.mode),'invalid checkpoint workspace');
-        return experiment;
+        return normalizeSharedExperiment(value,codec);
       }
       function envelopeFor(envelope,experiment,revision){
         const frame=contract.normalize(envelope);
@@ -242,28 +272,9 @@
       async function decode(raw){
         ensure(raw,'checkpoint read unavailable');
         if(!raw.present)return null;
-        const row=raw.row;
-        ensure(row&&Object.keys(row).length===7&&row.format===format&&row.version===1&&
-          Number.isSafeInteger(row.revision)&&row.revision>=1,'invalid shared checkpoint');
-        const {digest:checksum,...data}=row;
-        ensure(typeof checksum==='string'&&checksum===await digest(canonical(data),crypto),
-          'shared checkpoint digest mismatch; evidence retained');
-        const experiment=normalizeExperiment(row.experiment),frame=contract.normalize(row.envelope);
-        const ref=frame.documents.experiment;
-        const match=ref&&/^checkpoint:([1-9][0-9]*)$/.exec(ref.revision);
-        const sequence=match&&Number(match[1]);
-        const physical=['scene','compare'].includes(frame.workspace);
-        const auxiliary=['calibration','animation'].includes(frame.workspace);
-        ensure(frame.sessionId===contract.SHARED_ID&&
-          ((physical&&frame.workspace===experiment.display.mode)||
-           (auxiliary&&frame.documents[frame.workspace]&&row.draft===null))&&
-          ref&&ref.id===SHARED_COPY_ID&&ref.recovery===null&&Number.isSafeInteger(sequence)&&
-          sequence<=row.revision&&canonical(experiment)===canonical(row.experiment),
-          'invalid shared checkpoint binding');
-        ensure(row.draft===null||canonical(normalizeExperiment(row.draft))===canonical(row.draft),
-          'invalid shared checkpoint draft');
+        const value=await validateSharedCheckpoint(raw.row,codec,crypto,contract);
         lease.check();
-        return clone(row);
+        return value;
       }
       async function read(){
         ensure(!busy,'shared checkpoint operation pending');
@@ -923,5 +934,5 @@
     openSharedCheckpoint:defaultAdapter.openSharedCheckpoint,
     inspectProvenance:defaultAdapter.inspectProvenance,
     coordination:defaultAdapter.coordination,makeAdapter,
-    normalize:normalize,newer:newer});
+    normalize:normalize,newer:newer,validateSharedCheckpoint});
 }));

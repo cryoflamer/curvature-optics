@@ -154,7 +154,9 @@ transaction; domain materialization verifies target types and identity and
 rechecks original raster/digest before returning portable records.
 Saved Animation owns its full project and retained observation versions.
 Its local sourceSnapshotId is provenance, not a strong dependency. Historical
-image attribution is preserved by the retained observation version.
+image attribution is preserved by the retained observation version, including
+subsequent edits of a saved Animation after its gallery alias is removed.
+Previously verified fit evidence cannot be downgraded by a metadata edit.
 Calibration Results retain the verified original; Calibration Projects retain
 their original plus archived results and hydrate existing checkpoint/Undo/Redo
 data through the existing checkpoint adapter with a managed original lookup.
@@ -162,9 +164,18 @@ Locally calibrated snapshots and animations retain exact archived evidence;
 an explicitly standalone portable import with no evidence retains only its
 inline historical origin and is not presented as verified external evidence.
 
-These adapters are not the active Modern UI save path. Updating a retained
-project after its gallery alias has been removed, complete live-use coverage,
-working session/Animation draft adoption, limits and production cutover remain
+The opt-in working checkpoint adapter stores the acknowledged shared physical
+checkpoint as one document with strong committed and optional draft snapshot
+slots. It reuses the existing shared checkpoint digest/binding validator and
+preserves the source revision separately from the managed CAS revision.
+Identical retained snapshots can be reused, including promotion of a draft.
+The selection envelope is preserved as metadata, not activation of an
+auxiliary editor; mapping and validating its domain bindings remains a cutover
+requirement.
+
+These adapters are not the active Modern UI save path. Editing other retained
+owners after gallery removal, complete live-use coverage, working checkpoint
+adoption and Animation draft/recovery, limits and production cutover remain
 required before enabling user-facing deletion.
 
 ## Backup and cutover
