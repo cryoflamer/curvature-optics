@@ -2950,7 +2950,9 @@
     "src/storage/ModernManagedObjectStore.js": {
       "directHtmlLoads": [],
       "commonJsSourceCallers": [],
-      "commonJsTestCallers": [],
+      "commonJsTestCallers": [
+        "tests/ModernManagedObjectStore.test.js"
+      ],
       "commonJsToolCallers": []
     },
     "src/storage/ModernPortableBackup.js": {
