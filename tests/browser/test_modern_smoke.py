@@ -1781,6 +1781,22 @@ class ModernBrowserSmoke(unittest.TestCase):
                 null,null,{...reference,revision:'rev:999'}),/revision changed/);
             await store.removeDocument({documentId:'animation:'+copy.id,expectedRevision:copied.managedRevision});
             ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
+            const galleryBefore=await adapter.listObservations();
+            let guards=0;
+            await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,row,recoveryText,()=>++guards<4),/stale shared Animation/i);
+            ok(guards===4&&JSON.stringify(await adapter.listObservations())===JSON.stringify(galleryBefore)&&
+                (await adapter.readAnimationWorkingCollection()).row.digest===row.digest,'failed Recovery published partial assets');
+            const imported=await adapter.importAnimationRecovery(indexedDB,lease,row,recoveryText);
+            const importedOwner=await adapter.readAnimationWorkingCollection();
+            const importedCp=A.getWorkspace(imported.collection,portableRecovery.id);
+            const alias=importedCp.draft.frames[0].referenceImageIds[0];
+            const importedPhoto=await adapter.readObservation(alias);
+            ok(imported.revision===row.revision+1&&imported.collection.activeId===row.collection.activeId&&
+                importedCp.libraryId===null&&alias!==record.id&&importedPhoto.row.record.original.dataUrl===record.original.dataUrl&&
+                importedOwner.observations.some(v=>v.alias===alias&&v.target===importedPhoto.observationId),
+                'Recovery import lost exact remapped evidence or changed active workspace');
+            await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,imported,recoveryText),/identity is already used/);
+            ok((await adapter.readAnimationWorkingCollection()).row.digest===imported.digest,'duplicate Recovery changed collection');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
             return {valid:(await store.verifyIntegrity()).valid,revision:row.revision,pendingArchive,pendingExpected};
         }""")

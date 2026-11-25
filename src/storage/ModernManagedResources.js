@@ -1673,7 +1673,7 @@
       return value;
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -1734,12 +1734,18 @@
       // Opening another exact named revision must never silently substitute
       // an observation version retained by a different workspace.
       if(linked.some(link=>link.changed))await linkedSources();
+      const importedAliases=new Set(assetPlan?.mapping.values()??[]);
       for(const alias of inventory.photos){
         let target=oldPhotos.get(alias);
         const retained=await retainedFromAnimation(alias,'observations',!!target);
         check(!target||!retained||target===retained,
           'Conflicting retained Animation observation: '+alias+'; retire the conflicting working copy and retry');
         if(!target)target=retained;
+        const supplied=importedAliases.has(alias)?assetPlan.byId.get(alias)?.observationId:null;
+        check(!importedAliases.has(alias)||supplied,'missing planned Recovery observation');
+        check(!supplied||!target||supplied===target,
+          'Conflicting retained Animation observation: '+alias+'; retire the conflicting working copy and retry');
+        if(!target)target=supplied;
         if(!target){
           const graph=await store.readDocumentGraph(observationId(alias));
           check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
@@ -1779,12 +1785,15 @@
           'Animation receipt previous workspace mismatch');
         references.push(strong('previous',previous.collectionId));
       }
-      const [document]=await store.writeDocuments([{documentId:draftsId,kind:DRAFTS,
+      const workingPlan={documentId:draftsId,kind:DRAFTS,
         expectedRevision,metadata:{sourceRevision:row.revision},references,
-        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]}],{guard,lease,expectedInventory:sourceInventory});
+        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]};
+      const documents=await store.writeDocuments([...(assetPlan?.plans??[]),workingPlan],{guard,lease,
+        expectedInventory:[...(sourceInventory?[sourceInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[])]});
+      const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }
-    function createAnimationWorkingPort(db,lease){
+    function createAnimationWorkingPort(db,lease,assetPlan=null){
       draftContracts();
       check(db===env.indexedDB,'Animation working database context mismatch');
       check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
@@ -1802,9 +1811,24 @@
           check(same(previous?.row??null,before),'Shared Animation collection CAS conflict; evidence retained');
           check(previous||row.revision===1,'initial Animation working revision must be one');
           await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
-            expectedRow:before,guard,lease,animationHandoff:true});
+            expectedRow:before,guard,lease,animationHandoff:true,assetPlan});
         }
       });
+    }
+    // One-shot Recovery import reuses the shared collection transition engine.
+    // Its staged assets exist only in this operation, never as a second writer.
+    async function importAnimationRecovery(db,lease,expected,text,guard=()=>true){
+      draftContracts();
+      createAnimationWorkingPort(db,lease);
+      const prepared=await drafts.prepareRecoveryImport(text,env.crypto);
+      const assetPlan=prepared.referenceImages?await planObservationRecords(prepared.referenceImages,new Map()):null;
+      const checkpoint=assetPlan?drafts.remapRecoveryReferences(prepared.checkpoint,assetPlan.mapping):prepared.checkpoint;
+      const backend={createAnimationWorkingPort:(context,lifetime)=>createAnimationWorkingPort(context,lifetime,assetPlan)};
+      const working=drafts.openSharedCollection(db,{lease,crypto:env.crypto,managedResources:backend});
+      const row=await working.read();
+      check(same(row,expected),'Shared Animation collection CAS conflict; evidence retained');
+      return row?working.createDraft(row,prepared.id,checkpoint,guard):
+        working.initializeManaged(drafts.collection(prepared.id,checkpoint),guard);
     }
     // Read verified domain rows, one closure at a time. A second inventory
     // refuses a mixed-revision list rather than silently dropping changed
@@ -1919,7 +1943,7 @@
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,
-      saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,
+      saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createAnimationLibraryPort,

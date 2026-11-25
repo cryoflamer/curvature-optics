@@ -599,3 +599,5 @@ independently journaled). A stale reference whose collection is no longer
 retained fails closed, with raw recovery evidence still downloadable. This
 read-only path does not create or upgrade storage, modify a receipt, or enable
 reclamation.
+
+Managed portable Recovery import stages the verified observation mapping and the independent working draft through the existing shared collection transition engine. Gallery inventory and working revision CAS are checked in one transaction; a failed import publishes neither new assets nor the draft. Existing retained alias conflicts are refused rather than silently changing another working copy's evidence. The legacy path is unchanged.

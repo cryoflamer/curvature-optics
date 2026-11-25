@@ -3602,7 +3602,7 @@
     var namedMutationStarted=false,metadataCommitted=false,relinkRef=null;
     try{
       if(studioWorkspaceReady&&!ctx.row?.namedSave)await flushSharedAnimation();
-      var openRef=null,openNamed=null,recoveryImport=null,namedContents=null;
+      var openRef=null,openNamed=null,recoveryImport=null,recoveryContents=null,namedContents=null;
       if(kind==='importNamed'){
         if(value.size>studioLibrary.MAX_PORTABLE_LENGTH)throw Error('Animation JSON file is too large');
         namedContents=await value.text();
@@ -3610,7 +3610,8 @@
       if(kind==='importRecovery'){
         if(value.size>studioDraftAutosave.MAX_SHARED_RECOVERY_LENGTH)
           throw Error('Animation recovery JSON is too large');
-        recoveryImport=await studioDraftAutosave.prepareRecoveryImport(await value.text(),root.crypto);
+        recoveryContents=await value.text();
+        if(!managedResources)recoveryImport=await studioDraftAutosave.prepareRecoveryImport(recoveryContents,root.crypto);
       }
       if(kind==='metadata'&&value.file)
         value={record:value.record,cover:await thumbnailApi.coverFromFile(document,value.file)};
@@ -3777,6 +3778,9 @@
             ctx.namedError=null;
             ctx.message='Saved Animation deleted. Any working copy remains available as an independent recovery source.';
           }else if(kind==='importRecovery'){
+            if(managedResources){
+              ctx.row=await managedResources.importAnimationRecovery(root.indexedDB,ctx.lease,row,recoveryContents);
+            }else{
             var {id,checkpoint,referenceImages}=recoveryImport;
             if(row&&(row.collection.workspaces.some(item=>item.id===id)||
               (row.collection.removed||[]).some(item=>item.id===id)))
@@ -3794,6 +3798,7 @@
             }
             ctx.row=row?await store.createDraft(row,id,checkpoint):
               await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,checkpoint));
+            }
             ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
           }else if(kind==='deleteDrafts'){
             var selected=c.state().row.envelope.documents.animation;
