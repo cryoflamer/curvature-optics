@@ -58,7 +58,8 @@
     // Hydration must verify the existing original before making a second
     // independently editable checkpoint. No raster data are copied to IDB.
     const prepared=await prepare(storage,files,source,env);
-    if(!prepared||JSON.stringify(prepared.project)!==JSON.stringify(source))
+    if(!prepared||(storage.storageKind==='managed'&&
+        JSON.stringify(prepared.project)!==JSON.stringify(source)))
       throw Error('Calibration Project changed while preparing its duplicate');
     const current=await storage.get(env.indexedDB,id);
     if(!current||current.revision!==source.revision)
