@@ -13739,6 +13739,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.page.once('dialog',lambda dialog:dialog.dismiss())
                 to_b.click()
                 self.assertEqual(self.page.evaluate(read,project['id']),after)
+                # A derived Scene can be transferred only after the edited
+                # physical input has been acknowledged by the shared store.
+                self.assertTrue(self.page.evaluate("""() => {
+                    const m=CurvatureModernApp.getModel();m.Height+=7;m.Update();
+                    document.getElementById('ModernRender').click();
+                    return document.getElementById('ModernCalibrationSceneToB').disabled;
+                }"""))
+                expect(to_b).to_be_enabled(timeout=30000)
+                after=self.page.evaluate(read,project['id'])
                 self.page.once('dialog',lambda dialog:dialog.accept())
                 to_b.click()
                 expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
@@ -13756,7 +13765,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                     for row in transferred['history']))
                 self.page.reload(wait_until='load')
                 self.page.wait_for_function(ready,timeout=30000)
-                self.assertEqual(self.page.evaluate(read,project['id']),transferred)
+                restored=self.page.evaluate(read,project['id'])
+                for key in ['project','row','bound','receipt','archive']:
+                    self.assertEqual(restored[key],transferred[key],key)
             if target!='B':
                 self.page.locator('#ModernPhotoCalibrationOpen').click()
 

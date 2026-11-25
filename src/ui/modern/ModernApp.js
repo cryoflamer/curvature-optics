@@ -2004,7 +2004,7 @@
       }else persistenceStatus('Document session saved');
       syncPreviewUnloadWarning();
       if(sharedPresentationActive()){
-        updateSnapshotSaveAction();syncSharedHistoryPanel();
+        updateSnapshotSaveAction();syncSharedHistoryPanel();refreshCalibrationApplicability();
         if(view.status!=='dirty')queueSharedHistoryAuto();
       }
     }).catch(function(error){persistence.dirty=true;
@@ -2373,8 +2373,8 @@
     if(sharedPresentationActive())cancelHistoryAuto();
     calibrationSceneRevision++;
     updateSnapshotSaveAction();
-    refreshCalibrationApplicability();
     persistence.dirty=true;
+    refreshCalibrationApplicability();
     if(sharedPresentationActive())updateSnapshotSaveAction();
     if(experimentPreview.live){
       if(!experimentPreview.controller||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
