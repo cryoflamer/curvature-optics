@@ -515,3 +515,22 @@ This is a cooperative fence, not a complete startup migration protocol.
 Older code and unregistered localStorage writers are not fenced; they must
 not run during cutover. No production caller creates the marker yet, and
 no migration, default route switch or deletion is authorized by this API.
+
+### Explicit legacy cutover preparation
+
+`prepareLegacyCutover(file, env, {closedOtherTabs:true})` requires a
+checksummed external portable backup file and explicit operator confirmation
+that the other app tabs are closed. Under the exclusive cooperative barrier
+it compares the full captured source with that archive, refuses an existing
+managed target or route, and publishes a backup-bound preparing marker.
+After releasing the exclusive barrier it invokes the same verified
+best-effort domain importer as disposable rehearsals. No legacy database
+is written or removed. A final exclusive observation checks that the
+legacy data and marker did not change during staging. The report retains
+the imported, skipped, standalone and unhandled inventory and integrity
+results. A failure after the marker is written intentionally leaves the
+origin fenced and any partial target available for diagnosis; no retry
+overwrites it. A stale or invalid backup refuses before the marker or
+target is created. This API does not prove that other tabs are closed,
+does not activate the managed route, and is not yet called by production
+startup or a maintenance UI.

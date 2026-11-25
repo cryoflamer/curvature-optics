@@ -1804,6 +1804,13 @@
         check(lock,'another rehearsal is active; close the other tab and retry');
         const preview=await backup.previewEmptyRestore(archive,env);
         check(preview.empty,'rehearsal requires an empty disposable browser profile');
+        return importLegacyArchive(archive,env,deps);
+      });
+  }
+  // Shared import planner. Both entry points verify the archive and establish
+  // a fresh managed target before calling it. No legacy store is opened here.
+  async function importLegacyArchive(archive,env,deps){
+        const backup=deps.CurvatureModernPortableBackup;
         const data=JSON.parse(archive.payload).content;
         const present=data.databases.filter(db=>db.status==='present');
         check(!present.some(db=>db.name===deps.CurvatureModernManagedObjectStore.DATABASE),
@@ -1835,8 +1842,8 @@
             }catch(error){
               // A refused write is safely skippable. An acknowledged root
               // that cannot be verified is not: discard this test profile.
-              if(acknowledged)throw Error('Rehearsal verification failed after commit: '+
-                kind+' '+String(entry.key)+'; discard this disposable profile: '+String(error.message||error));
+              if(acknowledged)throw Error('Managed import verification failed after commit: '+
+                kind+' '+String(entry.key)+'; preserve the source and inspect the target: '+String(error.message||error));
               skipped.push({kind,id:String(entry.key),reason:String(error.message||error)});
             }
           }
@@ -1943,6 +1950,53 @@
         check(integrity.valid,'managed graph failed integrity verification');
         return {imported,skipped,standalone,unhandled,originals:originals.size,
           integrity,eligibleForMigration:false,sourceUntouched:true};
+  }
+  // Explicit staging only: the operator supplies the external file and
+  // confirms that all app tabs are closed. A matching source is required
+  // while holding the exclusive cooperative writer barrier. Never overwrite
+  // a previous managed target, delete legacy data, or activate a route here.
+  async function prepareLegacyCutover(file,env,{closedOtherTabs=false}={},deps=env){
+    const backup=deps.CurvatureModernPortableBackup,core=deps.CurvatureModernManagedObjectStore,
+      barrier=deps.CurvatureModernBackupWriteBarrier;
+    check(closedOtherTabs===true,'close all other app tabs before cutover preparation');
+    check(backup&&core&&barrier&&env?.navigator?.locks&&env.localStorage,
+      'portable backup, storage and Web Locks required');
+    const archive=await backup.readFile(file,env.crypto);
+    const source=JSON.parse(archive.payload).content;
+    const key=barrier.ROUTE_KEY;
+    check(!source.databases.some(db=>db.name===core.DATABASE&&db.status==='present')&&
+      !source.webStorage.local.some(row=>row.key===key),'source already contains a managed target or route');
+    const gate=barrier.create(env.navigator.locks);
+    return env.navigator.locks.request('curvature-modern-managed-rehearsal',
+      {mode:'exclusive',ifAvailable:true},async lock=>{
+        check(lock,'another managed import is active; close the other tab and retry');
+        const marker={format:'curvature-modern-storage-route',version:1,state:'preparing',
+          backupSha256:archive.sha256};
+        await gate.snapshot(async()=>{
+          check(!barrier.readRoute(env.localStorage),'storage route already exists; preserve and inspect it');
+          const current=JSON.parse((await backup.capture(env)).payload).content;
+          check(!current.databases.some(db=>db.name===core.DATABASE&&db.status==='present'),
+            'managed target already exists; no overwrite permitted');
+          check(same(source,current),'external backup differs from the current source; capture a fresh backup');
+          env.localStorage.setItem(key,JSON.stringify(marker));
+          check(same(barrier.readRoute(env.localStorage),marker),'cutover marker readback failed');
+        });
+        // The exclusive snapshot has ended: managed transactions may now
+        // acquire shared locks. Cooperating legacy writers remain fenced.
+        // On failure, deliberately leave the marker and partial target intact.
+        const report=await importLegacyArchive(archive,env,deps);
+        await gate.snapshot(async()=>{
+          check(same(barrier.readRoute(env.localStorage),marker),'cutover marker changed during preparation');
+          const after=JSON.parse((await backup.capture(env)).payload).content;
+          const oldSource=data=>({
+            databases:data.databases.filter(db=>db.name!==core.DATABASE),
+            webStorage:{...data.webStorage,local:data.webStorage.local.filter(row=>row.key!==key)}
+          });
+          check(same(oldSource(source),oldSource(after)),
+            'legacy source changed during preparation; preserve both stores and inspect');
+        });
+        return {...report,route:marker,backupSha256:archive.sha256,prepared:true,
+          sourceUntouched:true,eligibleForMigration:false};
       });
   }
   // Only an empty disposable profile may be restored. Exact portable
@@ -1974,5 +2028,5 @@
         }
       });
   }
-  return Object.freeze({create,rehearseLegacyArchive,restoreAndQualifyManagedArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION,DRAFTS});
+  return Object.freeze({create,rehearseLegacyArchive,prepareLegacyCutover,restoreAndQualifyManagedArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION,DRAFTS});
 }));

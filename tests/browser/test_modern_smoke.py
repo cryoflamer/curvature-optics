@@ -3060,6 +3060,51 @@ class ModernBrowserSmoke(unittest.TestCase):
                 invalid_context.close()
             self.assertFalse(self.page.evaluate("""async()=> (await indexedDB.databases()).some(
                 db=>db.name==='curvature-modern-managed-objects')"""))
+            # Explicit same-origin preparation uses the external archive file,
+            # refuses stale source data, and leaves the old databases intact.
+            staged=self.page.evaluate("""async source=>{
+                const api=CurvatureModernManagedResources,barrier=CurvatureModernBackupWriteBarrier;
+                const file=new File([JSON.stringify(source.archive)],'backup.json',{type:'application/json'});
+                async function refuse(options){
+                    try{await api.prepareLegacyCutover(file,window,options);}
+                    catch(error){return error.message;}
+                    throw Error('unexpected preparation success');
+                }
+                const noConsent=await refuse({});
+                localStorage.setItem('curvature-test-new-write','changed');
+                const stale=await refuse({closedOtherTabs:true});
+                localStorage.removeItem('curvature-test-new-write');
+                const untouched=!barrier.readRoute(localStorage)&&
+                    !(await indexedDB.databases()).some(db=>db.name==='curvature-modern-managed-objects');
+                const report=await api.prepareLegacyCutover(file,window,{closedOtherTabs:true});
+                const adapter=api.create(window);
+                const working=await adapter.readWorkingCheckpoint();
+                const draft=await adapter.readAnimationWorkingCollection();
+                const legacy=barrier.create(navigator.locks).registerWriter('working.session');
+                const fenced=await legacy.commit(()=>false).catch(error=>/fenced/.test(error.message));
+                const repeated=await refuse({closedOtherTabs:true});
+                const observed=JSON.parse((await CurvatureModernPortableBackup.captureCoordinated(window)).archive.payload).content;
+                const original=JSON.parse(source.archive.payload).content;
+                const legacyRows=data=>data.databases.filter(db=>db.name!=='curvature-modern-managed-objects');
+                return {noConsent,stale,untouched,report,fenced,repeated,
+                    legacySame:JSON.stringify(legacyRows(observed))===JSON.stringify(legacyRows(original)),
+                    marker:barrier.readRoute(localStorage),physical:working.row.digest,animation:draft.row.digest};
+            }""",source)
+            self.assertIn('close all other app tabs',staged['noConsent'])
+            self.assertIn('external backup differs',staged['stale'])
+            self.assertTrue(staged['untouched'])
+            self.assertTrue(staged['report']['prepared'])
+            self.assertFalse(staged['report']['eligibleForMigration'])
+            self.assertEqual(staged['report']['imported'],result['report']['imported'])
+            self.assertEqual(staged['report']['skipped'],result['report']['skipped'])
+            self.assertTrue(staged['report']['integrity']['valid'])
+            self.assertTrue(staged['fenced'])
+            self.assertIn('storage route already exists',staged['repeated'])
+            self.assertTrue(staged['legacySame'])
+            self.assertEqual(staged['marker']['state'],'preparing')
+            self.assertEqual(staged['marker']['backupSha256'],source['archive']['sha256'])
+            self.assertEqual(staged['physical'],source['working']['digest'])
+            self.assertEqual(staged['animation'],source['drafts']['digest'])
         finally:
             target_context.close()
 
