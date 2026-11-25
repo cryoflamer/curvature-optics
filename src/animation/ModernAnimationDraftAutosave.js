@@ -1132,6 +1132,36 @@
             row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
       },guard);
     }
+    // Only explicitly inspected, inactive independent drafts may be removed.
+    // The caller owns the shared document-operation lock and verifies the
+    // current session reference; neither the named store nor the session is
+    // changed by this single collection CAS.
+    function removeInactiveDrafts(expected,refs,selected,guard){
+      const keep=validateReference(selected);
+      if(!Array.isArray(refs)||!refs.length)throw Error('Exact inactive Animation draft references required');
+      const wanted=refs.map(validateReference),ids=new Set(wanted.map(ref=>ref.id));
+      if(ids.size!==wanted.length||ids.has(keep.id)||wanted.some(ref=>!ref.id.startsWith('draft_')))
+        throw Error('Only inactive independent Animation drafts may be deleted');
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        if(!equal(documentReference(row,keep.id),keep))
+          throw Error('Selected Animation revision changed');
+        for(const ref of wanted){
+          if(!equal(documentReference(row,ref.id),ref))
+            throw Error('Inactive Animation draft revision changed');
+          const cp=getWorkspace(row.collection,ref.id);
+          if(!cp||cp.libraryId!==null)throw Error('Only independent Animation drafts may be deleted');
+        }
+        const when=Math.max(Date.now(),row.collection.savedAt+1,
+          ...row.collection.workspaces.map(item=>item.checkpoint.savedAt+1));
+        const collection=normalizeCollection({...row.collection,savedAt:when,
+          activeId:ids.has(row.collection.activeId)?keep.id:row.collection.activeId,
+          workspaces:row.collection.workspaces.filter(item=>!ids.has(item.id)),
+          removed:[...(row.collection.removed||[]),...wanted.map(ref=>({id:ref.id,removedAt:when}))]});
+        return {version:1,revision,collection,
+          revisions:row.revisions.filter(item=>!ids.has(item.id)),receipt:null};
+      },guard);
+    }
     // The caller verifies the exact named Library record under the shared
     // operation lock. This creates only a working checkpoint, never mutates
     // the named owner or implicitly switches the session.
@@ -1324,7 +1354,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,removeInactiveDrafts,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

@@ -3262,6 +3262,15 @@
     section.appendChild(gallery);host.appendChild(section);
     var drafts=element('section','modern-animation-workspace-list');
     drafts.appendChild(element('strong','','Working drafts ('+(ctx.row?.collection.workspaces.length||0)+')'));
+    var selectedDraft=experimentPreview.controller?.state().row?.envelope.documents.animation;
+    var canClean=studioWorkspaceReady&&!studioActiveDemo&&!!selectedDraft&&
+      status.reference?.id===selectedDraft.id&&!status.error&&!status.unsaved;
+    var cleanupRefs=ctx.row&&canClean?ctx.row.collection.workspaces.filter(item=>
+      item.id.startsWith('draft_')&&item.id!==selectedDraft.id).map(item=>
+      studioDraftAutosave.documentReference(ctx.row,item.id)):[];
+    if(cleanupRefs.length)action(drafts,'Delete other independent drafts',
+      ()=>void runSharedAnimationAction('deleteDrafts',cleanupRefs),false,
+      {'id':'ModernSharedAnimationDeleteOtherDrafts'});
     if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
       var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
       var active=!studioActiveDemo&&studioWorkspaceReady&&studioWorkspaceId===item.id;
@@ -3270,6 +3279,10 @@
         item.checkpoint.draft.frames.length+' frames · '+new Date(item.checkpoint.savedAt).toLocaleString()));
       action(line,active?'Current':'Open draft',()=>void runSharedAnimationAction('open',ref),active,
         {'data-shared-animation-id':item.id,'aria-label':'Open draft · '+item.checkpoint.draft.name});
+      if(item.id.startsWith('draft_'))action(line,'Delete',
+        ()=>void runSharedAnimationAction('deleteDrafts',[ref]),
+        !cleanupRefs.some(candidate=>candidate.id===item.id),
+        {'data-shared-delete-draft-id':item.id,'aria-label':'Delete draft · '+item.checkpoint.draft.name});
       drafts.appendChild(line);
     });
     host.appendChild(drafts);
@@ -3495,6 +3508,9 @@
       'Delete the inspected saved Animation project "'+value.project.name+'"? Working drafts, History and reference photographs will be retained.')))return false;
     if(ctx.row?.keyframeEdit)return false;
     if(ctx.row?.namedSave&&!['open','completeNamedSave','abandonNamedSave'].includes(kind))return false;
+    if(kind==='deleteDrafts'&&(!Array.isArray(value)||!value.length||!root.confirm||!root.confirm(
+      'Permanently delete '+value.length+' selected inactive independent Animation draft'+(value.length===1?'':'s')+
+      '? The opened draft, saved projects, History and original photographs will be retained.')))return false;
     if(kind==='abandonNamedSave'&&(!root.confirm||!root.confirm(
       'Abandon this pending Save Changes intent? This does not undo any named save that may already have committed. Download the evidence first if needed. The working draft is retained.')))return false;
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
@@ -3690,6 +3706,19 @@
             ctx.row=row?await store.createDraft(row,id,checkpoint):
               await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,checkpoint),root.localStorage);
             ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
+          }else if(kind==='deleteDrafts'){
+            var selected=c.state().row.envelope.documents.animation;
+            if(!studioWorkspaceReady||studioActiveDemo||!selected||
+               studioWorkspaceId!==selected.id||ctx.writer.state().unsaved||ctx.writer.state().error)
+              throw Error('Open and save the working draft to retain before cleanup');
+            function deletionGuard(){
+              ctx.lease.check(true);
+              return experimentPreview.status!=='suspended'&&animationWorkspaceOpen&&
+                JSON.stringify(c.state().row.envelope.documents.animation)===JSON.stringify(selected);
+            }
+            ctx.row=await store.removeInactiveDrafts(row,value,selected,deletionGuard);
+            ctx.message='Deleted '+value.length+' inactive independent draft'+(value.length===1?'':'s')+
+              '. Opened draft and saved projects retained.';
           }else if(kind==='new'){
             var id=studioDraftAutosave.makeWorkspaceId(root.crypto);
             var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,

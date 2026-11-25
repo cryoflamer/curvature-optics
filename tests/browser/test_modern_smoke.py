@@ -12230,6 +12230,63 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after,{'evidence':before,'tab':'legacy_tab_123',
             'name':'legacy-window-name','keyframe':'{raw-keyframe-evidence'})
 
+    def test_shared_animation_inactive_draft_cleanup_preserves_selected_checkpoint(self):
+        """Exact single and bulk draft removal leaves the selected document unchanged."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        ids=[]
+        for name in ['First draft','Second draft','Keep this draft']:
+            self.page.locator('#ModernSharedAnimationNewDraft').click()
+            self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+            field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+            field.fill(name)
+            field.press('Tab')
+            expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+                'Shared working draft saved in IndexedDB',timeout=30000)
+            ids.append(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'))
+            self.page.locator('#ModernAnimationViewLibrary').click()
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            return {draft:await A.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read(),
+                session:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }"""
+        before=self.page.evaluate(read)
+        def delete_button(id):
+            return self.page.locator('[data-shared-delete-draft-id="'+id+'"]')
+        expect(delete_button(ids[2])).to_be_disabled()
+        expect(delete_button(ids[0])).to_be_enabled()
+        self.page.once('dialog',lambda dialog:dialog.dismiss())
+        delete_button(ids[0]).click()
+        self.assertEqual(self.page.evaluate(read),before)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        delete_button(ids[0]).click()
+        expect(delete_button(ids[0])).to_have_count(0,timeout=30000)
+        one=self.page.evaluate(read)
+        self.assertEqual(one['session'],before['session'])
+        self.assertEqual(one['draft']['revision'],before['draft']['revision']+1)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.page.locator('#ModernSharedAnimationDeleteOtherDrafts').click()
+        expect(delete_button(ids[1])).to_have_count(0,timeout=30000)
+        final=self.page.evaluate(read)
+        self.assertEqual(final['session'],before['session'])
+        self.assertEqual(final['draft']['revision'],one['draft']['revision']+1)
+        self.assertEqual(final['draft']['collection']['workspaces'],
+            [row for row in before['draft']['collection']['workspaces'] if row['id']==ids[2]])
+        self.assertEqual(final['draft']['revisions'],
+            [row for row in before['draft']['revisions'] if row['id']==ids[2]])
+        self.assertEqual({row['id'] for row in final['draft']['collection']['removed']},set(ids[:2]))
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),final)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Keep this draft')
+
     def test_shared_animation_mounted_draft_edit_and_reload(self):
         """New draft, real Studio editor, exact shared pointer and global F5."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

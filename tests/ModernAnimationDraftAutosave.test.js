@@ -1025,6 +1025,30 @@ test('shared Animation can create independent drafts without reselecting or revi
   assert.deepEqual(await a.read(),added);
 });
 
+test('shared Animation cleanup atomically removes exact inactive independent drafts without changing the selected revision',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const added=await a.createDraft(row,'draft_new',f.cp);
+  const keep=autosave.documentReference(added,f.id),other=autosave.documentReference(added,f.other),
+    fresh=autosave.documentReference(added,'draft_new');
+  await assert.rejects(async()=>a.removeInactiveDrafts(added,[keep],keep),/Only inactive/);
+  await assert.rejects(async()=>a.removeInactiveDrafts(added,[other,other],keep),/Only inactive/);
+  await assert.rejects(a.removeInactiveDrafts(added,[{...other,revision:'rev:2'},fresh],keep),/revision changed/);
+  assert.deepEqual(await a.read(),added);
+  await assert.rejects(a.removeInactiveDrafts(added,[other,fresh],keep,()=>false),/Stale shared/);
+  assert.deepEqual(await a.read(),added);
+  const cleaned=await a.removeInactiveDrafts(added,[other,fresh],keep);
+  assert.equal(cleaned.revision,added.revision+1);
+  assert.equal(cleaned.collection.activeId,keep.id);
+  assert.deepEqual(cleaned.collection.workspaces,[added.collection.workspaces.find(item=>item.id===keep.id)]);
+  assert.deepEqual(cleaned.revisions,[added.revisions.find(item=>item.id===keep.id)]);
+  assert.deepEqual(cleaned.collection.removed.map(item=>item.id),[other.id,fresh.id]);
+  assert.equal(cleaned.receipt,null);
+  assert.deepEqual(await f.open().read(),cleaned);
+  await assert.rejects(a.createDraft(cleaned,fresh.id,f.cp),/identity is already used/);
+  assert.deepEqual(await a.read(),cleaned);
+});
+
 test('shared Animation writer binds a canonicalized session reference regardless of property order',async()=>{
   const h=await sharedWriterFixture(),ref=h.pointer();
   const canonical={id:ref.id,recovery:ref.recovery,revision:ref.revision};
