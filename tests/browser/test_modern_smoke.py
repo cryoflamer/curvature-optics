@@ -850,6 +850,134 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(len(result['samples']),3)
         print("MANAGED_PHOTO_AUTOSAVE_PROFILE_BLOB "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
+    def test_managed_store_tombstone_scale_and_gc_candidates(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const store=adapter.store,S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const legacy=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:CurvatureModernDocumentSession});
+            await legacy.read();
+            let working=await legacy.initialize(experiment),revision=0,seeded=0;
+            const samples=[];
+            // Seed valid retired-ID rows directly to model a much older
+            // profile without spending thousands of transactions on setup.
+            // Timed reads/writes use the real domain adapter and real IDB.
+            async function seedTombstones(count){
+                const db=await new Promise((resolve,reject)=>{
+                    const req=indexedDB.open(CurvatureModernManagedObjectStore.DATABASE);
+                    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+                });
+                try{
+                    await new Promise((resolve,reject)=>{
+                        const tx=db.transaction('objects','readwrite'),objects=tx.objectStore('objects');
+                        for(let n=seeded;n<count;n++)objects.add({id:'retired-'+n,deleted:true,refCount:0});
+                        tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);
+                    });
+                    seeded=count;
+                }finally{db.close();}
+            }
+            for(const count of [0,1000,10000]){
+                if(count)await seedTombstones(count);
+                const times=[];
+                for(let k=0;k<8;k++){
+                    const edit=structuredClone(experiment);edit.scene.camera.Height+=count+k+1;
+                    working=await legacy.stage(edit,working.revision);
+                    const start=performance.now();
+                    const saved=await adapter.saveWorkingCheckpoint(working,{expectedRevision:revision});
+                    revision=saved.managedRevision;
+                    if(k)times.push(performance.now()-start);
+                }
+                let payloadReads=0;
+                const get=IDBObjectStore.prototype.get,getAll=IDBObjectStore.prototype.getAll;
+                IDBObjectStore.prototype.get=function(...args){
+                    if(this.name==='payloads')payloadReads++;
+                    return get.apply(this,args);
+                };
+                IDBObjectStore.prototype.getAll=function(...args){
+                    if(this.name==='payloads')payloadReads++;
+                    return getAll.apply(this,args);
+                };
+                let candidates,candidateMs;
+                try{
+                    await rejects(()=>store.listGarbageCandidates({limit:0}),/candidate limit/);
+                    await rejects(()=>store.listGarbageCandidates({limit:65}),/candidate limit/);
+                    ok((await store.listGarbageCandidates({limit:1})).length===1,'candidate limit ignored');
+                    const start=performance.now();
+                    candidates=await store.listGarbageCandidates();
+                    candidateMs=performance.now()-start;
+                }finally{IDBObjectStore.prototype.get=get;IDBObjectStore.prototype.getAll=getAll;}
+                ok(payloadReads===0,'candidate discovery loaded payload');
+                // A second writer may retain a candidate after discovery.
+                const target=candidates[0],guard='guard-'+count;
+                await store.writeDocument({documentId:guard,kind:'test',expectedRevision:0,
+                    metadata:{},references:[{slot:'value',target,strength:'strong'}]});
+                const batch=await store.collectGarbageBatch(candidates);
+                ok(batch.retained.length===1&&batch.retained[0]===target&&
+                    batch.collected.length===candidates.length-1,'stale discovery permitted reclamation');
+                await store.removeDocument({documentId:guard,expectedRevision:1});
+                ok((await store.collectGarbageBatch([target])).collected[0]===target,'released resource not collected');
+                const integrity=await store.verifyIntegrity();
+                const read=await adapter.readWorkingCheckpoint();
+                ok(integrity.valid&&integrity.liveObjects===2&&!integrity.eligible.length&&
+                    read.row.digest===working.digest,'state changed after maintenance');
+                times.sort((a,b)=>a-b);
+                samples.push({seededTombstones:count,writeMedianMs:times[3],writeMaxMs:times.at(-1),
+                    candidateMs,payloadReads,live:integrity.liveObjects});
+            }
+            await rejects(()=>store.writeDocument({documentId:'collision',kind:'test',expectedRevision:0,metadata:{},
+                references:[{slot:'snapshot',target:'retired-0',strength:'strong'}],
+                resources:[{id:'retired-0',type:api.SNAPSHOT,version:1,payload:{experiment,evidence:'none'}}]}),
+                /object ID collision/);
+            return {revision,samples};
+        }""")
+        self.assertEqual(result['revision'],24)
+        self.assertEqual(result['samples'][-1]['seededTombstones'],10000)
+        print("MANAGED_TOMBSTONE_PROFILE "+json.dumps(result,sort_keys=True),flush=True)
+
     def test_managed_store_long_running_autosave(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))

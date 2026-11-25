@@ -492,6 +492,21 @@
     }
     // Explicit single-object collection; later calls collect newly eligible
     // children. No implicit collection, and no destructive domain integration.
+    // Metadata-only candidate discovery. This is a hint, not authorization
+    // to reclaim: the later batch locks and revalidates the current graph
+    // and every payload. Bounded output allows a maintenance caller to yield.
+    async function listGarbageCandidates({limit=MAX_GC_BATCH}={}){
+      check(Number.isSafeInteger(limit)&&limit>0&&limit<=MAX_GC_BATCH,'invalid GC candidate limit');
+      return run('readonly',async stores=>{
+        const g=await graph(stores),{counts}=inspect(g,types);
+        const candidates=[];
+        for(const [id,count] of counts)if(count===0){
+          candidates.push(id);
+          if(candidates.length===limit)break;
+        }
+        return candidates;
+      });
+    }
     async function collectGarbage(id){
       return underResourceLock(id,'exclusive',()=>run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
@@ -569,7 +584,7 @@
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
-      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,collectGarbage,collectGarbageBatch});
+      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));
