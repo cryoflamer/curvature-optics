@@ -2648,7 +2648,8 @@
       runFit.disabled=stage!=="calibration"||restoring||pendingPhotoLoads>0||applyBusy||
         !!fitWorker||!record||!scene||!initialSupported||!count||!free.length||2*count<free.length;
       stopFit.disabled=!fitWorker;bestView.disabled=!fitBest;
-      const applyDisabled=!!sharedSelection||applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
+      const applyDisabled=!!sharedSelection&&(!sharedSelection.usable()||!projectSession?.project())||
+        applyBusy||restoring||pendingPhotoLoads>0||!resultStage()||
         !!fitWorker||!record||!scene||!bestSupported;
       if(applyButton)applyButton.disabled=applyDisabled;
       if(applyTarget)applyTarget.disabled=applyDisabled;
@@ -2919,7 +2920,7 @@
       try{
         await env.CurvatureModernApp.applyCalibrationToTarget({
           candidate:applyCandidate,target:()=>selectedApplyTarget,
-          revision:()=>applyRevision+':'+loadToken,saveDraft:()=>persist(),
+          revision:()=>applyRevision+':'+loadToken,saveDraft:()=>persist(!!sharedSelection),
           projectBinding,linkArchivedResult
         },info.target);
         applyMessage('Applied to '+info.label+'. Calibration draft retained.');

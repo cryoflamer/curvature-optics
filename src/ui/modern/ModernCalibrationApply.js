@@ -31,6 +31,8 @@
     // The host revision also covers destination ABA changes (A -> B -> A).
     if(host.target!==undefined&&typeof host.target!=='function')
       throw TypeError('Invalid calibration Apply host target');
+    if(host.commitDurable!==undefined&&typeof host.commitDurable!=='function')
+      throw TypeError('Invalid durable calibration Apply host');
     let busy=false;
     async function apply(target='Scene'){
       if(busy){
@@ -91,14 +93,25 @@
            fingerprint.exactSignature(backup.entry.experiment)!==fingerprint.exactSignature(before))
           throw Error('Outgoing experiment was not protected in History');
         phase='stale';current();
-        // No await between final validation and physical mutation. Host must
-        // synchronously update canonical model only, without navigation or
-        // render. A partial commit failure restores the outgoing experiment.
+        // The shared host first commits the whole durable physical row.
+        // The injected guard must be rechecked across its asynchronous CAS.
+        // After acknowledgement, a live-model failure is a presentation
+        // failure; never roll back the already committed durable row.
+        if(host.commitDurable){
+          phase='durable-commit';
+          await host.commitDurable(state.validate(next),state.validate(before),
+            ()=>{current();return true;},{target,resultId:record.id,recoveryId:backup.entry.id});
+          committed=true;
+        }
         phase='commit';
         try{
           host.commit(state.validate(next),target);
           committed=true;
         }catch(error){
+          if(committed){
+            const e=failure('commit',error,true);
+            e.recoveryId=backup.entry.id;e.resultId=record.id;throw e;
+          }
           let rollbackError=null;
           try{host.rollback(state.validate(before),target);}
           catch(e){rollbackError=String(e?.message||e);}

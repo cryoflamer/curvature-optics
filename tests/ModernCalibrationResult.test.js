@@ -722,3 +722,30 @@ test('failed project result link aborts before History and physical commit; arch
   assert.deepEqual(h.trace,['archive','link']);
   assert.deepEqual(h.current,before);
 });
+
+test('shared durable Apply commits after archive/link/History, before the live model',async()=>{
+  const record=await archive.create(input(),env());
+  const h=applyHost(record),before=copy(h.current);
+  h.host.link=async()=>{h.trace.push('link');};
+  h.host.commitDurable=async(next,old,guard,info)=>{
+    h.trace.push('durable');assert.deepEqual(old,before);
+    assert.deepEqual(next,transfer.transfer(record,before,'A'));
+    assert.deepEqual(info,{target:'A',resultId:record.id,recoveryId:17});
+    assert.equal(guard(),true);assert.deepEqual(h.current,before);
+  };
+  await applyApi.create(h.host).apply('A');
+  assert.deepEqual(h.trace,['archive','link','protect','durable','commit','present']);
+  assert.deepEqual(h.current,transfer.transfer(record,before,'A'));
+});
+test('shared Apply never mutates live physics on failed durable commit and never rolls back acknowledged data',async()=>{
+  const record=await archive.create(input(),env());
+  const h=applyHost(record),before=copy(h.current);
+  h.host.commitDurable=async()=>{throw Error('CAS rejected');};
+  await assert.rejects(applyApi.create(h.host).apply(),e=>e.phase==='durable-commit'&&!e.committed);
+  assert.deepEqual(h.current,before);assert.ok(!h.trace.includes('commit'));
+  const second=applyHost(record);
+  second.host.commitDurable=async()=>{};
+  second.host.commit=()=>{throw Error('Live activation failed');};
+  await assert.rejects(applyApi.create(second.host).apply(),e=>e.phase==='commit'&&e.committed&&e.recoveryId===17);
+  assert.ok(!second.trace.includes('rollback'));
+});

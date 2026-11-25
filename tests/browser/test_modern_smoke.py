@@ -12132,6 +12132,80 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             stale.close()
 
+    def test_shared_calibration_apply_durable_scene_and_compare(self):
+        """Actual Apply UI commits one physical checkpoint after verified archive and History."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=> {
+            const a=CurvatureModernApp,s=a.getExperimentSessionPreview();
+            return s.status==='failed'||s.status==='clean'&&a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+        data=self.soundly_calibration_experiment()
+        project=self.page.evaluate("""async data=>{
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters;
+            const points=rows.map(row=>({id:row.landmark.id,status:'visible',
+                observed:row.pixel,predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight}));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,
+                evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,
+                    cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(
+                    rows,freeParameters,model,physics,1176,791)};
+            return CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+        }""",data)
+        read="""async id=>{
+            const app=CurvatureModernApp,S=CurvatureModernCalibrationProjectStore;
+            const p=await S.get(indexedDB,id),c=app.getExperimentSessionPreview().controller;
+            return {project:p,row:c.row,bound:c.bound,receipt:await S.readSharedSelectionReceipt(indexedDB),
+                history:await app.getHistoryStore().list(),
+                archive:p.resultIds.length?await CurvatureModernCalibrationResultArchive.get(indexedDB,p.resultIds[0]):null};
+        }"""
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        self.page.locator('[data-calibration-project-open="'+project['id']+'"]').click()
+        for target in ['Scene','A','B']:
+            workspace=self.page.locator('#ModernPhotoCalibration')
+            expect(workspace).to_be_visible(timeout=30000)
+            button=workspace.locator('#ModernCalibrationApplyScene')
+            expect(button).to_be_enabled(timeout=30000)
+            workspace.locator('#ModernCalibrationApplyTarget').select_option(target)
+            self.page.wait_for_function("""()=>{
+                const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+                return e?.error||e&&!e.pending&&!e.unsaved&&!e.selectionPending;
+            }""",timeout=30000)
+            before=self.page.evaluate(read,project['id'])
+            self.page.once('dialog',lambda dialog:dialog.accept())
+            button.click()
+            expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+                'Applied to '+('Scene' if target=='Scene' else 'Compare '+target),timeout=30000)
+            saved=self.page.evaluate(read,project['id'])
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),
+                'scene' if target=='Scene' else 'compare')
+            self.assertEqual(saved['row']['revision'],
+                before['row']['revision']+saved['project']['revision']-before['project']['revision']+1)
+            self.assertEqual(saved['row']['envelope']['documents']['calibration'],
+                {'id':project['id'],'revision':'rev:'+str(saved['project']['revision']),'recovery':None})
+            self.assertEqual(saved['project']['photo'],before['project']['photo'])
+            self.assertEqual(len(saved['project']['resultIds']),1)
+            self.assertIsNone(saved['receipt'])
+            expected=self.page.evaluate("""args=>CurvatureModernCalibrationTransfer.transfer(
+                args.archive.record,args.previous,args.target)""",
+                {'archive':saved['archive'],'previous':before['bound']['experiment'],'target':target})
+            self.assertEqual(saved['bound']['experiment'],expected)
+            self.assertTrue(any(item['pinned'] and item['experiment']==before['bound']['experiment']
+                for item in saved['history']))
+            self.page.reload(wait_until='load')
+            self.page.wait_for_function(ready,timeout=30000)
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+            after=self.page.evaluate(read,project['id'])
+            for key in ['project','row','bound','receipt','archive']:
+                self.assertEqual(after[key],saved[key],key)
+            if target!='B':
+                self.page.locator('#ModernPhotoCalibrationOpen').click()
+
     def test_shared_calibration_image_library_guarded_navigation(self):
         """Transient gallery browsing preserves the shared physical checkpoint and exact project revisions."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

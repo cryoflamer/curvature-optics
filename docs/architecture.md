@@ -794,8 +794,7 @@ reference; F5 in the gallery restores that physical workspace. Return and
 saved Calibration usage navigation verify the exact project revision before
 activation, without a legacy tab marker. Other usage types remain visible
 but cannot navigate until their document owners are migrated. Original
-deletion remains blocked. Apply and mounted Animation are not enabled by
-this contract.
+deletion remains blocked. Mounted Animation is not enabled by this contract.
 
 The headless Calibration Apply checkpoint adapter supports a single CAS
 from an acknowledged Calibration selection to a new physical experiment.
@@ -806,8 +805,13 @@ immutable archived result, link it to the project and pin the outgoing
 experiment in History; it must hold the shared operation lock during the
 final CAS. Live physics must not be mutated until durable acknowledgement.
 An ambiguous postflight failure requires reload/readback, not a second
-write or a rollback of the durable row. The adapter is not yet mounted in
-the Apply UI.
+write or a rollback of the durable row. The mounted shared Calibration
+Apply uses this adapter for Scene and explicit Compare A/B. It verifies
+the archive transfer, exact linked project and pinned recovery readback
+under the shared lock; only then may it update live physics and render.
+An already acknowledged durable row is never rolled back because a live
+render or activation fails. The archive-only Scene-to-Compare action
+remains disabled until its separate shared physical transaction is migrated.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
