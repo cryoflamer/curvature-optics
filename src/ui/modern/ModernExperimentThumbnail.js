@@ -3,10 +3,10 @@
  * renders physics, reads the DOM UI, or modifies an experiment snapshot.
  */
 (function(root,factory){
-  var api=factory();
+  var api=factory(root);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentThumbnail=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root){
   'use strict';
   var MAX_DATA_LENGTH=750000,VIEW_WIDTH=480,VIEW_HEIGHT=300;
   var CACHE_ENTRIES=200,CACHE_CHARS=12000000;
@@ -179,12 +179,13 @@
   function cacheTransaction(indexedDB,mode,additions){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.reject(Error('Keyframe thumbnail storage unavailable'));
     return new Promise(function(resolve,reject){
-      var db,tx,done=false,result,request;
+      var db,tx,done=false,result,request,failure=null;
       function fail(error){if(done)return;done=true;if(db)db.close();reject(error||Error('Thumbnail cache transaction failed'));}
       try{request=indexedDB.open(CACHE_DATABASE,1);}catch(error){fail(error);return;}
       request.onblocked=function(){fail(Error('Thumbnail cache database blocked'));};
       request.onerror=function(){fail(request.error);};
       request.onupgradeneeded=function(){
+        if(done){request.transaction.abort();return;}
         var opened=request.result;
         if(!opened.objectStoreNames.contains(CACHE_STORE))opened.createObjectStore(CACHE_STORE,{keyPath:'id'});
       };
@@ -192,8 +193,9 @@
         db=request.result;if(done){db.close();return;}
         try{
           tx=db.transaction(CACHE_STORE,mode);
-          tx.oncomplete=function(){if(!done){done=true;db.close();resolve(result);}};
-          tx.onabort=tx.onerror=function(){fail(tx.error);};
+          tx.oncomplete=function(){if(!done){if(failure){fail(failure);return;}done=true;db.close();resolve(result);}};
+          tx.onerror=function(){failure=failure||tx.error||Error('Thumbnail cache transaction failed');};
+          tx.onabort=function(){fail(failure||tx.error);};
           var store=tx.objectStore(CACHE_STORE),read=store.getAll();
           read.onsuccess=function(){try{
             var old=read.result||[],map=new Map();
@@ -209,25 +211,37 @@
               old.forEach(function(row){if(!keep.has(row.id))store.delete(row.id);});
               (additions||[]).forEach(function(row){if(keep.has(row.id)&&map.get(row.id)===row)store.put(row);});
             }
-          }catch(error){try{tx.abort();}catch(ignore){}fail(error);}};
-        }catch(error){fail(error);}
+          }catch(error){failure=error;try{tx.abort();}catch(ignore){fail(error);}}};
+        }catch(error){failure=error;if(tx){try{tx.abort();}catch(ignore){fail(error);}}else fail(error);}
       };
     });
   }
-  function createKeyframePersistence(indexedDB,onError){
+  function createKeyframePersistence(indexedDB,onError,options){
+    options=options||{};
+    const locks=Object.hasOwn(options,'lockManager')?options.lockManager:root.navigator?.locks;
+    const barrier=locks?(typeof module==='object'&&module.exports?
+      require('../../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier):null;
+    if(locks&&!barrier)throw Error('Thumbnail cache write barrier unavailable');
+    const writer=locks?barrier.create(locks).registerWriter('keyframe.thumbnails'):null;
+    // Even read() can create the database. Both paths must wait until the
+    // exclusive backup finishes, and retain the lock until IDB acknowledges.
+    function transact(mode,rows){
+      const perform=()=>cacheTransaction(indexedDB,mode,rows);
+      return writer?writer.commit(perform):perform();
+    }
     var tail=Promise.resolve();
     function report(error){if(onError)try{onError(error);}catch(ignore){}return false;}
-    function read(){return tail.then(function(){return cacheTransaction(indexedDB,'readonly');});}
+    function read(){return tail.then(function(){return transact('readonly');});}
     function write(items){
       var rows=[];
       try{items.forEach(function(item){var row=cacheRow(item.experiment,item.image,Date.now());if(row)rows.push(row);});}
       catch(error){return Promise.resolve(report(error));}
       if(!rows.length)return tail.then(function(){return true;});
-      tail=tail.then(function(){return cacheTransaction(indexedDB,'readwrite',rows);})
+      tail=tail.then(function(){return transact('readwrite',rows);})
         .then(function(){return true;},report);
       return tail;
     }
-    return Object.freeze({read:read,write:write});
+    return Object.freeze({read:read,write:write,coordination:writer?'participating-writer':'uncoordinated'});
   }
   // Decode only local raster images, downsample, and re-encode to remove metadata.
   // Do not keep object URLs or the original potentially enormous source file.

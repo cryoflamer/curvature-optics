@@ -8748,6 +8748,43 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             other.close()
 
+    def test_thumbnail_cache_waits_for_exclusive_backup_barrier(self):
+        """Schema-capable reads and durable cache writes share the backup lock."""
+        self.open_modern()
+        other=self.context.new_page()
+        try:
+            other.goto(self.base_url,wait_until='load')
+            self.page.evaluate("""()=>{
+                window.__cacheHold=CurvatureModernBackupWriteBarrier.create(navigator.locks).snapshot(async()=>{
+                    window.__cacheHeld=true;
+                    await new Promise(resolve=>window.__cacheRelease=resolve);
+                });
+            }""")
+            self.page.wait_for_function('window.__cacheHeld===true')
+            other.evaluate("""()=>{
+                const cache=CurvatureModernExperimentThumbnail.createKeyframePersistence(indexedDB);
+                const experiment=CurvatureModernDemoCatalog.load()[0].project.baseExperiment;
+                const image={mode:experiment.display.mode,width:1,height:1,dataUrl:'data:image/png;base64,YQ=='};
+                window.__cacheReadDone=false;window.__cacheWriteDone=false;
+                window.__cacheRead=cache.read().then(rows=>{window.__cacheReadDone=true;return rows;});
+                window.__cacheWrite=cache.write([{experiment,image}]).then(ok=>{
+                    window.__cacheWriteDone=true;return ok;
+                });
+            }""")
+            other.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+                lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+            self.assertFalse(other.evaluate('window.__cacheReadDone || window.__cacheWriteDone'))
+            self.page.evaluate('window.__cacheRelease()')
+            self.assertTrue(other.evaluate('window.__cacheWrite'))
+            self.assertTrue(other.evaluate('window.__cacheReadDone'))
+            self.assertTrue(other.evaluate("""async()=>{
+                const rows=await CurvatureModernExperimentThumbnail.createKeyframePersistence(indexedDB).read();
+                return rows.some(row=>row.image.dataUrl==='data:image/png;base64,YQ==');
+            }"""))
+        finally:
+            self.page.evaluate('window.__cacheRelease?.()')
+            other.close()
+
     def test_backup_write_barrier_serializes_participating_tabs(self):
         """Real Web Locks: one tab's acknowledged writer must finish before the
         other tab enters its exclusive read-only snapshot.

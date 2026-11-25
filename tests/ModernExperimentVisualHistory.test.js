@@ -484,3 +484,21 @@ test('durable thumbnail store prunes oldest writes and corrupt rows under the co
   assert.equal(db.rows.has('broken'),false);
   assert.ok(rows.some(r=>r.id===JSON.stringify(items[24].experiment)));
 });
+
+test('thumbnail cache read and write participate in the same origin lock including schema creation',async()=>{
+  const db=thumbnailIndexedDB(),open=db.open,events=[];
+  let held=false;
+  const locks={async request(name,options,callback){
+    assert.equal(name,'curvature-optics-modern-backup-writers-v1');
+    assert.equal(options.mode,'shared');assert.equal(held,false);held=true;events.push('enter');
+    try{return await callback({name,mode:options.mode});}finally{held=false;events.push('exit');}
+  }};
+  db.open=function(...args){assert.equal(held,true);events.push('open');return open.apply(db,args);};
+  const store=thumbnail.createKeyframePersistence(db,null,{lockManager:locks});
+  assert.equal(store.coordination,'participating-writer');
+  assert.deepEqual(await store.read(),[]);
+  const experiment={display:{mode:'scene'}},image={mode:'scene',width:1,height:1,dataUrl:'data:image/png;base64,YQ=='};
+  assert.equal(await store.write([{experiment,image}]),true);
+  assert.equal(db.rows.size,1);assert.deepEqual(events,['enter','open','exit','enter','open','exit']);
+  assert.equal(thumbnail.createKeyframePersistence(db,null,{lockManager:null}).coordination,'uncoordinated');
+});
