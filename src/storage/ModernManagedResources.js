@@ -148,19 +148,25 @@
         expectedRevision,metadata,references:[strong('observation',id)],resources});
       return {observationId:id,originalId:binaryId,managedRevision:document.revision};
     }
+    async function materializeObservation(graph,observation){
+      const v=observation.payload;
+      const original=graph.resources.find(r=>r.id===v.originalId);
+      check(original?.type===ORIGINAL&&same(original.payload.identity,v.identity),'observation evidence mismatch');
+      const blob=original.payload.blob,bytes=new Uint8Array(await blob.arrayBuffer());
+      const record=images.validate({id:v.id,version:images.VERSION,...v.attribution,
+        original:{dataUrl:importer.dataUrl(bytes,blob.type.slice(6)),width:v.identity.width,height:v.identity.height},
+        ...(v.thumbnail?{thumbnail:v.thumbnail}:{})});
+      check(same(await importer.identify(record,env),v.identity),'original evidence digest mismatch');
+      return record;
+    }
     async function readObservation(id){
       const graph=await store.readDocumentGraph(observationId(id));
       if(!graph)return null;
       check(graph.document.kind==='observation'&&graph.document.references.length===1,'invalid observation root');
       const observation=pick(graph,'observation',OBSERVATION),v=observation.payload;
       const original=graph.resources.find(r=>r.id===v.originalId);
-      check(v.id===id&&graph.document.metadata.id===id&&original?.type===ORIGINAL&&
-        same(original.payload.identity,v.identity),'observation evidence mismatch');
-      const blob=original.payload.blob,bytes=new Uint8Array(await blob.arrayBuffer());
-      const record=images.validate({id,version:images.VERSION,...v.attribution,
-        original:{dataUrl:importer.dataUrl(bytes,blob.type.slice(6)),width:v.identity.width,height:v.identity.height},
-        ...(v.thumbnail?{thumbnail:v.thumbnail}:{})});
-      check(same(await importer.identify(record,env),v.identity),'original evidence digest mismatch');
+      check(v.id===id&&graph.document.metadata.id===id,'observation alias mismatch');
+      const record=await materializeObservation(graph,observation);
       const metadata=graph.document.metadata;
       return {row:{id,revision:metadata.revision,record,...classification(metadata)},
         observationId:observation.id,originalId:original.id,managedRevision:graph.document.revision};
@@ -182,6 +188,7 @@
         check(graph&&graph.document.kind==='observation','required observation missing: '+alias);
         const value=pick(graph,'observation',OBSERVATION);
         check(value.payload.id===alias,'observation alias mismatch');
+        await materializeObservation(graph,value);
         observations.push({alias,target:value.id});
       }
       const payload={project,observations,evidence:hasCalibration(project)?'standalone':'none'};
@@ -199,15 +206,14 @@
       const resource=pick(graph,'project',ANIMATION),v=resource.payload;
       const row=animations.normalize({...graph.document.metadata,project:v.project});
       check(row.id===id,'Animation alias mismatch');
+      const referenceImages=[];
       for(const entry of v.observations){
         const image=graph.resources.find(r=>r.id===entry.target);
         check(image?.type===OBSERVATION&&image.payload.id===entry.alias,'Animation observation mismatch');
-        const original=graph.resources.find(r=>r.id===image.payload.originalId);
-        check(original?.type===ORIGINAL&&same(original.payload.identity,image.payload.identity),
-          'Animation original evidence mismatch');
+        referenceImages.push(await materializeObservation(graph,image));
       }
       return {row,projectId:resource.id,managedRevision:graph.document.revision,
-        evidence:v.evidence,observations:v.observations};
+        evidence:v.evidence,observations:v.observations,referenceImages};
     }
     return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation});
   }

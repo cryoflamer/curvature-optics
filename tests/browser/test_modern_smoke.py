@@ -561,8 +561,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok((await adapter.store.get(first.snapshotId)).refCount===2,'source History alias became a strong dependency');
             await adapter.store.removeDocument({documentId:'observation:photo_a',expectedRevision:1});
             ok(!(await adapter.store.collectGarbage(photo.observationId)).collected,'Animation observation reclaimed');
-            ok((await adapter.readAnimation(project.id)).observations[0].target===photo.observationId,
+            const retainedAnimation=await adapter.readAnimation(project.id);
+            ok(retainedAnimation.observations[0].target===photo.observationId,
                 'Animation lost observation after gallery removal');
+            ok(retainedAnimation.referenceImages[0].original.dataUrl===original.dataUrl&&
+                retainedAnimation.referenceImages[0].author==='Observer A',
+                'Animation cannot hydrate original evidence after gallery removal');
             await adapter.store.removeDocument({documentId:'animation:'+project.id,expectedRevision:1});
             ok((await adapter.store.collectGarbage(animation.projectId)).collected,'unused Animation not reclaimed');
             ok((await adapter.store.collectGarbage(photo.observationId)).collected,'unused observation not reclaimed');
