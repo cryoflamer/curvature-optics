@@ -742,6 +742,10 @@ If the target is empty it restores the original IndexedDB database names,
 versions, store schemas, indexes, primary keys and values, then the raw
 Curvature localStorage/sessionStorage keys. It immediately reads everything
 again and requires an exact tagged-value comparison, including photograph bytes.
+Older V1 archives may omit descriptors for later-added optional databases;
+only those omitted descriptors that remain absent in the restored origin are
+ignored. Unexpected present databases and any archived data mismatch still
+fail verification, with the affected database or Web Storage area identified.
 On success, open `CurvatureModern.html` **in the same new tab** and reload (F5).
 Keep the original profile untouched and retain the downloaded JSON plus a Git
 tag pointing to the code baseline.

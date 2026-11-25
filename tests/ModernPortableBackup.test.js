@@ -332,6 +332,24 @@ test('empty-profile guard rejects proof databases and surviving tab recovery key
   assert.equal(preview.conflicts.sessionKeys.length,1);
 });
 
+test('empty-profile restore accepts older V1 inventories without later absent descriptors',async()=>{
+  const raw=inventory();
+  raw.webStorage.local.push({key:'curvature-test-legacy',value:'exact'});
+  const archive=await backup.pack(raw,webcrypto);
+  const values={};
+  const local={get length(){return Object.keys(values).length;},
+    key(i){return Object.keys(values)[i]??null;},getItem(k){return values[k]??null;},
+    setItem(k,v){values[k]=v;}};
+  const env={crypto:webcrypto,localStorage:local,sessionStorage:storage({}),
+    indexedDB:{async databases(){return [];},open(){throw Error('absent database must not be opened');}}};
+  const result=await backup.restoreEmpty(archive,env);
+  assert.equal(result.verified,true);
+  assert.equal(values['curvature-test-legacy'],'exact');
+  delete values['curvature-test-legacy'];
+  local.setItem=(k,v)=>{values[k]=v;values['curvature-extra']='unexpected';};
+  await assert.rejects(()=>backup.restoreEmpty(archive,env),/\(localStorage\)/);
+});
+
 test('coordinated capture holds an exclusive lock through both observational passes and stays unqualified',async()=>{
   let held=false,passes=0;
   const env={crypto:webcrypto,localStorage:storage({}),sessionStorage:storage({}),

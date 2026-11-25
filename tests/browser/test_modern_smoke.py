@@ -8991,6 +8991,46 @@ class ModernBrowserSmoke(unittest.TestCase):
 
 
 
+    def test_storage_backup_older_inventory_restores_with_later_databases_absent(self):
+        """An older V1 archive omits optional absent DBs, not their contents."""
+        from urllib.parse import urljoin
+        tool_url=urljoin(self.base_url,'tools/storage-backup.html')
+        source=self.browser.new_context()
+        target=self.browser.new_context()
+        try:
+            page=source.new_page()
+            page.goto(tool_url,wait_until='load')
+            archive=page.evaluate("""async()=>{
+                const A=CurvatureModernPortableBackup;
+                const databases=A.KNOWN_DATABASES.map(name=>({name,status:'absent',version:null,stores:[]}));
+                const db=databases.find(d=>d.name==='curvature-modern-reference-images');
+                db.status='present';db.version=1;
+                db.stores=[{name:'images',keyPath:'id',autoIncrement:false,indexes:[],
+                    records:[{key:'original_fixture',value:{id:'original_fixture',bytes:new Uint8Array([0,17,255])}}]}];
+                return A.pack({databases,webStorage:{local:[{key:'curvature-test-legacy',value:'exact'}],
+                    session:[],excluded:{local:0,session:0}}},crypto);
+            }""")
+            payload=json.dumps(archive).encode('utf-8')
+            restored=target.new_page()
+            restored.goto(tool_url,wait_until='load')
+            restored.locator('#backup-file').set_input_files({
+                'name':'older-backup.json','mimeType':'application/json','buffer':payload})
+            expect(restored.locator('#backup-import')).to_be_enabled()
+            restored.locator('#backup-import').click()
+            expect(restored.locator('#backup-import-status')).to_contain_text('УСПІХ',timeout=30000)
+            result=restored.evaluate("""async()=>{
+                const A=CurvatureModernPortableBackup;
+                const current=await A.capture(window),body=JSON.parse(current.payload).content;
+                const image=body.databases.find(d=>d.name==='curvature-modern-reference-images');
+                return {bytes:[...A.decode(image.stores[0].records[0].value).bytes],
+                    optional:body.databases.filter(d=>A.ADDITIONAL_DATABASES.includes(d.name)).map(d=>d.status),
+                    local:localStorage.getItem('curvature-test-legacy')};
+            }""")
+            self.assertEqual(result,{'bytes':[0,17,255],'optional':['absent','absent'],'local':'exact'})
+        finally:
+            target.close()
+            source.close()
+
     def test_storage_backup_file_restores_into_empty_profile_and_survives_f5(self):
         """Download actual Modern browser data, reject an occupied target,
         import into another clean origin profile, compare bytes and reload.

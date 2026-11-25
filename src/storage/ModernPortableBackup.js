@@ -653,10 +653,19 @@
     for(const row of content.webStorage.local)env.localStorage.setItem(row.key,row.value);
     for(const row of content.webStorage.session)env.sessionStorage.setItem(row.key,row.value);
     const after=await normalize(await scan(env));
-    ensure(JSON.stringify(after.databases)===JSON.stringify(content.databases)&&
-      JSON.stringify(after.webStorage.local)===JSON.stringify(content.webStorage.local)&&
-      JSON.stringify(after.webStorage.session)===JSON.stringify(content.webStorage.session),
-      'restored storage differs from the source archive; discard the test profile');
+    // Older V1 files did not enumerate absent later-added databases.
+    // Ignore only known optional descriptors omitted by the archive and
+    // still absent in the restored origin; never ignore actual databases.
+    const expectedByName=new Map(content.databases.map(db=>[db.name,db]));
+    const observedByName=new Map(after.databases.filter(db=>expectedByName.has(db.name)||
+      db.status!=='absent'||!ADDITIONAL_DATABASES.includes(db.name)).map(db=>[db.name,db]));
+    for(const name of new Set([...expectedByName.keys(),...observedByName.keys()]))
+      ensure(JSON.stringify(expectedByName.get(name))===JSON.stringify(observedByName.get(name)),
+        'restored storage differs from the source archive (IndexedDB: '+name+'); discard the test profile');
+    ensure(JSON.stringify(after.webStorage.local)===JSON.stringify(content.webStorage.local),
+      'restored storage differs from the source archive (localStorage); discard the test profile');
+    ensure(JSON.stringify(after.webStorage.session)===JSON.stringify(content.webStorage.session),
+      'restored storage differs from the source archive (sessionStorage); discard the test profile');
     return Object.freeze({verified:true,databases:preview.databases,
       stores:preview.stores,records:preview.records,localKeys:preview.localKeys,
       sessionKeys:preview.sessionKeys,eligibleForMigration:false,
