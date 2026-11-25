@@ -1527,6 +1527,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
         self.page.add_script_tag(url='/src/storage/ModernManagedResources.js')
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
         fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
         result=self.page.evaluate("""async fixture=>{
             const adapter=CurvatureModernManagedResources.create(window);
@@ -1669,10 +1670,98 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>adapter.saveHistory({...history,id:73}),/calibration result missing/);
             const standalone=await adapter.saveHistory({...history,id:74},{standalone:true});
             ok((await adapter.readHistory(74)).evidence==='standalone','standalone provenance misrepresented');
+            const archive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
             return {valid:(await adapter.store.verifyIntegrity()).valid,fit:read.row.record.payload.fit.result.evaluation.rmsPx,
-                snapshot:snap.snapshotId!==standalone.snapshotId};
+                snapshot:snap.snapshotId!==standalone.snapshotId,archive,expected:{
+                    calibration:revisedRead.project,inline:revisedRead.inline,
+                    undo:revisedRead.draft.undoStack,redo:revisedRead.draft.redoStack,
+                    original:record.original.dataUrl,result:archived,resultId:saved.resultId,
+                    originalId:photo.originalId,experiment,animation:editedRead.row.project,
+                    workingDigest:emptyRow.digest}};
         }""",fixture)
+        archive=result.pop('archive')
+        expected=result.pop('expected')
         self.assertEqual(result, {'valid': True, 'fit': 5, 'snapshot': True})
+        # Restore the complete archive into a clean profile with validators
+        # only, not the app startup or any legacy writer. The result root
+        # and photo gallery entry were removed BEFORE the backup.
+        scripts=[
+            'src/scene/CurvatureSceneContract.js',
+            'src/geometry/CurvatureSurfaceGeometry.js',
+            'src/geometry/CurvaturePhysicalWorldGeometry.js',
+            'src/geometry/CurvatureCameraTranslation.js',
+            'src/geometry/CurvatureGeometryEngine.js',
+            'src/geometry/CurvatureEarClip.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/calibration/CameraMaterialAnchor.js',
+            'src/calibration/CameraMaterialAnchorResolver.js',
+            'src/calibration/CameraPhysicalPose.js',
+            'src/ui/modern/CalibrationPointerGestures.js',
+            'src/ui/modern/ModernPhotoCalibrationEditor.js',
+            'src/ui/modern/ModernCalibrationProject.js',
+            'src/ui/modern/ModernCalibrationProjectCheckpoint.js',
+            'src/ui/modern/ModernCalibrationResult.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+            'src/storage/ModernPortableBackup.js',
+        ]
+        context=self.browser.new_context()
+        try:
+            page=context.new_page()
+            page.route(self.base_url,lambda route:route.fulfill(status=200,
+                content_type='text/html',body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in scripts:
+                page.add_script_tag(url='/'+script)
+            restored=page.evaluate("""async ({archive,expected})=>{
+                const api=CurvatureModernManagedResources;
+                const report=await api.restoreAndQualifyManagedArchive(archive,window);
+                const adapter=api.create(window);
+                const calibration=await adapter.readCalibrationProject(expected.calibration.id);
+                const history=await adapter.readHistory(71);
+                const animation=await adapter.readAnimation(expected.animation.id);
+                const working=await adapter.readAnimationWorkingCollection();
+                const result=await adapter.store.get(expected.resultId);
+                const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+                return {qualified:report.qualification.integrity.valid,
+                    owners:report.qualification.owners,originals:report.qualification.originalsVerified,
+                    exact:equal(calibration.project,expected.calibration)&&
+                        equal(calibration.inline,expected.inline)&&equal(calibration.draft.undoStack,expected.undo)&&
+                        equal(calibration.draft.redoStack,expected.redo)&&
+                        calibration.originalId===expected.originalId&&calibration.photo.original.dataUrl===expected.original&&
+                        equal(result.payload.record,expected.result)&&result.payload.originalId===expected.originalId&&
+                        history.evidence.result===expected.resultId&&equal(history.row.experiment,expected.experiment)&&
+                        equal(animation.row.project,expected.animation)&&animation.evidence[0].target===expected.resultId&&
+                        working.row.digest===expected.workingDigest&&working.evidence[0].target===expected.resultId,
+                    galleryAbsent:(await adapter.readCalibrationResult(expected.result.id))===null&&
+                        (await adapter.readObservation('managed_soundly'))===null,
+                    protected:!(await adapter.store.collectGarbage(expected.originalId)).collected&&
+                        !(await adapter.store.collectGarbage(expected.resultId)).collected,
+                    eligibleForMigration:report.eligibleForMigration};
+            }""",{'archive':archive,'expected':expected})
+            self.assertEqual(restored,{'qualified':True,'originals':1,'exact':True,
+                'galleryAbsent':True,'protected':True,'eligibleForMigration':False,
+                'owners':{'history':2,'calibration':1,'animation':1,'animation-working-collection':1}})
+        finally:
+            context.close()
 
     def test_managed_object_store_coordinated_backup_roundtrip(self):
         # Use the existing portable codec and empty-profile restore, with a
