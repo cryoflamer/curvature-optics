@@ -622,11 +622,14 @@ acknowledged workspace revision before publishing its live draft. The scope
 retains immutable observation versions across autosave and unlink/Undo/Redo;
 new picker originals are acquired and verified before attachment. The writer
 uses the captured mapping when an alias reappears after unlink, never silently
-substituting a newer gallery version. The scope conservatively retains all
-observations seen during the workspace generation until a different workspace
-is bound or the tab terminates; exact Undo eviction/pruning and Calibration
-result/physical provenance retention are not yet integrated. Named roots and
-working journals remain durable owners. Production deletion remains disabled.
+substituting a newer gallery version. After a clean acknowledged editor save, the scope can discard observations
+not reachable from the current draft or its Undo/Redo history. Inventory is
+read when the serialized pruning operation executes. Pruning is deferred
+during pending saves, recovery, temporary keyframe editing, named-save
+journals, workspace transitions and picker attachment. Newly acquired picker
+observations remain protected until the selection has finished publishing.
+Calibration result/physical provenance retention is not yet integrated. Named
+roots and working journals remain durable owners. Production deletion remains disabled.
 
 Linked-photo rows and their details dialog read the exact retained editor observation, independently of the gallery picker. A new picker attachment checks the inspected gallery revision and refuses a conflicting historical alias instead of substituting a different observation. Undo continues to use the captured original version.
 

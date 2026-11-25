@@ -1086,7 +1086,7 @@
     }
   }
   // Stage 2: one shared picker; only explicit confirmation edits frame links.
-  function renderReferenceLinks(doc,panel,frame,actions,list,get,getLinked){
+  function renderReferenceLinks(doc,panel,frame,actions,list,get,getLinked,beginSelection){
     var ids=frame.referenceImageIds||[],rows=null,linkedRows=null,busy=false;
     var section=el(doc,'section','modern-studio-reference-links');
     section.appendChild(el(doc,'strong','','Reference photographs ('+ids.length+')'));
@@ -1174,15 +1174,18 @@
             });
             if(selected.length+ids.length>100||new Set(selected.concat(ids)).size!==selected.length+ids.length)
               throw Error('Too many or duplicate reference images');
-            for(var id of selected){
-              var choice=available.find(function(item){return item.id===id;});
-              if(!choice)throw Error('Original image not in the inspected picker: '+id);
-              var row=await get(id,choice.revision);
-              if(!row||row.id!==id||!row.record||row.record.id!==id)
-                throw Error('Original image missing or changed: '+id);
-            }
-            if(section.isConnected===false)throw Error('Keyframe editor changed before attachment');
-            change(ids.concat(selected));
+            var finish=beginSelection?beginSelection():null;
+            try{
+              for(var id of selected){
+                var choice=available.find(function(item){return item.id===id;});
+                if(!choice)throw Error('Original image not in the inspected picker: '+id);
+                var row=await get(id,choice.revision);
+                if(!row||row.id!==id||!row.record||row.record.id!==id)
+                  throw Error('Original image missing or changed: '+id);
+              }
+              if(section.isConnected===false)throw Error('Keyframe editor changed before attachment');
+              change(ids.concat(selected));
+            }finally{if(finish)finish();}
           }
         });
       }catch(error){status.textContent='Cannot browse local originals: '+(error.message||error);}
@@ -1514,7 +1517,8 @@
         fields.appendChild(easing);
       }
       panel.appendChild(fields);
-      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage,options.getLinkedReferenceImage);
+      renderReferenceLinks(doc,panel,selected,actions,options.listReferenceImages,options.getReferenceImage,
+        options.getLinkedReferenceImage,options.beginReferenceSelection);
       framePane.appendChild(panel);
     }
     timelinePane.appendChild(el(doc,'p','modern-studio-hint',

@@ -1871,6 +1871,17 @@ class ModernBrowserSmoke(unittest.TestCase):
             const restoredOwner=await adapter.readAnimationWorkingCollection();
             ok(restoredOwner.observations.some(v=>v.alias===alias&&v.target===importedPhoto.observationId),
                 'Undo substituted current gallery observation');
+            ok(await live.prune(portableRecovery.id,()=>[alias]),'retained inventory rejected');
+            await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
+            ok(!await live.prune(portableRecovery.id,()=>null),'unacknowledged state was pruned');
+            await rejects(()=>live.prune(portableRecovery.id,()=>['missing_live_alias']),/inventory was not retained/);
+            await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
+            ref=A.documentReference(edited,portableRecovery.id);
+            edited=await editor.saveSelected(edited,ref,A.normalize({...unlinked,savedAt:undo.savedAt+1}),base);
+            edited=await editor.retire(edited,edited.receipt);
+            ok(await live.prune(portableRecovery.id,()=>[]),'empty retained inventory rejected');
+            await rejects(()=>live.linkedPhotograph(alias,portableRecovery.id),/was not retained/);
+            await store.collectGarbage(importedPhoto.observationId);
             await live.reset();
             ok(await live.recoveryReferences(liveEvidence)===null,'retired editor supplied stale recovery evidence');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
@@ -3112,6 +3123,41 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),recovery['importedId'])
         self.page.locator('#ModernAnimationViewPreview').click()
         expect(panel.locator('img')).to_have_attribute('src',original,timeout=30000)
+        # A photo in Redo remains live-retained after the unlink is durable.
+        # Branching the history by editing the name discards Redo, and the
+        # acknowledged save must release the now unreachable photo lock.
+        self.page.locator('#ModernAnimationViewEditor').click()
+        editor=self.page.locator('#ModernAnimationStudio')
+        links=editor.locator('.modern-studio-reference-links')
+        links.get_by_text('Browse photographs',exact=True).click()
+        picker=self.page.locator('dialog.modern-image-picker')
+        picker.get_by_role('button',name='Select image Managed preview original (Local)').click()
+        picker.get_by_role('button',name='Attach selected').click()
+        expect(links).to_contain_text('Reference photographs (2)')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        editor.locator('.modern-studio-edit-undo').last.click()
+        expect(links).to_contain_text('Reference photographs (1)')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.assertTrue(self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            const photo=await adapter.readObservation('managed_preview_photo');
+            try{await adapter.store.collectGarbage(photo.observationId);return false;}
+            catch(error){return /close the corresponding editor/.test(error.message);}
+        }"""))
+        field=editor.get_by_label('Project name',exact=True)
+        field.fill('Branched managed recovery draft')
+        field.press('Tab')
+        expect(editor.locator('.modern-studio-edit-redo').last).to_be_disabled()
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.wait_for_function("""async()=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            const photo=await adapter.readObservation('managed_preview_photo');
+            try{return (await adapter.store.collectGarbage(photo.observationId)).reason==='durable-reference';}
+            catch(error){if(/close the corresponding editor/.test(error.message))return false;throw error;}
+        }""",timeout=30000)
         self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
             [CurvatureModernManagedObjectStore.DATABASE,CurvatureModernUiSessionStore.DATABASE].includes(db.name))"""),
             self.page.evaluate('async()=>await indexedDB.databases()'))

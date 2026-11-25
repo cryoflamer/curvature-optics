@@ -1895,10 +1895,28 @@
           return records;
         });
       }
+      // Read the editor's reachability at execution time, not when the
+      // maintenance request is queued behind a pending picker operation.
+      // A null inventory declines pruning (unacknowledged or changing state).
+      function prune(workspace,readAliases){
+        return serialize(async()=>{
+          if(!owner||owner!==workspace)return false;
+          const aliases=readAliases();
+          if(aliases===null)return false;
+          check(Array.isArray(aliases),'live photo inventory required');
+          const next=new Map();
+          for(const alias of aliases){
+            check(photos.has(alias),'live photo inventory was not retained: '+alias);
+            next.set(alias,photos.get(alias));
+          }
+          await scope.replace([...next.values()]);photos=next;
+          return true;
+        });
+      }
       function reset(){
         return serialize(async()=>{await scope.replace([]);photos=new Map();owner=null;});
       }
-      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,reset,
+      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,prune,reset,
         createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos))});
     }
     // One-shot Recovery import reuses the shared collection transition engine.
