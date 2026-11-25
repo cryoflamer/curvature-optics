@@ -262,3 +262,17 @@ test('shared temporary keyframe pump blocks changed session base and ended lifet
   h.end();await assert.rejects(w.retry(),/lifetime ended/);
   assert.equal(h.writes.length,0);
 });
+
+
+test('shared temporary keyframe pump never adopts an identical foreign first write as a retry',async()=>{
+  const h=sharedKeyframeHarness(),w=h.writer;
+  h.mark(20);
+  const row=h.get();
+  h.commit({...row,revision:row.revision+1,keyframeEdit:{...row.keyframeEdit,
+    session:{...row.keyframeEdit.session,candidate:20}}});
+  await assert.rejects(w.save(),/journal changed/);
+  assert.equal(w.recovery().attempt,null);
+  await assert.rejects(w.retry(),/journal changed/);
+  assert.equal(h.writes.length,0);
+  assert.equal(w.recovery().latest.session.candidate,20);
+});

@@ -247,16 +247,16 @@
       const base=await selection.captureBase(original.reference);current(active);
       if(!same(base,original.base))throw Error('Shared session changed during keyframe edit');
       const durable=await storage.read();current(active);
-      const job=active.attempt||active.latest;
+      const attempted=active.attempt,job=attempted||active.latest;
       if(!job)return;
-      // Keep the captured input even if the IDB write or its readback fails.
-      // A retry may accept only the exact immediate successor of that input.
-      active.attempt=job;
+      // Keep evidence only for a write that was actually attempted.
+      // An initial stale read must never become a lost-acknowledgement claim.
       const expected={...original,...job.value};
       if(same(durable,active.row)){
+        active.attempt=job;
         active.row=await storage.updateKeyframeEdit(durable,original,
           job.value.session,job.value.compareSelected);current(active);
-      }else if(durable&&durable.revision===active.row.revision+1&&
+      }else if(attempted&&durable&&durable.revision===active.row.revision+1&&
         durable.receipt===null&&!durable.namedSave&&same(durable.collection,active.row.collection)&&
         same(durable.revisions,active.row.revisions)&&same(durable.keyframeEdit,expected)){
         active.row=durable;
