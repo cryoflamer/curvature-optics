@@ -97,6 +97,7 @@
       });
       pin.className='modern-history-pin'+(entry.pinned?' is-pinned':'');
       pin.setAttribute('aria-pressed',String(!!entry.pinned));
+      pin.disabled=!!(options&&options.readOnly);
       card.appendChild(pin);
       var deleteTitle=entry.pinned?'Unpin '+displayName(entry)+' before deleting':
         'Delete '+displayName(entry);
@@ -104,7 +105,7 @@
         if(actions.remove)actions.remove(entry.id);
       });
       remove.className='modern-history-delete modern-card-delete';
-      remove.disabled=!!entry.pinned;
+      remove.disabled=!!entry.pinned||!!(options&&options.readOnly);
       card.appendChild(remove);
       return card;
     }

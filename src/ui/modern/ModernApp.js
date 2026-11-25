@@ -799,12 +799,7 @@
     syncHistoryFilterControls();
     var size=newUiEl('ModernHistorySize');if(size)size.value=historyGallerySize;
     if(historyUI)historyUI.setSize(newUiEl('ModernHistoryGallery'),historyGallerySize);
-    // History is not enabled in this preview; retain its saved preference
-    // without showing an inaccessible modal over the physical editor.
-    ['ModernHistoryPanel','ModernHistoryBackdrop'].forEach(function(id){
-      var node=newUiEl(id);if(node)node.hidden=true;
-    });
-    var toggle=newUiEl('ModernHistoryToggle');if(toggle)toggle.setAttribute('aria-expanded','false');
+    syncSharedHistoryPanel();
   }
   function resetSharedGlobalPreferences(){
     if(!sharedPreferencesRestored||workspaceUiRegistryPreview.status!=='ready')return;
@@ -949,8 +944,10 @@
     var hint=newUiEl('ModernHistoryHint');
     if(hint)hint.textContent=historyWizardReferenceChoosing?
       'Select a snapshot, inspect its details, then choose Use as project reference. The live scene is not restored.':
-      'Click a snapshot to inspect its saved image and physical settings, then choose Restore experiment. '+
-      'A recovery copy of the current experiment is saved before replacement.';
+      sharedPresentationActive()?
+        'Inspect or export saved snapshots. Restore is available from a saved Scene or Compare; the outgoing experiment is protected first. History management is not yet enabled in the shared session.':
+        'Click a snapshot to inspect its saved image and physical settings, then choose Restore experiment. '+
+        'A recovery copy of the current experiment is saved before replacement.';
     ['ModernHistoryRestore','ModernHistoryEdit','ModernHistoryExportSelected'].forEach(function(id){
       var element=newUiEl(id);if(element)element.hidden=historyWizardReferenceChoosing;
     });
@@ -1840,9 +1837,12 @@
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
       if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||animationBusy||!previewModeAllowed(mode);
     });
-    ['ModernResetExperiment','ModernHistoryToggle'].forEach(function(id){
-      var button=newUiEl(id);if(button)button.disabled=true;
-    });
+    var resetExperiment=newUiEl('ModernResetExperiment');if(resetExperiment)resetExperiment.disabled=true;
+    var historyToggle=newUiEl('ModernHistoryToggle');
+    if(historyToggle)historyToggle.disabled=!sharedHistoryAvailable()||experimentPreview.calibrationBusy||animationBusy;
+    if(sharedPresentationActive()){
+      syncSharedHistoryPanel();updateSnapshotSaveAction();
+    }
     if(sharedPresentationActive()){
       var reset=newUiEl('ModernResetPreferences');if(reset)reset.disabled=!usable||!presentationReady||!sharedPreferencesRestored;
       var hint=newUiEl('ModernResetPreferencesHint');
@@ -1934,6 +1934,7 @@
           persistence.timer=setTimeout(function(){persistence.timer=null;storeExperiment(false);},550);
       }else persistenceStatus('Document session saved');
       syncPreviewUnloadWarning();
+      if(sharedPresentationActive()){updateSnapshotSaveAction();syncSharedHistoryPanel();}
     }).catch(function(error){persistence.dirty=true;
       if(experimentPreview.status!=='suspended')previewFailure(error);
     });
@@ -2301,6 +2302,7 @@
     updateSnapshotSaveAction();
     refreshCalibrationApplicability();
     persistence.dirty=true;
+    if(sharedPresentationActive())updateSnapshotSaveAction();
     if(experimentPreview.live){
       if(!experimentPreview.controller||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
       try{
@@ -2349,9 +2351,14 @@
     var bar=newUiEl('ModernSnapshotSaveBar'),button=newUiEl('ModernSnapshotSave');
     var status=newUiEl('ModernSnapshotSaveStatus');
     if(!button||!status)return;
-    if(bar)bar.hidden=!!state.demosActive||experimentPreview.live;
+    var shared=sharedPresentationActive(),physical=['scene','compare'].includes(currentWorkspaceMode());
+    var unavailable=state.demosActive||experimentPreview.live&&(!shared||!physical||keyframeEditSession);
+    if(bar)bar.hidden=!!unavailable;
     button.hidden=true;button.disabled=snapshotSaveBusy;
-    if(state.demosActive||experimentPreview.live){modernStatus(status,'','info');return;}
+    if(unavailable){modernStatus(status,'','info');return;}
+    if(shared&&!sharedHistoryPhysicalReady()){
+      modernStatus(status,'Finish saving the shared experiment before saving a snapshot.','info');return;
+    }
     if(!persistence.ready){modernStatus(status,'Preparing current experiment…','info');return;}
     if(historyLoadError){modernStatus(status,'History unavailable: '+historyLoadError,'error');return;}
     if(!savedHistorySignatures){modernStatus(status,'Checking History…','info');return;}
@@ -6833,7 +6840,9 @@
     if(historyUI)historyUI.renderDetails(document,newUiEl('ModernHistoryDetailsContent'),entry);
     var useReference=newUiEl('ModernHistoryUseAsReference');
     if(useReference)useReference.disabled=!entry;
-    [['ModernHistoryRestore',!!entry],['ModernHistoryEdit',!!entry],
+    var shared=sharedPresentationActive();
+    [['ModernHistoryRestore',!!entry&&(!shared||sharedHistoryPhysicalReady())],
+      ['ModernHistoryEdit',!!entry&&!shared],
       ['ModernHistoryExportSelected',!!entry]].forEach(function(item){
       var node=newUiEl(item[0]);if(node)node.disabled=!item[1];
     });
@@ -6849,6 +6858,7 @@
   }
   var historyCardActionPending=Object.create(null);
   function runHistoryCardAction(id,operation){
+    if(sharedPresentationActive())return Promise.reject(Error('History management is not yet enabled in the shared session'));
     if(historyCardActionPending[id])return Promise.resolve(false);
     historyCardActionPending[id]=true;
     return Promise.resolve().then(operation).finally(function(){delete historyCardActionPending[id];});
@@ -6970,7 +6980,7 @@
             deleteHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
           }
         },historyMultiSelection,{pinnedCollapsed:pinnedCollapsedForView,
-          manage:historyManageMode,emptyFiltered:entries.length>0,
+          manage:historyManageMode,readOnly:sharedPresentationActive(),emptyFiltered:entries.length>0,
           filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
           hasPinned:entries.some(function(entry){return !!entry.pinned;})});
         if(focused&&chosen&&gallery.querySelectorAll){
@@ -6989,10 +6999,118 @@
     });
   }
   var historyRestoreBusy=false;
+  function sharedHistoryAvailable(){
+    return sharedPresentationActive()&&sharedPreferencesRestored&&persistence.ready&&
+      workspaceUiRegistryPreview.status==='ready'&&!keyframeEditSession&&
+      ['clean','dirty','saving','committed'].includes(experimentPreview.status);
+  }
+  function sharedHistoryPhysicalReady(){
+    var c=experimentPreview.controller,view=c&&c.state();
+    return sharedHistoryAvailable()&&['scene','compare'].includes(currentWorkspaceMode())&&
+      !persistence.dirty&&!experimentPreview.calibrationBusy&&!view?.busy&&
+      ['clean','committed'].includes(view?.status)&&view.row?.draft===null&&
+      ['scene','compare'].includes(view.row.envelope.workspace);
+  }
+  // Hydrate the already registered global History preference without a
+  // synthetic user event or another persistence write.
+  function syncSharedHistoryPanel(){
+    if(!sharedPresentationActive())return;
+    var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
+    if(!panel||!toggle)return;
+    var shown=sharedHistoryAvailable()&&historyPanelOpen,opening=shown&&panel.hidden;
+    panel.hidden=!shown;panel.inert=!!experimentPreview.calibrationBusy;
+    var backdrop=newUiEl('ModernHistoryBackdrop');if(backdrop)backdrop.hidden=!shown;
+    toggle.setAttribute('aria-expanded',String(shown));
+    ['ModernHistoryManage','ModernHistoryClearAuto','ModernHistoryClearAll','ModernHistoryImport'].forEach(function(id){
+      var node=newUiEl(id);if(node)node.disabled=true;
+    });
+    var restore=newUiEl('ModernHistoryRestore');
+    if(restore)restore.disabled=!historySelectedId||!sharedHistoryPhysicalReady();
+    var current=newUiEl('ModernHistoryExportCurrent');
+    if(current)current.disabled=!sharedHistoryPhysicalReady();
+    syncHistoryNavigation();
+    if(opening&&experimentHistory)refreshHistoryList().catch(function(error){historyStatus(error.message,true);});
+  }
+  function sameHistoryExperiment(a,b){
+    return JSON.stringify(experiments.validate(a))===JSON.stringify(experiments.validate(b));
+  }
+  // Both manual save and Restore use the already acknowledged physical
+  // checkpoint, not a temporary editor, preview, or stale tab's live model.
+  async function runSharedPhysicalHistory(id){
+    if(!sharedHistoryPhysicalReady()||historyRestoreBusy||!experimentHistory)
+      throw Error('Finish saving the current shared Scene or Compare first');
+    var c=experimentPreview.controller,ctx=experimentPreview.calibrationContext;
+    var from=currentWorkspaceMode(),committed=false,result;
+    cancelEdits();stopCameraTransition(false,'History operation interrupted animation',false);
+    stopAutoCameraPreview();stopCameraKeyboard(true);abortCameraDrag();cancelPending();cancelHistoryAuto();
+    if(!sharedHistoryPhysicalReady())throw Error('Finish saving the current shared experiment first');
+    var before=experimentSnapshot(),thumbnail=historyThumbnail(before);
+    var guard=()=>experimentPreview.status!=='suspended'&&currentWorkspaceMode()===from&&
+      !keyframeEditSession&&sameHistoryExperiment(before,experimentSnapshot());
+    historyRestoreBusy=true;experimentPreview.calibrationBusy=true;previewControls();
+    try{
+      result=await ctx.coordinate(async function(){
+        ctx.lease.check(true);
+        await c.assertCleanCheckpoint();
+        if(!guard()||!sameHistoryExperiment(c.state().bound.experiment,before))
+          throw Error('Live experiment differs from the acknowledged shared checkpoint');
+        if(id===null){
+          var saved=await experimentHistory.record(before,'manual',thumbnail);
+          var verified=await experimentHistory.get(saved.entry.id);
+          if(!verified?.pinned||historyFingerprint.exactSignature(verified.experiment)!==historyFingerprint.exactSignature(before))
+            throw Error('Manual History snapshot readback failed');
+          return {entry:verified};
+        }
+        var entry=await experimentHistory.get(id);
+        if(!entry)throw Error('History snapshot not found');
+        var target=experiments.validate(entry.experiment);
+        if(sameHistoryExperiment(before,target))return {entry,unchanged:true};
+        var backup=await experimentHistory.record(before,'recovery',thumbnail);
+        var recovery=await experimentHistory.get(backup.entry.id);
+        var selected=await experimentHistory.get(id);
+        if(!recovery?.pinned||historyFingerprint.exactSignature(recovery.experiment)!==historyFingerprint.exactSignature(before)||
+           !selected||!sameHistoryExperiment(selected.experiment,target))
+          throw Error('History changed before Restore; current experiment kept');
+        if(!guard())throw Error('History restore generation changed');
+        var view=await c.replaceFromHistory(before,target,guard);
+        committed=true;experimentPreview.status=view.status;
+        return {entry:selected,backup:recovery,experiment:view.bound.experiment};
+      });
+      if(experimentPreview.status==='suspended')return result;
+      if(result.experiment){
+        // The controller already owns the exact durable revision. Hydrate
+        // the visible model only after its CAS and readback succeeded.
+        var ready=persistence.ready;persistence.ready=false;
+        try{
+          applyExperiment(result.experiment);syncNumericInputs();syncCompareEditor();
+          if(setMode(result.experiment.display.mode,false)===false)throw Error('Cannot activate restored History experiment');
+        }finally{persistence.ready=ready;}
+        previousExperimentHistoryId=result.backup.id;updatePresetNavigation();
+        persistenceStatus('Document session saved');resetHistoryBaseline();
+      }
+      return result;
+    }catch(error){
+      if(experimentPreview.status!=='suspended'&&(committed||c.state().status==='failed'))
+        previewFailure(error);
+      throw error;
+    }finally{
+      historyRestoreBusy=false;experimentPreview.calibrationBusy=false;
+      previewControls();syncPreviewUnloadWarning();refreshCalibrationApplicability();
+    }
+  }
   function restoreHistorySnapshot(id){
     if(presetSwitchBusy||calibrationApplyBusy)return Promise.reject(Error('Finish the pending experiment change first'));
     if(historyRestoreBusy)return Promise.resolve();
     if(!id)return Promise.reject(RangeError('Select a history snapshot to restore'));
+    if(experimentPreview.live){
+      if(!sharedPresentationActive())return Promise.reject(Error('History Restore is unavailable in this preview'));
+      return runSharedPhysicalHistory(id).then(function(result){
+        historyStatus(result.unchanged?'This snapshot already matches the current experiment.':
+          'Snapshot restored. Previous state saved as protected recovery point.');
+        setHistoryOpen(false);
+        return refreshHistoryList(id);
+      });
+    }
     historyRestoreBusy=true;
     return experimentHistory.get(id).then(function(entry){
       if(!entry)throw RangeError('History snapshot not found');
@@ -7035,6 +7153,8 @@
   function setHistoryOpen(open){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle)return;
+    if(open&&experimentPreview.live&&!sharedHistoryAvailable())
+      throw Error('History is unavailable until the shared session is ready');
     historyPanelOpen=!!open;panel.hidden=!historyPanelOpen;
     var returningToPicker=!historyPanelOpen&&historyOpenedFromPicker&&animationWorkspaceOpen;
     var returningToWizard=!historyPanelOpen&&historyWizardReferenceChoosing;
@@ -7230,6 +7350,12 @@
       if(snapshotSaveBusy)return;
       snapshotSaveBusy=true;updateSnapshotSaveAction();
       Promise.resolve().then(function(){
+        if(experimentPreview.live){
+          if(!sharedPresentationActive())throw Error('Snapshot save unavailable in this preview');
+          return runSharedPhysicalHistory(null).then(function(result){
+            historyStatus('Snapshot saved.');return result.entry.id;
+          });
+        }
         cancelEdits();
         var snapshot=experimentSnapshot(),signature=historyFingerprint.exactSignature(snapshot);
         // Another History operation may have committed since the last refresh.
@@ -7279,6 +7405,8 @@
     });});
     var exportCurrent=newUiEl('ModernHistoryExportCurrent');
     if(exportCurrent)exportCurrent.addEventListener('click',function(){handle(function(){
+      if(experimentPreview.live&&!sharedHistoryPhysicalReady())
+        throw Error('Export the current experiment from a saved Scene or Compare');
       cancelEdits();
       downloadHistoryJson(root.CurvatureModernExperimentLibrary.exportJson(experimentSnapshot()),
         'curvature-experiment.json');

@@ -14041,6 +14041,69 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.revision'),1)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_history_save_browse_f5_and_atomic_restore(self):
+        """Shared History restores presentation separately, then commits a protected physical replacement."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        old=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return {global:await ui.read('global',{}),
+                doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                local:localStorage.getItem(CurvatureModernApplicationPreferences.STORAGE_KEY)};
+        }"""
+        before=self.page.evaluate(read)
+        save=self.page.locator('#ModernSnapshotSave')
+        expect(save).to_be_visible(timeout=30000)
+        save.click()
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text('Already in History',timeout=30000)
+        self.assertEqual(self.page.evaluate(read)['doc'],before['doc'])
+        self.page.locator('#ModernHistoryToggle').click()
+        expect(self.page.locator('#ModernHistoryPanel')).to_be_visible()
+        card=self.page.locator('#ModernHistoryGallery .modern-history-card')
+        expect(card).to_have_count(1,timeout=30000)
+        expect(card.locator('.modern-history-pin')).to_be_disabled()
+        expect(self.page.locator('#ModernHistoryManage')).to_be_disabled()
+        self.page.locator('#ModernHistorySize').select_option('medium')
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        opened=self.page.evaluate(read)
+        self.assertEqual(opened['doc'],before['doc'])
+        self.assertEqual(opened['local'],before['local'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernHistoryPanel')).to_be_visible()
+        expect(self.page.locator('#ModernHistorySize')).to_have_value('medium')
+        expect(card).to_have_count(1,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),opened)
+        self.page.locator('#ModernHistoryClose').click()
+        self.page.locator('#ModernHeight').fill(str(old+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Document session saved',timeout=30000)
+        changed=self.page.evaluate(read)
+        self.page.locator('#ModernHistoryToggle').click()
+        expect(card).to_have_count(1,timeout=30000)
+        self.page.locator('#ModernHistoryRestore').click()
+        expect(self.page.locator('#ModernHistoryPanel')).to_be_hidden(timeout=30000)
+        restored=self.page.evaluate(read)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old)
+        self.assertEqual(restored['doc']['revision'],changed['doc']['revision']+1)
+        self.assertIsNone(restored['doc']['draft'])
+        self.assertEqual(restored['doc']['envelope']['documents']['animation'],changed['doc']['envelope']['documents']['animation'])
+        self.assertEqual(restored['doc']['envelope']['documents']['calibration'],changed['doc']['envelope']['documents']['calibration'])
+        self.page.locator('#ModernHistoryToggle').click()
+        expect(card).to_have_count(2,timeout=30000)
+        expect(card.locator('.modern-history-card-pinned')).to_have_count(2)
+        self.page.locator('#ModernHistoryClose').click()
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old)
+        self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
+        self.assertEqual(self.page.url,url)
+
 
 if __name__ == '__main__':
     unittest.main()
