@@ -6154,6 +6154,27 @@
         var now=Date.now();
         var entry={version:1,id:project.id,project:project,quality:quality,
           createdAt:now,updatedAt:now,cover:record&&record.cover};
+        if(managedResources)return (async function(){
+          var ctx=experimentPreview.animationContext,workspace=studioWorkspaceId;
+          function check(){
+            if(!current()||job.cancelled||ctx!==experimentPreview.animationContext||
+               workspace!==studioWorkspaceId||!studioWorkspaceReady||ctx?.busy)
+              throw Error('Storyboard export cancelled; Animation changed');
+          }
+          check();
+          var state=ctx?.writer.state();
+          if(!state?.reference||state.error||state.selectionPending)
+            throw Error('An acknowledged working Animation is required for storyboard export');
+          if((state.unsaved||state.pending)&&!await persistStudioWorkspace({requireDurable:true}))
+            throw Error('Working Animation is not acknowledged; retry the save');
+          check();
+          state=ctx.writer.state();
+          if(state.reference?.id!==workspace||state.error||state.pending||state.unsaved||state.selectionPending)
+            throw Error('Working Animation is not acknowledged; retry the export');
+          var result=await studioLibrary.exportWorkingPortable(root.indexedDB,entry,state.reference,lookup,{complete:complete});
+          check();
+          downloadHistoryJson(result,studioLibraryActionsApi.exportFilename(result));
+        })();
         if(studioLibrary.referenceIds([entry]).length)return collectStudioReferenceImages(project,()=>!current()).then(function(assets){
           if(!current())throw Error('Storyboard export cancelled');
           var result=studioLibrary.exportPortable([entry],lookup,{complete:complete,referenceImages:assets});

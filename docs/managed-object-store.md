@@ -728,6 +728,11 @@ private calibration originals. Deduplication includes exact calibration origins,
 evidence status, full result attribution and original bytes in addition to
 animation content and observation mappings; retries reuse matching owners.
 Verified and standalone copies of the same physical project remain distinct.
-The existing file-size bound applies to the entire V3 envelope. Working
-Recovery and direct Storyboard export are separate consumers and do not yet
-carry this full evidence extension.
+The existing file-size bound applies to the entire V3 envelope. Direct
+Storyboard export uses the same encoder and obtains exact proof and frame
+observations from the acknowledged working revision under the backup barrier.
+It never needs a named project or a gallery lookup. An incomplete or changing
+working selection refuses export; explicit standalone proof remains distinct
+from verified proof. Mixed proof status within one exported project is not
+supported by the current named/portable schema and is refused. Working
+Recovery remains a separate consumer.

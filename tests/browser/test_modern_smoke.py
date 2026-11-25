@@ -2700,8 +2700,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),contractedCp,base);
             animationRow=await animation.retire(animationRow,animationRow.receipt);
             const verifiedProject=Studio.buildSaved(contracted,'portable_verified');
-            const verifiedRow=await adapter.createAnimationLibraryPort().createFromWorking(indexedDB,verifiedProject,
-                'auto',206,null,null,A.documentReference(animationRow,id),()=>{});
+            const verifiedRef=A.documentReference(animationRow,id),workingPort=adapter.createAnimationLibraryPort();
+            const verifiedRow=await workingPort.createFromWorking(indexedDB,verifiedProject,
+                'auto',206,null,null,verifiedRef,()=>{});
+            const workingText=await workingPort.exportWorkingPortable(indexedDB,verifiedRow,verifiedRef);
             await port.replaceFromHistory(final.experiment,uncalibrated,final.revision,{isCurrent:()=>true});
             await live.reset();
             await adapter.store.removeDocument({documentId:'history:'+recorded.entry.id,
@@ -2809,6 +2811,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 portableBundle.calibrationEvidence[0][0].original.original.dataUrl===record.original.dataUrl,
                 'portable export lost exact Calibration evidence');
             await rejects(async()=>L.parseBundle(portableText),/Unsupported animation JSON format/);
+            const workingBundle=workingPort.parseBundle(workingText);
+            ok(canonical(workingBundle.calibrationEvidence[0])===canonical(portableBundle.calibrationEvidence[0]),
+                'working export changed retained Calibration evidence');
+            await rejects(()=>workingPort.exportWorkingPortable(indexedDB,verifiedRow,verifiedRef),/Working Animation revision changed/);
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length,portableText};
         }""",fixture)
         portable=result.pop('portableText')
@@ -3341,6 +3347,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.locator('#ModernAnimationStoryboard').get_by_role(
                 'button',name='Export without thumbnails',exact=True).click()
         exported=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(exported['version'],2)
         self.assertEqual(exported['referenceImages'][0]['original']['dataUrl'],original)
         self.assertEqual(exported['referenceImages'][0]['title'],'Retained animation original')
         # Exercise the actual full-presentation workers with a short two-frame

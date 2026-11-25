@@ -1356,8 +1356,10 @@
     // workspace revision. Scope asset lookup to that workspace, not to
     // unrelated aliases present in the rest of the collection.
     async function workingAnimationSource(ref,input){
+      return selectWorkingAnimationSource(await readAnimationWorkingCollection(),ref,input);
+    }
+    function selectWorkingAnimationSource(owner,ref,input){
       const project=projects.validate(input);
-      const owner=await readAnimationWorkingCollection();
       check(owner&&ref&&same(drafts.documentReference(owner.row,ref.id),ref),
         'Working Animation revision changed; save or reopen before using its evidence');
       const cp=drafts.getWorkspace(owner.row.collection,ref.id);
@@ -1592,13 +1594,50 @@
         }
         portable.push(animations.remapReferences(value.row,mapping));
       }
-      const text=animations.exportPortable(portable,lookup,{...options,referenceImages:assets});
-      if(verified.every(value=>value.portableEvidence==='none'))return text;
-      const payload={...JSON.parse(text),version:3,referenceImages:assets,
-        calibrationEvidence:verified.map(value=>value.portableEvidence)};
+      return encodeManagedAnimationBundle(portable,lookup,{...options,referenceImages:assets},
+        verified.map(value=>value.portableEvidence));
+    }
+    function encodeManagedAnimationBundle(entries,lookup,options,proofs){
+      const text=animations.exportPortable(entries,lookup,options);
+      if(proofs.every(value=>value==='none'))return text;
+      const payload={...JSON.parse(text),version:3,referenceImages:options.referenceImages,
+        calibrationEvidence:proofs};
       const result=JSON.stringify(payload,null,2)+'\n';
       check(result.length<=animations.MAX_PORTABLE_LENGTH,'Animation JSON export is too large');
       return result;
+    }
+    async function exportWorkingAnimationPortable(input,ref,lookup,options={}){
+      const entry=animations.normalize(input);
+      const barrier=deps.CurvatureModernBackupWriteBarrier;
+      check(barrier&&env.navigator?.locks,'coordinated working Animation export unavailable');
+      const {value}=await barrier.create(env.navigator.locks).snapshot(async()=>{
+        const graph=await store.inspectDocumentGraph(draftsId);
+        const source=selectWorkingAnimationSource(await loadAnimationWorkingCollection(async()=>graph),ref,entry.project);
+        const ids=calibrationAliases(entry.project);
+        let proof='none';
+        if(ids.length){
+          const mappings=ids.map(alias=>{
+            const mapping=source.evidence.find(value=>value.alias===alias);
+            check(mapping,'Working Animation calibration evidence missing');
+            return mapping;
+          });
+          if(mappings.every(mapping=>mapping.target===null))proof='standalone';
+          else{
+            check(mappings.every(mapping=>mapping.target!==null),
+              'Mixed verified and standalone portable Animation evidence is unsupported');
+            proof=[];
+            const cache=new Map();
+            for(const mapping of mappings){
+              const result=graph.resources.find(value=>value.id===mapping.target);
+              for(const origin of calibrationOrigins(entry.project).filter(o=>o.resultId===mapping.alias))
+                checkOrigin(origin,result);
+              proof.push({record:result.payload.record,original:await verifyResultOriginal(graph,result,cache)});
+            }
+          }
+        }
+        return {proof,referenceImages:source.referenceImages};
+      });
+      return encodeManagedAnimationBundle([entry],lookup,{...options,referenceImages:value.referenceImages},[value.proof]);
     }
     function createAnimationLibraryPort(){
       check(projects&&animations,'Animation adapters unavailable');
@@ -1648,6 +1687,9 @@
         },
         exportRetainedPortable:async(db,entries,lookup,options)=>{
           bound(db);return exportRetainedAnimationPortable(entries,lookup,options);
+        },
+        exportWorkingPortable:async(db,entry,reference,lookup,options)=>{
+          bound(db);return exportWorkingAnimationPortable(entry,reference,lookup,options);
         },
         // Export from the immutable owner, not from a mutable gallery alias.
         retainedReferences:async(db,id)=>{
