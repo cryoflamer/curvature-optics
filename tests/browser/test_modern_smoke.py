@@ -14354,6 +14354,50 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(where.get_by_text('Recoverable Storyboards (1)',exact=True)).to_be_visible()
         self.assertEqual(self.page.evaluate('localStorage.getItem(CurvatureModernAnimationDraftAutosave.STORAGE_KEY)'),'{broken')
 
+    def test_shared_image_usage_includes_history_calibration_provenance(self):
+        """Historical photo identity in History is read-only, not an attachment."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        before=self.page.evaluate("""async()=>{
+            const id='history_provenance_photo',canvas=document.createElement('canvas');
+            canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const original=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Provenance.png',{type:'image/png'}),id,window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,original);
+            const photo=await CurvatureModernReferenceImageImport.identify(original,window);
+            const codec=CurvatureModernExperimentState,
+                e=codec.validate(CurvatureModernDemoCatalog.load()[0].project.baseExperiment);
+            const digest='a'.repeat(64);
+            e.calibrationOrigin={version:1,target:'B',resultId:'calibration-result-v1-'+digest,
+                resultDigest:digest,photo,baselineCamera:{Height:42.8,FocalLengthField:1996,
+                    Pan:.61,Nick:-.29,Roll:-.11,CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+                historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+                    rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+            const history=CurvatureModernExperimentHistory.create({indexedDB});
+            const saved=await history.record(e,'manual',null,{retainAuto:true});
+            return {id,snapshot:saved.entry,row:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }""")
+        self.page.locator('#ModernImageLibraryTab').click()
+        gallery=self.page.locator('#ModernReferenceImageLibrary')
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('[data-image-id="'+before['id']+'"]').click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Historical experiment provenance (1)',exact=True)).to_be_visible(timeout=30000)
+        expect(where.get_by_text('Historical calibration identity, not an attached image or proof of current fit. Read-only evidence.',exact=True)).to_be_visible()
+        expect(where.get_by_role('button',name='Open use')).to_have_count(0)
+        actual=self.page.evaluate("""async id=>{
+            const history=CurvatureModernExperimentHistory.create({indexedDB});
+            return {snapshot:await history.get(id),row:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }""",before['snapshot']['id'])
+        self.assertEqual(actual['snapshot'],before['snapshot'])
+        row=actual['row']
+        where.get_by_role('button',name='Refresh uses').click()
+        expect(where.get_by_text('Historical experiment provenance (1)',exact=True)).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),row)
+
     def test_shared_animation_export_preferences_migrate_and_restore_without_web_storage_writes(self):
         """Existing global envelope gains export keys once; subsequent control edits are CAS-backed."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

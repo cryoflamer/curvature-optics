@@ -75,6 +75,9 @@
         origin(frame.experiment,id,draft.name||id,revision,source+' · frame provenance',frame,index,content);
       });
     }
+    (sources.history||[]).forEach(row=>{
+      origin(row.experiment,'history:'+row.id,row.name||'Snapshot '+row.id,null,'History snapshot '+row.id);
+    });
     (sources.animations||[]).forEach(function(row){
       if(!row||!row.project)return;
       imagesFromFrames(row.project.keyframes,selectedId,'animation',row.id,
@@ -185,7 +188,7 @@
     var uses=collect(selectedId,selectedIdentity,sources),unavailable=(failures||[]).slice();
     return {uses:uses,count:uses.length,complete:unavailable.length===0,
       unavailable:unavailable,
-      note:'Known uses in accessible local projects, local archived Calibration results and recovery snapshots only. Foreign browsers, external exports, removed records and inaccessible tabs are not covered; never authorize deletion from this list.'};
+      note:'Known uses in accessible local projects, local archived Calibration results, History and recovery snapshots only. Foreign browsers, external exports, removed records and inaccessible tabs are not covered; never authorize deletion from this list.'};
   }
   async function discover(env,row){
     var failures=[],sources={animations:[],calibrations:[],archives:[],drafts:[]};
@@ -193,6 +196,10 @@
       catch(error){failures.push(name+': '+(error&&error.message||String(error)));}}
     var db=env.indexedDB;
     await Promise.all([
+      read('History provenance',()=>env.CurvatureModernExperimentHistory.inspectProvenance(db),inventory=>{
+        sources.history=inventory.entries;
+        inventory.issues.forEach(issue=>failures.push('History provenance: '+issue));
+      }),
       read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.list(db);},v=>{sources.animations=v;}),
       read('Calibration Projects and legacy draft',function(){return env.CurvatureModernCalibrationProjectStore.inspectUsage(db);},
         v=>{sources.calibrations=v.projects;sources.rawLegacyCalibration=v.legacy;}),

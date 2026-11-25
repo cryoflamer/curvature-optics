@@ -808,3 +808,12 @@ test('History migration imports once and durable receipt prevents resurrection o
   assert.equal((await h.list()).length,1);
   assert.equal((await h.get(entry.id)).name,'Renamed');
 });
+
+test('History provenance inspection never opens absent or unsupported databases',async()=>{
+  let opens=0;
+  const db={databases:async()=>[],open(){opens++;throw Error('Unexpected open');}};
+  assert.deepEqual(await history.inspectProvenance(db),{entries:[],issues:[]});
+  db.databases=async()=>[{name:history.DATABASE,version:999}];
+  await assert.rejects(history.inspectProvenance(db),/Unsupported History database version/);
+  assert.equal(opens,0);
+});

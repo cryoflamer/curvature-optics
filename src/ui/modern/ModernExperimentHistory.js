@@ -79,6 +79,57 @@
       throw RangeError('Snapshot description exceeds '+MAX_DESCRIPTION+' characters');
     return {name:cleanName,description:cleanDescription};
   }
+  // Observational scan: no database creation, version upgrade or migration.
+  // Read one snapshot at a time and retain only its historical photo identity.
+  async function inspectProvenance(factory){
+    if(!factory||typeof factory.databases!=='function')
+      throw Error('History database inventory unavailable');
+    const existing=(await factory.databases()).find(item=>item.name===DATABASE);
+    if(!existing)return {entries:[],issues:[]};
+    if(![1,DB_VERSION].includes(existing.version))
+      throw Error('Unsupported History database version');
+    return new Promise((resolve,reject)=>{
+      let db,finished=false,entries=[],issues=[];
+      function finish(error){
+        if(finished)return;
+        finished=true;if(db)db.close();
+        if(error)reject(error);else resolve({entries,issues});
+      }
+      let req;
+      try{req=factory.open(DATABASE,existing.version);}catch(error){finish(error);return;}
+      req.onupgradeneeded=()=>{
+        req.transaction.abort();
+        finish(Error('History database changed during inventory'));
+      };
+      req.onerror=()=>finish(req.error||Error('History inventory unavailable'));
+      req.onblocked=()=>finish(Error('History database blocked'));
+      req.onsuccess=()=>{
+        db=req.result;
+        if(finished){db.close();return;}
+        db.onversionchange=()=>finish(Error('History database changed during inventory'));
+        try{
+          const tx=db.transaction(STORE,'readonly');
+          tx.oncomplete=()=>finish();
+          tx.onabort=tx.onerror=()=>finish(tx.error||Error('History inventory transaction failed'));
+          const request=tx.objectStore(STORE).openCursor();
+          request.onsuccess=()=>{
+            const cursor=request.result;
+            if(!cursor||finished)return;
+            try{
+              const row=cursor.value;
+              if(!row||row.version!==VERSION||!Number.isSafeInteger(row.id)||row.id<1||
+                 row.id!==cursor.primaryKey||typeof row.name!=='string')
+                throw Error('Invalid snapshot identity');
+              const experiment=state.validate(row.experiment);
+              if(experiment.calibrationOrigin)entries.push({id:row.id,name:row.name,
+                experiment:{calibrationOrigin:experiment.calibrationOrigin}});
+            }catch(error){issues.push('Snapshot '+String(cursor.primaryKey)+': '+error.message);}
+            cursor.continue();
+          };
+        }catch(error){finish(error);}
+      };
+    });
+  }
   function create(options){
     options=options||{};
     var factory=options.indexedDB,now=options.now||Date.now;
@@ -387,5 +438,5 @@
     MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,
     PORTABLE_FORMAT:PORTABLE_FORMAT,MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,
     MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,parsePortable:parsePortable,
-    exportPortable:exportPortable,create:create});
+    exportPortable:exportPortable,inspectProvenance,create:create});
 }));

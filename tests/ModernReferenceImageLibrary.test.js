@@ -518,6 +518,7 @@ test('Where used reports an unreadable calibration archive rather than asserting
   const identity={version:1,sha256:'e'.repeat(64),width:16,height:9};
   const env={
     indexedDB:{},localStorage:{},
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>{
@@ -623,6 +624,7 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     key:index=>[...keys.keys()][index]||null,
     getItem:key=>keys.has(key)?keys.get(key):null};
   const env={indexedDB:{},localStorage:storage,
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
@@ -656,6 +658,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   let reads=0;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:{get:async (idb,id)=>{reads++;return library.get(idb,id);}},
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
@@ -696,6 +699,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   const current=await library.get(db,'other'),updated=await library.update(db,'other',1,{title:'Tab B'});
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
@@ -720,6 +724,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
   let changed=false;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>{
       if(!changed){
         changed=true;
@@ -753,6 +758,7 @@ test('Where used includes verified shared workspace revisions and both pending n
   const shared={collection:{workspaces:[{id:'workspace',checkpoint:{savedAt:44,draft}}]},
     revisions:[{id:'workspace',revision:9}],namedSave:{plan:{before:named(10),after:named(11)}}};
   const env={indexedDB:{},localStorage:{length:0,key:()=>null,getItem:()=>null},
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
@@ -794,6 +800,7 @@ test('Where used inventories old standalone sources independently and matches ca
   const cp={savedAt:2,draft:{name:'Single recovery',frames:[{key:'kf',referenceImageIds:[id]}]}};
   const raw={version:2,physicalSessionId:'legacy',record:{id:'different_alias',title:'Old calibration'}};
   const env={indexedDB:{},localStorage:{getItem:()=>null},
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
     CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:raw})},
     CurvatureModernCalibrationProjectMigration:{normalizeLegacy:v=>v,matchingInline:()=>null},
@@ -844,4 +851,23 @@ test('Where used distinguishes historical calibration provenance from attached a
     .uses.filter(use=>use.type==='experiment-provenance').length,0);
   assert.equal(usageGraph.report('different-alias',photo,sources)
     .uses.filter(use=>use.type==='experiment-provenance').length,9);
+});
+
+test('Where used includes History provenance without authorizing deletion or hiding incomplete sources',async()=>{
+  const photo={version:1,sha256:'c'.repeat(64),width:20,height:10};
+  const env={indexedDB:{},localStorage:{getItem:()=>null},
+    CurvatureModernExperimentHistory:{inspectProvenance:async()=>({
+      entries:[{id:4,name:'Calibrated view',experiment:{calibrationOrigin:{photo}}}],
+      issues:['Snapshot 5: Invalid snapshot identity']})},
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:null})},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{inspectSharedCollection:async()=>null,
+      inspectLegacySources:async()=>({issues:[],sources:[]})},
+    CurvatureModernReferenceImageImport:{identify:async()=>photo}};
+  const report=await usageGraph.discover(env,{id:'alias',record:{}});
+  assert.equal(report.complete,false);
+  assert.deepEqual(report.uses.map(use=>[use.type,use.ownerId,use.title]),
+    [['experiment-provenance','history:4','Calibrated view']]);
+  assert.match(report.unavailable.join('; '),/History provenance.*Snapshot 5/);
 });
