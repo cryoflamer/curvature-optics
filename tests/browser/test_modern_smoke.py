@@ -2715,6 +2715,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>historyPort.recordKeyframeHistory(pending,null,{guard:()=>{throw Error('stale journal guard');}}),
                 /stale journal guard/);
             ok(!(await historyPort.list()).length,'refused journal History write committed');
+            const conflictingId=await adapter.suggestHistoryId();
+            const conflicting=await adapter.saveHistory({id:conflictingId,version:1,createdAt:101,
+                source:'manual',pinned:true,name:'Standalone conflict',description:'',thumbnail:null,
+                experiment:pending.keyframeEdit.history.experiment},{standalone:true});
+            await rejects(()=>historyPort.recordKeyframeHistory(pending,null),/different calibration evidence/);
+            ok((await adapter.readHistory(conflictingId)).evidence==='standalone',
+                'refused conflict changed existing History evidence');
+            await adapter.store.removeDocument({documentId:'history:'+conflictingId,
+                expectedRevision:conflicting.managedRevision});
             const savedFrame=await historyPort.recordKeyframeHistory(pending,null);
             const exactFrame=await adapter.readHistory(savedFrame.entry.id);
             ok(savedFrame.created&&exactFrame.evidence.result===saved.resultId,'journal History lost exact fit');

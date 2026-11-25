@@ -228,8 +228,13 @@
       const match=source==='auto'?(existing[0]?.row.signature===signature?existing[0]:null):
         existing.find(v=>v.row.signature===signature);
       if(match){
-        if(handoff)check(same(match.evidence,handoff.evidence),
-          'Matching History snapshot has different calibration evidence; retain recovery and resolve the conflict');
+        if(handoff){
+          const exactMatch=await readHistory(match.row.id);
+          check(exactMatch?.managedRevision===match.managedRevision&&same(exactMatch.row,match.row),
+            'Matching History snapshot changed; reload and retry');
+          check(same(exactMatch.evidence,handoff.evidence),
+            'Matching History snapshot has different calibration evidence; retain recovery and resolve the conflict');
+        }
         const row={...match.row};
         if(source!=='auto'&&!row.pinned){row.pinned=true;row.source=source;}
         if(item.thumbnail&&!row.thumbnail)row.thumbnail=item.thumbnail;
