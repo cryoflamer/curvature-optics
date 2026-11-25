@@ -836,6 +836,7 @@ test('Physical provenance inventory retains committed, draft and historical sour
   const local=JSON.stringify(experiment),storage={getItem:key=>key==='fixture'?local:null};
   await adapter.write(db,experiment,100);
   const checkpoint=adapter.openSharedCheckpoint(db,{lease,codec,crypto,contract});
+  assert.equal(await checkpoint.read(),null);
   const initial=await checkpoint.initialize(experiment);
   await checkpoint.stage({...experiment,extra:'draft'},initial.revision);
   db.rows.set('unknown',{version:999});
