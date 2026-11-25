@@ -2834,7 +2834,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             notice:document.querySelector('#ModernStorageStartupRefusal')?.textContent,
             row:window.CurvatureModernApp?.getExperimentSessionPreview().controller?.row})""")
         self.assertEqual(state.get('status'),'clean',state)
-        self.assertEqual(state['row']['digest'],seed['digest'])
+        self.assertEqual(self.page.evaluate("""async()=>
+            (await CurvatureModernApp.getManagedResources().readWorkingCheckpoint()).row.digest"""),seed['digest'])
         self.page.locator('#ModernImageLibraryTab').click()
         panel=self.page.locator('#ModernReferenceImageLibrary')
         expect(panel).to_be_visible()
@@ -2847,7 +2848,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible()
         expect(self.page.locator('#ModernCalibrationProjectsPanel')).to_be_visible()
         self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
-            ['curvature-modern-managed-objects','curvature-modern-ui-sessions'].includes(db.name))"""),
+            [CurvatureModernManagedObjectStore.DATABASE,CurvatureModernUiSessionStore.DATABASE].includes(db.name))"""),
             self.page.evaluate('async()=>await indexedDB.databases()'))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
