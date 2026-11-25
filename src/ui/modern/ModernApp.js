@@ -1473,6 +1473,8 @@
     }
     workspaceSections.forEach(function(entry){
       entry.node.addEventListener('toggle',function(){
+        // Temporary disclosures must not become shared presentation edits.
+        if(experimentPreview.live&&keyframeEditSession)return;
         var scope=workspaceScope(),key=scope+'.'+entry.suffix;
         if(sharedPresentationActive()&&workspaceUiRegistryPreview.status!=='ready')return;
         // This remains the ONE existing native-details controller. The
@@ -5691,7 +5693,8 @@
   async function finishSharedKeyframeEdit(apply){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller,
       writer=sharedKeyframeWriter,session=keyframeEditSession;
-    if(!writer||!session||keyframeEditApplying)return;
+    if(!writer||!session||keyframeEditApplying||
+       !['clean','committed'].includes(experimentPreview.status))return;
     keyframeEditApplying=true;ctx.busy=true;
     var physical=newUiEl('ModernWorkspace'),buttons=Array.from(keyframeEditBanner.querySelectorAll('button'));
     physical.inert=true;buttons.forEach(b=>b.disabled=true);
@@ -5739,7 +5742,8 @@
     }finally{
       keyframeEditApplying=false;ctx.busy=false;previewControls();
       if(keyframeEditSession===session){
-        buttons.forEach(b=>b.disabled=false);
+        var failed=!['clean','committed'].includes(experimentPreview.status);
+        buttons.forEach(b=>b.disabled=failed&&b.textContent!=='Download recovery');
         syncKeyframeEditHistoryControls();
       }
       syncPreviewUnloadWarning();
@@ -5852,8 +5856,9 @@
   function syncKeyframeEditHistoryControls(){
     if(!keyframeEditSession||!keyframeEditHistoryControls)return;
     var state=keyframeEditSession.history(),controls=keyframeEditHistoryControls;
-    controls.undo.disabled=keyframeEditApplying||!state.undo;
-    controls.redo.disabled=keyframeEditApplying||!state.redo;
+    var blocked=experimentPreview.live&&!['clean','committed'].includes(experimentPreview.status);
+    controls.undo.disabled=blocked||keyframeEditApplying||!state.undo;
+    controls.redo.disabled=blocked||keyframeEditApplying||!state.redo;
     controls.status.textContent=state.dirty?'Unsaved changes':'No changes';
     controls.status.classList.toggle('is-dirty',state.dirty);
   }
@@ -5864,7 +5869,8 @@
     if(keyframeEditSession)keyframeEditSession.endGroup('wheel');
   }
   function restoreKeyframeEditHistory(direction){
-    if(!keyframeEditSession||keyframeEditApplying)return false;
+    if(!keyframeEditSession||keyframeEditApplying||
+       experimentPreview.live&&!['clean','committed'].includes(experimentPreview.status))return false;
     endKeyframeEditWheelGroup();
     cancelEdits();cancelPending();
     stopCameraKeyboard(true);abortCameraDrag();stopAutoCameraPreview();
@@ -6227,6 +6233,7 @@
       workspaceState.compareModel=keyframeEditUIBaseline.compareModel;
       keyframeEditUIBaseline=null;
     }
+    if(experimentPreview.live)applyWorkspaceSections();
     resetHistoryBaseline();
     studioSelectedKey=session.frameKey;
     setTemporaryKeyframeMode('animation');
@@ -6470,7 +6477,9 @@
         catch(error){report(error);}
       },
       duplicateEditKeyframe:function(key){
-        if(studioActiveDemo||experimentPreview.live)return;
+        if(studioActiveDemo||experimentPreview.live&&
+           (experimentPreview.animationContext?.busy||experimentPreview.animationContext?.row?.keyframeEdit||
+            experimentPreview.animationContext?.row?.namedSave))return;
         // Commit duplication through the ordinary Studio Undo and persistence
         // path. The new frame remains independent even when editing is Cancelled.
         try{
@@ -6479,6 +6488,10 @@
           var oldSelection=studioSelectedKey;
           studioSelectedKey=duplicate.key;
           update(duplicate.draft,{beforeSelectedKey:oldSelection,endGroup:true});
+          if(experimentPreview.live){
+            // Entry flushes the independent duplicate before staging its journal.
+            void enterSharedKeyframeEdit(duplicate.key,false);return;
+          }
           // A temporary editor must only start from an acknowledged durable
           // draft. Otherwise its unchangedDraft guard would compare the new
           // frame against the prior IndexedDB state and falsely see a conflict.

@@ -892,7 +892,10 @@ in Library; Resume requires the same session base and physical snapshot.
 Apply acknowledges the domain receipt before restoring the ordinary physical
 workspace. Cancel removes only the exact journal. Unknown write outcomes
 require reload rather than rebasing. The shared path never writes or clears
-the historical sessionStorage recovery key.
+the historical sessionStorage recovery key. Temporary disclosure changes
+are not written to the shared UI registry. Duplicate and Edit first commits
+the independent duplicate through the normal working-draft writer; cancelling
+its temporary editor does not delete that acknowledged frame.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

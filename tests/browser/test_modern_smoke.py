@@ -12337,6 +12337,99 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read),cancelled)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_duplicate_keyframe_and_stale_editor_conflict(self):
+        """Duplicate is durable before editing; competing temporary journals cannot overwrite each other."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const P=CurvatureModernAnimationProject;
+            const first=structuredClone(CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment);
+            const second=structuredClone(first);second.scene.camera.Height+=5;
+            const project=P.createV2({version:1,mode:'camera',target:null,referenceExperiment:first},
+                [{name:'First',experiment:first},{name:'Second',experiment:second}],
+                {id:'shared_duplicate_test',name:'Duplicate keyframe test'});
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return {row,session:c.row,bound:c.bound,
+                layout:(await U.read('workspace',{workspace:'scene'})).envelope,
+                named:await CurvatureModernAnimationLibrary.list(indexedDB)};
+        }"""
+        original=self.page.evaluate(read)
+        studio=self.page.locator('#ModernAnimationStudio')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        studio.locator('.modern-studio-filmstrip-item').first.get_by_role(
+            'button',name=re.compile(r'^Duplicate and edit ')).click()
+        expect(banner).to_be_visible(timeout=30000)
+        staged=self.page.evaluate(read)
+        frames=staged['row']['collection']['workspaces'][0]['checkpoint']['draft']['frames']
+        self.assertEqual(len(frames),3)
+        self.assertEqual(staged['row']['keyframeEdit']['session']['frameKey'],frames[1]['key'])
+        self.assertEqual(frames[0],original['row']['collection']['workspaces'][0]['checkpoint']['draft']['frames'][0])
+        self.assertIsNone(frames[1]['sourceSnapshotId'])
+        self.assertEqual(frames[1]['experiment'],frames[0]['experiment'])
+        self.assertEqual(staged['bound'],original['bound'])
+        self.page.evaluate("""()=>{const node=document.getElementById('ModernCameraPoseSection');
+            node.open=!node.open;}""")
+        self.page.wait_for_timeout(150)
+        self.assertEqual(self.page.evaluate(read)['layout'],staged['layout'])
+        other=self.page.context.new_page()
+        try:
+            other.goto(url,wait_until='load')
+            other.wait_for_function(ready,timeout=30000)
+            other.locator('#ModernSharedKeyframeResume').click()
+            other_banner=other.locator('#ModernKeyframeEditBanner')
+            expect(other_banner).to_be_visible(timeout=30000)
+            h=other.evaluate('CurvatureModernApp.getModel().Height')
+            other.locator('#ModernHeight').fill(str(h+7))
+            other.locator('#ModernHeight').press('Tab')
+            other.wait_for_function("""async h=>{
+                const U=CurvatureModernUiSessionStore.create(window);U.sharedDocumentSessions(CurvatureModernDocumentSession);
+                const row=await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+                return row.keyframeEdit?.session.candidate.scene.camera.Height===h;
+            }""",arg=h+7)
+            remote=other.evaluate(read)
+            self.page.locator('#ModernHeight').fill(str(h+3))
+            self.page.locator('#ModernHeight').press('Tab')
+            expect(banner).to_contain_text('not acknowledged',timeout=30000)
+            self.assertEqual(self.page.evaluate(read)['row'],remote['row'])
+            banner.get_by_role('button',name='Apply & Return',exact=True).click()
+            expect(banner).to_contain_text('not completed',timeout=30000)
+            self.assertEqual(self.page.evaluate(read)['row'],remote['row'])
+            with self.page.expect_download() as dl:
+                banner.get_by_role('button',name='Download recovery',exact=True).click()
+            evidence=json.loads(Path(dl.value.path()).read_text(encoding='utf-8'))
+            self.assertEqual(evidence['live']['candidate']['scene']['camera']['Height'],h+3)
+            self.assertEqual(evidence['recovery']['latest']['session']['candidate']['scene']['camera']['Height'],h+3)
+            other_banner.get_by_role('button',name='Cancel & Return',exact=True).click()
+            expect(other_banner).to_have_count(0,timeout=30000)
+            expect(other.locator('#ModernAnimationDraftStatus')).to_have_text('Shared working draft saved in IndexedDB',timeout=30000)
+            durable=other.evaluate(read)
+            self.assertNotIn('keyframeEdit',durable['row'])
+            self.assertEqual(durable['row']['collection'],staged['row']['collection'])
+            self.assertEqual(durable['bound'],original['bound'])
+            self.assertEqual(durable['named'],original['named'])
+            self.assertEqual(durable['layout'],staged['layout'])
+        finally:
+            other.close()
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),durable)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_animation_save_changes_and_interrupted_named_commit(self):
         """Save Changes relinks the acknowledged draft; either interrupted named state completes exactly once."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
