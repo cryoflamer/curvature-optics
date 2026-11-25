@@ -39,9 +39,13 @@
     checkpoint.validateDraft(draft,null);
     return draft;
   }
+  const capture=(storage,files,draft,inline,env)=>storage.storageKind==='managed'?
+    storage.captureVerified(env.indexedDB,draft,inline,null):files.captureVerified(draft,inline,env);
+  const prepare=(storage,files,project,env)=>storage.storageKind==='managed'?
+    storage.prepare(env.indexedDB,project.id):files.prepare(project,env);
   async function createNew(env,scene,{title='Untitled calibration',storage=store,files=checkpoint,now=Date.now()}={}){
     const draft=emptyDraft(scene,sessionId(env));
-    const parts=await files.captureVerified(draft,null,env);
+    const parts=await capture(storage,files,draft,null,env);
     const project=model.fresh({id:model.createId(env.crypto),title,now,...parts});
     await storage.create(env.indexedDB,project);
     return project;
@@ -53,7 +57,9 @@
       throw Error('Calibration Project changed in another tab; refresh before duplicating');
     // Hydration must verify the existing original before making a second
     // independently editable checkpoint. No raster data are copied to IDB.
-    const prepared=await files.prepare(source,env);
+    const prepared=await prepare(storage,files,source,env);
+    if(!prepared||JSON.stringify(prepared.project)!==JSON.stringify(source))
+      throw Error('Calibration Project changed while preparing its duplicate');
     const current=await storage.get(env.indexedDB,id);
     if(!current||current.revision!==source.revision)
       throw Error('Calibration Project changed while preparing its duplicate');
@@ -69,7 +75,8 @@
     // independent per project; only the editable checkpoint is duplicated.
     const project=model.fresh({id:model.createId(env.crypto),title,now,...parts,
       resultIds:source.resultIds});
-    await storage.create(env.indexedDB,project);
+    if(storage.storageKind==='managed')await storage.createFromSource(env.indexedDB,project,source);
+    else await storage.create(env.indexedDB,project);
     return project;
   }
   async function importAsNew(env,validatedExperiment,{title='Imported calibration',storage=store,
@@ -77,7 +84,7 @@
     const draft=importedDraft(validatedExperiment,sessionId(env));
     // Verified original is staged asset-first, before the atomic project row.
     // Active calibration/editor and its legacy recovery draft are untouched.
-    const parts=await files.captureVerified(draft,null,env);
+    const parts=await capture(storage,files,draft,null,env);
     const project=model.fresh({id:model.createId(env.crypto),title,now,...parts});
     await storage.create(env.indexedDB,project);
     return project;
@@ -87,7 +94,7 @@
     // A first-class current-draft recovery, independent of one-time Legacy
     // migration and the subset of data carried by a portable experiment.
     files.validateDraft(draft,inline);
-    const parts=await files.captureVerified(copy(draft),inline===null?null:copy(inline),env);
+    const parts=await capture(storage,files,copy(draft),inline===null?null:copy(inline),env);
     const project=model.fresh({id:model.createId(env.crypto),title,now,...parts});
     await storage.create(env.indexedDB,project);
     // A successful transaction alone is not a verified recovery: reread the
@@ -96,7 +103,7 @@
     if(!durable||durable.revision!==project.revision||
        durable.photo?.identity.sha256!==project.photo?.identity.sha256)
       throw Error('Recovered calibration project could not be verified after save');
-    await files.prepare(durable,env);
+    await prepare(storage,files,durable,env);
     return durable;
   }
   return Object.freeze({emptyDraft,importedDraft,createNew,duplicate,importAsNew,saveDraftAsNew});

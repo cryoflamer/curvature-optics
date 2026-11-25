@@ -2622,6 +2622,17 @@ class ModernBrowserSmoke(unittest.TestCase):
                 revisedRead.results[0].target===saved.resultId&&
                 JSON.stringify(revisedRead.project)===JSON.stringify(revised),'Calibration edit lost historical evidence');
             await rejects(()=>adapter.saveCalibrationProject(revised,{expectedRevision:1}),/revision conflict/);
+            const actions=CurvatureModernCalibrationProjectActions;
+            const duplicate=await actions.duplicate(window,revised.id,2,{storage:projectPort,now:48});
+            const duplicated=await adapter.readCalibrationProject(duplicate.id);
+            ok(duplicated.originalId===revisedRead.originalId&&duplicated.results[0].target===saved.resultId&&
+                duplicated.draft.physicalSessionId!==revisedRead.draft.physicalSessionId&&
+                JSON.stringify(duplicated.draft.undoStack)===JSON.stringify(revisedRead.draft.undoStack),
+                'managed duplicate lost retained photo, result or checkpoint');
+            await rejects(()=>projectPort.createFromSource(indexedDB,{...duplicate,id:projectApi.createId(crypto)},calibration),
+                /changed while preparing/);
+            await adapter.store.removeDocument({documentId:'calibration:'+duplicate.id,expectedRevision:duplicated.managedRevision});
+            await adapter.store.collectGarbage(duplicated.projectId);
             await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(indexedDB),/shared lifetime/);
             await rejects(()=>projectPort.remove(indexedDB,calibration.id,2),/deletion is disabled/);
             const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));

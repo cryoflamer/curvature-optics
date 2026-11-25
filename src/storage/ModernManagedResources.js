@@ -959,6 +959,18 @@
       await store.writeDocuments([next.plan],{expectedInventory:next.inventories,guard});
       return project;
     }
+    async function duplicateApplicationCalibration(input,expected){
+      const project=calibrations.normalize(input),source=calibrations.normalize(expected);
+      const existing=await calibrationProjectInventory(),previous=existing.find(v=>v.project.id===source.id);
+      check(previous&&same(previous.project,source),'Calibration Project changed while preparing its duplicate');
+      check(project.id!==source.id&&project.revision===1&&!existing.some(v=>v.project.id===project.id),
+        'invalid duplicate Calibration Project identity');
+      check(same(project.photo,source.photo)&&same(project.resultIds,source.resultIds),
+        'duplicate Calibration Project evidence changed');
+      const next=await planApplicationCalibration(project,existing,previous,0);
+      await store.writeDocuments([next.plan],{expectedInventory:next.inventories});
+      return project;
+    }
     const calibrationReceiptId='calibration-selection:shared';
     function receiptInventory(value){
       return {kind:CALIBRATION_RECEIPT,documents:value?[{id:calibrationReceiptId,revision:value.managedRevision}]:[]};
@@ -1050,7 +1062,7 @@
       checkpoints.validateDraft(captured,capturedInline);
       if(!captured.record)return checkpoints.extract(captured,capturedInline,null);
       const original=await originalFrom(images.validate(captured.record));
-      const current=await readCalibrationProject(calibrations.normalize(boundProject).id);
+      const current=boundProject?await readCalibrationProject(calibrations.normalize(boundProject).id):null;
       if(current?.project.photo&&same(current.project.photo.identity,original.identity)){
         const retained=await store.get(current.originalId);
         check(retained?.type===ORIGINAL&&same(retained.payload.identity,original.identity)&&
@@ -1090,6 +1102,7 @@
           return {projects:rows.map(v=>v.row),legacy:null};
         },
         create:async(db,input)=>{bound(db);return createApplicationCalibration(input);},
+        createFromSource:async(db,input,source)=>{bound(db);return duplicateApplicationCalibration(input,source);},
         update:async(db,id,expected,changes,now=Date.now())=>{
           bound(db);return (await changeApplicationCalibration(id,expected,changes,now)).project;
         },
