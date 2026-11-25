@@ -441,9 +441,9 @@
       check(session&&sessionContract&&typeof session.validateSharedCheckpoint==='function',
         'working checkpoint adapter unavailable');
     }
-    async function readWorkingCheckpoint(){
+    async function loadWorkingCheckpoint(readGraph){
       workingContracts();
-      const graph=await store.readDocumentGraph(workingId);
+      const graph=await readGraph(workingId);
       if(!graph)return null;
       const meta=graph.document.metadata;
       check(graph.document.kind==='working-checkpoint'&&
@@ -465,6 +465,9 @@
       return {row,managedRevision:graph.document.revision,
         snapshots:{committed:committed.ref,draft:draft?draft.ref:null}};
     }
+    async function readWorkingCheckpoint(){
+      return loadWorkingCheckpoint(store.readDocumentGraph);
+    }
     function explicitStandaloneIds(ids){
       check(Array.isArray(ids),'standalone result ID list required');
       for(const id of ids)resultDocumentId(id);
@@ -474,7 +477,7 @@
       workingContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
-      const previous=expectedRevision===0?null:await readWorkingCheckpoint();
+      const previous=expectedRevision===0?null:await loadWorkingCheckpoint(store.readDocumentClosureForWrite);
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'working checkpoint revision conflict');
       check(!previous||row.revision===previous.row.revision+1,'working checkpoint source revision must advance once');
@@ -517,9 +520,9 @@
       check(drafts&&projects&&animations&&typeof drafts.verifySharedRow==='function',
         'Animation working collection adapter unavailable');
     }
-    async function readAnimationWorkingCollection(){
+    async function loadAnimationWorkingCollection(readGraph){
       draftContracts();
-      const graph=await store.readDocumentGraph(draftsId);
+      const graph=await readGraph(draftsId);
       if(!graph)return null;
       check(graph.document.kind===DRAFTS&&graph.document.references.length===1&&
         exact(graph.document.metadata,['sourceRevision']),'invalid Animation working root');
@@ -543,11 +546,14 @@
       return {row,collectionId:resource.id,managedRevision:graph.document.revision,
         observations:v.observations,evidence:v.evidence,referenceImages};
     }
+    async function readAnimationWorkingCollection(){
+      return loadAnimationWorkingCollection(store.readDocumentGraph);
+    }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[]}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
-      const previous=expectedRevision===0?null:await readAnimationWorkingCollection();
+      const previous=expectedRevision===0?null:await loadAnimationWorkingCollection(store.readDocumentClosureForWrite);
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'Animation working revision conflict');
       check(!previous||row.revision===previous.row.revision+1,'Animation working source revision must advance once');

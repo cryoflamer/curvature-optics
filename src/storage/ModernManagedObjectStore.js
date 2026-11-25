@@ -361,6 +361,68 @@
         return {document:{...doc,references:rootEdges.map(({slot,target,strength})=>({slot,target,strength}))},resources};
       });
     }
+    // Scoped preflight for an ensuing CAS write. It verifies the actual
+    // immutable strong closure, but deliberately makes no global integrity
+    // claim. The final write still checks the entire current metadata graph.
+    // Public restoration and destructive operations retain global checks.
+    async function readDocumentClosureForWrite(id){
+      token(id,'document ID');
+      return run('readonly',async stores=>{
+        const refsFor=async (kind,owner)=>{
+          const rows=await request(stores.references.index('owner').getAll([kind,owner]));
+          check(rows.every(e=>e.ownerKind===kind&&e.ownerId===owner),'invalid reference owner');
+          return slots(rows);
+        };
+        const [doc,rootEdges]=await Promise.all([
+          request(stores.documents.get(id)),refsFor('document',id)
+        ]);
+        if(doc){
+          check(doc.id===id&&revision(doc.revision)>0&&typeof doc.deleted==='boolean','invalid document revision');
+          token(doc.kind,'document kind');
+        }
+        if(!doc||doc.deleted){
+          check(!rootEdges.length,'missing reference owner');return null;
+        }
+        const seen=new Set(),queue=[],weakTargets=new Set(),children=new Map(),resources=[];
+        function add(refs){
+          for(const ref of refs){
+            if(ref.strength==='weak'){weakTargets.add(ref.target);continue;}
+            if(!seen.has(ref.target)){seen.add(ref.target);queue.push(ref.target);}
+          }
+        }
+        add(rootEdges);
+        for(let i=0;i<queue.length;i++){
+          const objectId=queue[i];
+          const [obj,row,actual]=await Promise.all([
+            request(stores.objects.get(objectId)),request(stores.payloads.get(objectId)),refsFor('object',objectId)
+          ]);
+          check(obj&&obj.id===objectId&&obj.deleted===false,'missing strong target');
+          check(Number.isSafeInteger(obj.refCount)&&obj.refCount>0,'invalid reference count');
+          const adapter=types.get(typeKey(obj.type,obj.version));
+          check(adapter&&row&&adapter.validate(clone(row.value))===true,'invalid or unsupported payload');
+          const expected=slots(adapter.references(clone(row.value)));
+          check(expected.length===actual.length&&expected.every(ref=>actual.some(e=>
+            e.slot===ref.slot&&e.target===ref.target&&e.strength===ref.strength)),'payload reference mismatch');
+          resources.push({...obj,payload:row.value});
+          children.set(objectId,actual.filter(ref=>ref.strength==='strong').map(ref=>ref.target));
+          add(actual);
+        }
+        for(const target of weakTargets)if(!seen.has(target)){
+          const obj=await request(stores.objects.get(target));
+          check(obj&&obj.id===target&&typeof obj.deleted==='boolean','unknown reference target');
+        }
+        const degrees=new Map(queue.map(id=>[id,0]));
+        for(const refs of children.values())for(const target of refs)
+          degrees.set(target,degrees.get(target)+1);
+        const ready=queue.filter(id=>degrees.get(id)===0);
+        for(let i=0;i<ready.length;i++)for(const target of children.get(ready[i])){
+          const n=degrees.get(target)-1;degrees.set(target,n);
+          if(n===0)ready.push(target);
+        }
+        check(ready.length===queue.length,'strong reference cycle');
+        return {document:{...doc,references:rootEdges},resources};
+      });
+    }
     async function inspectUsage(id){
       token(id,'object ID');
       return run('readonly',async stores=>{
@@ -504,7 +566,7 @@
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
-      verifyIntegrity,recount,withRetained,collectGarbage,collectGarbageBatch});
+      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));

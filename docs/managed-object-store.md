@@ -159,6 +159,13 @@ Classification and attribution remain separate per observation.
 `readDocumentGraph` reads one revision and its strong closure in one IDB
 transaction; domain materialization verifies target types and identity and
 rechecks original raster/digest before returning portable records.
+The autosave adapters use a separate indexed `readDocumentClosureForWrite`
+preflight for the previous revision. It validates the complete immutable
+strong closure, declared edges, weak target existence and cycles in one
+read transaction, but is not a global integrity report. The subsequent
+`writeDocument` still checks the full current metadata graph and CAS revision;
+public restores, explicit integrity/recount and reclamation retain their
+original global validation. No cached graph is treated as write authority.
 Saved Animation owns its full project and retained observation versions.
 Its local sourceSnapshotId is provenance, not a strong dependency. Historical
 image attribution is preserved by the retained observation version, including

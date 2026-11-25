@@ -655,6 +655,57 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
 
+    def test_managed_object_store_indexed_write_preflight(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedObjectStore;
+            const s=api.create(window,{types:[
+                {type:'test',version:1,validate:v=>!!v&&Array.isArray(v.refs),references:v=>v.refs}
+            ]});
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const strong=(slot,target)=>({slot,target,strength:'strong'});
+            const weak=(slot,target)=>({slot,target,strength:'weak'});
+            const resource=(id,refs)=>({id,type:'test',version:1,payload:{refs}});
+            await s.writeDocument({documentId:'outside',kind:'test',expectedRevision:0,metadata:{},
+                resources:[resource('outside-object',[])],references:[strong('value','outside-object')]});
+            await s.writeDocument({documentId:'doc',kind:'test',expectedRevision:0,metadata:{name:'root'},
+                resources:[resource('parent',[strong('child','child'),weak('outside','outside-object')]),
+                    resource('child',[])],references:[strong('value','parent')]});
+            const scoped=await s.readDocumentClosureForWrite('doc'),full=await s.readDocumentGraph('doc');
+            ok(JSON.stringify(scoped.document)===JSON.stringify(full.document)&&
+                JSON.stringify(scoped.resources)===JSON.stringify(full.resources),'scoped closure changed');
+            ok(await s.readDocumentClosureForWrite('absent')===null,'absent document resolved');
+            const db=await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(api.DATABASE);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+            });
+            async function change(store,work){
+                await new Promise((resolve,reject)=>{
+                    const tx=db.transaction(store,'readwrite');work(tx.objectStore(store));
+                    tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);
+                });
+            }
+            await change('objects',store=>{
+                const req=store.get('outside-object');
+                req.onsuccess=()=>store.put({...req.result,refCount:99});
+            });
+            ok((await s.readDocumentClosureForWrite('doc')).resources.length===2,'unrelated count changed preflight');
+            await rejects(()=>s.readDocumentGraph('doc'),/reference count mismatch/);
+            await rejects(()=>s.writeDocument({documentId:'doc',kind:'test',expectedRevision:1,
+                metadata:{name:'edited'},references:[strong('value','parent')]}),/reference count mismatch/);
+            await change('references',store=>store.delete(['object','parent','outside']));
+            await rejects(()=>s.readDocumentClosureForWrite('doc'),/payload reference mismatch/);
+            db.close();
+            return {revision:scoped.document.revision,resources:scoped.resources.length};
+        }""")
+        self.assertEqual(result, {'revision': 1, 'resources': 2})
+
     def test_managed_store_autosave_performance_profile(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
@@ -780,7 +831,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(result['valid'])
         self.assertEqual(len(result['samples']),6)
         self.assertGreaterEqual(result['eligible'],1)
-        print("MANAGED_AUTOSAVE_PROFILE "+__import__('json').dumps(result,sort_keys=True),flush=True)
+        print("MANAGED_AUTOSAVE_PROFILE_SCOPED "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
     def test_managed_animation_working_collection_retains_inactive_draft_originals(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
