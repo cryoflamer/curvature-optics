@@ -1138,6 +1138,7 @@
       ],
       "commonJsSourceCallers": [],
       "commonJsTestCallers": [
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAnimationWorkspacePersistence.test.js"
       ],

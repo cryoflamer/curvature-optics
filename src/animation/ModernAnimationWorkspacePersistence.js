@@ -171,7 +171,7 @@
     }
     function save(retry=false){
       if(!owner||binding)return Promise.reject(Error('No verified shared Animation editor'));
-      if(running)return running;
+      if(running)return running.then(state);
       if(owner.error&&!retry)return Promise.reject(Error('Explicit Animation save retry required'));
       if(!owner.latest&&!owner.receipt)return Promise.resolve(state());
       const active=owner;

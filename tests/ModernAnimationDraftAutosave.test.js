@@ -875,7 +875,9 @@ test('shared Animation coordinator retains later edits and acknowledges them in 
   while(!h.counts().acks)await new Promise(setImmediate);
   c.mark(h.changed('Second',201));
   assert.equal(c.state().unsaved,true);
-  release();await saving;
+  const joined=c.save();release();
+  const [first,second]=await Promise.all([saving,joined]);
+  assert.deepEqual(first,second);assert.equal(second.unsaved,false);
   assert.equal(h.counts().domainWrites,2);assert.equal(h.counts().acks,2);
   assert.equal(c.state().unsaved,false);assert.equal(c.state().selectionPending,null);
   const row=await h.storage.read();
