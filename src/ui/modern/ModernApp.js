@@ -3406,17 +3406,15 @@
     var evidence=structuredClone(ctx.writer.recovery());
     ctx.busy=true;ctx.message='Collecting verified recovery originals…';renderSharedAnimationLibrary();
     try{
-      var originals=null;
+      var text;
       if(managedResources){
-        var live=ctx.retention?await ctx.retention.recoveryReferences(evidence):null;
-        var records=live===null?await studioLibrary.recoveryReferences(root.indexedDB,evidence):live;
-        originals=new Map(records.map(record=>[record.id,record]));
-      }
-      var text=await studioDraftAutosave.exportRecovery(evidence,
-        id=>originals?(originals.has(id)?{record:originals.get(id)}:null):referenceLibrary.inspectOriginal(root.indexedDB,id),
+        var live=ctx.retention?await ctx.retention.exportRecovery(evidence):null;
+        text=live===null?await studioLibrary.exportRecovery(root.indexedDB,evidence):live;
+      }else text=await studioDraftAutosave.exportRecovery(evidence,
+        id=>referenceLibrary.inspectOriginal(root.indexedDB,id),
         record=>root.CurvatureModernReferenceImageImport.verify(record,root),root.crypto);
       downloadHistoryJson(text,'curvature-animation-recovery-with-originals.json');
-      ctx.message='Portable recovery exported with original photographs.';
+      ctx.message='Portable recovery exported with verified retained evidence.';
     }catch(error){
       ctx.error=true;ctx.message='Recovery export failed: '+error.message+
         '. Download raw recovery evidence to preserve the checkpoint.';

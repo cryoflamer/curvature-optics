@@ -1770,9 +1770,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const recoveryRecords=await recoveryPort.recoveryReferences(indexedDB,recovery);
             ok(recoveryRecords.length===1&&recoveryRecords[0].original.dataUrl===record.original.dataUrl,
                 'pending recovery did not resolve the removed historical original');
-            const recoveryText=await A.exportRecovery(recovery,
-                alias=>({record:recoveryRecords.find(v=>v.id===alias)}),
-                value=>CurvatureModernReferenceImageImport.verify(value,window),crypto);
+            const recoveryText=await recoveryPort.exportRecovery(indexedDB,recovery);
+            ok(JSON.parse(recoveryText).version===2,'uncalibrated Recovery changed V2 format');
             const portableRecovery=await A.prepareRecoveryImport(recoveryText,crypto);
             ok(portableRecovery.referenceImages[0].original.dataUrl===record.original.dataUrl,
                 'recovery portable bytes changed');
@@ -2704,6 +2703,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             const verifiedRow=await workingPort.createFromWorking(indexedDB,verifiedProject,
                 'auto',206,null,null,verifiedRef,()=>{});
             const workingText=await workingPort.exportWorkingPortable(indexedDB,verifiedRow,verifiedRef);
+            const recoveryInput={version:1,reference:verifiedRef,
+                checkpoint:A.getWorkspace(animationRow.collection,id),receipt:null};
+            const recoveryText=await animationLive.exportRecovery(recoveryInput);
+            const durableRecoveryText=await workingPort.exportRecovery(indexedDB,recoveryInput);
             await port.replaceFromHistory(final.experiment,uncalibrated,final.revision,{isCurrent:()=>true});
             await live.reset();
             await adapter.store.removeDocument({documentId:'history:'+recorded.entry.id,
@@ -2794,6 +2797,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const linkedId=A.projectWorkspaceId(named.id),linkedRef=A.documentReference(animationRow,linkedId);
             ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===null,
                 'linked standalone was not explicit');
+            const standaloneRecoveryText=await libraryPort.exportRecovery(indexedDB,{version:1,reference:linkedRef,
+                checkpoint:A.getWorkspace(animationRow.collection,linkedId),receipt:null});
             const copy=P.validate({...renamed.project,id:'standalone_copy'});
             await libraryPort.createFromWorking(indexedDB,copy,'auto',303,null,null,linkedRef,()=>{});
             ok((await adapter.readAnimation(copy.id)).evidence==='standalone','Save As changed standalone evidence');
@@ -2815,9 +2820,18 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(canonical(workingBundle.calibrationEvidence[0])===canonical(portableBundle.calibrationEvidence[0]),
                 'working export changed retained Calibration evidence');
             await rejects(()=>workingPort.exportWorkingPortable(indexedDB,verifiedRow,verifiedRef),/Working Animation revision changed/);
-            return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length,portableText};
+            ok(JSON.parse(recoveryText).version===3&&
+                canonical(JSON.parse(recoveryText).calibrationEvidence)===canonical(JSON.parse(durableRecoveryText).calibrationEvidence)&&
+                canonical(JSON.parse(recoveryText).calibrationEvidence[0].proof)===canonical(portableBundle.calibrationEvidence[0][0]),
+                'live and durable Recovery proof changed');
+            ok(JSON.parse(standaloneRecoveryText).calibrationEvidence[0].proof===null,
+                'standalone Recovery lost explicit status');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length,
+                portableText,recoveryText,standaloneRecoveryText};
         }""",fixture)
         portable=result.pop('portableText')
+        recovery=result.pop('recoveryText')
+        standalone_recovery=result.pop('standaloneRecoveryText')
         self.assertEqual(result, {'valid': True, 'history': 1})
         # An independent browser context has no source managed objects.
         destination=self.browser.new_context()
@@ -2826,7 +2840,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             page.goto(self.base_url,wait_until='load',timeout=30000)
             for script in ['ModernManagedObjectStore.js','ModernManagedResources.js']:
                 page.add_script_tag(url='/src/storage/'+script)
-            restored=page.evaluate("""async text=>{
+            restored=page.evaluate("""async ({text,recoveryText,standaloneRecoveryText})=>{
                 const adapter=CurvatureModernManagedResources.create(window),port=adapter.createAnimationLibraryPort();
                 const ok=(value,msg)=>{if(!value)throw Error(msg);};
                 const rejects=async(action,pattern)=>{
@@ -2864,8 +2878,26 @@ class ModernBrowserSmoke(unittest.TestCase):
                     'private imported proof fabricated gallery entries');
                 const exported=port.parseBundle(await port.exportRetainedPortable(indexedDB,[verified.row,standalone.row]));
                 ok(canonical(exported.calibrationEvidence)===canonical(parsed.calibrationEvidence),'re-export changed evidence');
+                const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+                const badRecovery=JSON.parse(recoveryText);
+                badRecovery.calibrationEvidence[0].proof.original.original.dataUrl=canvas.toDataURL('image/png');
+                await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,null,JSON.stringify(badRecovery)),/original identity mismatch/);
+                ok(!(await adapter.readAnimationWorkingCollection()),'invalid Recovery published a draft');
+                const restored=await adapter.importAnimationRecovery(indexedDB,lease,null,recoveryText);
+                const collection=await adapter.readAnimationWorkingCollection();
+                ok(collection.evidence[0].target===verified.evidence[0].target,
+                    'Recovery did not reuse exact named proof');
+                await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,restored,recoveryText),/identity is already used/);
+                await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,restored,standaloneRecoveryText),/Conflicting imported recovery Calibration evidence/);
+                ok((await adapter.readAnimationWorkingCollection()).row.digest===restored.digest,
+                    'refused Recovery changed acknowledged draft');
+                const A=CurvatureModernAnimationDraftAutosave,id=restored.collection.activeId;
+                const recoveryAgain=await port.exportRecovery(indexedDB,{version:1,reference:A.documentReference(restored,id),
+                    checkpoint:A.getWorkspace(restored.collection,id),receipt:null});
+                ok(canonical(JSON.parse(recoveryAgain).calibrationEvidence)===canonical(JSON.parse(recoveryText).calibrationEvidence),
+                    'imported Recovery changed exact proof');
                 return {valid:(await adapter.store.verifyIntegrity()).valid,count:(await port.list(indexedDB)).length};
-            }""",portable)
+            }""",{'text':portable,'recoveryText':recovery,'standaloneRecoveryText':standalone_recovery})
             self.assertEqual(restored, {'valid': True, 'count': 2})
         finally:
             destination.close()

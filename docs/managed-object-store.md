@@ -734,5 +734,25 @@ observations from the acknowledged working revision under the backup barrier.
 It never needs a named project or a gallery lookup. An incomplete or changing
 working selection refuses export; explicit standalone proof remains distinct
 from verified proof. Mixed proof status within one exported project is not
-supported by the current named/portable schema and is refused. Working
-Recovery remains a separate consumer.
+supported by the current named/portable schema and is refused.
+
+### Portable working Recovery calibration evidence
+
+The managed shared Recovery route extends the existing V1/V2 envelope to
+version 3 only when the captured checkpoint has calibration origins. Its
+calibrationEvidence list contains sorted {alias, proof} pairs, where proof
+is null for explicit standalone or the same validated {record, original}
+pair used by named export. Unlike the named project schema, a Recovery can
+retain mixed statuses on different aliases. Capture from the live retention
+scope serializes original and result materialization together; durable
+fallback resolves the exact preceding or acknowledged working revision and
+only a matching pending receipt. Missing proof refuses portable export,
+leaving raw Recovery available.
+
+Import verifies every origin, result digest, attribution and original before
+the shared collection transaction. The portable identity includes the full
+evidence content/status. An existing exact collection target or matching
+named evidence may be reused with inventory CAS; conflicting mappings refuse
+the import. New private result/original resources and any frame observations
+are staged atomically with the independent working draft, without fabricating
+Calibration Gallery roots. V1/V2 Recovery compatibility is unchanged.

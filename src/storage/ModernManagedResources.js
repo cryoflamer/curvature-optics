@@ -1470,18 +1470,24 @@
         if(!ids.length){check(value==='none','Unexpected portable Calibration evidence');return value;}
         if(value==='standalone')return value;
         check(results&&Array.isArray(value)&&value.length===ids.length,'Missing portable Calibration evidence');
-        return value.map((item,i)=>{
-          check(exact(item,['record','original']),'Invalid portable Calibration evidence record');
-          const record=results.validate(item.record),original=images.validate(item.original);
-          check(record.id===ids[i]&&same(record,item.record)&&same(original,item.original)&&
-            original.id==='calibration_evidence'&&same(attribution(original),record.provenance.attribution),
-            'Portable Calibration evidence identity or attribution mismatch');
-          for(const origin of calibrationOrigins(project).filter(o=>o.resultId===record.id))
-            checkOrigin(origin,{type:RESULT,payload:{record}});
-          return {record,original};
-        });
+        return value.map((item,i)=>validatePortableCalibrationPair(item,ids[i],calibrationOrigins(project)));
       });
       return {...bundle,calibrationEvidence:evidence};
+    }
+    function validatePortableCalibrationPair(item,alias,origins){
+      check(results&&exact(item,['record','original']),'Invalid portable Calibration evidence record');
+      const record=results.validate(item.record),original=images.validate(item.original);
+      check(record.id===alias&&same(record,item.record)&&same(original,item.original)&&
+        original.id==='calibration_evidence'&&same(attribution(original),record.provenance.attribution),
+        'Portable Calibration evidence identity or attribution mismatch');
+      for(const origin of origins.filter(o=>o.resultId===alias))
+        checkOrigin(origin,{type:RESULT,payload:{record}});
+      return {record,original};
+    }
+    async function verifyPortableCalibrationOriginal(item){
+      const original=await originalFrom(item.original);
+      check(same(original.identity,item.record.payload.photo),'Portable Calibration original identity mismatch');
+      return original;
     }
     // Imported proof belongs to the new Animation, not a fabricated gallery
     // entry. Verify every original before planning, then publish private
@@ -1491,9 +1497,7 @@
       for(const proof of proofs)if(Array.isArray(proof))for(const item of proof){
         const key=stable(item);
         if(checked.has(key))continue;
-        const original=await originalFrom(item.original);
-        check(same(original.identity,item.record.payload.photo),'Portable Calibration original identity mismatch');
-        checked.set(key,original);
+        checked.set(key,await verifyPortableCalibrationOriginal(item));
       }
       const existing=await animationInventory(),seen=new Map(),reusable=new Map(),stagedOriginals=new Map(),ids=new Set();
       for(const doc of await store.listDocuments('animation',{includeDeleted:true}))
@@ -1661,6 +1665,9 @@
         },
         recoveryReferences:async(db,recovery)=>{
           bound(db);return readAnimationRecoveryReferences(recovery);
+        },
+        exportRecovery:async(db,recovery)=>{
+          bound(db);return encodeManagedRecovery(recovery,await readAnimationRecoveryReferences(recovery,true));
         },
         update:async(db,project,optics,expected,now,thumbnail)=>{
           bound(db);return changeApplicationAnimation(project.id,expected,old=>animations.nextRecord(old,project,optics,now,thumbnail));
@@ -1924,10 +1931,41 @@
     // A failed editor save carries the preceding acknowledged reference.
     // A pending receipt may still retain that exact prior collection.
     // Resolve its photos before considering any newly attached, unsaved IDs.
-    async function readAnimationRecoveryReferences(recovery){
+    function recoveryOrigins(checkpoint){
+      return animationDraftOrigins(checkpoint.draft).map(({experiment})=>experiment.calibrationOrigin);
+    }
+    async function recoveryCalibrationProof(checkpoint,resolve){
+      const origins=recoveryOrigins(checkpoint),aliases=[...new Set(origins.map(origin=>origin.resultId))].sort();
+      const proof=[],cache=new Map();
+      for(const alias of aliases){
+        const matching=origins.filter(origin=>origin.resultId===alias);
+        const source=await resolve(alias,matching);
+        check(source,'Recovery Calibration evidence is not retained: '+alias);
+        if(source.target===null)proof.push({alias,proof:null});
+        else{
+          const result=source.resources.find(value=>value.id===source.target);
+          for(const origin of matching)checkOrigin(origin,result);
+          proof.push({alias,proof:{record:result.payload.record,
+            original:await verifyResultOriginal({resources:source.resources},result,cache)}});
+        }
+      }
+      return proof;
+    }
+    async function encodeManagedRecovery(recovery,{referenceImages,calibrationEvidence}){
+      const byId=new Map(referenceImages.map(record=>[record.id,record]));
+      const text=await drafts.exportRecovery(recovery,id=>byId.has(id)?{record:byId.get(id)}:null,
+        record=>importer.verify(record,env),env.crypto);
+      if(!calibrationEvidence.length)return text;
+      const payload={...JSON.parse(text),version:3,referenceImages,calibrationEvidence};
+      const result=JSON.stringify(payload,null,2)+'\n';
+      check(result.length<=drafts.MAX_SHARED_RECOVERY_LENGTH,'Animation recovery JSON is too large');
+      return result;
+    }
+    async function readAnimationRecoveryReferences(recovery,includeCalibration=false){
       const checkpoint=drafts.normalize(recovery?.checkpoint);
       const ids=[...new Set(checkpoint.draft.frames.flatMap(frame=>frame.referenceImageIds||[]))].sort();
-      if(!ids.length)return [];
+      if(!ids.length&&(!includeCalibration||!recoveryOrigins(checkpoint).length))
+        return includeCalibration?{referenceImages:[],calibrationEvidence:[]}:[];
       const barrier=deps.CurvatureModernBackupWriteBarrier;
       check(barrier&&env.navigator?.locks,'coordinated Animation recovery unavailable');
       const {value}=await barrier.create(env.navigator.locks).snapshot(async()=>{
@@ -1946,9 +1984,10 @@
         }
         check(source,'acknowledged recovery revision is no longer retained; download raw evidence');
         const retained=new Map(source.payload.observations.map(entry=>[entry.alias,entry.target]));
+        const successor=source!==active&&recovery.receipt&&same(current.row.receipt,recovery.receipt);
         // A matching pending receipt proves the staged successor's new
         // observations too. An unrelated successor is not recovery evidence.
-        if(source!==active&&recovery.receipt&&same(current.row.receipt,recovery.receipt)){
+        if(successor){
           for(const entry of active.payload.observations){
             if(retained.has(entry.alias))
               check(retained.get(entry.alias)===entry.target,'conflicting recovery observation versions');
@@ -1971,12 +2010,28 @@
             records.push(fresh.row.record);
           }
         }
-        return records;
+        if(!includeCalibration)return records;
+        const mappings=new Map(source.payload.evidence.map(entry=>[entry.alias,entry.target]));
+        const known=recoveryOrigins(drafts.getWorkspace(source.payload.row.collection,ref.id));
+        if(successor){
+          known.push(...recoveryOrigins(drafts.getWorkspace(active.payload.row.collection,ref.id)));
+          for(const entry of active.payload.evidence){
+            check(!mappings.has(entry.alias)||mappings.get(entry.alias)===entry.target,
+              'conflicting recovery Calibration evidence versions');
+            mappings.set(entry.alias,entry.target);
+          }
+        }
+        const calibrationEvidence=await recoveryCalibrationProof(checkpoint,(alias,origins)=>{
+          if(!mappings.has(alias)||!origins.every(origin=>known.some(old=>same(old,origin))))return null;
+          return {target:mappings.get(alias),resources:graph.resources};
+        });
+        return {referenceImages:records,calibrationEvidence};
       });
       return value;
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null,editorPhotos=null,editorEvidence=null}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null,editorPhotos=null,editorEvidence=null,
+      evidencePlan=null}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -2098,6 +2153,11 @@
             'Conflicting retained Animation calibration evidence: '+alias+'; retire the conflicting working copy and retry');
           target=retained.target;
         }
+        const imported=evidencePlan?.mappings.get(alias);
+        if(imported){
+          check(target===undefined||target===imported.target,'Conflicting imported recovery Calibration evidence: '+alias);
+          target=imported.target;
+        }
         const live=editorEvidence?.results.get(alias);
         if(live){
           check(target===undefined||target===live,'Conflicting live Animation calibration evidence: '+alias);
@@ -2119,10 +2179,11 @@
           target=saved?.resultId??null;
         }
         if(target!==null){
-          const result=await store.get(target);
+          const result=evidencePlan?.resources.find(value=>value.id===target)??await store.get(target);
           for(const origin of origins)checkOrigin(origin,result);
         }else{
           const known=origins.every(origin=>
+            imported?.target===null&&imported.origins.some(old=>same(old,origin))||
             retained?.standaloneOrigins.some(old=>same(old,origin))||
             liveStandalone.some(old=>same(old,origin))||
             physical?.target===null&&same(physical.origin,origin)||
@@ -2141,14 +2202,17 @@
       }
       const workingPlan={documentId:draftsId,kind:DRAFTS,
         expectedRevision,metadata:{sourceRevision:row.revision},references,
-        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]};
+        resources:[...(evidencePlan?.resources??[]),{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]};
+      const namedInventory=sourceInventory??evidencePlan?.expectedInventory;
+      check(!sourceInventory||!evidencePlan?.expectedInventory||same(sourceInventory,evidencePlan.expectedInventory),
+        'Named Animation evidence inventory changed; retry recovery import');
       const documents=await store.writeDocuments([...(assetPlan?.plans??[]),workingPlan],{guard,lease,
-        expectedInventory:[...(sourceInventory?[sourceInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[]),
+        expectedInventory:[...(namedInventory?[namedInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[]),
           ...(journalSource?[journalSource.inventory]:[])]});
       const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }
-    function createAnimationWorkingPort(db,lease,assetPlan=null,editorPhotos=null,editorEvidence=null){
+    function createAnimationWorkingPort(db,lease,assetPlan=null,editorPhotos=null,editorEvidence=null,evidencePlan=null){
       draftContracts();
       check(db===env.indexedDB,'Animation working database context mismatch');
       check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
@@ -2167,7 +2231,7 @@
           check(previous||row.revision===1,'initial Animation working revision must be one');
           await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
             expectedRow:before,guard,lease,animationHandoff:true,assetPlan,
-            editorPhotos:editorPhotos?.()??null,editorEvidence:editorEvidence?.()??null});
+            editorPhotos:editorPhotos?.()??null,editorEvidence:editorEvidence?.()??null,evidencePlan});
         }
       });
     }
@@ -2288,7 +2352,7 @@
       // Live Recovery must never resolve a historical alias through the gallery.
       // Serialize materialization with bind/reset so every original stays held
       // until the portable evidence has been copied out of the managed store.
-      function recoveryReferences(recovery){
+      function recoveryReferences(recovery,includeCalibration=false){
         return serialize(async()=>{
           if(!owner||owner!==recovery?.reference?.id)return null;
           const checkpoint=drafts.normalize(recovery.checkpoint);
@@ -2302,8 +2366,22 @@
             const original=await store.get(observation.payload.originalId);
             records.push(await materializeObservation({resources:[observation,original]},observation,verified));
           }
-          return records;
+          if(!includeCalibration)return records;
+          const calibrationEvidence=await recoveryCalibrationProof(checkpoint,async(alias,origins)=>{
+            const target=archived.get(alias);
+            if(target){
+              const result=await store.get(target);
+              check(result?.type===RESULT,'live recovery Calibration resource missing');
+              return {target,resources:[result,await store.get(result.payload.originalId)]};
+            }
+            return origins.every(origin=>standalone.some(old=>same(old,origin)))?{target:null}:null;
+          });
+          return {referenceImages:records,calibrationEvidence};
         });
+      }
+      async function exportRecovery(recovery){
+        const value=await recoveryReferences(recovery,true);
+        return value===null?null:encodeManagedRecovery(recovery,value);
       }
       // Read the editor's reachability at execution time, not when the
       // maintenance request is queued behind a pending picker operation.
@@ -2342,20 +2420,84 @@
       function reset(){
         return serialize(async()=>{await scope.replace([]);photos=new Map();archived=new Map();standalone=[];owner=null;});
       }
-      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,prune,reset,needsEvidence,retainDraft,
+      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,exportRecovery,prune,reset,needsEvidence,retainDraft,
         hasOrigins:draft=>animationDraftOrigins(draft).length>0,
         createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos),
           ()=>({results:new Map(archived),standalone:structuredClone(standalone)}))});
+    }
+    async function prepareManagedRecoveryImport(text){
+      check(typeof text==='string'&&text.length<=drafts.MAX_SHARED_RECOVERY_LENGTH,'Animation recovery JSON is too large');
+      const payload=JSON.parse(text);
+      if(payload?.format!=='curvature-shared-animation-recovery'||payload.version!==3)
+        return drafts.prepareRecoveryImport(text,env.crypto);
+      check(exact(payload,['format','version','recovery','referenceImages','calibrationEvidence'])&&
+        Array.isArray(payload.referenceImages),'Invalid managed Animation recovery bundle');
+      const {format,recovery,referenceImages,calibrationEvidence}=payload;
+      const prepared=await drafts.prepareRecoveryImport(JSON.stringify(referenceImages.length?
+        {format,version:2,recovery,referenceImages}:{format,version:1,recovery}),env.crypto);
+      const origins=recoveryOrigins(prepared.checkpoint),aliases=[...new Set(origins.map(o=>o.resultId))].sort();
+      check(aliases.length&&Array.isArray(calibrationEvidence)&&calibrationEvidence.length===aliases.length,
+        'Missing recovery Calibration evidence');
+      const evidence=calibrationEvidence.map((item,i)=>{
+        check(exact(item,['alias','proof'])&&item.alias===aliases[i],'Invalid recovery Calibration alias');
+        return {alias:item.alias,proof:item.proof===null?null:validatePortableCalibrationPair(item.proof,item.alias,origins)};
+      });
+      // Different evidence content/status must never share a recovery identity.
+      const digest=await env.crypto.subtle.digest('SHA-256',new TextEncoder().encode(stable({id:prepared.id,evidence})));
+      const id=drafts.workspaceId('draft_imported_'+Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join(''));
+      return {...prepared,id,calibrationEvidence:evidence};
+    }
+    async function planRecoveryCalibrationEvidence(prepared,expected){
+      if(!prepared.calibrationEvidence)return null;
+      const graph=await store.readDocumentGraph(draftsId);
+      const owner=await loadAnimationWorkingCollection(async()=>graph,false);
+      check(same(owner?.row??null,expected),'Shared Animation collection CAS conflict; evidence retained');
+      const mappings=new Map(),resources=[],stagedOriginals=new Map(),origins=recoveryOrigins(prepared.checkpoint);
+      let named=null,expectedInventory=null;
+      for(const item of prepared.calibrationEvidence){
+        const proof=item.proof,old=owner?.evidence.find(value=>value.alias===item.alias);
+        const original=proof?await verifyPortableCalibrationOriginal(proof):null;
+        let target=null;
+        if(old){
+          check((old.target===null)===(proof===null),'Conflicting imported recovery Calibration evidence: '+item.alias);
+          target=old.target;
+          if(target){
+            const result=graph.resources.find(value=>value.id===target);
+            const prior={record:result.payload.record,original:await verifyResultOriginal(graph,result)};
+            check(same(prior,proof),'Conflicting imported recovery Calibration evidence: '+item.alias);
+          }
+        }else if(proof){
+          named??=await animationInventory();
+          const match=named.find(value=>Array.isArray(value.portableEvidence)&&
+            value.portableEvidence.some(entry=>same(entry,proof)));
+          if(match){
+            target=match.evidence.find(value=>value.alias===item.alias).target;
+            expectedInventory=animationExpected(named);
+          }else{
+            const key=stable(proof.original.original);
+            let originalId=stagedOriginals.get(key);
+            if(!originalId){
+              originalId=store.newObjectId();stagedOriginals.set(key,originalId);
+              resources.push({id:originalId,type:ORIGINAL,version:1,payload:original});
+            }
+            target=store.newObjectId();
+            resources.push({id:target,type:RESULT,version:1,payload:{record:proof.record,originalId}});
+          }
+        }
+        mappings.set(item.alias,{target,origins:origins.filter(origin=>origin.resultId===item.alias)});
+      }
+      return {mappings,resources,expectedInventory};
     }
     // One-shot Recovery import reuses the shared collection transition engine.
     // Its staged assets exist only in this operation, never as a second writer.
     async function importAnimationRecovery(db,lease,expected,text,guard=()=>true){
       draftContracts();
       createAnimationWorkingPort(db,lease);
-      const prepared=await drafts.prepareRecoveryImport(text,env.crypto);
+      const prepared=await prepareManagedRecoveryImport(text);
       const assetPlan=prepared.referenceImages?await planObservationRecords(prepared.referenceImages,new Map()):null;
+      const evidencePlan=await planRecoveryCalibrationEvidence(prepared,expected);
       const checkpoint=assetPlan?drafts.remapRecoveryReferences(prepared.checkpoint,assetPlan.mapping):prepared.checkpoint;
-      const backend={createAnimationWorkingPort:(context,lifetime)=>createAnimationWorkingPort(context,lifetime,assetPlan)};
+      const backend={createAnimationWorkingPort:(context,lifetime)=>createAnimationWorkingPort(context,lifetime,assetPlan,null,null,evidencePlan)};
       const working=drafts.openSharedCollection(db,{lease,crypto:env.crypto,managedResources:backend});
       const row=await working.read();
       check(same(row,expected),'Shared Animation collection CAS conflict; evidence retained');
