@@ -416,6 +416,19 @@
       }catch(error){abort(error);}};
     });
   }
+  // Shared preview deletion is authorized for one exact inspected record.
+  // Never delete a changed revision, even if its ID is still present.
+  function removeExact(indexedDB,expected){
+    var wanted=normalize(expected);
+    return transaction(indexedDB,'readwrite',function(store,finish,abort){
+      var read=store.get(wanted.id);
+      read.onsuccess=function(){try{
+        if(!read.result||JSON.stringify(normalize(read.result))!==JSON.stringify(wanted))
+          throw Error('Saved Animation changed or was removed; reload the Library before deleting');
+        store.delete(wanted.id);finish(true);
+      }catch(error){abort(error);}};
+    });
+  }
   function remove(indexedDB,id){
     validId(id);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
@@ -432,5 +445,5 @@
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,parseBundle:parseBundle,referenceIds:referenceIds,
     collectReferences:collectReferences,remapReferences:remapReferences,importEntries:importEntries,
-    list:list,get:get,create:create,update:update,rename:rename,setCover:setCover,remove:remove});
+    list:list,get:get,create:create,update:update,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
 }));

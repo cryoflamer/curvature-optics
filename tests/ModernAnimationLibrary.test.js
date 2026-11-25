@@ -1513,3 +1513,19 @@ test('reference links persist in named copies and portable imports without dedup
   assert.equal(updated.project.keyframes[0].referenceImageIds,undefined);
   assert.deepEqual((await library.get(db,copy.id)).project.keyframes[0].referenceImageIds,['obs_A','obs_B']);
 });
+
+
+test('exact named Animation deletion rejects changed or missing rows and preserves unrelated records',async()=>{
+  const db=memoryIndexedDB(),draft=source();
+  const original=await library.create(db,studio.build(draft,'animation_exact'),'auto',100);
+  const unrelated=await library.create(db,studio.build(draft,'animation_other'),'auto',101,null,true);
+  const changed=await library.rename(db,original.id,'Changed elsewhere',original.updatedAt,102);
+  await assert.rejects(library.removeExact(db,original),/changed or was removed/);
+  assert.deepEqual(await library.get(db,original.id),changed);
+  await assert.rejects(library.removeExact(db,{...changed,project:{...changed.project,name:'Wrong bytes'}}),
+    /changed or was removed/);
+  assert.equal(await library.removeExact(db,changed),true);
+  assert.equal(await library.get(db,changed.id),null);
+  await assert.rejects(library.removeExact(db,changed),/changed or was removed/);
+  assert.deepEqual(await library.get(db,unrelated.id),unrelated);
+});

@@ -830,8 +830,13 @@ preview. The existing Studio Editor/Preview can edit an explicitly selected
 working checkpoint. Saved Library records may be opened as linked working
 copies after exact revision/content preflight, including before the shared
 selection. A changed saved record does not silently replace an existing
-working checkpoint. The named Library itself is read-only in this stage;
-named mutations and the temporary keyframe editor remain disabled. A transient library visit without a selected
+working checkpoint. Explicit named Library deletion compares the exact
+inspected saved record inside its IndexedDB readwrite transaction and
+checks absence afterward. A linked working checkpoint is not removed,
+rewritten or silently reassigned: its old Library identity remains recovery
+evidence and the editor reports the unavailable/changed revision. The
+other named mutations and the temporary keyframe editor remain disabled.
+A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
 lock. F5 restores the exact acknowledged Animation workspace; departure

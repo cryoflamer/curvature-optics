@@ -12206,6 +12206,60 @@ class ModernBrowserSmoke(unittest.TestCase):
                                            latest['id']),latest)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_exact_named_delete_preserves_working_copy(self):
+        """A stale Library delete fails; an exact delete leaves linked draft bytes and selection unchanged."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        saved=self.page.evaluate("""async()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Delete fixture';
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+saved['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        delete_button=self.page.locator('[data-shared-delete-animation-id="'+saved['id']+'"]')
+        expect(delete_button).to_be_enabled()
+        self.page.on('dialog',lambda dialog:dialog.accept())
+        newer=self.page.evaluate("""async record=>CurvatureModernAnimationLibrary.rename(
+            indexedDB,record.id,'Newer deletion fixture',record.updatedAt,record.updatedAt+1)""",saved)
+        delete_button.click()
+        expect(self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+            'changed or was removed')
+        self.assertEqual(self.page.evaluate("id=>CurvatureModernAnimationLibrary.get(indexedDB,id)",saved['id']),newer)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(delete_button).to_contain_text('Newer deletion fixture')
+        before=self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return {draft:await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read(),
+                session:CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope};
+        }""")
+        delete_button.click()
+        expect(self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+            'Saved Animation deleted')
+        expect(delete_button).to_have_count(0)
+        after=self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return {draft:await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read(),
+                session:CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope};
+        }""")
+        self.assertEqual(after,before)
+        self.assertIsNone(self.page.evaluate("id=>CurvatureModernAnimationLibrary.get(indexedDB,id)",saved['id']))
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),'project_'+saved['id'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Delete fixture')
+
     def test_shared_animation_mounted_receipt_recovers_after_reload(self):
         """Both interrupted pointer states recover exactly without a second domain save."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

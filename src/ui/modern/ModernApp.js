@@ -2879,7 +2879,7 @@
     var heading=element('div','modern-animation-library-heading');
     heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Named Library changes and temporary keyframe editing are not enabled in this preview.'));
+      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Saved projects can be deleted without deleting their working copies. Saving named changes and temporary keyframe editing are not enabled in this preview.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
@@ -2933,6 +2933,9 @@
         ()=>void runSharedAnimationAction('openNamed',record),
         !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
         {'data-shared-named-animation-id':record.id});
+      action(named,'Delete saved project · '+record.project.name,
+        ()=>void runSharedAnimationAction('deleteNamed',record),false,
+        {'data-shared-delete-animation-id':record.id});
     });
     var controls=group('Working drafts');
     action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
@@ -3011,6 +3014,8 @@
        !['clean','committed'].includes(experimentPreview.status))return false;
     if(['adopt','recover'].includes(kind)&&(!root.confirm||!root.confirm(
       'Recover this exact historical Animation source? Confirm a verified local backup (or disposable test profile) and close old Modern tabs. Old records will be retained.')))return false;
+    if(kind==='deleteNamed'&&(!root.confirm||!root.confirm(
+      'Delete the inspected saved Animation project "'+value.project.name+'"? Working drafts, History and reference photographs will be retained.')))return false;
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
     try{
       if(studioWorkspaceReady)await flushSharedAnimation();
@@ -3047,6 +3052,16 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='deleteNamed'){
+            await studioLibrary.removeExact(root.indexedDB,value);
+            ctx.lease.check(true);
+            // Independent domain operation: never delete or relink the
+            // shared working checkpoint as a side effect of Library deletion.
+            ctx.named=await studioLibrary.list(root.indexedDB);
+            if(ctx.named.some(record=>record.id===value.id))
+              throw Error('Saved Animation deletion could not be confirmed; reload and inspect');
+            ctx.namedError=null;
+            ctx.message='Saved Animation deleted. Any working copy remains available as an independent recovery source.';
           }else if(kind==='importRecovery'){
             var {id,checkpoint}=recoveryImport;
             ctx.row=row?await store.createDraft(row,id,checkpoint):
