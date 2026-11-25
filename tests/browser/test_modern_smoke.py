@@ -1637,10 +1637,27 @@ class ModernBrowserSmoke(unittest.TestCase):
             const before=await adapter.readAnimationWorkingCollection();
             await rejects(()=>fresh.createDraft(row,'draft_rejected',cp,()=>false),/stale shared Animation/i);
             ok((await adapter.readAnimationWorkingCollection()).row.digest===before.row.digest,'guard failure changed working collection');
+            // A named owner, not a gallery entry, must supply a newly opened linked copy.
+            const retainedRecord={...record,id:'named_photo'};
+            const retainedPhoto=await adapter.saveObservation({id:retainedRecord.id,revision:1,record:retainedRecord});
+            const named=P.validate({...linked,keyframes:linked.keyframes.map((f,i)=>i?f:{...f,referenceImageIds:[retainedRecord.id]})});
+            const namedRow=L.record(named,'auto',named.id,200,200,null);
+            const namedOwner=await adapter.saveAnimation(namedRow);
+            await store.removeDocument({documentId:'observation:'+retainedRecord.id,expectedRevision:1});
+            const namedDraft=CurvatureModernAnimationStudio.fromProject(named);
+            const namedCp=A.checkpoint({...cp,draft:namedDraft,selectedKey:namedDraft.frames[0].key,
+                libraryId:named.id,libraryRevision:namedRow.updatedAt},201);
+            row=await fresh.createLinkedWorkspace(row,namedCp);
+            const linkedOwner=await adapter.readAnimationWorkingCollection();
+            ok(linkedOwner.observations.some(v=>v.alias===retainedRecord.id&&
+                v.target===retainedPhoto.observationId),'linked copy did not reuse named evidence');
+            await store.removeDocument({documentId:'animation:'+named.id,expectedRevision:namedOwner.managedRevision});
+            ok((await store.collectGarbage(namedOwner.projectId)).collected,'removed named owner still retained');
+            ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
             return {valid:(await store.verifyIntegrity()).valid,revision:row.revision};
         }""")
-        self.assertEqual(result, {'valid': True, 'revision': 3})
+        self.assertEqual(result, {'valid': True, 'revision': 4})
 
     def test_managed_animation_pending_journals_retain_resources(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

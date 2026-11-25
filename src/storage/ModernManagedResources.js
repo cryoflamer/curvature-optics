@@ -1485,7 +1485,7 @@
       return loadAnimationWorkingCollection(store.readDocumentGraph);
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -1498,8 +1498,41 @@
       const oldPhotos=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
       const oldResults=new Map((previous?.evidence||[]).map(entry=>[entry.alias,entry.target]));
       const observations=[],evidence=[];
+      // A linked working checkpoint identifies an exact named Library revision.
+      // Transfer retained resources from that owner, not a mutable gallery alias.
+      // The inventory CAS protects the source until the new root is committed.
+      let sources=null,sourceInventory=null;
+      async function linkedSources(){
+        if(sources)return sources;
+        sources=[];
+        if(!animationHandoff)return sources;
+        const linked=row.collection.workspaces.map(w=>w.checkpoint).filter(cp=>cp.libraryId!==null);
+        if(!linked.length)return sources;
+        const named=await listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),
+          v=>v,(a,b)=>byTime('updatedAt')(a.row,b.row));
+        sourceInventory=animationExpected(named.map(v=>v.row));
+        for(const cp of linked){
+          const match=named.find(v=>v.row.row.id===cp.libraryId&&v.row.row.updatedAt===cp.libraryRevision);
+          if(match)sources.push(match.row);
+        }
+        return sources;
+      }
+      async function retainedFromAnimation(alias,kind,origins=[]){
+        const matches=new Set();
+        for(const source of await linkedSources()){
+          if(kind==='evidence'&&!origins.every(origin=>
+            calibrationOrigins(source.row.project).some(v=>same(v,origin))))continue;
+          const entries=source[kind];
+          if(!Array.isArray(entries))continue;
+          const target=entries.find(v=>v.alias===alias)?.target;
+          if(target)matches.add(target);
+        }
+        check(matches.size<=1,'ambiguous named Animation resource: '+alias);
+        return matches.values().next().value??null;
+      }
       for(const alias of inventory.photos){
         let target=oldPhotos.get(alias);
+        if(!target)target=await retainedFromAnimation(alias,'observations');
         if(!target){
           const graph=await store.readDocumentGraph(observationId(alias));
           check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
@@ -1513,6 +1546,7 @@
       for(const alias of inventory.results){
         const origins=inventory.origins.filter(o=>o.resultId===alias);
         let target=oldResults.get(alias);
+        if(!target)target=await retainedFromAnimation(alias,'evidence',origins);
         if(!target){
           const saved=await readCalibrationResult(alias);
           target=saved?.resultId??null;
@@ -1537,7 +1571,7 @@
       }
       const [document]=await store.writeDocuments([{documentId:draftsId,kind:DRAFTS,
         expectedRevision,metadata:{sourceRevision:row.revision},references,
-        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]}],{guard,lease});
+        resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]}],{guard,lease,expectedInventory:sourceInventory});
       return {collectionId:id,managedRevision:document.revision};
     }
     function createAnimationWorkingPort(db,lease){
@@ -1558,7 +1592,7 @@
           check(same(previous?.row??null,before),'Shared Animation collection CAS conflict; evidence retained');
           check(previous||row.revision===1,'initial Animation working revision must be one');
           await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
-            expectedRow:before,guard,lease});
+            expectedRow:before,guard,lease,animationHandoff:true});
         }
       });
     }
