@@ -217,10 +217,12 @@
           use.ownerId,use.frameKey,use.revision,selected&&selected.id,
           use.source,use.draftContent);
       }else if(use.type==='calibration-draft'){
-        var currentCalibration=env.CurvatureModernPhotoCalibrationEditor?.mount?.(doc);
-        var livePhoto=currentCalibration?.snapshot?.()?.referenceImageId;
-        var liveOwner=currentCalibration?.projectBinding?.()?.projectId||'current';
-        if(livePhoto!==(selected&&selected.id)||liveOwner!==use.ownerId)
+        var inspectedId=selected&&selected.id,inspectedRevision=selected&&selected.revision;
+        var current=await env.CurvatureModernPhotoCalibrationEditor?.inspectCurrentUsage?.();
+        var graph=env.CurvatureModernImageUsageGraph;
+        if(!selected||selected.id!==inspectedId||selected.revision!==inspectedRevision||
+           current?.referenceImageId!==inspectedId||(current?.projectId||'current')!==use.ownerId||
+           graph.identityKey(current?.identity)!==use.photoIdentity)
           throw Error('Calibration working session changed; refresh Where used?');
         var calibrationTab=doc.getElementById('ModernPhotoCalibrationOpen');
         if(!calibrationTab)throw Error('Calibration workspace unavailable');
@@ -240,7 +242,8 @@
         var report=await graph.discover(env,row);
         if(token!==usageEpoch||!selected||selected.id!==row.id)return;
         usageStatus.textContent=report.count+' known local use'+(report.count===1?'':'s')+
-          (report.complete?' · accessible stores inspected':' · incomplete discovery');
+          (report.complete?' · accessible stores inspected':' · incomplete discovery')+
+          (report.coordinated===true?' · coordinated local scan':' · uncoordinated local scan');
         var groups=[
           ['animation','Saved animations'],['calibration','Calibration projects'],
           ['archive','Archived results'],['draft','Recoverable Storyboards'],
@@ -271,6 +274,8 @@
               el('small','Retained standalone recovery evidence · adopt or recover explicitly before opening.',item);
             }else if(use.type==='draft'&&use.source==='shared checkpoint'&&!sharedPreview()){
               el('small','Verified shared recovery checkpoint · open the shared session to navigate.',item);
+            }else if(use.type==='calibration-draft'&&use.source==='current original identity'){
+              el('small','Original bytes match, but the current Calibration uses another local alias. Read-only evidence.',item);
             }else if(use.type==='live-recovery'){
               el('small','Retained in-memory edit evidence · not an openable checkpoint.',item);
             }else if(use.type==='animation-intent'){

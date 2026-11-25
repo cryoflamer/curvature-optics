@@ -174,9 +174,13 @@
       add({type:'calibration-recovery',ownerId:'legacy-calibration-active',
         title:sources.legacyCalibration.title||'Standalone Calibration draft',
         revision:null,source:'legacy standalone recovery'});
-    if(sources.currentCalibration&&sources.currentCalibration.referenceImageId===selectedId)
+    if(target&&identityKey(sources.currentCalibration?.identity)===target){
+      const alias=sources.currentCalibration.referenceImageId;
       add({type:'calibration-draft',ownerId:sources.currentCalibration.projectId||'current',
-        title:'Current Calibration working session',revision:null,source:'current'});
+        title:'Current Calibration working session',revision:null,
+        source:alias===selectedId?'current':'current original identity',
+        referenceImageId:alias,photoIdentity:target});
+    }
     if(sources.currentStudio&&sources.currentStudio.draft&&sources.currentStudioWorkspaceId){
       var draftContent=JSON.stringify(sources.currentStudio.draft);
       imagesFromFrames(sources.currentStudio.draft.frames,selectedId,'draft',
@@ -248,7 +252,7 @@
       workspace:codec.validate(session.workspace),candidate:candidate(session.candidate),
       past:session.past.map(candidate),future:session.future.map(candidate)}};
   }
-  async function discover(env,row){
+  async function discoverRaw(env,row){
     var failures=[],sources={animations:[],calibrations:[],archives:[],drafts:[]};
     async function read(name,fn,set){try{set(await fn());}
       catch(error){failures.push(name+': '+(error&&error.message||String(error)));}}
@@ -336,23 +340,35 @@
         throw Error('Invalid live recovery evidence');
       return evidence;
     },value=>{sources.liveEvidence=value;});
-    try{
-      var calibration=env.CurvatureModernPhotoCalibrationEditor?.mount?.(env.document);
-      var current=calibration?.snapshot?.(),binding=calibration?.projectBinding?.();
-      if(current)sources.currentCalibration={referenceImageId:current.referenceImageId,
-        projectId:binding?.projectId||null};
-    }catch(error){failures.push('Current Calibration: '+error.message);}
+    if(env.CurvatureModernPhotoCalibrationEditor)
+      await read('Current Calibration',()=>env.CurvatureModernPhotoCalibrationEditor.inspectCurrentUsage(),
+        value=>{sources.currentCalibration=value;});
     var identity=null;
     try{identity=await env.CurvatureModernReferenceImageImport.identify(row.record,env);}
     catch(error){failures.push('Original identity: '+error.message);}
     if(!identity)failures.push('Original identity unavailable; Calibration matches were not checked');
     return report(row.id,identity,sources,failures);
   }
+  // Hold one origin-wide read-only cut across participating writers. A
+  // denied available lock must never fall back to a successful unlocked scan.
+  async function coordinated(env,operation,failure){
+    const locks=env.navigator?.locks,barrier=env.CurvatureModernBackupWriteBarrier;
+    try{
+      if(!locks)return {...await operation(),coordinated:false};
+      if(!barrier)throw Error('Image usage barrier unavailable');
+      const result=await barrier.create(locks).snapshot(operation);
+      return {...result.value,coordinated:true};
+    }catch(error){return {...failure(error),coordinated:false};}
+  }
+  async function discover(env,row){
+    return coordinated(env,()=>discoverRaw(env,row),error=>
+      report(row.id,null,{},['Image usage inspection failed: '+String(error.message||error)]));
+  }
   // Deletion review is explicitly informational and read-only. Independent
   // IDB databases, foreign tabs' Undo buffers and portable exports cannot
   // participate in the Image Library transaction. Even a second zero-use
   // scan can never issue a physical-delete authorization.
-  async function deletionReview(env,selected){
+  async function deletionReviewRaw(env,selected){
     if(!selected||typeof selected.id!=='string'||!selected.id)
       throw TypeError('Select an original photograph before checking deletion');
     var source=env.CurvatureModernReferenceImageLibrary,issues=[],report=null,
@@ -364,7 +380,7 @@
       catch(error){issues.push('Original read failed: '+(error.message||error));}
       if(!before)issues.push('Original missing or inaccessible; refresh Image Library');
       else{
-        try{report=await discover(env,before);}
+        try{report=await discoverRaw(env,before);}
         catch(error){issues.push('Usage scan failed: '+(error.message||error));}
         try{after=await source.inspectOriginal(env.indexedDB,selected.id);}
         catch(error){issues.push('Original recheck failed: '+(error.message||error));}
@@ -384,6 +400,15 @@
       localScanComplete:!!report&&report.complete&&!!before&&!!after&&
         before.revision===selected.revision&&after.revision===before.revision,
       reasons:issues,unavailable:report?report.unavailable.slice():[]};
+  }
+  async function deletionReview(env,selected){
+    if(!selected||typeof selected.id!=='string'||!selected.id)
+      throw TypeError('Select an original photograph before checking deletion');
+    return coordinated(env,()=>deletionReviewRaw(env,selected),error=>({
+      safe:false,knownUses:null,localScanComplete:false,
+      reasons:['Coordinated inspection failed: '+String(error.message||error),'Deletion is disabled'],
+      unavailable:[String(error.message||error)]
+    }));
   }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,
     demoReferences:demoReferences,collect:collect,resolveSharedDraft,report:report,discover:discover,

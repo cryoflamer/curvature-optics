@@ -2990,7 +2990,17 @@
       deletedProjectHandoff=null;
       syncFitControls();projectsControls();
     }
-    mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
+    // Usage inspection never mounts controls, selects a project or writes.
+    // Hash the captured original, not a bare alias that may belong elsewhere.
+    async function inspectUsage(){
+      if(!scene||!record)return null;
+      const captured=record,binding=projectBinding();
+      const identity=await env.CurvatureModernReferenceImageImport.identify(captured,env);
+      if(record!==captured||JSON.stringify(projectBinding())!==JSON.stringify(binding))
+        throw Error('Calibration changed during usage inspection');
+      return {referenceImageId:captured.id,projectId:binding?.projectId||null,identity};
+    }
+    mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,inspectUsage,
       configureSharedSelection,openSharedProject,prepareSharedLeave,
       hydrateOrbitSensitivity:value=>inlineViewer.hydrateOrbitSensitivity(value),
       isSharedLibraryOnly:()=>!!sharedSelection&&!projectSession?.project(),
@@ -3004,5 +3014,5 @@
       observations:workflow.rows.map(r=>pair(r.landmark,r.pixel,record.original.width,record.original.height,r.weight,r.included))}:null};
     return mounted;
   }
-  return Object.freeze({applyDestination,sharedInputFingerprint,calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,mount});
+  return Object.freeze({applyDestination,sharedInputFingerprint,calibrationDisclosures,fitProjectionFailures,calibrationStageState,createPairWorkflow,pairToolbarState,contextActions,createContextMenu,linkDraftGesture,commitGlobePair,moveSavedEndpoint,fit,imagePoint,zoomAt,previewSize,screenPoint,objectKey,objectPackages,ownerSelections,identitySpans,pair,upsert,photoChoices,validateExperiment,validateFitResult,observationRows,fitBinding,experimentVersion,fitRows,residualRows,residualStatistics,drawResidual,inspectCurrentUsage:()=>mounted?mounted.inspectUsage():Promise.resolve(null),mount});
 }));

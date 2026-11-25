@@ -4347,6 +4347,46 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsInstance(review['knownUses'],int)
         self.assertFalse([m for m in self.console if m.startswith('PAGE ERROR:')],self.console)
 
+    def test_image_usage_review_waits_for_participating_writer(self):
+        """The complete original recheck and inventory hold one exclusive read cut."""
+        self.open_modern()
+        other=self.context.new_page()
+        try:
+            other.goto(self.base_url,wait_until='load')
+            self.page.evaluate("""async()=>{
+                const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+                canvas.getContext('2d').fillRect(0,0,2,2);
+                const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+                const record=await CurvatureModernReferenceImageImport.ingest(
+                    new File([blob],'Coordinated review.png',{type:'image/png'}),'coordinated_review',window);
+                await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+                const writer=CurvatureModernBackupWriteBarrier.create(navigator.locks).registerWriter('test.review');
+                window.__reviewWriter=writer.commit(async()=>{
+                    window.__reviewHeld=true;
+                    await new Promise(resolve=>window.__releaseReview=resolve);
+                });
+            }""")
+            self.page.wait_for_function('window.__reviewHeld===true')
+            other.evaluate("""()=>{
+                window.__reviewDone=false;
+                window.__reviewTask=CurvatureModernImageUsageGraph.deletionReview(window,
+                    {id:'coordinated_review',revision:1}).then(result=>{
+                    window.__reviewDone=true;return result;
+                });
+            }""")
+            other.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+                lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='exclusive')""")
+            self.assertFalse(other.evaluate('window.__reviewDone'))
+            self.page.evaluate('window.__releaseReview()')
+            review=other.evaluate('window.__reviewTask')
+            self.assertTrue(review['coordinated'],review)
+            self.assertTrue(review['localScanComplete'],review)
+            self.assertFalse(review['safe'])
+            self.assertEqual(review['knownUses'],0)
+        finally:
+            self.page.evaluate('window.__releaseReview?.()')
+            other.close()
+
     def test_image_library_stage5_second_tab_revision_disables_deletion_review(self):
         import base64
         self.open_modern()

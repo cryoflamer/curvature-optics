@@ -949,3 +949,31 @@ test('Where used retains current-tab Undo/Redo and temporary editor provenance a
   assert.equal(other.uses.filter(use=>use.type==='experiment-provenance').length,3);
   assert.match(result.note,/never authorize deletion/);
 });
+
+test('Current Calibration uses verified original identity, not a coincident local alias',()=>{
+  const photo={version:1,sha256:'a'.repeat(64),width:2,height:2};
+  const other={...photo,sha256:'b'.repeat(64)};
+  const currentCalibration={referenceImageId:'alias',projectId:'cal',identity:photo};
+  assert.equal(usageGraph.report('alias',other,{currentCalibration}).count,0);
+  const match=usageGraph.report('alias',photo,{currentCalibration}).uses[0];
+  assert.equal(match.source,'current');
+  assert.equal(match.photoIdentity,usageGraph.identityKey(photo));
+  const alias=usageGraph.report('another',photo,{currentCalibration}).uses[0];
+  assert.equal(alias.source,'current original identity');
+});
+test('Image usage denied exclusive lock cannot scan or authorize deletion',async()=>{
+  let reads=0;
+  const env={navigator:{locks:{request(_name,_options,callback){return callback(null);}}},
+    CurvatureModernBackupWriteBarrier:{create(locks){return {async snapshot(operation){
+      return locks.request('test',{mode:'exclusive'},lock=>{
+        if(!lock)throw Error('lock denied');return operation();
+      });
+    }}}},
+    CurvatureModernReferenceImageLibrary:{inspectOriginal(){reads++;throw Error('Unexpected read');}}};
+  const result=await usageGraph.discover(env,{id:'photo'});
+  assert.equal(result.coordinated,false);assert.equal(result.complete,false);
+  assert.match(result.unavailable.join('; '),/lock denied/);
+  const review=await usageGraph.deletionReview(env,{id:'photo',revision:1});
+  assert.equal(review.coordinated,false);assert.equal(review.safe,false);
+  assert.equal(review.localScanComplete,false);assert.equal(reads,0);
+});
