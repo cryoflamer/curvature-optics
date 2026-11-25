@@ -535,11 +535,28 @@ target is created. This API does not prove that other tabs are closed,
 does not activate the managed route, and is not yet called by production
 startup or a maintenance UI.
 
-### Startup refusal before production activation
+### Startup refusal and protected managed presentation preview
 
-While the Modern application is still wired to the legacy adapters, its
-bootstrap refuses any preparing, managed or invalid cutover marker before
-mounting session restore, autosave or preference writers. The blocked page
-shows an explicit recovery notice and does not clear the marker or either
-store. The normal absent-marker path remains unchanged. This is an interim
-safety gate, not the final managed application route.
+A preparing, malformed, or unsupported cutover marker still refuses startup
+before mounting session restore, autosave or preference writers. A valid
+managed marker is accepted only by the explicit
+`?document-session=managed-preview&ui-state-registry=preview` route (no
+additional query parameters). The normal absent-marker path is unchanged;
+the preview without a managed marker refuses. The preview first validates an
+existing physical checkpoint and the managed graph integrity, then injects
+managed physical, History, observation, Calibration project/archive and
+Animation named/working ports into the shared presentation. The UI registry
+remains its own permitted writer. Historical Animation thumbnail persistence
+is disabled in this preview; thumbnail use is in-memory only. Compare
+parser-time bootstrap honors an explicit storage refusal rather than mounting
+canvases without an application controller.
+
+Calibration copy retains the source's exact original and result resources
+under project and inventory CAS; the copy has an independent physical session.
+Animation Save As uses the exact selected working reference, retained photo
+and calibration evidence, and a working-collection inventory CAS rather than
+requiring a current gallery alias. Managed destructive removal and legacy
+adoption remain disabled. The route is a protected integration rehearsal,
+not automatic production migration or approval to change the marker. Foreign
+standalone provenance, remaining export/recovery paths, retention and manual
+acceptance still require qualification.
