@@ -264,3 +264,38 @@ test('shared UI and document lifetime cancels delayed open and refuses stale rea
   assert.equal(closed,1);
   assert.equal(transactions,0);
 });
+
+test('UI evidence inspection does not initialize missing schema or require tab dependencies',async()=>{
+  const env={indexedDB:{databases:async()=>[],open(){throw Error('unexpected open');}},
+    get navigator(){throw Error('writer lock acquired by observer');},
+    get sessionStorage(){throw Error('tab identity accessed');}};
+  const ui=store.create(env);
+  assert.deepEqual(await ui.inspectExisting(),{sessions:[],preferences:[]});
+  env.indexedDB.databases=async()=>[{name:store.DATABASE,version:99}];
+  await assert.rejects(ui.inspectExisting(),/unsupported UI database version/);
+});
+test('UI registry holds its backup lock through an actual transaction abort',async()=>{
+  let held=false,tx;
+  const env={navigator:{locks:{async request(name,options,callback){
+    assert.equal(name,'curvature-optics-modern-backup-writers-v1');
+    assert.equal(options.mode,'shared');held=true;
+    try{return await callback({name,mode:options.mode});}finally{held=false;}
+  }}},indexedDB:{open(){
+    const request={};
+    queueMicrotask(()=>{request.result={close(){},transaction(){
+      tx={objectStore(){return {get(){return {};}};}};
+      return tx;
+    }};request.onsuccess();});
+    return request;
+  }}};
+  const ui=store.create(env),frame={format:registry.FORMAT,version:1,scope:'global',values:{}};
+  const pending=ui.write('global',{},frame,0);
+  const rejected=assert.rejects(pending,/IndexedDB transaction failed/);
+  while(!tx)await new Promise(resolve=>setImmediate(resolve));
+  tx.onerror();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(held,true);
+  tx.onabort();
+  await rejected;
+  assert.equal(held,false);
+});

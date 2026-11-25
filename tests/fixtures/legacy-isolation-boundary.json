@@ -2921,6 +2921,7 @@
         "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernAnimationLibrary.js",
         "src/animation/ModernReferenceImageLibrary.js",
+        "src/storage/ModernUiSessionStore.js",
         "src/ui/modern/ModernCalibrationProjectStore.js",
         "src/ui/modern/ModernCalibrationResultArchive.js",
         "src/ui/modern/ModernExperimentHistory.js",

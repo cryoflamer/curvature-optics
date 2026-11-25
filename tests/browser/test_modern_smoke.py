@@ -9033,7 +9033,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             const env={indexedDB,
                 get sessionStorage(){throw Error('sessionStorage accessed');},
                 get crypto(){throw Error('crypto accessed');},
-                get navigator(){throw Error('tab lock accessed');}};
+                navigator:{locks:{request(name,options,callback){
+                    if(name!==CurvatureModernBackupWriteBarrier.LOCK_NAME||options.mode!=='shared')
+                        throw Error('tab ownership lock accessed');
+                    return navigator.locks.request(name,options,callback);
+                }}}};
             const store=CurvatureModernUiSessionStore.create(env);
             const manager=CurvatureModernUiSessionManager.create({
                 registry:CurvatureModernStateRegistry.create(),store,workspace});
@@ -10299,7 +10303,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             const env={indexedDB,addEventListener:window.addEventListener.bind(window),
                 get sessionStorage(){throw Error('sessionStorage accessed');},
                 get crypto(){throw Error('crypto accessed');},
-                get navigator(){throw Error('locks accessed');}};
+                navigator:{locks:{request(name,options,callback){
+                    if(name!==CurvatureModernBackupWriteBarrier.LOCK_NAME||options.mode!=='shared')
+                        throw Error('tab ownership lock accessed');
+                    return navigator.locks.request(name,options,callback);
+                }}}};
             window.sharedDoc=CurvatureModernUiSessionStore.create(env).sharedDocumentSessions(C);
             return sharedDoc.read();
         }"""
@@ -14104,6 +14112,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old)
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
+
+    def test_ui_registry_writer_waits_for_exclusive_backup_barrier(self):
+        """Global UI CAS waits without minting a tab identity or blocking the inspector."""
+        self.open_modern()
+        self.page.evaluate("""async()=>{
+            const U=CurvatureModernUiSessionStore.create(window);
+            const frame={format:CurvatureModernStateRegistry.FORMAT,version:1,scope:'global',
+                values:{'test.preference':{version:1,value:'before'}}};
+            window.__uiStore=U;
+            await U.write('global',{},frame,0);
+            window.__uiBefore=await U.inspectExisting();
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__uiEntered=false;
+            window.__uiTask=gate.snapshot(async()=>{
+                window.__uiEntered=true;
+                await new Promise(resolve=>window.__uiRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__uiEntered===true')
+        self.page.evaluate("""()=>{
+            const frame={format:CurvatureModernStateRegistry.FORMAT,version:1,scope:'global',
+                values:{'test.preference':{version:1,value:'after'}}};
+            window.__uiSettled=false;
+            window.__uiWrite=window.__uiStore.write('global',{},frame,1)
+                .then(row=>{window.__uiSettled=true;return row;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__uiSettled'))
+        self.assertEqual(self.page.evaluate('window.__uiStore.inspectExisting()'),
+            self.page.evaluate('window.__uiBefore'))
+        self.page.evaluate("window.__uiRelease()")
+        self.assertEqual(self.page.evaluate('window.__uiWrite')['revision'],2)
+        self.assertEqual(self.page.evaluate('window.__uiTask')['value'],'released')
+        self.assertIsNone(self.page.evaluate("sessionStorage.getItem(CurvatureModernUiSessionStore.TAB_KEY)"))
 
     def test_image_library_writer_waits_for_exclusive_backup_barrier(self):
         """Original metadata edits wait while the non-creating inspector reads exact bytes."""

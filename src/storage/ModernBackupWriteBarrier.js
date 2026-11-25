@@ -1,6 +1,6 @@
 /* Explicit opt-in cooperation barrier for Modern storage writes.
- * Working-session, History, Animation, Calibration and Reference Image IDB
- * adapters participate. This is not a complete migration safety gate.
+ * Working-session, History, Animation, Calibration, Reference Image and UI
+ * registry IDB adapters participate. This is not a complete migration safety gate.
  */
 (function(root,factory){
   const api=factory();

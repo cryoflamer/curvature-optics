@@ -2,10 +2,10 @@
  * Document rows are explicitly opt-in; existing UI preview behavior remains.
  */
 (function(root,factory){
-  const api=factory();
+  const api=factory(root);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernUiSessionStore=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root){
   'use strict';
   const DATABASE='curvature-modern-ui-state',VERSION=1;
   const TAB_KEY='curvature-modern-ui-tab-id-v1';
@@ -224,16 +224,18 @@
       }
       return true;
     }
-    function connect(){
+    function connect(existingOnly=false){
       return new Promise((resolve,reject)=>{
-        let req,settled=false;
+        let req,settled=false,failure=null;
         function fail(error){if(settled)return;settled=true;reject(error||Error('IndexedDB open failed'));}
         try{req=indexedDB.open(DATABASE,VERSION);}catch(error){fail(error);return;}
         req.onblocked=()=>fail(Error('UI Session Store: IndexedDB open blocked'));
-        req.onerror=()=>fail(req.error);
+        req.onerror=()=>fail(failure||req.error);
         req.onupgradeneeded=e=>{
-          if(e.oldVersion!==0){try{req.transaction.abort();}catch(ignore){}
-            fail(Error('UI Session Store: incompatible schema upgrade'));return;}
+          if(settled||existingOnly||e.oldVersion!==0){
+            failure=Error(existingOnly?'UI Session Store: database changed during inspection':'UI Session Store: incompatible schema upgrade');
+            try{req.transaction.abort();}catch(ignore){fail(failure);}return;
+          }
           const db=req.result;
           db.createObjectStore('sessions',{keyPath:'id'});
           db.createObjectStore('preferences',{keyPath:'id'});
@@ -274,8 +276,19 @@
         }
       });
     }
-    async function transact(storeName,mode,action,documentLease=null){
-      const db=await connect();
+    function transact(storeName,mode,action,documentLease=null){
+      // Normal reads can initialize schema. This lock does not claim a tab ID.
+      const locks=env.navigator?.locks;
+      const operation=()=>transactRaw(storeName,mode,action,documentLease);
+      if(!locks)return operation();
+      const barrier=typeof module==='object'&&module.exports?
+        require('./ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+      if(!barrier)return Promise.reject(Error('UI Session Store: backup barrier unavailable'));
+      return barrier.create(locks).registerWriter('ui.registry').commit(operation);
+    }
+    async function transactRaw(storeName,mode,action,documentLease=null,existingOnly=false){
+      if(documentLease)verifyDocumentLease(documentLease,mode==='readwrite');
+      const db=await connect(existingOnly);
       if(documentLease){
         try{verifyDocumentLease(documentLease,mode==='readwrite');}
         catch(error){db.close();throw error;}
@@ -298,20 +311,33 @@
               catch(error){fail(error);return;}
               documentLease.documentTransactions.delete(tx);
             }
+            if(reportedError){fail(reportedError);return;}
             done=true;db.close();resolve(output);
           };
           tx.onerror=()=>{reportedError=reportedError||tx.error||Error('IndexedDB transaction failed');};
           tx.onabort=()=>fail(reportedError||tx.error||Error('IndexedDB transaction aborted'));
-          action(tx.objectStore(storeName),{
+          action(Array.isArray(storeName)?null:tx.objectStore(storeName),{
             result(value){output=value;},
             reject(error){reportedError=error;try{tx.abort();}catch(ignore){fail(error);}}
-          });
+          },tx);
         }catch(error){
           reportedError=error;
           if(tx){try{tx.abort();}catch(ignore){fail(error);}}
           else fail(error);
         }
       });
+    }
+    // Observational raw evidence, not an activation or replay authority.
+    // Both stores are read in a single transaction, without creating schema.
+    async function inspectExisting(){
+      check(typeof indexedDB.databases==='function','database inventory unavailable');
+      const existing=(await indexedDB.databases()).find(row=>row.name===DATABASE);
+      if(!existing)return {sessions:[],preferences:[]};
+      check(existing.version===VERSION,'unsupported UI database version');
+      return transactRaw(['sessions','preferences'],'readonly',(_store,reply,tx)=>{
+        const a=tx.objectStore('sessions').getAll(),b=tx.objectStore('preferences').getAll();
+        b.onsuccess=()=>reply.result({sessions:a.result,preferences:b.result});
+      },null,true);
     }
     async function read(scope,context){
       const target=address(scope,context);
@@ -454,7 +480,7 @@
       return api;
     }
     return Object.freeze({tabId,claimTab,reclaimTab,finishResume,
-      read,write,stage,readPending,acknowledge,
+      read,write,inspectExisting,stage,readPending,acknowledge,
       sharedDocumentSessions,
       captureSharedDocumentLifetime});
   }
