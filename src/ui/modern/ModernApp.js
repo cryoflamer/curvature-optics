@@ -7349,8 +7349,38 @@
         wizardHost.scrollIntoView({block:'nearest'});
     });
   }
+  var historyUsageReviewGeneration=0;
+  function resetHistoryUsageReview(){
+    historyUsageReviewGeneration++;
+    var report=newUiEl('ModernHistoryUsageReport');
+    if(report){report.hidden=true;report.textContent='';}
+    var review=newUiEl('ModernHistoryReviewLinks');
+    if(review){review.hidden=!sharedPresentationActive();review.disabled=!historySelectedId||!sharedHistoryAvailable();}
+  }
+  async function reviewHistoryLinks(){
+    if(!sharedHistoryAvailable()||!historySelectedId)throw Error('Choose an available shared History snapshot');
+    var id=Number(historySelectedId),generation=++historyUsageReviewGeneration;
+    var report=newUiEl('ModernHistoryUsageReport'),review=newUiEl('ModernHistoryReviewLinks');
+    if(!report||!review)return;
+    review.disabled=true;report.hidden=false;report.textContent='Reviewing known local History links…';
+    try{
+      var result=await historyFactory.inspectUsage(root,id);
+      if(generation!==historyUsageReviewGeneration||String(id)!==historySelectedId)return;
+      var sources=Array.from(new Set(result.uses.map(use=>use.source)));
+      report.textContent='Snapshot #'+id+': '+result.count+' known local link(s)' +
+        (sources.length?' ( '+sources.join(', ')+' )':'')+'. '+
+        (result.localScanComplete?'Local scan complete.':'Local scan incomplete: '+result.issues.join('; ')+'.')+' '+
+        (result.coordinated?'Participating writers coordinated.':'Inspection uncoordinated.')+' '+
+        'Other tabs, older clients and external files are not covered. Permanent deletion remains disabled.';
+    }catch(error){
+      if(generation===historyUsageReviewGeneration)report.textContent='Link review failed: '+error.message+'. Permanent deletion remains disabled.';
+    }finally{
+      if(generation===historyUsageReviewGeneration)review.disabled=!sharedHistoryAvailable()||!historySelectedId;
+    }
+  }
   function updateHistorySelection(entry){
     historySelectedId=entry?String(entry.id):'';
+    resetHistoryUsageReview();
     var gallery=newUiEl('ModernHistoryGallery');
     if(gallery&&historyUI)historyUI.select(gallery,historySelectedId);
     if(historyUI)historyUI.renderDetails(document,newUiEl('ModernHistoryDetailsContent'),entry);
@@ -7554,6 +7584,7 @@
     if(!panel||!toggle)return;
     var shown=sharedHistoryAvailable()&&historyPanelOpen,opening=shown&&panel.hidden;
     panel.hidden=!shown;panel.inert=!!experimentPreview.calibrationBusy;
+    if(!shown)resetHistoryUsageReview();
     var backdrop=newUiEl('ModernHistoryBackdrop');if(backdrop)backdrop.hidden=!shown;
     toggle.setAttribute('aria-expanded',String(shown));
     ['ModernHistoryClearAuto','ModernHistoryClearAll'].forEach(function(id){
@@ -7877,6 +7908,8 @@
         historyStatus('Deleted '+ids.length+' selected snapshots.');return refreshHistoryList();
       });
     });});
+    var reviewLinks=newUiEl('ModernHistoryReviewLinks');
+    if(reviewLinks)reviewLinks.addEventListener('click',function(){handle(reviewHistoryLinks);});
     var editSelected=newUiEl('ModernHistoryEdit');
     if(editSelected)editSelected.addEventListener('click',function(){handle(function(){
       if(!historySelectedId)throw RangeError('Choose an experiment to edit');
