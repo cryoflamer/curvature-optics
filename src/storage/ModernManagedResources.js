@@ -380,5 +380,108 @@
     return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
   }
-  return Object.freeze({create,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION});
+  // One-way rehearsal from a verified portable archive into a disposable,
+  // empty origin profile. No old database is opened or rewritten. No UI route
+  // selects this data and the report never authorizes a production cutover.
+  async function rehearseLegacyArchive(archive,env,deps=env){
+    const backup=deps.CurvatureModernPortableBackup;
+    check(backup&&env?.navigator?.locks,'portable backup and Web Locks required');
+    return env.navigator.locks.request('curvature-modern-managed-rehearsal',
+      {mode:'exclusive',ifAvailable:true},async lock=>{
+        check(lock,'another rehearsal is active; close the other tab and retry');
+        const preview=await backup.previewEmptyRestore(archive,env);
+        check(preview.empty,'rehearsal requires an empty disposable browser profile');
+        const data=JSON.parse(archive.payload).content;
+        const present=data.databases.filter(db=>db.status==='present');
+        check(!present.some(db=>db.name===deps.CurvatureModernManagedObjectStore.DATABASE),
+          'source already contains a managed store; use graph restore instead');
+        const adapter=create(env,deps);
+        check(adapter.store.coordination==='participating-writer','backup coordination required');
+        const covered=new Set(),imported={},skipped=[],standalone=[],originals=new Map();
+        function rows(database,store){
+          covered.add(database+'/'+store);
+          const source=present.find(db=>db.name===database)?.stores.find(s=>s.name===store);
+          return (source?.records||[]).map(row=>({key:backup.decode(row.key),value:backup.decode(row.value)}));
+        }
+        const identityKey=v=>{const i=deps.CurvatureModernReferenceImage.validateIdentity(v);
+          return i.sha256+':'+i.width+'x'+i.height;};
+        async function each(kind,entries,operation){
+          imported[kind]=0;
+          for(const entry of entries){
+            try{
+              check(entry.value&&entry.key===entry.value.id,'source row ID mismatch');
+              await operation(entry.value);
+              imported[kind]++;
+            }catch(error){skipped.push({kind,id:String(entry.key),reason:String(error.message||error)});}
+          }
+        }
+        const annotations=rows('curvature-modern-reference-images','annotations');
+        const observations=rows('curvature-modern-reference-images','observations');
+        const annotationMap=new Map(annotations.map(entry=>[entry.key,entry.value]));
+        for(const entry of annotations){
+          if(!entry.value||entry.value.id!==entry.key||!observations.some(row=>row.key===entry.key))
+            skipped.push({kind:'annotation',id:String(entry.key),reason:'invalid or orphan classification'});
+        }
+        await each('observation',observations,async row=>{
+          const a=annotationMap.get(row.id);
+          if(a)check(a.id===row.id&&positive(a.revision),'invalid classification revision');
+          const identity=await deps.CurvatureModernReferenceImageImport.identify(row.record,env);
+          const key=identityKey(identity);
+          const saved=await adapter.saveObservation({...row,...(a?{
+            kind:a.kind,tags:a.tags,collections:a.collections,annotationRevision:a.revision}:{} )},
+            {originalId:originals.get(key)});
+          await adapter.readObservation(row.id);
+          originals.set(key,saved.originalId);
+        });
+        const resultRows=rows('curvature-modern-calibration-results','results');
+        const archived=new Set(resultRows.map(row=>row.key));
+        await each('calibration-result',resultRows,async row=>{
+          const originalId=originals.get(identityKey(row.record.payload.photo));
+          check(originalId,'verified original absent from migrated observations');
+          await adapter.saveCalibrationResult(row,{originalId});
+          await adapter.readCalibrationResult(row.id);
+        });
+        function standalonePolicy(origins){
+          if(!origins.length)return false;
+          const available=origins.filter(origin=>archived.has(origin.resultId));
+          check(!available.length||available.length===origins.length,
+            'mixed local and unresolved calibration evidence requires explicit recovery');
+          return !available.length;
+        }
+        await each('history',rows('curvature-modern-experiment-history','snapshots'),async row=>{
+          const mode=standalonePolicy([row.experiment.calibrationOrigin].filter(Boolean));
+          await adapter.saveHistory(row,{standalone:mode});
+          await adapter.readHistory(row.id);
+          if(mode)standalone.push({kind:'history',id:row.id,reason:'archive absent in source'});
+        });
+        await each('animation',rows('curvature-modern-animation-library','projects'),async row=>{
+          const project=deps.CurvatureModernAnimationProject.validate(row.project);
+          const origins=[project.baseExperiment,...(project.mode==='experimental'?project.keyframes.map(f=>f.value):[])]
+            .map(e=>e.calibrationOrigin).filter(Boolean);
+          const mode=standalonePolicy(origins);
+          await adapter.saveAnimation(row,{standalone:mode});
+          await adapter.readAnimation(row.id);
+          if(mode)standalone.push({kind:'animation',id:row.id,reason:'archive absent in source'});
+        });
+        await each('calibration',rows('curvature-photo-calibration','projects'),async row=>{
+          const originalId=row.photo?originals.get(identityKey(row.photo.identity)):null;
+          check(!row.photo||originalId,'verified Calibration Project original missing');
+          await adapter.saveCalibrationProject(row,{originalId});
+          await adapter.readCalibrationProject(row.id);
+        });
+        const unhandled=[];
+        for(const db of present)for(const store of db.stores){
+          const key=db.name+'/'+store.name;
+          if(store.records.length&&!covered.has(key))
+            unhandled.push({source:key,records:store.records.length});
+        }
+        if(data.webStorage.local.length)unhandled.push({source:'localStorage',records:data.webStorage.local.length});
+        if(data.webStorage.session.length)unhandled.push({source:'sessionStorage',records:data.webStorage.session.length});
+        const integrity=await adapter.store.verifyIntegrity();
+        check(integrity.valid,'managed graph failed integrity verification');
+        return {imported,skipped,standalone,unhandled,originals:originals.size,
+          integrity,eligibleForMigration:false,sourceUntouched:true};
+      });
+  }
+  return Object.freeze({create,rehearseLegacyArchive,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION});
 }));

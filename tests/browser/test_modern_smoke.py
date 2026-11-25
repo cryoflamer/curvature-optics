@@ -770,6 +770,100 @@ class ModernBrowserSmoke(unittest.TestCase):
             second.close()
             target_context.close()
 
+    def test_managed_legacy_archive_rehearsal_in_empty_profile(self):
+        # Exercise actual legacy stores -> existing portable codec -> managed
+        # domain adapters in another profile, with no legacy DB in the target.
+        scripts=[
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/storage/ModernPortableBackup.js',
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]
+        def prepare(page):
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in scripts:
+                page.add_script_tag(url='/'+script)
+        prepare(self.page)
+        source=self.page.evaluate("""async()=>{
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const history=CurvatureModernExperimentHistory.create({indexedDB,now:()=>42});
+            const saved=await history.record(experiment,'manual',null);
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=3;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#876543';ctx.fillRect(0,0,2,3);
+            const record={version:1,id:'legacy_photo',title:'Original',author:'Source',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:3}};
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,record);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,{...record,id:'other_alias',author:'Other'});
+            const project=CurvatureModernAnimationProject.create([
+                {id:saved.entry.id,experiment,referenceImageIds:['legacy_photo']},
+                {id:saved.entry.id,experiment,referenceImageIds:['other_alias']}
+            ],{id:'legacy_animation',name:'Legacy Animation',mode:'camera'});
+            await CurvatureModernAnimationLibrary.create(indexedDB,project,'accurate',100,null,true);
+            sessionStorage.setItem('curvature-test-unhandled','preserve-report');
+            const archive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
+            return {archive,history:saved.entry,record,project};
+        }""")
+        target_context=self.browser.new_context()
+        try:
+            target=target_context.new_page()
+            prepare(target)
+            result=target.evaluate("""async source=>{
+                const api=CurvatureModernManagedResources;
+                const report=await api.rehearseLegacyArchive(source.archive,window);
+                const adapter=api.create(window),history=await adapter.readHistory(source.history.id),
+                    photo=await adapter.readObservation(source.record.id),
+                    animation=await adapter.readAnimation(source.project.id);
+                const same=JSON.stringify(history.row.experiment)===JSON.stringify(source.history.experiment)&&
+                    photo.row.record.original.dataUrl===source.record.original.dataUrl&&
+                    JSON.stringify(animation.row.project)===JSON.stringify(source.project);
+                let refused=false;
+                try{await api.rehearseLegacyArchive(source.archive,window);}
+                catch(error){refused=/empty disposable/.test(error.message);}
+                return {report,same,refused,databases:(await indexedDB.databases()).map(db=>db.name)};
+            }""",source)
+            self.assertTrue(result['same'])
+            self.assertTrue(result['refused'])
+            self.assertEqual(result['databases'],['curvature-modern-managed-objects'])
+            self.assertEqual(result['report']['imported'],{'observation':2,'calibration-result':0,
+                'history':1,'animation':1,'calibration':0})
+            self.assertEqual(result['report']['originals'],1)
+            self.assertEqual(result['report']['skipped'],[])
+            self.assertFalse(result['report']['eligibleForMigration'])
+            self.assertIn({'source':'sessionStorage','records':1},result['report']['unhandled'])
+            self.assertTrue(result['report']['integrity']['valid'])
+            self.assertFalse(self.page.evaluate("""async()=> (await indexedDB.databases()).some(
+                db=>db.name==='curvature-modern-managed-objects')"""))
+        finally:
+            target_context.close()
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.
