@@ -327,6 +327,73 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             second.close()
 
+    def test_managed_object_store_abort_cycle_and_competing_writers(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedObjectStore;
+            const types=[{type:'test',version:1,validate:v=>!!v&&Array.isArray(v.refs),references:v=>v.refs}];
+            const s=api.create(window,{types});
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const input={documentId:'doc',kind:'test',expectedRevision:0,metadata:{},
+                slot:'value',type:'test',version:1,payload:{refs:[]}};
+            const initial=await s.createAndAttach(input);
+            const fixed=api.create({indexedDB,navigator,crypto:{randomUUID:()=> 'self-cycle'}},{types});
+            await rejects(()=>fixed.createAndAttach({...input,expectedRevision:1,payload:{
+                refs:[{slot:'self',target:'self-cycle',strength:'strong'}]}}),/strong reference cycle/);
+            ok((await s.verifyIntegrity()).liveObjects===1,'cycle leaked data');
+            const weak=await fixed.createAndAttach({...input,documentId:'weak',payload:{
+                refs:[{slot:'self',target:'self-cycle',strength:'weak'}]}});
+            ok((await s.get(weak.id)).refCount===1,'weak cycle retained itself');
+            // Fault injection at the real IDB write boundary, after metadata
+            // insertion has been queued. This is not actual disk exhaustion.
+            const add=IDBObjectStore.prototype.add;
+            IDBObjectStore.prototype.add=function(...args){
+                if(this.name==='payloads')throw new DOMException('Injected quota failure','QuotaExceededError');
+                return add.apply(this,args);
+            };
+            try{
+                await rejects(()=>s.createAndAttach({...input,expectedRevision:1}),/Injected quota/);
+            }finally{IDBObjectStore.prototype.add=add;}
+            ok((await s.getDocument('doc')).revision===1,'quota error advanced revision');
+            ok((await s.verifyIntegrity()).liveObjects===2,'quota failure leaked data');
+            // Two independent database connections race the same revision.
+            const other=api.create(window,{types});
+            const writes=await Promise.allSettled([
+                s.createAndAttach({...input,expectedRevision:1,payload:{refs:[],value:1}}),
+                other.createAndAttach({...input,expectedRevision:1,payload:{refs:[],value:2}})
+            ]);
+            ok(writes.filter(x=>x.status==='fulfilled').length===1,'both competing writes succeeded');
+            ok(writes.filter(x=>x.status==='rejected'&&/stale document revision/.test(x.reason.message)).length===1,
+                'losing writer did not get explicit stale revision');
+            const integrity=await s.verifyIntegrity();
+            ok(integrity.valid&&integrity.liveObjects===3,'competing writes leaked data');
+            ok(integrity.unreachable.length===1&&integrity.unreachable[0]===initial.id,'reachability mismatch');
+            // Corrupt the stored graph without changing its derived counts.
+            // A payload-declared weak edge is still part of its immutable
+            // contract; deleting it must block repair and reclamation.
+            const db=await new Promise((resolve,reject)=>{
+                const q=indexedDB.open(api.DATABASE);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
+            });
+            await new Promise((resolve,reject)=>{
+                const tx=db.transaction('references','readwrite');
+                tx.objectStore('references').delete(['object',weak.id,'self']);
+                tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);
+            });db.close();
+            await rejects(()=>s.verifyIntegrity(),/payload reference mismatch/);
+            await rejects(()=>s.recount(),/payload reference mismatch/);
+            await rejects(()=>s.collectGarbage(initial.id),/payload reference mismatch/);
+            ok(!!await s.get(initial.id),'corrupt graph permitted reclamation');
+            return {revision:(await s.getDocument('doc')).revision,retained:true};
+        }""")
+        self.assertEqual(result, {'revision': 2, 'retained': True})
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.

@@ -139,17 +139,35 @@
   }
   async function verifyPayloads(g,stores,types){
     const rows=await request(stores.payloads.getAll());
+    const edgeCounts=new Map();
+    for(const edge of g.refs.values())if(edge.ownerKind==='object')
+      edgeCounts.set(edge.ownerId,(edgeCounts.get(edge.ownerId)||0)+1);
     for(const row of rows){
       const obj=g.objects.get(row.id);
       const adapter=obj&&!obj.deleted&&types.get(typeKey(obj.type,obj.version));
       check(adapter&&adapter.validate(clone(row.value))===true,'invalid or unsupported payload');
       const expected=slots(adapter.references(clone(row.value)));
-      const actual=[...g.refs.values()].filter(e=>e.ownerKind==='object'&&e.ownerId===row.id);
-      check(expected.length===actual.length&&expected.every(ref=>{
+      check(expected.length===(edgeCounts.get(row.id)||0)&&expected.every(ref=>{
         const edge=g.refs.get(edgeId({ownerKind:'object',ownerId:row.id,slot:ref.slot}));
         return edge&&edge.target===ref.target&&edge.strength===ref.strength;
       }),'payload reference mismatch');
     }
+  }
+  function reachable(g){
+    const children=new Map(),seen=new Set(),queue=[];
+    for(const edge of g.refs.values()){
+      if(edge.strength!=='strong')continue;
+      if(edge.ownerKind==='document'){
+        if(!seen.has(edge.target)){seen.add(edge.target);queue.push(edge.target);}
+      }else{
+        if(!children.has(edge.ownerId))children.set(edge.ownerId,[]);
+        children.get(edge.ownerId).push(edge.target);
+      }
+    }
+    for(let i=0;i<queue.length;i++)for(const id of children.get(queue[i])||[]){
+      if(!seen.has(id)){seen.add(id);queue.push(id);}
+    }
+    return seen;
   }
   function setEdge(g,stores,edge){
     const id=edgeId(edge);
@@ -291,8 +309,10 @@
       return run('readonly',async stores=>{
         const g=await graph(stores),{counts,mismatches}=inspect(g,types,true);
         await verifyPayloads(g,stores,types);
+        const retained=reachable(g);
         return {valid:!mismatches.length,liveObjects:counts.size,mismatches,
-          eligible:[...counts].filter(([,n])=>n===0).map(([id])=>id)};
+          eligible:[...counts].filter(([,n])=>n===0).map(([id])=>id),
+          unreachable:[...counts.keys()].filter(id=>!retained.has(id))};
       });
     }
     async function recount(){
