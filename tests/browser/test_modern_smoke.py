@@ -706,6 +706,39 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'revision': 1, 'resources': 2})
 
+    def test_managed_original_blob_verification(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/animation/ModernReferenceImage.js')
+        self.page.add_script_tag(url='/src/ui/modern/ModernReferenceImageImport.js')
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernReferenceImageImport;
+            const canvas=document.createElement('canvas');canvas.width=19;canvas.height=11;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#296b96';ctx.fillRect(0,0,19,11);
+            const types=['png','jpeg','webp'],verified=[];
+            for(const type of types){
+                const dataUrl=canvas.toDataURL('image/'+type);
+                const raw=atob(dataUrl.split(',')[1]),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+                const record={id:'test_'+type,version:1,title:'Test raster',original:{dataUrl,width:19,height:11}};
+                const legacy=await api.identify(record,window);
+                const blob=new Blob([bytes],{type:'image/'+type});
+                const value=await api.verifyOriginalBlob(blob,window);
+                if(JSON.stringify(value.identity)!==JSON.stringify(legacy))throw Error('Identity differs for '+type);
+                if(api.dataUrl(value.bytes,type)!==dataUrl)throw Error('Bytes changed for '+type);
+                verified.push(type);
+            }
+            const dataUrl=canvas.toDataURL('image/png'),raw=atob(dataUrl.split(',')[1]);
+            const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+            let mismatch=false,truncated=false;
+            try{await api.verifyOriginalBlob(new Blob([bytes],{type:'image/jpeg'}),window);}
+            catch(e){mismatch=/MIME mismatch/.test(e.message);}
+            try{await api.verifyOriginalBlob(new Blob([bytes.slice(0,33)],{type:'image/png'}),window);}
+            catch(e){truncated=true;}
+            return {verified,mismatch,truncated};
+        }""")
+        self.assertEqual(result, {'verified':['png','jpeg','webp'],'mismatch':True,'truncated':True})
+
     def test_managed_store_photo_autosave_performance_profile(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
@@ -814,7 +847,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertTrue(result['valid'])
         self.assertGreater(result['bytes'],2*1024*1024)
         self.assertEqual(len(result['samples']),3)
-        print("MANAGED_PHOTO_AUTOSAVE_PROFILE "+__import__('json').dumps(result,sort_keys=True),flush=True)
+        print("MANAGED_PHOTO_AUTOSAVE_PROFILE_BLOB "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
     def test_managed_store_autosave_performance_profile(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

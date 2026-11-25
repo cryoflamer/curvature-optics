@@ -75,7 +75,7 @@
       {type:OBSERVATION,version:1,validate:v=>exact(v,['id','attribution','originalId','identity','thumbnail'])&&
         images.validId(v.id)===v.id&&same(images.validateAttribution(v.attribution),v.attribution)&&
         objectId(v.originalId)&&same(images.validateIdentity(v.identity),v.identity)&&
-        (v.thumbnail===null||exact(v.thumbnail,['dataUrl','width','height'])),
+        (v.thumbnail===null||same(images.validateThumbnail(v.thumbnail),v.thumbnail)),
         references:v=>[strong('original',v.originalId)]}
     ];
     function calibrationAliases(project){
@@ -224,20 +224,31 @@
         expectedRevision,metadata,references:[strong('observation',id)],resources});
       return {observationId:id,originalId:binaryId,managedRevision:document.revision};
     }
-    async function materializeOriginal(original,id,attribution,thumbnail=null){
+    // A cache belongs to one immutable graph closure only. Never retain
+    // verification across transactions or trust an alias as binary identity.
+    async function verifiedOriginal(original,cache){
       check(original?.type===ORIGINAL,'missing original resource');
-      const {identity,blob}=original.payload,bytes=new Uint8Array(await blob.arrayBuffer());
-      const record=images.validate({id,version:images.VERSION,...attribution,
-        original:{dataUrl:importer.dataUrl(bytes,blob.type.slice(6)),width:identity.width,height:identity.height},
-        ...(thumbnail?{thumbnail}:{})});
-      check(same(await importer.identify(record,env),identity),'original evidence digest mismatch');
-      return record;
+      if(cache?.has(original.id))return cache.get(original.id);
+      const {identity,blob}=original.payload;
+      const verified=await importer.verifyOriginalBlob(blob,env);
+      check(same(verified.identity,identity),'original evidence digest mismatch');
+      if(cache)cache.set(original.id,verified);
+      return verified;
     }
-    async function materializeObservation(graph,observation){
+    async function materializeOriginal(original,id,attribution,thumbnail=null,cache){
+      const verified=await verifiedOriginal(original,cache);
+      const {identity,blob}=original.payload;
+      if(!verified.dataUrl)verified.dataUrl=importer.dataUrl(verified.bytes,blob.type.slice(6));
+      return images.validate({id,version:images.VERSION,...attribution,
+        original:{dataUrl:verified.dataUrl,width:identity.width,height:identity.height},
+        ...(thumbnail?{thumbnail}:{})});
+    }
+    async function materializeObservation(graph,observation,cache,hydrate=true){
       const v=observation.payload;
       const original=graph.resources.find(r=>r.id===v.originalId);
       check(original?.type===ORIGINAL&&same(original.payload.identity,v.identity),'observation evidence mismatch');
-      return materializeOriginal(original,v.id,v.attribution,v.thumbnail);
+      if(!hydrate){await verifiedOriginal(original,cache);return null;}
+      return materializeOriginal(original,v.id,v.attribution,v.thumbnail,cache);
     }
     async function readObservation(id){
       const graph=await store.readDocumentGraph(observationId(id));
@@ -255,13 +266,14 @@
       check(typeof id==='string'&&/^calibration-result-v1-[0-9a-f]{64}$/.test(id),'invalid calibration result ID');
       return 'result:'+id;
     }
-    async function verifyResultOriginal(graph,result){
+    async function verifyResultOriginal(graph,result,cache,hydrate=true){
       check(result?.type===RESULT,'calibration result resource missing');
       const original=graph.resources.find(r=>r.id===result.payload.originalId);
       const record=result.payload.record;
       check(original?.type===ORIGINAL&&same(original.payload.identity,record.payload.photo),
         'calibration original identity mismatch');
-      return materializeOriginal(original,'calibration_evidence',record.provenance.attribution);
+      if(!hydrate){await verifiedOriginal(original,cache);return null;}
+      return materializeOriginal(original,'calibration_evidence',record.provenance.attribution,null,cache);
     }
     async function saveCalibrationResult(row,{originalId}={}){
       check(results&&exact(row,['id','createdAt','record'])&&positive(row.createdAt),
@@ -450,12 +462,13 @@
         exact(meta,['format','version','revision','envelope','digest']),'invalid working checkpoint root');
       const hasDraft=graph.document.references.some(ref=>ref.slot==='draft');
       check(graph.document.references.length===(hasDraft?2:1),'invalid working checkpoint slots');
+      const verified=new Map();
       async function load(slot){
         const snapshot=pick(graph,slot,SNAPSHOT),{experiment,evidence}=snapshot.payload;
         if(typeof evidence==='object'){
           const result=graph.resources.find(r=>r.id===evidence.result);
           checkOrigin(experiment.calibrationOrigin,result);
-          await verifyResultOriginal(graph,result);
+          await verifyResultOriginal(graph,result,verified,false);
         }
         return {experiment,ref:{id:snapshot.id,evidence}};
       }
@@ -520,7 +533,7 @@
       check(drafts&&projects&&animations&&typeof drafts.verifySharedRow==='function',
         'Animation working collection adapter unavailable');
     }
-    async function loadAnimationWorkingCollection(readGraph){
+    async function loadAnimationWorkingCollection(readGraph,hydrate=true){
       draftContracts();
       const graph=await readGraph(draftsId);
       if(!graph)return null;
@@ -529,19 +542,20 @@
       const resource=pick(graph,'collection',DRAFTS),v=resource.payload;
       const row=await drafts.verifySharedRow(v.row,env.crypto);
       check(graph.document.metadata.sourceRevision===row.revision,'Animation working revision mismatch');
-      const inventory=draftInventory(row),referenceImages=[];
+      const inventory=draftInventory(row),referenceImages=[],verified=new Map();
       for(const entry of v.observations){
         const observation=graph.resources.find(r=>r.id===entry.target);
         check(observation?.type===OBSERVATION&&observation.payload.id===entry.alias,
           'Animation working observation mismatch');
-        referenceImages.push(await materializeObservation(graph,observation));
+        const record=await materializeObservation(graph,observation,verified,hydrate);
+        if(hydrate)referenceImages.push(record);
       }
       for(const entry of v.evidence){
         if(entry.target===null)continue;
         const result=graph.resources.find(r=>r.id===entry.target);
         for(const origin of inventory.origins.filter(origin=>origin.resultId===entry.alias))
           checkOrigin(origin,result);
-        await verifyResultOriginal(graph,result);
+        await verifyResultOriginal(graph,result,verified,false);
       }
       return {row,collectionId:resource.id,managedRevision:graph.document.revision,
         observations:v.observations,evidence:v.evidence,referenceImages};
@@ -553,7 +567,7 @@
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
-      const previous=expectedRevision===0?null:await loadAnimationWorkingCollection(store.readDocumentClosureForWrite);
+      const previous=expectedRevision===0?null:await loadAnimationWorkingCollection(store.readDocumentClosureForWrite,false);
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'Animation working revision conflict');
       check(!previous||row.revision===previous.row.revision+1,'Animation working source revision must advance once');
@@ -568,7 +582,7 @@
           check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
           const observation=pick(graph,'observation',OBSERVATION);
           check(observation.payload.id===alias,'working observation alias mismatch');
-          await materializeObservation(graph,observation);
+          await materializeObservation(graph,observation,undefined,false);
           target=observation.id;
         }
         observations.push({alias,target});

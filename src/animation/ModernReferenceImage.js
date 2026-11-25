@@ -162,5 +162,6 @@
     return Array.from(digest,function(b){return b.toString(16).padStart(2,'0');}).join('');
   }
   return Object.freeze({VERSION:VERSION,validateIdentity:validateIdentity,validateAttribution:validateAttribution,originalDigest:originalDigest,MAX_ORIGINAL_BYTES:MAX_ORIGINAL_BYTES,
-    MAX_THUMBNAIL_BYTES:MAX_THUMBNAIL_BYTES,validate:validate,validateCollection:validateCollection,validId:id});
+    MAX_THUMBNAIL_BYTES:MAX_THUMBNAIL_BYTES,validate:validate,validateCollection:validateCollection,
+    validateThumbnail:function(value){return raster(value,true);},validId:id});
 }));

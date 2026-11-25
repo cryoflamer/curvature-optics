@@ -159,6 +159,13 @@ Classification and attribution remain separate per observation.
 `readDocumentGraph` reads one revision and its strong closure in one IDB
 transaction; domain materialization verifies target types and identity and
 rechecks original raster/digest before returning portable records.
+Managed originals are verified directly from Blob bytes (header, MIME,
+browser-decoded orientation-aware dimensions and SHA-256). The temporary
+object URL is always revoked. Portable Base64 is constructed only when a
+portable image record is actually returned. Working collection preflight
+verifies each immutable original once per graph closure and never builds
+Base64; distinct observation attribution is still retained. No verification
+cache survives a transaction or an operation.
 The autosave adapters use a separate indexed `readDocumentClosureForWrite`
 preflight for the previous revision. It validates the complete immutable
 strong closure, declared edges, weak target existence and cycles in one

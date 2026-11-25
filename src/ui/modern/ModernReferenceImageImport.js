@@ -58,6 +58,29 @@
     return images.validateIdentity({version:1,sha256:await images.originalDigest(record,env.crypto),
       width:record.original.width,height:record.original.height});
   }
+  // Managed storage already owns immutable binary data. Verify the same
+  // header, browser-decoded dimensions and SHA-256 without a Base64 roundtrip.
+  async function verifyOriginalBlob(blob,env){
+    if(!blob||!Number.isSafeInteger(blob.size)||blob.size<=0||blob.size>images.MAX_ORIGINAL_BYTES)
+      throw RangeError('Invalid original Blob size');
+    var bytes=new Uint8Array(await blob.arrayBuffer());
+    if(bytes.length!==blob.size)throw Error('Image file length changed');
+    var header=inspect(bytes);
+    if(blob.type!=='image/'+header.type)throw Error('Image MIME mismatch');
+    var url=env.URL.createObjectURL(blob),width,height;
+    try{
+      var image=new env.Image();image.src=url;await image.decode();
+      width=image.naturalWidth;height=image.naturalHeight;
+      if(!((width===header.width&&height===header.height)||(width===header.height&&height===header.width)))
+        throw Error('Decoded dimensions do not match image header');
+    }finally{env.URL.revokeObjectURL(url);}
+    var digest=new Uint8Array(await env.crypto.subtle.digest('SHA-256',bytes));
+    if(digest.length!==32)throw Error('Invalid SHA-256 digest');
+    var identity=images.validateIdentity({version:1,
+      sha256:Array.from(digest,function(b){return b.toString(16).padStart(2,'0');}).join(''),
+      width:width,height:height});
+    return {identity:identity,bytes:bytes};
+  }
   async function ingest(file,id,env){
     if(!file||!Number.isSafeInteger(file.size)||file.size<=0||file.size>images.MAX_ORIGINAL_BYTES)
       throw RangeError('Select a PNG, JPEG or WebP image up to 20 MiB');
@@ -78,5 +101,5 @@
       original:{dataUrl:url,width:w,height:h},thumbnail:{dataUrl:thumbnail,width:canvas.width,height:canvas.height}});
     canvas.width=canvas.height=0;return record;
   }
-  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest,verify:verify,verifyOriginal:verifyOriginal,identify:identify});
+  return Object.freeze({inspect:inspect,dataUrl:dataUrl,ingest:ingest,verify:verify,verifyOriginal:verifyOriginal,identify:identify,verifyOriginalBlob:verifyOriginalBlob});
 }));
