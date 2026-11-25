@@ -77,7 +77,7 @@ test('blocked IndexedDB falls back gracefully without inventing a checkpoint',as
 });
 
 
-test('working-session write and clear use a shared Web Lock until IDB transaction completion',async()=>{
+test('working-session schema-capable read, write and clear use a shared Web Lock until IDB transaction completion',async()=>{
   const requests=[],lockManager={request(name,options,action){
     requests.push({name,mode:options.mode});
     return action({name,mode:options.mode});
@@ -88,7 +88,7 @@ test('working-session write and clear use a shared Web Lock until IDB transactio
   assert.equal((await coordinated.read(db)).savedAt,900);
   await coordinated.clear(db);
   assert.equal(await coordinated.read(db),null);
-  assert.deepEqual(requests.map(x=>x.mode),['shared','shared']);
+  assert.deepEqual(requests.map(x=>x.mode),['shared','shared','shared','shared']);
   assert.equal(requests[0].name,requests[1].name);
   assert.equal(autosave.makeAdapter(null).coordination,'uncoordinated');
   assert.throws(()=>autosave.makeAdapter({}),/Web Locks manager is invalid/);
@@ -853,4 +853,13 @@ test('Physical provenance inventory retains committed, draft and historical sour
   const empty=await adapter.inspectProvenance(absent,{storage,codec,crypto,contract});
   assert.deepEqual(empty.entries.map(entry=>entry.key),['local:fixture']);
   assert.deepEqual(empty.issues,[]);
+});
+
+test('denied working-session read never opens or creates an IndexedDB database',async()=>{
+  let opens=0;
+  const db={open(){opens++;throw Error('Unexpected open');}};
+  const adapter=autosave.makeAdapter({request(_name,_options,action){return action(null);}});
+  await assert.rejects(adapter.read(db),/lock was not granted/);
+  await assert.rejects(adapter.readWorkingCopy(db,'shared-experiment',{},{}),/lock was not granted/);
+  assert.equal(opens,0);
 });

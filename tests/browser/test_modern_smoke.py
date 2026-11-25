@@ -8871,8 +8871,14 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(response.status,200)
         self.assertEqual(second.evaluate(
             "CurvatureModernSessionAutosave.coordination"),'participating-writer')
-        # Hold an exclusive reader in one tab. The real autosave write in the
-        # other must wait for it, including its transaction acknowledgement.
+        # Read the prior checkpoint before taking the exclusive lock: an
+        # ordinary read can create schema, so it must now wait too.
+        second.evaluate("""async()=>{
+            window.__workingPrior=await CurvatureModernSessionAutosave.read(indexedDB);
+            if(!window.__workingPrior?.experiment)throw Error('Missing saved working experiment');
+        }""")
+        # Hold an exclusive reader in one tab. Both schema-capable reads
+        # and real autosave writes in the other must wait for release.
         self.page.evaluate("""() => {
             const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
             window.__snapshotEntered=false;
@@ -8884,10 +8890,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             });
         }""")
         self.page.wait_for_function('window.__snapshotEntered===true')
-        second.evaluate("""async () => {
+        second.evaluate("""() => {
             const source=CurvatureModernSessionAutosave;
-            const prior=await source.read(indexedDB);
-            if(!prior||!prior.experiment)throw Error('Missing saved working experiment');
+            const prior=window.__workingPrior;
+            window.__readSettled=false;
+            window.__blockedWorkingRead=source.read(indexedDB).then(row=>{
+                window.__readSettled=true;return row;
+            });
             window.__writeSettled=false;
             window.__writeError=null;
             window.__newSavedAt=prior.savedAt+10000;
@@ -8911,6 +8920,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertTrue(pending,'Production writer never queued its shared Web Lock')
         self.assertFalse(second.evaluate('window.__writeSettled'))
+        self.assertFalse(second.evaluate('window.__readSettled'))
         self.assertTrue(self.page.evaluate('window.__snapshotEntered'))
         checkpoint=self.page.evaluate("""async () => {
             window.__releaseSnapshot();
@@ -8919,6 +8929,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(checkpoint['value'],'exclusive-reader-finished')
         saved=second.evaluate("""async () => {
             await window.__blockedWorkingWrite;
+            if(!await window.__blockedWorkingRead||!window.__readSettled)
+                throw Error('Blocked read did not complete after release');
             const row=await CurvatureModernSessionAutosave.read(indexedDB);
             return {settled:window.__writeSettled,error:window.__writeError,
                 expected:window.__newSavedAt,savedAt:row.savedAt,

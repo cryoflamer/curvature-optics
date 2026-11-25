@@ -22,6 +22,7 @@
       function rejectOnce(error){if(settled)return;settled=true;cleanup();reject(error);}
       try{request=indexedDB.open(DATABASE,1);}catch(error){rejectOnce(error);return;}
       request.onupgradeneeded=function(){
+        if(settled){request.transaction.abort();return;}
         db=request.result;
         if(existingOnly){request.transaction.abort();rejectOnce(Error('Working-session database changed during inventory'));return;}
         if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE);
@@ -54,9 +55,6 @@
         }
       };
     });
-  }
-  function read(indexedDB){
-    return withStore(indexedDB,'readonly',function(store){return store.get(KEY);});
   }
   // Each browser tab uses the same origin-wide Web Lock. A protected writer
   // owns its SHARED lock until the underlying IndexedDB transaction completes,
@@ -115,9 +113,9 @@
     ensure(typeof id==='string'&&COPY_ID.test(id),'invalid working-copy identity');
     return COPY_PREFIX+id;
   }
-  function copyRead(indexedDB,id){
+  function copyRead(indexedDB,id,readStore){
     const key=copyKey(id);
-    return withStore(indexedDB,'readonly',store=>{
+    return readStore(indexedDB,store=>{
       const output={result:null},req=store.get(key);
       req.onsuccess=()=>{output.result={present:req.result!==undefined,value:req.result};};
       return output;
@@ -150,9 +148,9 @@
       'selected migration digest mismatch');
     return {kind:'experiment',id,revision:row.revision,experiment,origin};
   }
-  async function readWorkingCopy(indexedDB,id,codec,crypto){
+  async function readWorkingCopyRaw(indexedDB,id,codec,crypto,readStore){
     ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
-    const found=await copyRead(indexedDB,id);
+    const found=await copyRead(indexedDB,id,readStore);
     ensure(found,'working-copy read unavailable');
     if(!found.present)return null;
     const row=found.value;
@@ -182,6 +180,18 @@
     function transaction(indexedDB,perform,lease=null){
       const action=function(){return withStore(indexedDB,'readwrite',perform,lease);};
       return writer?writer.commit(action):action();
+    }
+    // Ordinary reads may create the schema; observational existing-only
+    // reads must not acquire a shared lock from an exclusive snapshot.
+    function readTransaction(indexedDB,perform,lease=null,existingOnly=false){
+      const action=()=>withStore(indexedDB,'readonly',perform,lease,existingOnly);
+      return writer&&!existingOnly?writer.commit(action):action();
+    }
+    function read(indexedDB){
+      return readTransaction(indexedDB,store=>store.get(KEY));
+    }
+    function readWorkingCopy(indexedDB,id,codec,crypto){
+      return readWorkingCopyRaw(indexedDB,id,codec,crypto,readTransaction);
     }
     function write(indexedDB,experiment,savedAt){
       if(!Number.isSafeInteger(savedAt)||savedAt<=0)
@@ -223,7 +233,7 @@
       }
       async function fetch(){
         if(existingOnly&&!await existingDatabase(indexedDB))return {present:false};
-        return withStore(indexedDB,'readonly',store=>{
+        return readTransaction(indexedDB,store=>{
           const out={result:null},req=store.get(key);
           req.onsuccess=()=>{out.result=req.result===undefined?{present:false}:{present:true,row:req.result};};
           return out;
@@ -675,13 +685,13 @@
       async function snapshot(){
         let failure=null;
         try{
-          return await withStore(indexedDB,'readonly',store=>{
+          return await readTransaction(indexedDB,store=>{
             const out={result:null};
             readRaw(store,v=>{out.result=v;},error=>{
               failure=error;store.transaction.abort();
             });
             return out;
-          },lease);
+          },lease,existingOnly);
         }catch(error){throw failure||error;}
       }
       async function verify(raw){
@@ -696,7 +706,7 @@
       }
       async function readRevision(revision){
         lease.check();
-        const row=await withStore(indexedDB,'readonly',store=>store.get(revisionKey(revision)),lease);
+        const row=await readTransaction(indexedDB,store=>store.get(revisionKey(revision)),lease,existingOnly);
         const value=await decode(row,revision);lease.check();return value;
       }
       // A separately acknowledged draft never advances the document head.
@@ -734,13 +744,13 @@
       async function recoverySnapshot(){
         let failure;
         try{
-          return await withStore(indexedDB,'readonly',store=>{
+          return await readTransaction(indexedDB,store=>{
             const out={result:null};
             getRecoveryRaw(store,v=>{out.result=v;},error=>{
               failure=error;store.transaction.abort();
             });
             return out;
-          },lease);
+          },lease,existingOnly);
         }catch(error){throw failure||error;}
       }
       async function verifyRecovery(raw,documentId=id){
@@ -763,7 +773,7 @@
       // a timestamp, HEAD, or copied tab token as an automatic selection.
       async function inventoryRows(){
         if(existingOnly&&!await existingDatabase(indexedDB))return new Map();
-        return withStore(indexedDB,'readonly',store=>{
+        return readTransaction(indexedDB,store=>{
           const output={result:null},req=store.getAllKeys();
           req.onsuccess=()=>{
             const keys=req.result,rows=new Map();
@@ -908,7 +918,7 @@
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,META_KEY:META_KEY,
     read:defaultAdapter.read,write:defaultAdapter.write,clear:defaultAdapter.clear,
-    readWorkingCopy,
+    readWorkingCopy:defaultAdapter.readWorkingCopy,
     openWorkingCopy:defaultAdapter.openWorkingCopy,
     openSharedCheckpoint:defaultAdapter.openSharedCheckpoint,
     inspectProvenance:defaultAdapter.inspectProvenance,
