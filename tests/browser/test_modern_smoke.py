@@ -1473,6 +1473,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/animation/ModernAnimationContract.js',
             'src/animation/ModernAnimationProject.js',
             'src/animation/ModernAnimationLibrary.js',
+            'src/animation/ModernAnimationLibraryActions.js',
             'src/storage/ModernBackupWriteBarrier.js',
             'src/animation/ModernAnimationStudio.js',
             'src/animation/ModernAnimationDraftAutosave.js',
@@ -1551,6 +1552,43 @@ class ModernBrowserSmoke(unittest.TestCase):
             const renamed=await port.rename(indexedDB,project.id,'Renamed',101,102);
             ok(renamed.project.name==='Renamed'&&renamed.updatedAt===102,'rename failed');
             await rejects(()=>port.commitPlannedUpdate(indexedDB,plan),/changed in another tab/);
+            const bundle=port.parseBundle(await port.exportRetainedPortable(indexedDB,[renamed]));
+            ok(bundle.referenceImages.length===1&&
+                bundle.referenceImages[0].original.dataUrl===photos[1].record.original.dataUrl&&
+                JSON.stringify(bundle.animations[0].project)===JSON.stringify(renamed.project),
+                'portable export depended on removed gallery');
+            await rejects(()=>port.exportRetainedPortable(indexedDB,[committed]),/changed or was removed/);
+            let downloaded=null,busy=false;
+            const actions=CurvatureModernAnimationLibraryActions.create({
+                library:()=>port,indexedDB:()=>indexedDB,busy:()=>busy,setBusy:v=>{busy=v;},
+                render(){},notice(message,error){if(error)throw Error(message);},refreshState(){},
+                entries:()=>[renamed],download:text=>{downloaded=text;},
+                getReferenceImage(){throw Error('Legacy gallery lookup used');}
+            });
+            await actions.exportEntries(true);
+            ok(downloaded&&port.parseBundle(downloaded).referenceImages.length===1&&!busy,
+                'application export bypassed retained evidence');
+            const shared={...photos[0].record,id:'shared_alias',title:'First attribution',author:'First'};
+            const firstPhoto=await adapter.saveObservation({id:shared.id,revision:1,record:shared});
+            const firstProject=P.validate({...withPhoto(shared.id),id:'first_export'});
+            const firstRow=L.record(firstProject,'auto',firstProject.id,300,300,null);
+            const firstOwner=await adapter.saveAnimation(firstRow);
+            await adapter.saveObservation({id:shared.id,revision:2,record:{...shared,title:'Second attribution',author:'Second'}},
+                {expectedRevision:1,originalId:firstPhoto.originalId});
+            const secondProject=P.validate({...withPhoto(shared.id),id:'second_export'});
+            const secondRow=L.record(secondProject,'auto',secondProject.id,301,301,null);
+            const secondOwner=await adapter.saveAnimation(secondRow);
+            await store.removeDocument({documentId:'observation:'+shared.id,expectedRevision:2});
+            const multi=port.parseBundle(await port.exportRetainedPortable(indexedDB,[firstRow,secondRow]));
+            const ids=multi.animations.map(v=>v.project.keyframes[0].referenceImageIds[0]);
+            const records=ids.map(id=>multi.referenceImages.find(record=>record.id===id));
+            ok(new Set(ids).size===2&&records[0].author==='First'&&records[1].author==='Second'&&
+                records.every(record=>record.original.dataUrl===shared.original.dataUrl),
+                'portable multi-export merged historical observation versions');
+            ok((await port.get(indexedDB,secondProject.id)).project.keyframes[0].referenceImageIds[0]===shared.id,
+                'portable remap modified local project');
+            await store.removeDocument({documentId:'animation:'+firstProject.id,expectedRevision:firstOwner.managedRevision});
+            await store.removeDocument({documentId:'animation:'+secondProject.id,expectedRevision:secondOwner.managedRevision});
             const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
             const inspection=await barrier.snapshot(()=>port.inspectUsage(indexedDB));
             ok(inspection.value.length===1&&inspection.value[0].updatedAt===102,'existing-only usage failed');

@@ -1272,6 +1272,48 @@
       await store.writeDocuments(plans,{expectedInventory:animationExpected(existing)});
       return {created:createdIds.length,reused:reusedIds.length,createdIds,reusedIds};
     }
+    // A V2 portable bundle has one asset record per alias. Preserve
+    // distinct historical observation versions by remapping conflicting
+    // aliases in the exported copy only, never in the local owners.
+    async function exportRetainedAnimationPortable(entries,lookup,options={}){
+      check(Array.isArray(entries)&&entries.length>0&&entries.length<=animations.MAX_PORTABLE_ITEMS,
+        'Select saved Animation records to export');
+      const expected=entries.map(animations.normalize);
+      check(new Set(expected.map(row=>row.id)).size===expected.length,'duplicate saved Animation selection');
+      const barrier=deps.CurvatureModernBackupWriteBarrier;
+      check(barrier&&env.navigator?.locks,'coordinated Animation export unavailable');
+      const {value:verified}=await barrier.create(env.navigator.locks).snapshot(async()=>{
+        const rows=[];
+        for(const row of expected){
+          const current=await inspectAnimation(row.id);
+          check(current&&same(current.row,row),'Saved Animation changed or was removed; refresh before exporting');
+          rows.push(current);
+        }
+        return rows;
+      });
+      const used=new Set(verified.flatMap(value=>value.referenceImages.map(record=>record.id)));
+      const byAlias=new Map(),assets=[],portable=[];
+      let ordinal=0;
+      for(const value of verified){
+        const mapping=new Map();
+        for(const record of value.referenceImages){
+          if(!byAlias.has(record.id))byAlias.set(record.id,[]);
+          const variants=byAlias.get(record.id);
+          let variant=variants.find(v=>same(v.record,record));
+          if(!variant){
+            let id=record.id;
+            if(variants.length){
+              do{id='portable_image_'+(++ordinal);}while(used.has(id));
+            }
+            used.add(id);variant={record,id};variants.push(variant);
+            assets.push({...record,id});
+          }
+          mapping.set(record.id,variant.id);
+        }
+        portable.push(animations.remapReferences(value.row,mapping));
+      }
+      return animations.exportPortable(portable,lookup,{...options,referenceImages:assets});
+    }
     function createAnimationLibraryPort(){
       check(projects&&animations,'Animation adapters unavailable');
       function bound(db){check(db===env.indexedDB,'Animation Library database context mismatch');}
@@ -1304,6 +1346,9 @@
             old.createdAt,Math.max(now||Date.now(),old.updatedAt+1),old.thumbnail,image));
         },
         importEntries:async(db,items,now,crypto)=>{bound(db);return importApplicationAnimations(items,now,crypto);},
+        exportRetainedPortable:async(db,entries,lookup,options)=>{
+          bound(db);return exportRetainedAnimationPortable(entries,lookup,options);
+        },
         // Export from the immutable owner, not from a mutable gallery alias.
         retainedReferences:async(db,id)=>{
           bound(db);const value=await readAnimation(id);check(value,'Saved Animation missing');return value.referenceImages;

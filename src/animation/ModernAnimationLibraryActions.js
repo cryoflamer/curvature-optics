@@ -77,11 +77,20 @@
           return entry.id===options.selected();
         });
         if(!entries.length)throw Error('Select a saved animation first');
-        function download(assets){
-          var json=api.exportPortable(entries,options.keyframeThumbnail,{referenceImages:assets});
+        function downloadJson(json){
           options.download(json,exportFilename(json,undefined,all));
           options.notice('Exported '+entries.length+' complete animation'+
             (entries.length===1?'':'s')+' to portable JSON.',false);
+        }
+        function download(assets){
+          downloadJson(api.exportPortable(entries,options.keyframeThumbnail,{referenceImages:assets}));
+        }
+        if(typeof api.exportRetainedPortable==='function'){
+          options.setBusy(true);options.notice('Collecting retained original photographs…',false);
+          return api.exportRetainedPortable(indexedDB(),entries,options.keyframeThumbnail)
+            .then(downloadJson).catch(function(error){
+              options.notice('Animation export failed: '+error.message,true);
+            }).then(finishBusy);
         }
         if(api.referenceIds&&api.referenceIds(entries).length){
           options.setBusy(true);options.notice('Collecting original reference photographs…',false);

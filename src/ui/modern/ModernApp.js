@@ -3311,11 +3311,17 @@
     try{
       var checked=[];
       for(var entry of entries)checked.push(await verifySharedNamedAnimation(entry));
-      var originals=await studioLibrary.collectReferences(checked,
-        id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
-      for(var original of originals)await root.CurvatureModernReferenceImageImport.verify(original,root);
-      var json=studioLibrary.exportPortable(checked,experiment=>studioKeyframeThumbnails?.get(experiment),
-        {referenceImages:originals});
+      var json;
+      if(typeof studioLibrary.exportRetainedPortable==='function'){
+        json=await studioLibrary.exportRetainedPortable(root.indexedDB,checked,
+          experiment=>studioKeyframeThumbnails?.get(experiment));
+      }else{
+        var originals=await studioLibrary.collectReferences(checked,
+          id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+        for(var original of originals)await root.CurvatureModernReferenceImageImport.verify(original,root);
+        json=studioLibrary.exportPortable(checked,experiment=>studioKeyframeThumbnails?.get(experiment),
+          {referenceImages:originals});
+      }
       downloadHistoryJson(json,studioLibraryActionsApi.exportFilename(json,undefined,checked.length!==1));
       ctx.message='Exported '+checked.length+' saved animation project(s).';
     }catch(error){ctx.error=true;ctx.message='Animation export failed: '+error.message;}
