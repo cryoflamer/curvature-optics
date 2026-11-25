@@ -18,6 +18,38 @@
   const positive=v=>Number.isSafeInteger(v)&&v>0;
   const nonnegative=v=>Number.isSafeInteger(v)&&v>=0;
   const strong=(slot,target)=>({slot,target,strength:'strong'});
+  function aliases(project){
+    return [...new Set(project.keyframes.flatMap(frame=>frame.referenceImageIds||[]))].sort();
+  }
+  function calibrationOrigins(project){
+    return [project.baseExperiment,...(project.mode==='experimental'?project.keyframes.map(frame=>frame.value):[])]
+      .map(experiment=>experiment.calibrationOrigin).filter(Boolean);
+  }
+  // The acknowledged shared collection is one revisioned owner. Inactive
+  // workspaces and pending journals are included, never only the selected one.
+  function draftInventory(row){
+    const photos=new Set(),origins=[];
+    function physical(experiment){
+      if(experiment.calibrationOrigin)origins.push(experiment.calibrationOrigin);
+    }
+    for(const workspace of row.collection.workspaces){
+      for(const frame of workspace.checkpoint.draft.frames){
+        physical(frame.experiment);
+        for(const id of frame.referenceImageIds||[])photos.add(id);
+      }
+    }
+    if(row.namedSave)for(const record of [row.namedSave.plan.before,row.namedSave.plan.after]){
+      for(const alias of aliases(record.project))photos.add(alias);
+      origins.push(...calibrationOrigins(record.project));
+    }
+    if(row.keyframeEdit){
+      const edit=row.keyframeEdit.session;
+      for(const experiment of [edit.original,edit.workspace,edit.candidate,...edit.past,...edit.future])
+        physical(experiment);
+      if(row.keyframeEdit.history)physical(row.keyframeEdit.history.experiment);
+    }
+    return {photos:[...photos].sort(),origins,results:[...new Set(origins.map(o=>o.resultId))].sort()};
+  }
   function create(env,deps=env){
     const core=deps.CurvatureModernManagedObjectStore,state=deps.CurvatureModernExperimentState,
       history=deps.CurvatureModernExperimentHistory,fp=deps.CurvatureModernExperimentFingerprint,
@@ -46,13 +78,6 @@
         (v.thumbnail===null||exact(v.thumbnail,['dataUrl','width','height'])),
         references:v=>[strong('original',v.originalId)]}
     ];
-    function aliases(project){
-      return [...new Set(project.keyframes.flatMap(frame=>frame.referenceImageIds||[]))].sort();
-    }
-    function calibrationOrigins(project){
-      return [project.baseExperiment,...(project.mode==='experimental'?project.keyframes.map(frame=>frame.value):[])]
-        .map(experiment=>experiment.calibrationOrigin).filter(Boolean);
-    }
     function calibrationAliases(project){
       return [...new Set(calibrationOrigins(project).map(origin=>origin.resultId))].sort();
     }
@@ -87,31 +112,6 @@
       ...(v.originalId?[strong('original',v.originalId)]:[]),
       ...v.results.map(entry=>strong('result:'+entry.alias,entry.target))
     ]});
-    // The acknowledged shared collection is one revisioned owner. Inactive
-    // workspaces and pending journals are included, never only the selected one.
-    function draftInventory(row){
-      const photos=new Set(),origins=[];
-      function physical(experiment){
-        if(experiment.calibrationOrigin)origins.push(experiment.calibrationOrigin);
-      }
-      for(const workspace of row.collection.workspaces){
-        for(const frame of workspace.checkpoint.draft.frames){
-          physical(frame.experiment);
-          for(const id of frame.referenceImageIds||[])photos.add(id);
-        }
-      }
-      if(row.namedSave)for(const record of [row.namedSave.plan.before,row.namedSave.plan.after]){
-        for(const alias of aliases(record.project))photos.add(alias);
-        origins.push(...calibrationOrigins(record.project));
-      }
-      if(row.keyframeEdit){
-        const edit=row.keyframeEdit.session;
-        for(const experiment of [edit.original,edit.workspace,edit.candidate,...edit.past,...edit.future])
-          physical(experiment);
-        if(row.keyframeEdit.history)physical(row.keyframeEdit.history.experiment);
-      }
-      return {photos:[...photos].sort(),origins,results:[...new Set(origins.map(o=>o.resultId))].sort()};
-    }
     function mapped(entries,ids,standalone=false){
       return Array.isArray(entries)&&entries.length===ids.length&&entries.every((entry,i)=>
         exact(entry,['alias','target'])&&entry.alias===ids[i]&&
@@ -465,8 +465,14 @@
       return {row,managedRevision:graph.document.revision,
         snapshots:{committed:committed.ref,draft:draft?draft.ref:null}};
     }
-    async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false}={}){
+    function explicitStandaloneIds(ids){
+      check(Array.isArray(ids),'standalone result ID list required');
+      for(const id of ids)resultDocumentId(id);
+      return new Set(ids);
+    }
+    async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false,standaloneResultIds=[]}={}){
       workingContracts();
+      const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
       const previous=expectedRevision===0?null:await readWorkingCheckpoint();
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
@@ -489,7 +495,7 @@
             const target=archived.payload.evidence.result;
             checkOrigin(origin,await store.get(target));
             evidence={result:target};
-          }else if(standalone===true||retained.some(r=>r.payload.evidence==='standalone'&&
+          }else if(standalone===true||allowedStandalone.has(origin.resultId)||retained.some(r=>r.payload.evidence==='standalone'&&
             same(r.payload.experiment.calibrationOrigin,origin)))evidence='standalone';
           else evidence={result:await resolveOrigin(origin)};
         }
@@ -537,8 +543,9 @@
       return {row,collectionId:resource.id,managedRevision:graph.document.revision,
         observations:v.observations,evidence:v.evidence,referenceImages};
     }
-    async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false}={}){
+    async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[]}={}){
       draftContracts();
+      const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
       const previous=expectedRevision===0?null:await readAnimationWorkingCollection();
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
@@ -573,7 +580,8 @@
         }else{
           const retained=oldResults.has(alias)&&oldResults.get(alias)===null&&
             origins.every(origin=>oldInventory.origins.some(old=>same(origin,old)));
-          check(standalone===true||retained,'working calibration result missing; standalone recovery must be explicit');
+          check(standalone===true||allowedStandalone.has(alias)||retained,
+            'working calibration result missing; standalone recovery must be explicit');
         }
         evidence.push({alias,target});
       }
@@ -605,20 +613,26 @@
           'source already contains a managed store; use graph restore instead');
         const adapter=create(env,deps);
         check(adapter.store.coordination==='participating-writer','backup coordination required');
-        const covered=new Set(),imported={},skipped=[],standalone=[],originals=new Map();
-        function rows(database,store){
-          covered.add(database+'/'+store);
+        const covered=new Set(),partial=new Map(),imported={},skipped=[],standalone=[],originals=new Map();
+        function rows(database,store,onlyKey){
+          const path=database+'/'+store;
           const source=present.find(db=>db.name===database)?.stores.find(s=>s.name===store);
-          return (source?.records||[]).map(row=>({key:backup.decode(row.key),value:backup.decode(row.value)}));
+          const selected=(source?.records||[]).filter(row=>onlyKey===undefined||backup.decode(row.key)===onlyKey);
+          if(onlyKey===undefined)covered.add(path);
+          else{
+            check(selected.length<=1,'duplicate shared checkpoint key');
+            partial.set(path,(partial.get(path)||0)+selected.length);
+          }
+          return selected.map(row=>({key:backup.decode(row.key),value:backup.decode(row.value)}));
         }
         const identityKey=v=>{const i=deps.CurvatureModernReferenceImage.validateIdentity(v);
           return i.sha256+':'+i.width+'x'+i.height;};
-        async function each(kind,entries,operation){
+        async function each(kind,entries,operation,keyIsId=true){
           imported[kind]=0;
           for(const entry of entries){
             let acknowledged=false;
             try{
-              check(entry.value&&entry.key===entry.value.id,'source row ID mismatch');
+              check(entry.value&&(!keyIsId||entry.key===entry.value.id),'source row ID mismatch');
               await operation(entry.value,()=>{acknowledged=true;});
               imported[kind]++;
             }catch(error){
@@ -689,11 +703,42 @@
           ack();
           check(await adapter.readCalibrationProject(row.id),'migrated Calibration Project missing');
         });
+        // Only the acknowledged shared rows are adopted here. The other
+        // keys in the same legacy stores remain explicit unhandled evidence.
+        const missingArchiveIds=origins=>[...new Set(origins.map(o=>o.resultId))]
+          .filter(id=>!archived.has(id));
+        await each('working-checkpoint',rows('curvature-modern-working-session','session','shared-checkpoint'),
+          async (input,ack)=>{
+            const session=deps.CurvatureModernSessionAutosave,contract=deps.CurvatureModernDocumentSession;
+            check(session&&contract,'working checkpoint contracts unavailable');
+            const row=await session.validateSharedCheckpoint(input,deps.CurvatureModernExperimentState,env.crypto,contract);
+            const missing=missingArchiveIds([row.experiment.calibrationOrigin,row.draft?.calibrationOrigin].filter(Boolean));
+            await adapter.saveWorkingCheckpoint(row,{standaloneResultIds:missing});
+            ack();
+            const read=await adapter.readWorkingCheckpoint();
+            check(read?.row.digest===row.digest,'migrated working checkpoint mismatch');
+            for(const resultId of missing)standalone.push({kind:'working-checkpoint',id:'shared-checkpoint',
+              resultId,reason:'archive absent in source'});
+          },false);
+        await each('animation-working',rows('curvature-modern-animation-draft','draft','shared-workspaces-v1'),
+          async (input,ack)=>{
+            const drafts=deps.CurvatureModernAnimationDraftAutosave;
+            check(drafts,'Animation working collection contract unavailable');
+            const row=await drafts.verifySharedRow(input,env.crypto);
+            const missing=missingArchiveIds(draftInventory(row).origins);
+            await adapter.saveAnimationWorkingCollection(row,{standaloneResultIds:missing});
+            ack();
+            const read=await adapter.readAnimationWorkingCollection();
+            check(read?.row.digest===row.digest,'migrated Animation working collection mismatch');
+            for(const resultId of missing)standalone.push({kind:'animation-working',id:'shared-workspaces-v1',
+              resultId,reason:'archive absent in source'});
+          },false);
         const unhandled=[];
         for(const db of present)for(const store of db.stores){
           const key=db.name+'/'+store.name;
-          if(store.records.length&&!covered.has(key))
-            unhandled.push({source:key,records:store.records.length});
+          const remaining=store.records.length-(partial.get(key)||0);
+          if(remaining&&!covered.has(key))
+            unhandled.push({source:key,records:remaining});
         }
         if(data.webStorage.local.length)unhandled.push({source:'localStorage',records:data.webStorage.local.length});
         if(data.webStorage.session.length)unhandled.push({source:'sessionStorage',records:data.webStorage.session.length});

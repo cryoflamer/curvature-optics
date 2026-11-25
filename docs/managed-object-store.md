@@ -212,7 +212,13 @@ in dependency order, deduplicates verified originals, reports skipped records,
 unresolved standalone evidence and unhandled stores/Web Storage, and verifies
 the resulting graph. An acknowledged row that cannot be reopened fails the
 rehearsal rather than being reported as skipped. This is a best-effort rehearsal,
-not an in-place migration or production activation. It never returns migration
+not an in-place migration or production activation. It additionally adopts the
+exact acknowledged shared physical checkpoint and Animation working collection
+after the named owners. Other keys in those same legacy databases remain
+reported as unhandled; pending selection/save/edit intents are preserved, not
+replayed. Only fit IDs absent from the source archive may be explicitly
+standalone during this adoption; a failed migration of an existing result
+does not authorize dropping its evidence. It never returns migration
 eligibility, and a failed rehearsal profile can be discarded.
 
 Before adopting destructive operations, verify an external backup, prevent

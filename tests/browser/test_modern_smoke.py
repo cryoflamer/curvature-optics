@@ -976,6 +976,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/animation/ModernAnimationContract.js',
             'src/animation/ModernAnimationProject.js',
             'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
         ]
@@ -1013,9 +1016,29 @@ class ModernBrowserSmoke(unittest.TestCase):
             const broken=structuredClone(project);broken.id='missing_animation';
             broken.keyframes[0].referenceImageIds=['missing_photo'];
             await CurvatureModernAnimationLibrary.create(indexedDB,broken,'accurate',101,null,true);
+            const S=CurvatureModernSessionAutosave,A=CurvatureModernAnimationDraftAutosave;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const checkpoint=S.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession});
+            await checkpoint.read();
+            const initial=await checkpoint.initialize(experiment);
+            const edit=structuredClone(experiment);edit.compare.selected='A';
+            const working=await checkpoint.stage(edit,initial.revision);
+            const cp=A.checkpoint({draft:{name:'Research draft',description:'',mode:'auto',target:'auto',
+                source:'history',frames:[{key:'first',sourceSnapshotId:saved.entry.id,name:'Compare',
+                    experiment,travelMs:0,holdMs:0,easing:'linear',referenceImageIds:[record.id]}]},
+                selectedKey:'first',quality:'auto',prepared:false,positionMs:0},100);
+            const plan=await A.inspectLegacySources(window);
+            const draftStore=A.openSharedCollection(indexedDB,{lease,crypto});
+            await draftStore.read();
+            const drafts=await draftStore.initializeEmpty(plan,A.collection('draft_research',cp,100),localStorage);
+            // Older fallback keys in the same stores must not be reported as
+            // adopted just because the shared key was handled.
+            await S.write(indexedDB,experiment,99);
+            await A.write(indexedDB,cp);
             sessionStorage.setItem('curvature-test-unhandled','preserve-report');
             const archive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
-            return {archive,history:saved.entry,record,project};
+            return {archive,history:saved.entry,record,project,working,drafts};
         }""")
         target_context=self.browser.new_context()
         try:
@@ -1026,10 +1049,14 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const report=await api.rehearseLegacyArchive(source.archive,window);
                 const adapter=api.create(window),history=await adapter.readHistory(source.history.id),
                     photo=await adapter.readObservation(source.record.id),
-                    animation=await adapter.readAnimation(source.project.id);
+                    animation=await adapter.readAnimation(source.project.id),
+                    working=await adapter.readWorkingCheckpoint(),drafts=await adapter.readAnimationWorkingCollection();
                 const same=JSON.stringify(history.row.experiment)===JSON.stringify(source.history.experiment)&&
                     photo.row.record.original.dataUrl===source.record.original.dataUrl&&
-                    JSON.stringify(animation.row.project)===JSON.stringify(source.project);
+                    JSON.stringify(animation.row.project)===JSON.stringify(source.project)&&
+                    working.row.digest===source.working.digest&&working.row.draft.compare.selected==='A'&&
+                    drafts.row.digest===source.drafts.digest&&
+                    drafts.referenceImages[0].original.dataUrl===source.record.original.dataUrl;
                 let refused=false;
                 try{await api.rehearseLegacyArchive(source.archive,window);}
                 catch(error){refused=/empty disposable/.test(error.message);}
@@ -1039,7 +1066,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertTrue(result['refused'])
             self.assertEqual(result['databases'],['curvature-modern-managed-objects'])
             self.assertEqual(result['report']['imported'],{'observation':2,'calibration-result':0,
-                'history':1,'animation':1,'calibration':0})
+                'history':1,'animation':1,'calibration':0,'working-checkpoint':1,'animation-working':1})
             self.assertEqual(result['report']['originals'],1)
             self.assertEqual(len(result['report']['skipped']),1)
             self.assertEqual(result['report']['skipped'][0]['kind'],'animation')
@@ -1049,6 +1076,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 CurvatureModernManagedResources.create(window).readAnimation('missing_animation')"""))
             self.assertFalse(result['report']['eligibleForMigration'])
             self.assertIn({'source':'sessionStorage','records':1},result['report']['unhandled'])
+            self.assertIn({'source':'curvature-modern-working-session/session','records':1},result['report']['unhandled'])
+            self.assertIn({'source':'curvature-modern-animation-draft/draft','records':1},result['report']['unhandled'])
             self.assertTrue(result['report']['integrity']['valid'])
             self.assertFalse(self.page.evaluate("""async()=> (await indexedDB.databases()).some(
                 db=>db.name==='curvature-modern-managed-objects')"""))
