@@ -2118,6 +2118,116 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'projects': 3})
 
+    def test_managed_physical_history_evidence_handoff(self):
+        # Use the existing Modern script dependency order, but create only
+        # synthetic managed records. No production routing is changed.
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        self.page.add_script_tag(url='/src/storage/ModernManagedResources.js')
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        result=self.page.evaluate("""async fixture=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            // Same mixed authored topology as the existing result contract
+            // test, with a real decodable generated raster. Fit metrics are
+            // synthetic and are not a new optical-fit measurement.
+            const m=structuredClone(fixture.model),observations=structuredClone(fixture.observations);
+            observations[1].included=false;
+            const canvas=document.createElement('canvas');canvas.width=1176;canvas.height=791;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#7c5a30';ctx.fillRect(0,0,1176,791);
+            const record={version:1,id:'managed_soundly',title:'Soundly evidence test',author:'Test source',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:1176,height:791}};
+            const archivePort=CurvatureModernCalibrationResultArchive.createPort({managedResources:adapter});
+            await rejects(async()=>CurvatureModernCalibrationResultArchive.createPort(),/explicit managed Calibration archive/i);
+            const freeParameters=fixture.options.freeParameters.slice();
+            const physics={atmosphere:'vacuum',temperatureProfile:structuredClone(fixture.options.temperatureProfile)};
+            const points=observations.filter(r=>r.included).map(r=>({id:r.landmark.id,status:'visible',
+                observed:r.pixel.slice(),predicted:[r.pixel[0]+3,r.pixel[1]+4],weight:r.weight}));
+            const editor=CurvatureModernPhotoCalibrationEditor;
+            const fit={status:'stalled',reason:'Step tolerance',pose:{...m,Height:42.8},
+                method:'canvas-direct',atmosphere:'vacuum',initialRmsPx:300,evaluations:20,
+                acceptedSteps:4,iterations:5,freeParameters,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((n,p)=>n+25*p.weight/2,0),points},
+                materialBinding:editor.fitBinding(observations,freeParameters,m,physics,1176,791)};
+            const input={format:'curvature-photo-calibration',version:3,scene:{model:m,physics},
+                referenceImage:record,referenceSource:{source:'local',links:[]},observations,
+                fit:{method:'canvas-direct',maxIterations:80,freeParameters,result:fit,status:'stalled',running:false}};
+            const resultApi=CurvatureModernCalibrationResult;
+            const archived=await resultApi.create(input,window);
+            const row={id:archived.id,createdAt:42,record:archived};
+            await rejects(()=>adapter.archiveCalibrationExperiment(input,{guard:()=>{throw Error('stale calibration editor');}}),
+                /stale calibration editor/);
+            ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length&&
+                (await adapter.store.verifyIntegrity()).liveObjects===0,'refused archive partially committed');
+            const committed=await archivePort.archiveExperiment(indexedDB,input,window);
+            ok(!committed.reused&&!committed.photoReused&&committed.photoId===record.id&&
+                committed.row.id===archived.id,'atomic archive port result incorrect');
+            const photo=await adapter.readObservation(record.id);
+            const saved=await adapter.saveCalibrationResult(row,{originalId:photo.originalId});
+            ok(saved.reused,'low-level archive did not reuse result');
+            const again=await archivePort.archiveExperiment(indexedDB,{...input,
+                referenceImage:{...record,id:'new_photo_alias',author:'Another attribution'}},window);
+            ok(again.reused&&again.photoReused&&again.row.createdAt===committed.row.createdAt&&
+                JSON.stringify(again.row.record)===JSON.stringify(committed.row.record),
+                'repeated archival changed first evidence');
+            const portable=await archivePort.save(indexedDB,archived,window);
+            ok(portable.reused&&portable.row.id===archived.id,'portable archive save not idempotent');
+            const listed=await archivePort.list(indexedDB);
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspected=await barrier.snapshot(()=>archivePort.inspectUsage(indexedDB));
+            ok(listed.length===1&&JSON.stringify(listed)===JSON.stringify(inspected.value),'archive inspection failed');
+            const read=await adapter.readCalibrationResult(archived.id);
+            ok(read.original.original.dataUrl===record.original.dataUrl,'archived original bytes changed');
+            ok(JSON.stringify(read.row.record)===JSON.stringify(archived),'archived fit changed');
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A',calibrationOrigin:resultApi.origin(archived,'Scene')});
+            const history={id:71,version:1,createdAt:43,source:'manual',pinned:true,
+                name:'Calibrated',description:'',thumbnail:null,experiment};
+            const snap=await adapter.saveHistory(history);
+            ok((await adapter.store.get(saved.resultId)).refCount===2,'snapshot did not retain archive');
+            await adapter.store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
+            await adapter.store.removeDocument({documentId:'result:'+archived.id,expectedRevision:1});
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const port=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D,managedResources:adapter});
+            const uncalibrated=structuredClone(experiment);delete uncalibrated.calibrationOrigin;
+            await port.read();
+            const initial=await port.initialize(uncalibrated);
+            const restored=await port.replaceFromHistory(uncalibrated,experiment,initial.revision,{isCurrent:()=>true});
+            const physical=await adapter.readWorkingCheckpoint();
+            ok(physical.row.digest===restored.digest&&physical.snapshots.committed.id===snap.snapshotId&&
+                physical.snapshots.committed.evidence.result===saved.resultId,'History restore lost retained evidence');
+            await adapter.store.removeDocument({documentId:'history:71',expectedRevision:1});
+            const edited=structuredClone(experiment);edited.scene.camera.Height+=1;
+            const staged=await port.stage(edited,restored.revision);
+            const draft=await adapter.readWorkingCheckpoint();
+            ok(draft.snapshots.draft.evidence.result===saved.resultId,'edit lost retained origin');
+            const historyPort=CurvatureModernExperimentHistory.create({managedResources:adapter,protectedRetention:true,now:()=>100});
+            const recorded=await historyPort.record(edited,'manual',null);
+            const retained=await adapter.readHistory(recorded.entry.id);
+            ok(retained.snapshotId===draft.snapshots.draft.id&&retained.evidence.result===saved.resultId,'History save lost working evidence');
+            await port.promote(staged.revision);
+            ok(!(await adapter.store.collectGarbage(saved.resultId)).collected&&
+                !(await adapter.store.collectGarbage(photo.originalId)).collected,'handoff did not protect archive');
+            ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
+                'handoff recreated removed gallery records');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};
+        }""",fixture)
+        self.assertEqual(result, {'valid': True, 'history': 1})
+
     def test_managed_calibration_result_snapshot_evidence(self):
         # Use the existing Modern script dependency order, but create only
         # synthetic managed records. No production routing is changed.

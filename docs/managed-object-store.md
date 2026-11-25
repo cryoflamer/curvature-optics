@@ -481,3 +481,17 @@ legacy inspection/adoption and empty-profile migration decisions remain
 fenced until the coordinated cutover. Restoring a physical payload whose
 archived fit is no longer listed may still require an explicit evidence
 handoff from its current owner; this port does not authorize a downgrade.
+
+### Verified physical evidence handoff
+
+The managed shared checkpoint can retain an exact History snapshot and its
+verified Calibration result even when the archive gallery entry has been
+removed. The source is an exact validated experiment, not a guessed alias;
+multiple different verified targets fail closed. The History inventory is
+CAS-checked in the destination transaction. New History records can likewise
+retain verified evidence from the committed or staged working checkpoint
+with the same calibration origin, reusing an exact snapshot where possible.
+The working root revision is checked atomically. Low-level explicit import
+semantics and standalone provenance policy remain separate. No removed
+gallery root is recreated; no broad automatic resource reclamation is
+introduced. This does not yet establish all Animation/Calibration handoffs.

@@ -149,7 +149,7 @@
         source:row.source,pinned:item.pinned,name:item.name,description:item.description,
         thumbnail:item.thumbnail}};
     }
-    async function prepareHistory(row,{expectedRevision=0,snapshotId,standalone=false}={}){
+    async function prepareHistory(row,{expectedRevision=0,snapshotId,standalone=false,handoff=null}={}){
       const {item,metadata}=historyFields(row),experiment=item.experiment;
       const prior=expectedRevision===0?null:await readHistory(row.id);
       check(expectedRevision===0||prior?.managedRevision===expectedRevision,'History revision conflict');
@@ -160,7 +160,14 @@
           check(standalone!==true,'verified calibration evidence cannot be downgraded');
           evidence=prior.evidence;
         }else if(retained&&prior.evidence==='standalone')evidence='standalone';
-        else evidence=standalone===true?'standalone':{result:await resolveOrigin(experiment.calibrationOrigin)};
+        else if(handoff){
+          check(!standalone&&same(handoff.experiment.calibrationOrigin,experiment.calibrationOrigin),
+            'History handoff origin mismatch');
+          evidence=handoff.evidence;
+          if(typeof evidence==='object')checkOrigin(experiment.calibrationOrigin,await store.get(evidence.result));
+          else check(evidence==='standalone','invalid History handoff evidence');
+          if(same(handoff.experiment,experiment))snapshotId=handoff.id;
+        }else evidence=standalone===true?'standalone':{result:await resolveOrigin(experiment.calibrationOrigin)};
       }
       const payload={experiment,evidence};
       // A metadata-only edit does not allocate another immutable snapshot.
@@ -223,9 +230,27 @@
         return {created:false,entry:null,skipped:'capacity'};
       }
       const id=await suggestHistoryId();
+      const inventories=[expectedInventory];
+      let handoff=null;
+      if(snapshot.calibrationOrigin&&session&&sessionContract){
+        const working=await readWorkingCheckpoint();
+        if(working){
+          const candidates=['committed','draft'].map(slot=>({
+            experiment:slot==='committed'?working.row.experiment:working.row.draft,
+            ref:working.snapshots[slot]})).filter(v=>v.experiment&&
+              same(v.experiment.calibrationOrigin,snapshot.calibrationOrigin));
+          const chosen=candidates.find(v=>typeof v.ref.evidence==='object'&&same(v.experiment,snapshot))??
+            candidates.find(v=>typeof v.ref.evidence==='object')??
+            candidates.find(v=>same(v.experiment,snapshot));
+          if(chosen){
+            handoff={experiment:chosen.experiment,id:chosen.ref.id,evidence:chosen.ref.evidence};
+            inventories.push({kind:'working-checkpoint',documents:[{id:workingId,revision:working.managedRevision}]});
+          }
+        }
+      }
       const next=await prepareHistory({id,version:history.VERSION,createdAt:now(),source,pinned:source!=='auto',
-        name:naming.snapshot(snapshot),description:'',thumbnail:item.thumbnail,experiment:snapshot});
-      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+        name:naming.snapshot(snapshot),description:'',thumbnail:item.thumbnail,experiment:snapshot},{handoff});
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory:inventories,guard});
       return {created:true,entry:next.row,managedRevision:document.revision};
     }
     // Portable import retains the legacy name/notes deduplication contract.
@@ -1316,7 +1341,7 @@
       return new Set(ids);
     }
     async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,historyHandoff=false}={}){
       workingContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
@@ -1331,7 +1356,8 @@
         if(experiment)retained.push({id:previous.snapshots[slot].id,
           payload:{experiment,evidence:previous.snapshots[slot].evidence}});
       }
-      const resources=[],references=[];
+      const resources=[],references=[],inventories=[];
+      let historySources=null;
       for(const [slot,experiment] of [['committed',row.experiment],['draft',row.draft]]){
         if(!experiment)continue;
         const origin=experiment.calibrationOrigin;
@@ -1345,7 +1371,28 @@
             evidence={result:target};
           }else if(standalone===true||allowedStandalone.has(origin.resultId)||retained.some(r=>r.payload.evidence==='standalone'&&
             same(r.payload.experiment.calibrationOrigin,origin)))evidence='standalone';
-          else evidence={result:await resolveOrigin(origin)};
+          else{
+            let handoff=null;
+            if(historyHandoff){
+              if(!historySources){
+                historySources=await listVerified('history',readHistory,historyId,v=>v,(a,b)=>b.row.id-a.row.id);
+                inventories.push({kind:'history',documents:historySources.map(v=>({
+                  id:historyId(v.row.row.id),revision:v.managedRevision}))});
+              }
+              const matches=historySources.map(v=>v.row).filter(v=>same(v.row.experiment,experiment));
+              const verified=matches.filter(v=>typeof v.evidence==='object');
+              check(new Set(verified.map(v=>v.evidence.result)).size<=1,
+                'ambiguous History calibration evidence; select an exact source');
+              handoff=verified[0]??null;
+              // Only transfer verified evidence here; portable standalone
+              // provenance remains a separately explicit policy.
+            }
+            if(handoff){
+              evidence=handoff.evidence;
+              checkOrigin(origin,await store.get(evidence.result));
+              retained.push({id:handoff.snapshotId,payload:{experiment,evidence}});
+            }else evidence={result:await resolveOrigin(origin)};
+          }
         }
         const payload={experiment,evidence};
         let snapshot=[...retained,...resources].find(r=>same(r.payload,payload));
@@ -1357,7 +1404,7 @@
       }
       const {experiment,draft,...metadata}=row;
       const [saved]=await store.writeDocuments([{documentId:workingId,kind:'working-checkpoint',
-        expectedRevision,metadata,references,resources}],{guard,lease});
+        expectedRevision,metadata,references,resources}],{expectedInventory:inventories.length?inventories:null,guard,lease});
       return {managedRevision:saved.revision};
     }
     function createWorkingCheckpointPort(db,lease){
@@ -1378,7 +1425,7 @@
           check(same(previous?.row??null,before),'shared checkpoint CAS conflict; evidence retained');
           check(previous||row.revision===1,'initial working checkpoint revision must be one');
           await saveWorkingCheckpoint(row,{expectedRevision:previous?.managedRevision??0,
-            expectedRow:before,guard,lease});
+            expectedRow:before,guard,lease,historyHandoff:true});
         }
       });
     }
