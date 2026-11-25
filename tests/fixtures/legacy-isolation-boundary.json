@@ -787,10 +787,12 @@
         "modern"
       ],
       "commonJsSourceCallers": [
+        "src/animation/ModernAnimationDraftAutosave.js",
         "src/animation/ModernDemoCatalog.js"
       ],
       "commonJsTestCallers": [
         "tests/ModernAnimationAtmosphereSwitcher.test.js",
+        "tests/ModernAnimationDraftAutosave.test.js",
         "tests/ModernAnimationKeyframeReferences.test.js",
         "tests/ModernAnimationLibrary.test.js",
         "tests/ModernAnimationLibraryFilters.test.js",
