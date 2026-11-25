@@ -7050,7 +7050,7 @@
         if(host.__studioHistoryAction)host.__studioHistoryAction(direction);
       });
     }
-    var retentionWorkspace=studioWorkspaceId;
+    var retentionWorkspace=experimentPreview.animationContext?.retention?studioWorkspaceId:null;
     var studioEditing=studioEditingApi.create({
       studio:studioApi,
       readOnly:function(){return !!studioActiveDemo;},
