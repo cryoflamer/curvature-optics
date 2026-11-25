@@ -12161,6 +12161,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(durable['libraryId'],latest['id'])
         self.assertEqual(durable['libraryRevision'],latest['updatedAt'])
         self.assertEqual(durable['draft']['name'],'New saved revision')
+        self.page.locator('#ModernAnimationStudio').get_by_role('button',name='Inspect project settings').click()
         field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
         field.fill('Working copy edits only')
         field.press('Tab')
