@@ -835,7 +835,11 @@ inspected saved record inside its IndexedDB readwrite transaction and
 checks absence afterward. A linked working checkpoint is not removed,
 rewritten or silently reassigned: its old Library identity remains recovery
 evidence and the editor reports the unavailable/changed revision. The
-other named mutations and the temporary keyframe editor remain disabled.
+portable named import uses the same parser, deduplication and reference
+original verification/remapping as ordinary Modern. It leaves working
+selection and drafts unchanged; originals already imported before a
+failed project transaction are retained, not destructively rolled back.
+Other named mutations and the temporary keyframe editor remain disabled.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

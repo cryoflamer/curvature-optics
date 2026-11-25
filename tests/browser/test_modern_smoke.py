@@ -12206,6 +12206,45 @@ class ModernBrowserSmoke(unittest.TestCase):
                                            latest['id']),latest)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_named_import_preserves_session_and_deduplicates(self):
+        """Named portable import remains independent of the shared working selection."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        portable=self.page.evaluate("""()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Imported Animation fixture';
+            for(const frame of project.keyframes)delete frame.referenceImageIds;
+            return {format:'curvature-modern-animations',version:1,
+                animations:[{project,quality:'auto'}]};
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope')
+        file=self.page.locator('#ModernSharedNamedAnimationImportFile')
+        payload={'name':'animation.json','mimeType':'application/json',
+            'buffer':json.dumps(portable).encode('utf-8')}
+        file.set_input_files(payload)
+        message=self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')
+        expect(message).to_contain_text('Imported 1 animations; 0 already present')
+        entries=self.page.evaluate('CurvatureModernAnimationLibrary.list(indexedDB)')
+        self.assertEqual(len(entries),1)
+        self.assertEqual(entries[0]['project']['name'],'Imported Animation fixture')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope'),before)
+        file.set_input_files(payload)
+        expect(message).to_contain_text('Imported 0 animations; 1 already present')
+        self.assertEqual(self.page.evaluate('CurvatureModernAnimationLibrary.list(indexedDB)'),entries)
+        file.set_input_files({'name':'invalid.json','mimeType':'application/json','buffer':b'{}'})
+        expect(message).to_contain_text('Unsupported animation JSON format')
+        self.assertEqual(self.page.evaluate('CurvatureModernAnimationLibrary.list(indexedDB)'),entries)
+        self.page.locator('[data-shared-named-animation-id="'+entries[0]['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                         'Imported Animation fixture')
+
     def test_shared_animation_exact_named_delete_preserves_working_copy(self):
         """A stale Library delete fails; an exact delete leaves linked draft bytes and selection unchanged."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

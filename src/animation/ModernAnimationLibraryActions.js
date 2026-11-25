@@ -25,6 +25,27 @@
     var images=entries.some(function(entry){return Array.isArray(entry.keyframeThumbnails)&&entry.keyframeThumbnails.length>0;});
     return slug+(!all&&entries.length===1?naming.atmosphereSuffix(entries[0].project):'')+'-'+stamp+(images?'-with-thumbnails':'')+'.json';
   }
+  // Portable imports have the same validation and asset-remapping contract
+  // for both legacy and shared editors. No editor or navigation is owned here.
+  async function importPortable(api,db,contents,options={}){
+    const bundle=api.parseBundle?api.parseBundle(contents):{animations:api.parsePortable(contents),referenceImages:[]};
+    const entries=bundle.animations,guard=options.guard||(()=>{});
+    const linked=api.referenceIds&&api.referenceIds(entries).length;
+    if(linked&&!bundle.referenceImages.length)
+      throw Error('Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
+    guard();
+    const mapping=linked?await options.importReferenceImages(bundle.referenceImages):null;
+    const resolved=linked?entries.map(entry=>api.remapReferences(entry,mapping)):entries;
+    // Imported originals may already be durable. Never delete those assets
+    // as compensation if a later project transaction fails or is interrupted.
+    guard();
+    const result=await api.importEntries(db,resolved,undefined,options.crypto());
+    if(options.importKeyframeThumbnails){
+      try{if(await options.importKeyframeThumbnails(entries)===false)result.thumbnailWarning=true;}
+      catch(error){result.thumbnailWarning=true;}
+    }
+    return result;
+  }
   function create(options){
     if(!options||typeof options.library!=='function'||
        typeof options.busy!=='function'||typeof options.render!=='function'||
@@ -79,19 +100,7 @@
       }
       options.setBusy(true);options.notice('Checking animation JSON…',false);
       return Promise.resolve().then(function(){return file.text();}).then(function(contents){
-        var bundle=api.parseBundle?api.parseBundle(contents):{animations:api.parsePortable(contents),referenceImages:[]};
-        var entries=bundle.animations;
-        var linked=api.referenceIds&&api.referenceIds(entries).length;
-        if(linked&&!bundle.referenceImages.length)throw Error('Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
-        var prepared=linked?Promise.resolve().then(function(){return options.importReferenceImages(bundle.referenceImages);}).then(function(mapping){
-          return entries.map(function(entry){return api.remapReferences(entry,mapping);});
-        }):Promise.resolve(entries);
-        return prepared.then(function(resolved){return api.importEntries(indexedDB(),resolved,undefined,options.crypto());}).then(function(result){
-          if(!options.importKeyframeThumbnails)return result;
-          return Promise.resolve().then(function(){return options.importKeyframeThumbnails(entries);})
-            .then(function(ok){if(ok===false)result.thumbnailWarning=true;return result;},
-              function(){result.thumbnailWarning=true;return result;});
-        });
+        return importPortable(api,indexedDB(),contents,options);
       }).then(function(result){
         options.imported(result);
         return refresh();
@@ -163,5 +172,5 @@
     return Object.freeze({refresh:refresh,exportEntries:exportEntries,
       importFile:importFile,rename:rename,setCover:setCover,save:save,remove:remove});
   }
-  return Object.freeze({create:create,exportFilename:exportFilename});
+  return Object.freeze({create:create,exportFilename:exportFilename,importPortable:importPortable});
 }));

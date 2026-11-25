@@ -2937,6 +2937,14 @@
         ()=>void runSharedAnimationAction('deleteNamed',record),false,
         {'data-shared-delete-animation-id':record.id});
     });
+    var namedFile=element('input');namedFile.type='file';namedFile.hidden=true;
+    namedFile.id='ModernSharedNamedAnimationImportFile';namedFile.accept='.json,application/json';
+    named.appendChild(namedFile);
+    action(named,'Import Animation JSON',()=>{namedFile.value='';namedFile.click();},
+      !!status.error,{'id':'ModernSharedNamedAnimationImport'});
+    namedFile.addEventListener('change',()=>{
+      var file=namedFile.files?.[0];if(file)void runSharedAnimationAction('importNamed',file);
+    });
     var controls=group('Working drafts');
     action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
       !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
@@ -3019,7 +3027,11 @@
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
     try{
       if(studioWorkspaceReady)await flushSharedAnimation();
-      var openRef=null,openNamed=null,recoveryImport=null;
+      var openRef=null,openNamed=null,recoveryImport=null,namedContents=null;
+      if(kind==='importNamed'){
+        if(value.size>studioLibrary.MAX_PORTABLE_LENGTH)throw Error('Animation JSON file is too large');
+        namedContents=await value.text();
+      }
       if(kind==='importRecovery'){
         if(value.size>studioDraftAutosave.MAX_SHARED_RECOVERY_LENGTH)
           throw Error('Animation recovery JSON is too large');
@@ -3052,6 +3064,23 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='importNamed'){
+            var result=await studioLibraryActionsApi.importPortable(studioLibrary,root.indexedDB,namedContents,{
+              crypto:()=>root.crypto,guard:()=>ctx.lease.check(true),
+              importReferenceImages:async records=>{
+                for(var record of records)await root.CurvatureModernReferenceImageImport.verify(record,root);
+                ctx.lease.check(true);
+                return root.CurvatureModernReferenceImageLibrary.importAssets(root.indexedDB,records,root.crypto);
+              },
+              importKeyframeThumbnails:importStudioKeyframeThumbnails
+            });
+            ctx.lease.check(true);
+            ctx.named=await studioLibrary.list(root.indexedDB);
+            if([...result.createdIds,...result.reusedIds].some(id=>!ctx.named.some(record=>record.id===id)))
+              throw Error('Animation Library import not confirmed; reload and inspect retained records');
+            ctx.namedError=null;
+            ctx.message='Imported '+result.created+' animations; '+result.reused+' already present. Working draft unchanged.'+
+              (result.thumbnailWarning?' Thumbnail storage unavailable; images may not survive reload.':'');
           }else if(kind==='deleteNamed'){
             await studioLibrary.removeExact(root.indexedDB,value);
             ctx.lease.check(true);

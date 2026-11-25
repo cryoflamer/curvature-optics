@@ -198,3 +198,24 @@ test('thumbnail attachments are imported only after project commit and failure i
   assert.equal(actions.exportFilename(wire('Soundly',[{}]),now,true),'curvature-animations-20261119-132045-123-with-thumbnails.json');
   assert.notEqual(actions.exportFilename(wire('Soundly',[]),now),actions.exportFilename(wire('Soundly',[]),+now+1));
 });
+
+
+test('shared portable Animation importer verifies and remaps original assets before committing named projects',async()=>{
+  const calls=[],items=[{project:{id:'source'}}],images=[{id:'photo'}],resolved=[{project:{id:'resolved'}}];
+  const api={parseBundle:()=>({animations:items,referenceImages:images}),referenceIds:()=>['photo'],
+    remapReferences:(entry,mapping)=>{assert.equal(mapping.get('photo'),'local');return resolved[0];},
+    importEntries:async(db,entries)=>{calls.push('commit');assert.deepEqual(entries,resolved);
+      return {created:1,reused:0,createdIds:['new'],reusedIds:[]};}};
+  let stop=false;
+  const options={guard:()=>{calls.push('guard');if(stop)throw Error('lifetime ended');},
+    importReferenceImages:async records=>{assert.deepEqual(records,images);calls.push('assets');return new Map([['photo','local']]);},
+    importKeyframeThumbnails:async entries=>{assert.deepEqual(entries,items);calls.push('thumbs');return false;},
+    crypto:()=>null};
+  const result=await actions.importPortable(api,{},'{}',options);
+  assert.deepEqual(calls,['guard','assets','guard','commit','thumbs']);
+  assert.equal(result.thumbnailWarning,true);
+  calls.length=0;
+  const blocked={...options,importReferenceImages:async()=>{calls.push('assets');stop=true;return new Map([['photo','local']]);}};
+  await assert.rejects(actions.importPortable(api,{},'{}',blocked),/lifetime ended/);
+  assert.deepEqual(calls,['guard','assets','guard']);
+});
