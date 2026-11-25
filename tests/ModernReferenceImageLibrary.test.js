@@ -518,6 +518,7 @@ test('Where used reports an unreadable calibration archive rather than asserting
   const identity={version:1,sha256:'e'.repeat(64),width:16,height:9};
   const env={
     indexedDB:{},localStorage:{},
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -625,6 +626,7 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     key:index=>[...keys.keys()][index]||null,
     getItem:key=>keys.has(key)?keys.get(key):null};
   const env={indexedDB:{},localStorage:storage,
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -660,6 +662,7 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   let reads=0;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:{get:async (idb,id)=>{reads++;return library.get(idb,id);}},
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -702,6 +705,7 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   const current=await library.get(db,'other'),updated=await library.update(db,'other',1,{title:'Tab B'});
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -728,6 +732,7 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
   let changed=false;
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>{
@@ -763,6 +768,7 @@ test('Where used includes verified shared workspace revisions and both pending n
   const shared={collection:{workspaces:[{id:'workspace',checkpoint:{savedAt:44,draft}}]},
     revisions:[{id:'workspace',revision:9}],namedSave:{plan:{before:named(10),after:named(11)}}};
   const env={indexedDB:{},localStorage:{length:0,key:()=>null,getItem:()=>null},
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -806,6 +812,7 @@ test('Where used inventories old standalone sources independently and matches ca
   const cp={savedAt:2,draft:{name:'Single recovery',frames:[{key:'kf',referenceImageIds:[id]}]}};
   const raw={version:2,physicalSessionId:'legacy',record:{id:'different_alias',title:'Old calibration'}};
   const env={indexedDB:{},localStorage:{getItem:()=>null},
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
@@ -863,6 +870,7 @@ test('Where used distinguishes historical calibration provenance from attached a
 test('Where used includes History provenance without authorizing deletion or hiding incomplete sources',async()=>{
   const photo={version:1,sha256:'c'.repeat(64),width:20,height:10};
   const env={indexedDB:{},localStorage:{getItem:()=>null},
+    sessionStorage:{getItem:()=>null},CurvatureModernExperimentLibrary:{read:()=>[]},
     CurvatureModernSessionAutosave:{inspectProvenance:async()=>({entries:[],issues:[]})},
     CurvatureModernExperimentHistory:{inspectProvenance:async()=>({
       entries:[{id:4,name:'Calibrated view',experiment:{calibrationOrigin:{photo}}}],
@@ -892,4 +900,24 @@ test('Where used distinguishes committed physical provenance from retained recov
   assert.equal(result.count,3);
   assert.equal(new Set(result.uses.map(use=>use.ownerId)).size,3);
   assert.ok(result.uses.every(use=>use.type==='experiment-provenance'));
+});
+
+test('Legacy temporary editor evidence is read-only and includes retained attachments and historical originals',()=>{
+  const photo={version:1,sha256:'e'.repeat(64),width:10,height:20};
+  const experiment={display:{mode:'scene'},calibrationOrigin:{photo}};
+  const draft={name:'Entry',frames:[{key:'kf',name:'Frame',experiment,referenceImageIds:['alias']}]};
+  const saved={version:1,draftAtEntry:JSON.stringify(draft),
+    session:{version:1,projectId:'old',frameKey:'kf',mode:'scene',original:experiment,
+      workspace:experiment,candidate:experiment,past:[experiment],future:[]}};
+  const raw=JSON.stringify(saved),env={sessionStorage:{getItem:()=>raw},
+    CurvatureModernExperimentState:{validate:value=>value},
+    CurvatureModernAnimationDraftAutosave:{checkpoint:value=>value}};
+  const evidence=usageGraph.inspectLegacyKeyframe(env);
+  const report=usageGraph.report('alias',photo,{legacyKeyframe:evidence,
+    legacyHistory:[{name:'Old named experiment',experiment}]});
+  assert.equal(report.uses.filter(use=>use.type==='keyframe-recovery').length,1);
+  assert.equal(report.uses.filter(use=>use.type==='experiment-provenance').length,6);
+  assert.equal(env.sessionStorage.getItem(),raw);
+  env.sessionStorage.getItem=()=>JSON.stringify({...saved,session:{...saved.session,frameKey:'different'}});
+  assert.throws(()=>usageGraph.inspectLegacyKeyframe(env),/original does not match/);
 });

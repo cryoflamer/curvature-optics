@@ -246,6 +246,7 @@
           ['archive','Archived results'],['draft','Recoverable Storyboards'],
           ['animation-intent','Interrupted Animation saves'],
           ['calibration-draft','Current Calibration'],['calibration-recovery','Legacy Calibration recovery'],
+          ['keyframe-recovery','Legacy temporary keyframe recovery'],
           ['experiment-provenance','Historical experiment provenance']
         ];
         groups.forEach(function(group){
@@ -265,7 +266,7 @@
             detail.title=use.ownerId;
             if(use.type==='draft'&&use.source==='recoverable local backup'){
               el('small','Unsent local recovery snapshot · open Animation Studio recovery to restore it before navigating. This snapshot is not the currently loaded workspace.',item);
-            }else if(use.source==='legacy single draft'||use.type==='calibration-recovery'){
+            }else if(use.source==='legacy single draft'||use.type==='calibration-recovery'||use.type==='keyframe-recovery'){
               el('small','Retained standalone recovery evidence · adopt or recover explicitly before opening.',item);
             }else if(use.type==='draft'&&use.source==='shared checkpoint'&&!sharedPreview()){
               el('small','Verified shared recovery checkpoint · open the shared session to navigate.',item);

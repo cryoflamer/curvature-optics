@@ -78,6 +78,9 @@
     (sources.physical||[]).forEach(row=>{
       origin(row.experiment,'physical:'+row.key,row.title,row.revision,row.key);
     });
+    (sources.legacyHistory||[]).forEach(row=>{
+      origin(row.experiment,'legacy-library:'+row.name,row.name,null,'retained legacy Library evidence');
+    });
     (sources.history||[]).forEach(row=>{
       origin(row.experiment,'history:'+row.id,row.name||'Snapshot '+row.id,null,'History snapshot '+row.id);
     });
@@ -134,6 +137,16 @@
         if(edit.history)origin(edit.history.experiment,owner,title,revision,'temporary edit · pending History');
       }
     }
+    if(sources.legacyKeyframe){
+      const {draft,session}=sources.legacyKeyframe,owner='legacy-keyframe:'+session.projectId,
+        title=draft.name||'Legacy keyframe recovery';
+      imagesFromFrames(draft.frames,selectedId,'keyframe-recovery',owner,title,null,'retained temporary editor')
+        .forEach(add);
+      draftOrigins(draft,owner,null,'legacy temporary edit entry draft');
+      ['original','workspace','candidate'].forEach(side=>origin(session[side],owner,title,null,'legacy temporary edit · '+side));
+      ['past','future'].forEach(side=>session[side].forEach((snapshot,index)=>
+        origin(snapshot,owner,title,null,'legacy temporary edit · '+side+' '+(index+1))));
+    }
     if(target){
       (sources.calibrations||[]).forEach(function(row){
         if(row&&identityKey(row.photo)===target)add({type:'calibration',ownerId:row.id,
@@ -162,7 +175,7 @@
       draftOrigins(sources.currentStudio.draft,sources.currentStudioWorkspaceId,sources.currentStudio.savedAt,'current');
     }
     uses.sort(function(a,b){
-      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery','experiment-provenance'];
+      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery','keyframe-recovery','experiment-provenance'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });
@@ -193,6 +206,37 @@
       unavailable:unavailable,
       note:'Known uses in accessible local projects, local archived Calibration results, History and recovery snapshots only. Foreign browsers, external exports, removed records and inaccessible tabs are not covered; never authorize deletion from this list.'};
   }
+  // Read only the current tab's retained legacy editor evidence. It is not
+  // a shared selection key and must not be restored implicitly or consumed.
+  function inspectLegacyKeyframe(env){
+    const raw=env.sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1');
+    if(raw===null)return null;
+    if(typeof raw!=='string'||raw.length>3000000)throw Error('Invalid legacy temporary editor recovery size');
+    const saved=JSON.parse(raw),session=saved?.session;
+    if(saved?.version!==1||typeof saved.draftAtEntry!=='string'||session?.version!==1||
+       typeof session.projectId!=='string'||!session.projectId||
+       typeof session.frameKey!=='string'||!session.frameKey||
+       !['scene','compare'].includes(session.mode)||
+       !Array.isArray(session.past)||!Array.isArray(session.future)||
+       session.past.length>30||session.future.length>30)
+      throw Error('Invalid legacy temporary editor recovery');
+    const draft=env.CurvatureModernAnimationDraftAutosave.checkpoint({
+      draft:JSON.parse(saved.draftAtEntry),selectedKey:null,quality:'auto',prepared:false,positionMs:0},1).draft;
+    const codec=env.CurvatureModernExperimentState;
+    const frame=draft.frames.find(item=>item.key===session.frameKey);
+    const original=codec.validate(session.original);
+    if(!frame||JSON.stringify(frame.experiment)!==JSON.stringify(original)||
+       original.display.mode!==session.mode)
+      throw Error('Legacy temporary editor original does not match entry draft');
+    const candidate=value=>{
+      const experiment=codec.validate(value);
+      if(experiment.display.mode!==session.mode)throw Error('Invalid legacy temporary editor mode');
+      return experiment;
+    };
+    return {draft,session:{projectId:session.projectId,frameKey:session.frameKey,original,
+      workspace:codec.validate(session.workspace),candidate:candidate(session.candidate),
+      past:session.past.map(candidate),future:session.future.map(candidate)}};
+  }
   async function discover(env,row){
     var failures=[],sources={animations:[],calibrations:[],archives:[],drafts:[]};
     async function read(name,fn,set){try{set(await fn());}
@@ -205,6 +249,8 @@
         sources.physical=inventory.entries;
         inventory.issues.forEach(issue=>failures.push('Physical experiment provenance: '+issue));
       }),
+      read('Legacy named Library evidence',()=>env.CurvatureModernExperimentLibrary.read(env.localStorage),v=>{sources.legacyHistory=v;}),
+      read('Legacy temporary keyframe recovery',()=>inspectLegacyKeyframe(env),v=>{sources.legacyKeyframe=v;}),
       read('History provenance',()=>env.CurvatureModernExperimentHistory.inspectProvenance(db),inventory=>{
         sources.history=inventory.entries;
         inventory.issues.forEach(issue=>failures.push('History provenance: '+issue));
@@ -320,5 +366,5 @@
   }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,
     demoReferences:demoReferences,collect:collect,resolveSharedDraft,report:report,discover:discover,
-    deletionReview:deletionReview});
+    inspectLegacyKeyframe, deletionReview:deletionReview});
 }));

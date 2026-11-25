@@ -14398,6 +14398,64 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(where.get_by_text('Historical experiment provenance (1)',exact=True)).to_be_visible(timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),row)
 
+    def test_shared_image_usage_includes_retained_physical_and_temporary_recovery(self):
+        """Retained local and IDB physical evidence and the current tab's old editor are read-only."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        before=self.page.evaluate("""async()=>{
+            const id='legacy_provenance_photo',canvas=document.createElement('canvas');
+            canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const original=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Legacy evidence.png',{type:'image/png'}),id,window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,original);
+            const photo=await CurvatureModernReferenceImageImport.identify(original,window);
+            const codec=CurvatureModernExperimentState,
+                A=CurvatureModernAnimationDraftAutosave,
+                S=CurvatureModernSessionAutosave,L=CurvatureModernExperimentLibrary;
+            const draft=CurvatureModernAnimationStudio.fromProject(CurvatureModernDemoCatalog.load()[0].project);
+            const frame=draft.frames[0],e=codec.validate(frame.experiment),digest='a'.repeat(64);
+            e.calibrationOrigin={version:1,target:'B',resultId:'calibration-result-v1-'+digest,
+                resultDigest:digest,photo,baselineCamera:{Height:42.8,FocalLengthField:1996,
+                    Pan:.61,Nick:-.29,Roll:-.11,CameraEast:-50.75,CameraNorth:-9.42,viewcenterHorizon:3},
+                historicalFit:{method:'canvas-direct',status:'stalled',fitCount:14,validationCount:0,
+                    rmsPx:6.82,weightedRmsPx:6.82,initialRmsPx:314.76}};
+            localStorage.setItem(codec.STORAGE_KEY,JSON.stringify(e));
+            await S.write(indexedDB,e,100);
+            L.save(localStorage,'Retained named experiment',e);
+            frame.referenceImageIds=[id];
+            const entry=A.checkpoint({draft,selectedKey:null,quality:'auto',prepared:false,positionMs:0},1).draft;
+            const old={version:1,draftAtEntry:JSON.stringify(entry),
+                session:{version:1,projectId:'retained',frameKey:entry.frames[0].key,
+                    mode:frame.experiment.display.mode,original:entry.frames[0].experiment,
+                    workspace:e,candidate:entry.frames[0].experiment,past:[],future:[]}};
+            sessionStorage.setItem('curvature-modern-keyframe-edit-recovery-v1',JSON.stringify(old));
+            return {id,physical:await S.read(indexedDB),local:localStorage.getItem(codec.STORAGE_KEY),
+                named:localStorage.getItem(L.KEY),temporary:JSON.stringify(old)};
+        }""")
+        self.page.locator('#ModernImageLibraryTab').click()
+        gallery=self.page.locator('#ModernReferenceImageLibrary')
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('[data-image-id="'+before['id']+'"]').click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Historical experiment provenance (4)',exact=True)).to_be_visible(timeout=30000)
+        expect(where.get_by_text('Legacy temporary keyframe recovery (1)',exact=True)).to_be_visible(timeout=30000)
+        expect(where.get_by_role('button',name='Open use')).to_have_count(0)
+        after=self.page.evaluate("""async()=>{
+            const codec=CurvatureModernExperimentState,L=CurvatureModernExperimentLibrary;
+            return {physical:await CurvatureModernSessionAutosave.read(indexedDB),
+                local:localStorage.getItem(codec.STORAGE_KEY),named:localStorage.getItem(L.KEY),
+                temporary:sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')};
+        }""")
+        self.assertEqual(after,{k:v for k,v in before.items() if k!='id'})
+        self.page.evaluate("sessionStorage.setItem('curvature-modern-keyframe-edit-recovery-v1','{broken')")
+        where.get_by_role('button',name='Refresh uses').click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text('incomplete discovery',timeout=30000)
+        expect(where.get_by_text('Historical experiment provenance (3)',exact=True)).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate("sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')"),'{broken')
+
     def test_shared_animation_export_preferences_migrate_and_restore_without_web_storage_writes(self):
         """Existing global envelope gains export keys once; subsequent control edits are CAS-backed."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
