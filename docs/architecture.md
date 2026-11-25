@@ -827,8 +827,11 @@ replay, pruning or pagehide writer is started. Ordinary and explicit
 compatibility routes keep their original recovery behavior. The adapter is
 mounted for shared working drafts in the combined document-session/UI-registry
 preview. The existing Studio Editor/Preview can edit an explicitly selected
-working checkpoint; named Library mutations and the temporary keyframe
-editor remain disabled. A transient library visit without a selected
+working checkpoint. Saved Library records may be opened as linked working
+copies after exact revision/content preflight, including before the shared
+selection. A changed saved record does not silently replace an existing
+working checkpoint. The named Library itself is read-only in this stage;
+named mutations and the temporary keyframe editor remain disabled. A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
 lock. F5 restores the exact acknowledged Animation workspace; departure

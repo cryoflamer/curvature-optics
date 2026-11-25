@@ -12115,6 +12115,61 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             second.close()
 
+    def test_shared_animation_open_named_working_copy_preserves_library(self):
+        """Opening a saved revision never overwrites the independent named project."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        saved=self.page.evaluate("""async()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Saved animation fixture';
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        button=self.page.locator('[data-shared-named-animation-id="'+saved['id']+'"]')
+        expect(button).to_be_enabled()
+        latest=self.page.evaluate("""async record=>CurvatureModernAnimationLibrary.rename(
+            indexedDB,record.id,'New saved revision',record.updatedAt,record.updatedAt+1)""",saved)
+        button.click()
+        expect(self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+            'Saved Animation changed since inspection')
+        self.assertIsNone(self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+        }"""))
+        self.page.locator('#ModernSceneTab').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='scene'")
+        self.page.locator('#ModernAnimationTab').click()
+        expect(button).to_contain_text('New saved revision')
+        button.click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(cp['libraryId'],latest['id'])
+        self.assertEqual(cp['libraryRevision'],latest['updatedAt'])
+        self.assertEqual(cp['draft']['name'],'New saved revision')
+        field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+        field.fill('Working copy edits only')
+        field.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",
+                                           latest['id']),latest)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'animation')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),
+                         'project_'+latest['id'])
+        cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(cp['draft']['name'],'Working copy edits only')
+        self.assertEqual(cp['libraryRevision'],latest['updatedAt'])
+        self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",
+                                           latest['id']),latest)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_animation_mounted_receipt_recovers_after_reload(self):
         """Both interrupted pointer states recover exactly without a second domain save."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

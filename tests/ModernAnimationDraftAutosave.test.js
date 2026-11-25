@@ -1032,3 +1032,17 @@ test('shared Animation writer binds a canonicalized session reference regardless
   assert.deepEqual(await h.coordinator.bind(canonical),h.cp);
   assert.deepEqual(h.coordinator.state().reference,ref);
 });
+
+test('shared Animation linked workspace creation is independent of named Library writes and selection',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const cp=autosave.normalize({...f.cp,libraryId:'named_project',libraryRevision:123});
+  const linked=await a.createLinkedWorkspace(row,cp);
+  assert.deepEqual(autosave.getWorkspace(linked.collection,'project_named_project'),cp);
+  assert.equal(linked.collection.activeId,row.collection.activeId);
+  assert.equal(linked.receipt,null);
+  assert.deepEqual(autosave.documentReference(linked,f.id),autosave.documentReference(row,f.id));
+  await assert.rejects(a.createLinkedWorkspace(linked,cp),/already exists/);
+  assert.deepEqual(await a.read(),linked);
+  await assert.rejects(async()=>a.createLinkedWorkspace(linked,f.cp),/Named Animation revision required/);
+});

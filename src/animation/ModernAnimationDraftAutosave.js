@@ -928,6 +928,26 @@
             row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
       },guard);
     }
+    // The caller verifies the exact named Library record under the shared
+    // operation lock. This creates only a working checkpoint, never mutates
+    // the named owner or implicitly switches the session.
+    function createLinkedWorkspace(expected,checkpoint,guard){
+      const cp=normalize(checkpoint);
+      if(cp.libraryId===null)throw Error('Named Animation revision required');
+      const id=projectWorkspaceId(cp.libraryId);
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        if(row.collection.workspaces.some(item=>item.id===id))
+          throw Error('Named Animation working copy already exists');
+        // Explicitly reopening a saved project may replace an old deletion
+        // marker; its new monotonic revision cannot match a stale reference.
+        const next=withWorkspace(row.collection,id,cp);
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
+      },guard);
+    }
     function saveSelected(expected,ref,checkpoint,base,guard){
       const previous=validateReference(ref),bound=selectionBase(base),value=normalize(checkpoint);
       return commit(expected,row=>{
@@ -964,7 +984,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

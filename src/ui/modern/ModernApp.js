@@ -1999,7 +1999,7 @@
         onChange:function(){syncPreviewUnloadWarning();syncStudioOpenedProject();}
       });
       experimentPreview.animationContext={lease,coordinate,makeStore:animationStore,writer:sharedWriter,
-        row:null,inventory:null,inventoryError:null,busy:false,message:'',error:false};
+        row:null,inventory:null,inventoryError:null,named:null,namedError:null,busy:false,message:'',error:false};
     }
     if(calibrationEnabled)experimentPreview.calibrationContext={
       lease:lease,coordinate:coordinate,
@@ -2701,7 +2701,10 @@
       name.textContent=studioWorkspaceReady?studioDraft.name:'No shared working draft selected';
       details.textContent=!studioWorkspaceReady?'Select or create a verified working draft':
         shared.error?'Shared draft not acknowledged · recovery available':
-        shared.unsaved||shared.pending?'Saving shared working draft…':'Shared working draft · Saved in IndexedDB';
+        shared.unsaved||shared.pending?'Saving shared working draft…':
+        studioLibraryPending?'Shared working copy · Saved Library revision unavailable or changed':
+        studioLibraryActive?'Shared working copy · Named project unchanged':
+        'Shared working draft · Saved in IndexedDB';
       if(show){show.hidden=true;show.disabled=true;}
       return;
     }
@@ -2876,7 +2879,7 @@
     var heading=element('div','modern-animation-library-heading');
     heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. Named Library changes and temporary keyframe editing are not enabled in this preview.'));
+      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Named Library changes and temporary keyframe editing are not enabled in this preview.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
@@ -2916,6 +2919,21 @@
         });
       }
     }
+    var named=group('Saved Animation Library');
+    if(ctx.namedError)named.appendChild(element('span','modern-animation-library-message is-error',ctx.namedError));
+    if(ctx.named&&ctx.named.length===0)named.appendChild(element('span','modern-animation-library-note','No saved projects.'));
+    (ctx.named||[]).forEach(record=>{
+      var id=studioDraftAutosave.projectWorkspaceId(record.id);
+      var existing=ctx.row?.collection.workspaces.find(item=>item.id===id);
+      if(existing){
+        named.appendChild(element('span','modern-animation-library-note',record.project.name+
+          (existing.checkpoint.libraryRevision===record.updatedAt?' · working copy below':
+            ' · saved revision changed; retained working copy below')));
+      }else action(named,'Open saved project · '+record.project.name,
+        ()=>void runSharedAnimationAction('openNamed',record),
+        !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
+        {'data-shared-named-animation-id':record.id});
+    });
     var controls=group('Working drafts');
     action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
       !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
@@ -2933,11 +2951,22 @@
     ctx.row=await store.read();
     try{ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;}
     catch(error){ctx.inventory=null;ctx.inventoryError='Legacy evidence unavailable: '+error.message;}
+    try{ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;}
+    catch(error){ctx.named=null;ctx.namedError='Saved Animation Library unavailable: '+error.message;}
   }
-  async function bindSharedAnimation(ref,restore=false){
+  async function verifySharedNamedAnimation(expected){
+    var record=await studioLibrary.get(root.indexedDB,expected.id);
+    if(!record||JSON.stringify(record)!==JSON.stringify(expected))
+      throw Error('Saved Animation changed since inspection; reopen the Library before creating a working copy');
+    return record;
+  }
+  async function bindSharedAnimation(ref,restore=false,named=null){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!restore){
-      var selected=await ctx.coordinate(()=>c.selectWorkspace('animation',ref));
+      var selected=await ctx.coordinate(async()=>{
+        if(named)await verifySharedNamedAnimation(named);
+        return c.selectWorkspace('animation',ref);
+      });
       experimentPreview.status=selected.status;
     }
     try{
@@ -2949,6 +2978,8 @@
       studioDraftGeneration++;studioDiagnosticTransition=null;
       studioPickerOpen=false;studioPickerChecked=Object.create(null);studioFilmstripScroll=0;
       restoreStudioDraft(cp);
+      var linked=(ctx.named||[]).find(record=>record.id===cp.libraryId&&record.updatedAt===cp.libraryRevision);
+      if(linked){studioLibraryActive=linked;studioLibraryPending=null;}
       studioDraftStatus('Shared working draft saved in IndexedDB',false);
       renderAnimationStudio(studioHistoryEntries);
     }catch(error){
@@ -2974,7 +3005,7 @@
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
     try{
       if(studioWorkspaceReady)await flushSharedAnimation();
-      var openRef=null;
+      var openRef=null,openNamed=null;
       if(kind==='open')openRef=value;
       else{
         await ctx.coordinate(async function(){
@@ -2988,6 +3019,20 @@
           }else if(kind==='recover'){
             ctx.row=await store.adoptLegacyVariant(row,ctx.inventory,value,root.localStorage);
             ctx.message='Historical variant recovered as an independent draft.';
+          }else if(kind==='openNamed'){
+            openNamed=await verifySharedNamedAnimation(value);
+            var id=studioDraftAutosave.projectWorkspaceId(openNamed.id);
+            var draft=studioApi.fromProject(openNamed.project);
+            var cp=studioDraftAutosave.checkpoint({draft,selectedKey:draft.frames[0]?.key??null,
+              quality:openNamed.quality,prepared:studioApi.inspect(draft).compatible,
+              libraryId:openNamed.id,libraryRevision:openNamed.updatedAt,positionMs:0},Date.now());
+            ctx.row=row?await store.createLinkedWorkspace(row,cp):
+              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage);
+            // The separate domain transaction may already have committed.
+            // If the named row changed, retain that exact working copy but
+            // do not select it as the current saved project.
+            await verifySharedNamedAnimation(openNamed);
+            openRef=studioDraftAutosave.documentReference(ctx.row,id);
           }else if(kind==='new'){
             var id=studioDraftAutosave.makeWorkspaceId(root.crypto);
             var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,
@@ -2999,14 +3044,17 @@
         });
       }
       if(openRef){
-        await bindSharedAnimation(openRef);setStudioView('editor',true);
+        await bindSharedAnimation(openRef,false,openNamed);setStudioView('editor',true);
       }else if(studioWorkspaceReady){
         await bindSharedAnimation(ctx.writer.state().reference,true);
       }
       return true;
     }catch(error){
       ctx.error=true;ctx.message=error.message;
-      if(c.state().status==='failed'&&!ctx.writer.state().error)previewFailure(error);
+      if(kind==='openNamed'&&studioWorkspaceReady&&ctx.row&&
+         JSON.stringify(ctx.writer.acknowledgedRow())!==JSON.stringify(ctx.row))
+        previewFailure(Error('Working copy creation requires reload and readback: '+error.message));
+      else if(c.state().status==='failed'&&!ctx.writer.state().error)previewFailure(error);
       return false;
     }finally{ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();}
   }
