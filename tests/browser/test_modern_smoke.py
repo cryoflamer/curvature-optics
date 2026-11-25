@@ -3146,6 +3146,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             try{await adapter.store.collectGarbage(photo.observationId);return false;}
             catch(error){return /close the corresponding editor/.test(error.message);}
         }"""))
+        editor.get_by_role('button',name='Inspect project settings',exact=True).click()
         field=editor.get_by_label('Project name',exact=True)
         field.fill('Branched managed recovery draft')
         field.press('Tab')
