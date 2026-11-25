@@ -14105,6 +14105,48 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_draft_writer_waits_for_exclusive_backup_barrier(self):
+        """A shared draft transaction waits; its verified observer remains read-only."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        self.page.evaluate("""async()=>{
+            const A=CurvatureModernAnimationDraftAutosave,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(CurvatureModernDocumentSession);
+            const store=A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto});
+            window.__draftStore=store;
+            window.__draftBefore=await store.read();
+            if(window.__draftBefore!==null)throw Error('Expected a fresh shared collection');
+            window.__draftInventory=await A.inspectLegacySources(window);
+            window.__draftCheckpoint=A.checkpoint({draft:CurvatureModernAnimationStudio.blank(),
+                selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__draftEntered=false;
+            window.__draftTask=gate.snapshot(async()=>{
+                window.__draftEntered=true;
+                await new Promise(resolve=>window.__draftRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__draftEntered===true')
+        self.page.evaluate("""()=>{
+            const A=CurvatureModernAnimationDraftAutosave;
+            window.__draftSettled=false;
+            window.__draftWrite=window.__draftStore.initializeEmpty(window.__draftInventory,
+                A.collection('draft_coordinated',window.__draftCheckpoint),localStorage)
+                .then(row=>{window.__draftSettled=true;return row;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__draftSettled'))
+        self.assertIsNone(self.page.evaluate('CurvatureModernAnimationDraftAutosave.inspectSharedCollection(indexedDB,crypto)'))
+        self.page.evaluate("window.__draftRelease()")
+        saved=self.page.evaluate('window.__draftWrite')
+        self.assertEqual(saved['collection']['workspaces'][0]['id'],'draft_coordinated')
+        self.assertEqual(self.page.evaluate('window.__draftTask')['value'],'released')
+        self.assertEqual(self.page.evaluate('CurvatureModernAnimationDraftAutosave.inspectSharedCollection(indexedDB,crypto)'),saved)
+
     def test_animation_library_writer_waits_for_exclusive_backup_barrier(self):
         """The observer reads existing named projects while a separate writer waits."""
         self.open_modern()

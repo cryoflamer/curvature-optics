@@ -20,10 +20,10 @@
     require('./ModernAnimationLibrary'):root.CurvatureModernAnimationLibrary;
   var getStudio=()=>typeof module==='object'&&module.exports?
     require('./ModernAnimationStudio'):root.CurvatureModernAnimationStudio;
-  var api=factory(experiment,hud,contracts,projects,getLibrary,getStudio);
+  var api=factory(root,experiment,hud,contracts,projects,getLibrary,getStudio);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernAnimationDraftAutosave=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(experiment,hud,contracts,projects,getLibrary,getStudio){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,experiment,hud,contracts,projects,getLibrary,getStudio){
   'use strict';
   var VERSION=1,STORAGE_KEY='curvature-modern-animation-draft-v1';
   var DATABASE='curvature-modern-animation-draft',STORE='draft',KEY='current';
@@ -509,14 +509,27 @@
   // normal autosave, a no-op checkpoint must not acknowledge a newer remote
   // draft and then apply an old keyframe to the still-open editor.
   // Check inside the SAME readwrite transaction that reconciles the collection.
+  // IDB writes (including legacy merges) use the same origin-wide
+  // barrier. Synchronous old Web Storage fallbacks remain outside it.
+  function coordinateIDB(operation){
+    const locks=root.navigator?.locks;
+    if(!locks)return operation();
+    const barrier=typeof module==='object'&&module.exports?
+      require('../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+    if(!barrier)return Promise.reject(Error('Animation draft write barrier unavailable'));
+    return barrier.create(locks).registerWriter('animation.draft').commit(operation);
+  }
   function writeCollectionMerged(indexedDB,staged,baseline,crypto,unchangedDraft){
+    return coordinateIDB(()=>writeCollectionMergedRaw(indexedDB,staged,baseline,crypto,unchangedDraft));
+  }
+  function writeCollectionMergedRaw(indexedDB,staged,baseline,crypto,unchangedDraft){
     var next=normalizeCollection(staged),before=baseline?normalizeCollection(baseline):null;
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
-      var db=null,settled=false,request,result;
+      var db=null,settled=false,request,result,failure=null,tx;
       function fail(error){if(settled)return;settled=true;if(db)db.close();reject(error);}
       try{request=indexedDB.open(DATABASE,1);}catch(error){fail(error);return;}
-      request.onupgradeneeded=function(){db=request.result;
+      request.onupgradeneeded=function(){if(settled){request.transaction.abort();return;}db=request.result;
         if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE);};
       request.onerror=function(){fail(request.error||Error('Workspace database unavailable'));};
       request.onblocked=function(){fail(Error('Workspace database blocked'));};
@@ -524,7 +537,7 @@
         if(settled){request.result.close();return;}
         db=request.result;
         try{
-          var tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);
+          tx=db.transaction(STORE,'readwrite');var store=tx.objectStore(STORE);
           var read=store.get(COLLECTION_DB_KEY);
           read.onsuccess=function(){
             try{
@@ -548,35 +561,43 @@
               }
               result=reconcileCollection(next,before,remote,crypto);
               store.put(result.collection,COLLECTION_DB_KEY);
-            }catch(error){tx.abort();fail(error);}
+            }catch(error){failure=error;try{tx.abort();}catch(ignore){fail(error);}}
           };
-          read.onerror=function(){fail(read.error||Error('Workspace read failed'));};
-          tx.oncomplete=function(){if(settled)return;settled=true;db.close();resolve(result);};
-          tx.onerror=function(){fail(tx.error||Error('Workspace write failed'));};
-          tx.onabort=function(){fail(tx.error||Error('Workspace write aborted'));};
-        }catch(error){fail(error);}
+          read.onerror=function(){failure=read.error||Error('Workspace read failed');};
+          tx.oncomplete=function(){if(settled)return;if(failure){fail(failure);return;}settled=true;db.close();resolve(result);};
+          tx.onerror=function(){failure=failure||tx.error||Error('Workspace write failed');};
+          tx.onabort=function(){fail(failure||tx.error||Error('Workspace write aborted'));};
+        }catch(error){
+          failure=error;
+          if(tx){tx.onabort=()=>fail(failure);try{tx.abort();}catch(ignore){fail(error);}}
+          else fail(error);
+        }
       };
     });
   }
   function withStore(indexedDB,mode,act){
+    return coordinateIDB(()=>withStoreRaw(indexedDB,mode,act));
+  }
+  function withStoreRaw(indexedDB,mode,act){
     if(!indexedDB||typeof indexedDB.open!=='function')return Promise.resolve(null);
     return new Promise(function(resolve,reject){
       var db=null,settled=false,request;
       function fail(error){if(settled)return;settled=true;if(db)db.close();reject(error);}
       try{request=indexedDB.open(DATABASE,1);}catch(error){fail(error);return;}
-      request.onupgradeneeded=function(){db=request.result;
+      request.onupgradeneeded=function(){if(settled){request.transaction.abort();return;}db=request.result;
         if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE);};
       request.onerror=function(){fail(request.error||Error('Animation draft database unavailable'));};
       request.onblocked=function(){fail(Error('Animation draft database blocked'));};
       request.onsuccess=function(){
         if(settled){request.result.close();return;}
         db=request.result;
-        var tx,result;
-        try{tx=db.transaction(STORE,mode);result=act(tx.objectStore(STORE));}
-        catch(error){fail(error);return;}
-        tx.oncomplete=function(){if(settled)return;settled=true;db.close();resolve(result?result.result:null);};
-        tx.onerror=function(){fail(tx.error||Error('Animation draft transaction failed'));};
-        tx.onabort=function(){fail(tx.error||Error('Animation draft transaction aborted'));};
+        var tx,result,failure=null;
+        try{tx=db.transaction(STORE,mode);}catch(error){fail(error);return;}
+        tx.oncomplete=function(){if(settled)return;if(failure){fail(failure);return;}settled=true;db.close();resolve(result?result.result:null);};
+        tx.onerror=function(){failure=failure||tx.error||Error('Animation draft transaction failed');};
+        tx.onabort=function(){fail(failure||tx.error||Error('Animation draft transaction aborted'));};
+        try{result=act(tx.objectStore(STORE));}
+        catch(error){failure=error;try{tx.abort();}catch(ignore){fail(error);}}
       };
     });
   }
@@ -842,6 +863,12 @@
     return row;
   }
   function sharedTransaction(db,lease,mode,action,allowCreate=false){
+    const operation=()=>sharedTransactionRaw(db,lease,mode,action,allowCreate);
+    // The shared reader already opens only existing schema and must remain
+    // callable under an exclusive observational lock.
+    return mode==='readwrite'?coordinateIDB(operation):operation();
+  }
+  function sharedTransactionRaw(db,lease,mode,action,allowCreate=false){
     return new Promise((resolve,reject)=>{
       let req,connection,tx,untrack=null,finished=false,value,error;
       const write=mode==='readwrite';
@@ -857,11 +884,11 @@
       req.onupgradeneeded=()=>{
         try{
           requireLease(lease,write);
-          if(!allowCreate)throw Error('Shared Animation database changed during read');
+          if(finished||!allowCreate)throw Error('Shared Animation database changed during read');
           if(!req.result.objectStoreNames.contains(STORE))req.result.createObjectStore(STORE);
-        }catch(cause){try{req.transaction.abort();}catch(ignore){}finish(cause);}
+        }catch(cause){error=cause;try{req.transaction.abort();}catch(ignore){finish(cause);}}
       };
-      req.onerror=()=>finish(req.error||Error('Shared Animation database unavailable'));
+      req.onerror=()=>finish(error||req.error||Error('Shared Animation database unavailable'));
       req.onblocked=()=>finish(Error('Shared Animation database blocked'));
       req.onsuccess=()=>{
         connection=req.result;if(finished){connection.close();return;}
@@ -870,7 +897,7 @@
           tx.onabort=()=>finish(error||tx.error||Error('Shared Animation transaction aborted'));
           tx.onerror=()=>{error=error||tx.error||Error('Shared Animation transaction failed');};
           tx.oncomplete=()=>{
-            try{requireLease(lease,write);finish();}catch(cause){finish(cause);}
+            try{requireLease(lease,write);finish(error);}catch(cause){finish(cause);}
           };
           untrack=lease.track(tx,write);
           const store=tx.objectStore(STORE);
