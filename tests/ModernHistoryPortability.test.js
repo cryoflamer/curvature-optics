@@ -22,27 +22,29 @@ function storage(){const map=new Map();return {map,getItem:k=>map.has(k)?map.get
 // Same minimal asynchronous IndexedDB semantics used by the History tests,
 // including a failed transaction when a write cannot be committed.
 function indexedDB(){
-  const records=new Map(),api={failAdd:false,nextId:1};
-  const db={objectStoreNames:{contains:name=>name==='snapshots'},
+  const records=new Map(),control=new Map(),api={failAdd:false,nextId:1};
+  const db={objectStoreNames:{contains:name=>['snapshots','migration'].includes(name)},
     createObjectStore(){return {createIndex(){}};},close(){},
     transaction(_name,mode){let pending=0,done=false;
       const tx={error:null,oncomplete:null,onerror:null,onabort:null,
         abort(){if(done)return;done=true;tx.error=Error('transaction aborted');
           setImmediate(()=>tx.onabort&&tx.onabort());},
-        objectStore(){const copy=x=>x===undefined?x:JSON.parse(JSON.stringify(x));
+        objectStore(name){const data=name==='migration'?control:records;
+          const copy=x=>x===undefined?x:JSON.parse(JSON.stringify(x));
           const request=action=>{const r={result:null,error:null,onsuccess:null,onerror:null};pending++;
             setImmediate(()=>{if(done)return;
               try{r.result=action();r.onsuccess&&r.onsuccess();}
               catch(error){r.error=error;tx.error=error;done=true;tx.onabort&&tx.onabort();return;}
               pending--;if(!pending)setImmediate(()=>{if(!done&&!pending){done=true;tx.oncomplete&&tx.oncomplete();}});
             });return r;};
-          return {getAll(){return request(()=>[...records.values()].map(copy));},
-            get(id){return request(()=>copy(records.get(id)));},
-            add(v){return request(()=>{if(mode!=='readwrite'||api.failAdd)throw Error('Quota exceeded');
-              const id=api.nextId++;records.set(id,copy({...v,id}));return id;});},
+          return {getAll(){return request(()=>[...data.values()].map(copy));},
+            get(id){return request(()=>copy(data.get(id)));},
+            add(v,key){return request(()=>{if(mode!=='readwrite'||api.failAdd)throw Error('Quota exceeded');
+              if(name==='migration'){data.set(key,copy(v));return key;}
+              const id=api.nextId++;data.set(id,copy({...v,id}));return id;});},
             put(v){return request(()=>{if(mode!=='readwrite')throw Error('Read-only');
-              records.set(v.id,copy(v));return v.id;});},
-            delete(id){return request(()=>{if(mode!=='readwrite')throw Error('Read-only');records.delete(id);});}};
+              data.set(v.id,copy(v));return v.id;});},
+            delete(id){return request(()=>{if(mode!=='readwrite')throw Error('Read-only');data.delete(id);});}};
         }};return tx;
     }};
   api.open=()=>{const r={result:db,onupgradeneeded:null,onsuccess:null,onerror:null};
@@ -79,17 +81,25 @@ test('Bulk import preserves distinct legacy names for identical experiments and 
   const old=storage(),e=experiment();legacy.save(old,'Study A',e);legacy.save(old,'Study B',e);
   const original=old.getItem(legacy.KEY);
   const db=indexedDB(),h=history.create({indexedDB:db});
-  assert.deepEqual(await legacy.migrate(old,h),{created:2,reused:0});
-  assert.equal(old.getItem(legacy.MIGRATION_KEY),'done');
+  const migrated=await legacy.migrate(old,h);
+  assert.equal(migrated.created,2);assert.equal(migrated.reused,0);
+  assert.deepEqual(await h.migrationReceipt(),migrated.receipt);
+  assert.match(migrated.receipt.sourceDigest,/^sha256:[0-9a-f]{64}$/);
+  assert.equal(migrated.receipt.status,'imported');
+  assert.equal(old.getItem(legacy.MIGRATION_KEY),null);
   assert.equal(old.getItem(legacy.KEY),original,'original browser library remains for rollback');
   assert.deepEqual(new Set((await h.list()).map(r=>r.name)),new Set(['Study A','Study B']));
   assert.ok((await h.list()).every(r=>r.source==='manual'&&!r.pinned));
-  assert.deepEqual(await legacy.migrate(old,h),{skipped:true});
+  assert.deepEqual(await legacy.migrate(old,h),{skipped:true,receipt:migrated.receipt});
   assert.equal((await h.list()).length,2);
-  // Simulate a crash after the IDB commit but before the migration marker.
-  old.removeItem(legacy.MIGRATION_KEY);
-  assert.deepEqual(await legacy.migrate(old,h),{created:0,reused:2});
-  assert.equal((await h.list()).length,2);
+  // Simulate reopening after losing the transaction acknowledgement and
+  // after a deliberate user rename; the committed receipt, not a duplicate
+  // name scan or Web Storage marker, prevents resurrection.
+  const [row]=await h.list();await h.updateMetadata(row.id,'Renamed','notes');
+  const reopened=history.create({indexedDB:db});
+  assert.deepEqual(await legacy.migrate(old,reopened),{skipped:true,receipt:migrated.receipt});
+  assert.equal((await reopened.list()).length,2);
+  assert.equal((await reopened.get(row.id)).name,'Renamed');
 });
 
 test('Migration failure keeps legacy data and remains retryable',async()=>{
@@ -98,8 +108,13 @@ test('Migration failure keeps legacy data and remains retryable',async()=>{
   await assert.rejects(legacy.migrate(old,h),/Quota exceeded/);
   assert.equal(old.getItem(legacy.MIGRATION_KEY),null);
   assert.equal(legacy.read(old)[0].name,'Important');
+  assert.equal(await h.migrationReceipt(),null);
+  assert.deepEqual(await h.list(),[]);
   db.failAdd=false;
-  assert.deepEqual(await legacy.migrate(old,h),{created:1,reused:0});
+  const migrated=await legacy.migrate(old,h);
+  assert.equal(migrated.created,1);assert.equal(migrated.reused,0);
+  assert.deepEqual(await h.migrationReceipt(),migrated.receipt);
+  assert.equal(old.getItem(legacy.MIGRATION_KEY),null);
 });
 
 test('Compatible plain v1 experiment JSON imports without overwriting the live session',async()=>{
@@ -140,4 +155,19 @@ test('History is the sole Modern archive panel and retains four portable actions
   assert.match(app,/oldLibrary\.migrate\(root\.localStorage,experimentHistory\)/);
   assert.match(app,/historyFactory\.parsePortable\(contents\)/);
   assert.match(app,/experimentHistory\.importEntries\(entries\)/);
+});
+
+test('An old done marker becomes historical evidence without reimporting deliberately removed records',async()=>{
+  const old=storage(),h=history.create({indexedDB:indexedDB()});
+  legacy.save(old,'Previously removed',experiment());
+  old.setItem(legacy.MIGRATION_KEY,'done');
+  const raw=old.getItem(legacy.KEY);
+  const result=await legacy.migrate(old,h);
+  assert.equal(result.receipt.status,'historical-marker');
+  assert.equal(result.created,0);
+  assert.deepEqual(await h.list(),[]);
+  assert.deepEqual(await h.migrationReceipt(),result.receipt);
+  assert.equal(old.getItem(legacy.MIGRATION_KEY),'done');
+  assert.equal(old.getItem(legacy.KEY),raw);
+  assert.equal((await legacy.migrate({getItem(){throw Error('should not read');}},h)).skipped,true);
 });
