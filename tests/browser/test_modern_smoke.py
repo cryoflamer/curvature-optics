@@ -1569,7 +1569,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
         self.page.goto(self.base_url)
-        for script in [
+        scripts=[
             'src/ui/modern/ModernExperimentState.js',
             'src/ui/modern/ModernCompareState.js',
             'src/ui/modern/ModernExperimentFingerprint.js',
@@ -1592,7 +1592,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/animation/ModernAnimationDraftAutosave.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
-        ]:
+            'src/storage/ModernPortableBackup.js',
+        ]
+        for script in scripts:
             self.page.add_script_tag(url='/'+script)
         result=self.page.evaluate("""async()=>{
             const api=CurvatureModernManagedResources,adapter=api.create(window);
@@ -1641,6 +1643,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 !(await store.collectGarbage(photo.observationId)).collected,'receipt lost previous photo');
             await rejects(()=>stale.saveSelected(previous.row,A.documentReference(previous.row,id),next,base),
                 /CAS conflict/);
+            const pendingArchive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
+            const pendingExpected={digest:row.digest,previousId:previous.collectionId,
+                photoId:photo.observationId,originalId:photo.originalId,dataUrl:record.original.dataUrl};
             const fresh=open(),found=await fresh.read();
             ok(found.digest===row.digest,'reopened port changed row');
             const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
@@ -1671,9 +1676,50 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok((await store.collectGarbage(namedOwner.projectId)).collected,'removed named owner still retained');
             ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
-            return {valid:(await store.verifyIntegrity()).valid,revision:row.revision};
+            return {valid:(await store.verifyIntegrity()).valid,revision:row.revision,pendingArchive,pendingExpected};
         }""")
+        archive=result.pop('pendingArchive')
+        expected=result.pop('pendingExpected')
         self.assertEqual(result, {'valid': True, 'revision': 4})
+        context=self.browser.new_context()
+        try:
+            page=context.new_page()
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in scripts:
+                page.add_script_tag(url='/'+script)
+            restored=page.evaluate("""async ({archive,expected})=>{
+                const api=CurvatureModernManagedResources;
+                const report=await api.restoreAndQualifyManagedArchive(archive,window);
+                const adapter=api.create(window),store=adapter.store;
+                const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+                const working=CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease,crypto,managedResources:adapter});
+                const row=await working.read();
+                const photo=await store.get(expected.photoId);
+                const blob=(await store.get(expected.originalId)).payload.blob;
+                const dataUrl='data:'+blob.type+';base64,'+
+                    btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())));
+                const retained=!(await store.collectGarbage(expected.previousId)).collected&&
+                    !(await store.collectGarbage(expected.photoId)).collected&&
+                    !(await store.collectGarbage(expected.originalId)).collected;
+                const exact=row.digest===expected.digest&&!!row.receipt&&
+                    photo.payload.originalId===expected.originalId&&dataUrl===expected.dataUrl&&
+                    (await adapter.readObservation('prior_photo'))===null;
+                const retired=await working.retire(row,row.receipt);
+                const released=(await store.collectGarbage(expected.previousId)).collected&&
+                    (await store.collectGarbage(expected.photoId)).collected&&
+                    (await store.collectGarbage(expected.originalId)).collected;
+                return {qualified:report.qualification.integrity.valid,exact,retained,released,
+                    retired:!retired.receipt&&retired.revision===row.revision+1,
+                    valid:(await store.verifyIntegrity()).valid,
+                    owners:report.qualification.owners};
+            }""",{'archive':archive,'expected':expected})
+            self.assertEqual(restored,{'qualified':True,'exact':True,'retained':True,
+                'released':True,'retired':True,'valid':True,'owners':{'animation-working-collection':1}})
+        finally:
+            context.close()
 
     def test_managed_animation_pending_journals_retain_resources(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
@@ -2056,6 +2102,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
         self.page.add_script_tag(url='/src/storage/ModernManagedResources.js')
+        self.page.add_script_tag(url='/src/storage/ModernPortableBackup.js')
         result=self.page.evaluate("""async()=>{
             const M=CurvatureModernManagedResources,P=CurvatureModernCalibrationProject,
                 S=CurvatureModernCalibrationProjectStore;
@@ -2124,6 +2171,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const recovering=controller(reloaded);await recovering.open();
             ok(recovering.state().status==='recovering-selection','pending selection not offered');
             const before=await checkpoint().read();
+            const pendingArchive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
+            const pendingExpected={receipt,before,previousId:previous.projectId,projectId:project.id};
             await recovering.recoverDocumentSelection(receipt);
             const after=await checkpoint().read();
             ok(after.revision===before.revision+1&&after.envelope.documents.calibration.revision==='rev:2'&&
@@ -2147,9 +2196,100 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null&&
                 JSON.stringify(await checkpoint().read())===JSON.stringify(acknowledged),
                 'already acknowledged pointer was rewritten');
-            return {valid:(await adapter.store.verifyIntegrity()).valid,projects:(await reloaded.list(indexedDB)).length};
+            return {valid:(await adapter.store.verifyIntegrity()).valid,projects:(await reloaded.list(indexedDB)).length,
+                pendingArchive,pendingExpected};
         }""")
+        archive=result.pop('pendingArchive')
+        expected=result.pop('pendingExpected')
         self.assertEqual(result, {'valid': True, 'projects': 3})
+        scripts=[
+            'src/scene/CurvatureSceneContract.js',
+            'src/geometry/CurvatureSurfaceGeometry.js',
+            'src/geometry/CurvaturePhysicalWorldGeometry.js',
+            'src/geometry/CurvatureCameraTranslation.js',
+            'src/geometry/CurvatureGeometryEngine.js',
+            'src/geometry/CurvatureEarClip.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/calibration/CameraMaterialAnchor.js',
+            'src/calibration/CameraMaterialAnchorResolver.js',
+            'src/calibration/CameraPhysicalPose.js',
+            'src/ui/modern/CalibrationPointerGestures.js',
+            'src/ui/modern/ModernPhotoCalibrationEditor.js',
+            'src/ui/modern/ModernCalibrationProject.js',
+            'src/ui/modern/ModernCalibrationProjectCheckpoint.js',
+            'src/ui/modern/ModernCalibrationProjectStore.js',
+            'src/ui/modern/ModernCalibrationProjectPersistence.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/ui/modern/ModernCalibrationResult.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+            'src/storage/ModernPortableBackup.js',
+        ]
+        context=self.browser.new_context()
+        try:
+            page=context.new_page()
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in scripts:
+                page.add_script_tag(url='/'+script)
+            restored=page.evaluate("""async ({archive,expected})=>{
+                const M=CurvatureModernManagedResources,D=CurvatureModernDocumentSession,
+                    C=CurvatureModernExperimentState,PERSIST=CurvatureModernCalibrationProjectPersistence;
+                const report=await M.restoreAndQualifyManagedArchive(archive,window);
+                const adapter=M.create(window),storage=CurvatureModernCalibrationProjectStore.createPort({managedResources:adapter});
+                const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+                const checkpoint=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                    lease,codec:C,crypto,contract:D,managedResources:adapter});
+                const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+                const receipt=await storage.readExistingSharedSelectionReceipt(indexedDB,lease);
+                const before=await checkpoint().read();
+                const retained=!(await adapter.store.collectGarbage(expected.previousId)).collected;
+                const controller=D.createAtomicExperimentController({
+                    lease,checkpoint:checkpoint(),isCurrent:()=>true,
+                    prepare:()=>{throw Error('Unexpected migration');},
+                    readDocument:async(kind,id)=>{
+                        const row=await storage.get(indexedDB,id);
+                        return row?{kind,id,revision:'rev:'+row.revision}:null;
+                    },
+                    selectionRecovery:PERSIST.sharedSelectionRecovery(window,lease,{storage,existingOnly:true})
+                });
+                await controller.open();
+                const offered=controller.state().status==='recovering-selection';
+                await controller.recoverDocumentSelection(receipt);
+                const after=await checkpoint().read();
+                return {qualified:report.qualification.integrity.valid,retained,offered,
+                    exact:same(receipt,expected.receipt)&&same(before,expected.before),
+                    recovered:after.revision===before.revision+1&&
+                        after.envelope.documents.calibration.id===expected.projectId&&
+                        after.envelope.documents.calibration.revision==='rev:2'&&same(after.experiment,before.experiment),
+                    retired:(await storage.readSharedSelectionReceipt(indexedDB))===null,
+                    released:(await adapter.store.collectGarbage(expected.previousId)).collected,
+                    valid:(await adapter.store.verifyIntegrity()).valid};
+            }""",{'archive':archive,'expected':expected})
+            self.assertEqual(restored,{'qualified':True,'retained':True,'offered':True,'exact':True,
+                'recovered':True,'retired':True,'released':True,'valid':True})
+        finally:
+            context.close()
 
     def test_managed_physical_history_evidence_handoff(self):
         # Use the existing Modern script dependency order, but create only
