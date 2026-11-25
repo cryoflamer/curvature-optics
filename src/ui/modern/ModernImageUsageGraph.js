@@ -258,7 +258,7 @@
       read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.inspectUsage(db);},v=>{sources.animations=v;}),
       read('Calibration Projects and legacy draft',function(){return env.CurvatureModernCalibrationProjectStore.inspectUsage(db);},
         v=>{sources.calibrations=v.projects;sources.rawLegacyCalibration=v.legacy;}),
-      read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.list(db);},v=>{sources.archives=v;}),
+      read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.inspectUsage(db);},v=>{sources.archives=v;}),
       read('Shared Animation recovery',function(){
         return env.CurvatureModernAnimationDraftAutosave.inspectSharedCollection(db,env.crypto);
       },v=>{sources.sharedAnimation=v;}),
@@ -336,16 +336,16 @@
       throw TypeError('Select an original photograph before checking deletion');
     var source=env.CurvatureModernReferenceImageLibrary,issues=[],report=null,
       before=null,after=null;
-    if(!source||typeof source.get!=='function')
+    if(!source||typeof source.inspectOriginal!=='function')
       issues.push('Original store unavailable for revision recheck');
     else{
-      try{before=await source.get(env.indexedDB,selected.id);}
+      try{before=await source.inspectOriginal(env.indexedDB,selected.id);}
       catch(error){issues.push('Original read failed: '+(error.message||error));}
       if(!before)issues.push('Original missing or inaccessible; refresh Image Library');
       else{
         try{report=await discover(env,before);}
         catch(error){issues.push('Usage scan failed: '+(error.message||error));}
-        try{after=await source.get(env.indexedDB,selected.id);}
+        try{after=await source.inspectOriginal(env.indexedDB,selected.id);}
         catch(error){issues.push('Original recheck failed: '+(error.message||error));}
         if(!after||before.revision!==selected.revision||
            after.revision!==before.revision)

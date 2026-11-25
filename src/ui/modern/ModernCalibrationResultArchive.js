@@ -2,14 +2,14 @@
  * Image Library; drafts, Scene and History are deliberately not mutated.
  */
 (function(root,factory){
-  const api=factory(
+  const api=factory(root,
     root.CurvatureModernCalibrationResult||require('./ModernCalibrationResult'),
     root.CurvatureModernReferenceImage||require('../../animation/ModernReferenceImage'),
     root.CurvatureModernReferenceImageLibrary||require('../../animation/ModernReferenceImageLibrary'),
     root.CurvatureModernReferenceImageImport||require('./ModernReferenceImageImport'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernCalibrationResultArchive=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(results,images,library,importer){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,results,images,library,importer){
   'use strict';
   const DATABASE='curvature-modern-calibration-results',STORE='results',VERSION=1;
   const MAX_ITEMS=256,MAX_CHARS=64*1024*1024;
@@ -38,8 +38,17 @@
     }
   }
   function transaction(indexedDB,mode,action){
+    const locks=root.navigator?.locks;
+    if(!locks)return transactionRaw(indexedDB,mode,action);
+    const barrier=typeof module==='object'&&module.exports?
+      require('../../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+    if(!barrier)return Promise.reject(Error('Calibration archive write barrier unavailable'));
+    return barrier.create(locks).registerWriter('calibration.results').commit(
+      ()=>transactionRaw(indexedDB,mode,action));
+  }
+  function transactionRaw(indexedDB,mode,action,existingOnly=false){
     return new Promise((resolve,reject)=>{
-      let db,tx,request,done=false,value;
+      let db,tx,request,done=false,value,failure=null;
       function fail(error){
         if(done)return;done=true;
         if(db)db.close();
@@ -47,26 +56,26 @@
       }
       try{request=indexedDB.open(DATABASE,VERSION);}catch(error){fail(error);return;}
       request.onupgradeneeded=()=>{
-        if(done){request.transaction.abort();return;}
+        if(done||existingOnly){failure=Error('Calibration archive database changed during inspection');request.transaction.abort();return;}
         request.result.createObjectStore(STORE,{keyPath:'id'});
       };
       request.onblocked=()=>fail(Error('Calibration result storage upgrade blocked'));
-      request.onerror=()=>fail(request.error);
+      request.onerror=()=>fail(failure||request.error);
       request.onsuccess=()=>{
         db=request.result;
         if(done){db.close();return;}
         try{tx=db.transaction(STORE,mode);}catch(error){fail(error);return;}
         tx.oncomplete=()=>{
-          if(done)return;done=true;db.close();resolve(value);
+          if(done)return;if(failure){fail(failure);return;}done=true;db.close();resolve(value);
         };
-        tx.onerror=()=>fail(tx.error);
-        tx.onabort=()=>fail(tx.error||Error('Calibration result transaction aborted'));
+        tx.onerror=()=>{failure=failure||tx.error||Error('Calibration result transaction failed');};
+        tx.onabort=()=>fail(failure||tx.error||Error('Calibration result transaction aborted'));
         function read(req,fn){
           req.onsuccess=()=>{try{fn(req.result);}catch(error){abort(error);}};
         }
         function abort(error){
-          try{tx.abort();}catch(ignore){}
-          fail(error);
+          failure=error;
+          try{tx.abort();}catch(ignore){fail(error);}
         }
         try{action(tx.objectStore(STORE),read,v=>{value=v;});}catch(error){abort(error);}
       };
@@ -107,13 +116,22 @@
     if(row.id!==id)throw Error('Calibration archive lookup ID mismatch');
     return row;
   }
-  async function list(db){
-    const rows=await transaction(db,'readonly',(store,read,finish)=>read(store.getAll(),finish));
+  function summaries(rows){
     const entries=rows.map(raw=>{
       const row=normalize(raw);
       return Object.freeze({...results.summary(row.record),createdAt:row.createdAt});
     });
     return Object.freeze(entries.sort((a,b)=>b.createdAt-a.createdAt||(a.id<b.id?-1:a.id>b.id?1:0)));
+  }
+  async function list(db){
+    return summaries(await transaction(db,'readonly',(store,read,finish)=>read(store.getAll(),finish)));
+  }
+  async function inspectUsage(db){
+    if(!db||typeof db.databases!=='function')throw Error('Calibration archive inventory unavailable');
+    const existing=(await db.databases()).find(row=>row.name===DATABASE);
+    if(!existing)return [];
+    if(existing.version!==VERSION)throw Error('Unsupported Calibration archive database version');
+    return summaries(await transactionRaw(db,'readonly',(store,read,finish)=>read(store.getAll(),finish),true));
   }
   // Rehydrate a portable immutable result only when its verified photograph
   // is already present. Reading historical records remains independent of
@@ -138,5 +156,5 @@
     const saved=await commit(db,results.validate(record));
     return Object.freeze({...saved,photoId:durable.row.id,photoReused:durable.reused});
   }
-  return Object.freeze({DATABASE,STORE,VERSION,MAX_ITEMS,MAX_CHARS,validId,quota,get,list,save,archiveExperiment});
+  return Object.freeze({DATABASE,STORE,VERSION,MAX_ITEMS,MAX_CHARS,validId,quota,get,list,inspectUsage,save,archiveExperiment});
 }));

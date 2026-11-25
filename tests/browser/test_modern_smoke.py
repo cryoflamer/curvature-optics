@@ -14105,6 +14105,43 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_image_library_writer_waits_for_exclusive_backup_barrier(self):
+        """Original metadata edits wait while the non-creating inspector reads exact bytes."""
+        self.open_modern()
+        self.page.evaluate("""async()=>{
+            const L=CurvatureModernReferenceImageLibrary;
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;
+            const image={version:1,id:'coordinated_photo',title:'Before',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:2}};
+            await L.create(indexedDB,image);
+            window.__imageBefore=await L.inspectOriginal(indexedDB,image.id);
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__imageEntered=false;
+            window.__imageTask=gate.snapshot(async()=>{
+                window.__imageEntered=true;
+                await new Promise(resolve=>window.__imageRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__imageEntered===true')
+        self.page.evaluate("""()=>{
+            const L=CurvatureModernReferenceImageLibrary;
+            window.__imageSettled=false;
+            window.__imageWrite=L.update(indexedDB,'coordinated_photo',1,{title:'After'})
+                .then(row=>{window.__imageSettled=true;return row;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__imageSettled'))
+        self.assertEqual(self.page.evaluate("CurvatureModernReferenceImageLibrary.inspectOriginal(indexedDB,'coordinated_photo')"),
+            self.page.evaluate('window.__imageBefore'))
+        self.page.evaluate("window.__imageRelease()")
+        saved=self.page.evaluate('window.__imageWrite')
+        self.assertEqual(saved['record']['title'],'After')
+        self.assertEqual(saved['revision'],2)
+        self.assertEqual(saved['record']['original'],self.page.evaluate('window.__imageBefore.record.original'))
+        self.assertEqual(self.page.evaluate('window.__imageTask')['value'],'released')
+
     def test_calibration_project_writer_waits_for_exclusive_backup_barrier(self):
         """Project and summary writes wait for the same lock as History and Animation."""
         self.open_modern()

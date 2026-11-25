@@ -1,9 +1,9 @@
 /* Independent durable observation library. No project or thumbnail-cache access. */
 (function(root,factory){
-  var api=factory(typeof module==='object'&&module.exports?require('./ModernReferenceImage'):root.CurvatureModernReferenceImage);
+  var api=factory(root,typeof module==='object'&&module.exports?require('./ModernReferenceImage'):root.CurvatureModernReferenceImage);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernReferenceImageLibrary=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(images){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,images){
   'use strict';
   var DATABASE='curvature-modern-reference-images',STORE='observations',ANNOTATIONS='annotations',MAX_ITEMS=100,MAX_CHARS=64*1024*1024;
   var MAX_ANNOTATION_CHARS=512*1024,VERSION_ANNOTATED=2;
@@ -51,26 +51,39 @@
     if(rows.length>MAX_ITEMS||JSON.stringify(rows).length>MAX_ANNOTATION_CHARS)
       throw RangeError('Image classifications exceed local metadata quota');
   }
+  function coordinateIDB(operation){
+    const locks=root.navigator?.locks;
+    if(!locks)return operation();
+    const barrier=typeof module==='object'&&module.exports?
+      require('../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+    if(!barrier)return Promise.reject(Error('Image Library write barrier unavailable'));
+    return barrier.create(locks).registerWriter('reference.images').commit(operation);
+  }
   function transaction(indexedDB,mode,action,includeAnnotations){
+    return coordinateIDB(()=>transactionRaw(indexedDB,mode,action,includeAnnotations));
+  }
+  function transactionRaw(indexedDB,mode,action,includeAnnotations,existingVersion=null){
     return new Promise(function(resolve,reject){
-      var db,tx,request,done=false,result;
+      var db,tx,request,done=false,result,failure=null;
       function fail(error){if(done)return;done=true;if(db)db.close();reject(error||Error('Observation storage unavailable'));}
-      try{request=indexedDB.open(DATABASE);}catch(error){fail(error);return;}
+      try{request=existingVersion===null?indexedDB.open(DATABASE):indexedDB.open(DATABASE,existingVersion);}catch(error){fail(error);return;}
       request.onupgradeneeded=function(){
+        if(done||existingVersion!==null){failure=Error('Image Library database changed during inspection');request.transaction.abort();return;}
         if(!request.result.objectStoreNames.contains(STORE))
           request.result.createObjectStore(STORE,{keyPath:'id'});
       };
       request.onblocked=function(){fail(Error('Observation storage upgrade blocked'));};
-      request.onerror=function(){fail(request.error);};
+      request.onerror=function(){fail(failure||request.error);};
       request.onsuccess=function(){
         db=request.result;if(done){db.close();return;}
         db.onversionchange=function(){db.close();};
         var available=db.objectStoreNames.contains(ANNOTATIONS);
         if(includeAnnotations===true&&!available){fail(Error('Enable Image Library classification before editing kind or tags'));return;}
         try{tx=db.transaction(includeAnnotations&&available?[STORE,ANNOTATIONS]:STORE,mode);}catch(error){fail(error);return;}
-        tx.oncomplete=function(){if(done)return;done=true;db.close();resolve(result);};
-        tx.onerror=function(){fail(tx.error);};tx.onabort=function(){fail(tx.error||Error('Observation transaction aborted'));};
-        function abort(error){try{tx.abort();}catch(ignore){}fail(error);}
+        tx.oncomplete=function(){if(done)return;if(failure){fail(failure);return;}done=true;db.close();resolve(result);};
+        tx.onerror=function(){failure=failure||tx.error||Error('Observation transaction failed');};
+        tx.onabort=function(){fail(failure||tx.error||Error('Observation transaction aborted'));};
+        function abort(error){failure=error;try{tx.abort();}catch(ignore){fail(error);}}
         function read(req,fn){req.onsuccess=function(){try{fn(req.result);}catch(error){abort(error);}};}
         try{action(tx.objectStore(STORE),read,function(value){result=value;},available&&includeAnnotations?tx.objectStore(ANNOTATIONS):null);}catch(error){abort(error);}
       };
@@ -91,14 +104,25 @@
       if(annotations)read(annotations.getAll(),complete);else complete([]);
     });
   },'optional');}
-  function get(db,id){images.validId(id);return transaction(db,'readonly',function(store,read,finish,annotations){
+  function readOriginal(id){return function(store,read,finish,annotations){
     read(store.get(id),function(row){
       if(!row){finish(null);return;}
       var normalized=normalize(row);
       if(!annotations){finish({...normalized,...annotated(null)});return;}
       read(annotations.get(id),function(extra){finish({...normalized,...annotated(extra)});});
     });
-  },'optional');}
+  };}
+  function get(db,id){
+    images.validId(id);return transaction(db,'readonly',readOriginal(id),'optional');
+  }
+  async function inspectOriginal(db,id){
+    images.validId(id);
+    if(!db||typeof db.databases!=='function')throw Error('Image Library database inventory unavailable');
+    const existing=(await db.databases()).find(row=>row.name===DATABASE);
+    if(!existing)return null;
+    if(![1,VERSION_ANNOTATED].includes(existing.version))throw Error('Unsupported Image Library database version');
+    return transactionRaw(db,'readonly',readOriginal(id),'optional',existing.version);
+  }
   function annotationStatus(db){
     return transaction(db,'readonly',function(store,read,finish,annotations){
       finish({enabled:!!annotations,version:annotations?VERSION_ANNOTATED:1});
@@ -106,7 +130,8 @@
   }
   // This is explicitly invoked after exporting the complete v1 library.
   // No transaction automatically bumps a user's existing v1 database.
-  function enableAnnotations(db){
+  function enableAnnotations(db){return coordinateIDB(()=>enableAnnotationsRaw(db));}
+  function enableAnnotationsRaw(db){
     return new Promise(function(resolve,reject){
       var request,database,done=false;
       function fail(error){if(done)return;done=true;if(database)database.close();reject(error||Error('Image Library classification upgrade failed'));}
@@ -114,6 +139,7 @@
       request.onblocked=function(){fail(Error('Image Library upgrade blocked by another tab; close older tabs and retry'));};
       request.onerror=function(){fail(request.error);};
       request.onupgradeneeded=function(){
+        if(done){request.transaction.abort();return;}
         database=request.result;
         if(!database.objectStoreNames.contains(STORE))
           database.createObjectStore(STORE,{keyPath:'id'});
@@ -414,5 +440,5 @@
     return images.validId('reference_'+token);
   }
   return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
-    list:list,get:get,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails,validateBackup:validateBackup,restoreBackup:restoreBackup});
+    list:list,get:get,inspectOriginal,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails,validateBackup:validateBackup,restoreBackup:restoreBackup});
 }));

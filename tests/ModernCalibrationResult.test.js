@@ -749,3 +749,13 @@ test('shared Apply never mutates live physics on failed durable commit and never
   await assert.rejects(applyApi.create(second.host).apply(),e=>e.phase==='commit'&&e.committed&&e.recoveryId===17);
   assert.ok(!second.trace.includes('rollback'));
 });
+
+test('Calibration archive inspection reads only an existing supported database',async()=>{
+  const db=memoryStorage();
+  const observer={databases:async()=>[...db.databases.keys()].map(name=>({name,version:1})),open:db.open};
+  assert.deepEqual(await storage.inspectUsage(observer),[]);
+  assert.equal(db.databases.size,0);
+  await storage.archiveExperiment(db,input(),env());
+  assert.deepEqual(await storage.inspectUsage(observer),await storage.list(db));
+  assert.equal(db.databases.size,2);
+});
