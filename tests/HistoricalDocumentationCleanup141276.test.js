@@ -48,7 +48,12 @@ test('140.12.76: retired chronological migration and patch notes stay out of act
   for (const name of ['modern-location-migration.md', 'interactive-rendering-migration.md',
     'modern-demo-catalog.md', 'technical-debt.md'])
     assert.ok(!names.includes(name), 'retired backlog has reappeared: '+name);
-  assert.ok(names.length <= 58, 'a chronological documentation tree was reintroduced');
+  // A stable resource-ownership contract is not a chronological patch diary.
+  // Keep the original cap for every other document.
+  assert.ok(names.includes('managed-object-store.md'));
+  assert.match(read('docs/managed-object-store.md'), /^# Managed Object Store — architectural contract/);
+  assert.ok(names.filter(name => name !== 'managed-object-store.md').length <= 58,
+    'a chronological documentation tree was reintroduced');
 });
 
 test('140.12.76: current guides, test-backed contracts, and physical evidence survive', () => {
