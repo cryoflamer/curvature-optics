@@ -763,6 +763,11 @@ presentation mechanisms.
 Pending-save intents, historical legacy recovery variants and archived results
 are informational until their own recovery/viewer contracts support exact
 navigation. None of these reads authorizes deletion of an original. The
-inventory still excludes inaccessible tabs and external backups; old
-single-draft and standalone Calibration evidence require further migration
-coverage.
+inventory still excludes inaccessible tabs and external backups. It also
+reads the retained singleton Animation drafts in IndexedDB and localStorage
+independently of the legacy workspace collections. Standalone Calibration
+originals are inspected using verified original SHA-256 and dimensions; actual
+Calibration project rows and their summaries are compared, and unreadable or
+inconsistent evidence marks discovery incomplete. Old singleton records are
+informational, not selectable active projects. Discovery preserves original
+bytes and does not migrate or delete them.

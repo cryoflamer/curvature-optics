@@ -626,6 +626,14 @@ Legacy bytes are not updated by registry interactions. Global application prefer
 snapshot: first backfill from validated legacy preferences is explicitly
 acknowledged, subsequent restores read IndexedDB without rewriting the
 legacy keys, and conflicting global writes surface the same recovery panel.
+Frame and Video export settings and Animation Library filters are registered
+extensions of this same global owner. Each additive upgrade accepts only an
+explicitly supported complete previous key set, validates all retained values,
+reads the missing extension's legacy source, and acknowledges the upgraded
+envelope by revision CAS and exact readback. It never silently fills a
+damaged or future envelope. Reset includes registered extension defaults.
+The shared Animation Library reuses the ordinary filter component for named
+projects; working drafts and recovery variants remain visible independently.
 Global preferences do not own workspace or display-panel layout. A
 preference-only redraw does not advance the physical checkpoint. Reset
 preferences resets only global Registry values, not workspace folds,
@@ -633,8 +641,11 @@ selected document or legacy data; the existing Reset workspace layout
 action separately resets workspace scopes.
 A failed or incompatible UI restore blocks editing and offers diagnostic
 export. The shared layout reset does not change physics or the active
-document. Only Scene and Compare are enabled: other workspaces, History navigation and reset are
-disabled pending migration. Startup locks the physical workspace until
+document. In the combined opt-in preview the shared Calibration and Animation
+workspaces, keyframe editing, History and reference-image navigation now use
+the domain-specific contracts described below and in their own documentation.
+Destructive History and original-photo removal remain disabled in that route.
+Startup locks the physical workspace until
 verified binding; absent or conflicting evidence fails closed without
 falling back to the legacy writer. Historical divergent HEADs are handled
 only by explicit migration selection. The live atomic row contains the

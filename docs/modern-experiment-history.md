@@ -411,9 +411,14 @@ History has four portable actions:
 **One-time legacy migration:** on History startup, previously saved names and
 experiments from `localStorage['curvature-modern-library-v1']` are copied into
 IndexedDB as *manual, unpinned* records; distinct names are preserved, even
-for identical physics. The migration marker is written only after successful
-commit. Import is idempotent, so a crash before the marker is safe to retry.
-The original localStorage library is never deleted or rewritten. If legacy
+for identical physics. History database version 2 adds a migration-control
+store; the snapshot record format and existing snapshot IDs are unchanged.
+The imported rows and SHA-256 source receipt commit in the same transaction.
+The receipt is consulted before reading legacy data, so interrupted
+acknowledgement, later renames, or intentional deletions cannot replay an
+acknowledged import. A historical Web Storage `done` marker is retained as
+evidence of earlier import, not a reason to resurrect records. The original
+localStorage library and marker are never deleted or rewritten. If legacy
 storage is malformed, unavailable, or IndexedDB is blocked, History continues
 operating when possible and reports the migration problem; old data is retained
 for troubleshooting. Pin still means gallery selection, not long-term
@@ -633,7 +638,10 @@ existing records. At the automatic retention limit (200 unpinned automatic
 records by default), new automatic captures are skipped; manual saves remain
 available. This does not change the ordinary legacy route's retention policy.
 
-The old named History Library migration marker remains in Web Storage. Its
-non-destructive migration and broader provenance inventory must precede
-retirement of legacy storage. Manual Opera acceptance and wider regression
-verification remain separate from targeted automated verification.
+The named History Library migration now uses the atomic IndexedDB receipt
+described above; old Web Storage bytes remain historical evidence. The
+database upgrade is additive, but old code opening version 1 cannot open the
+upgraded database; use a compatible exported backup and a disposable origin
+for rollback. Broader provenance inventory must still precede destructive
+retention or retirement of legacy data. Manual Opera acceptance and wider
+regression verification remain separate from targeted automated verification.
