@@ -729,7 +729,8 @@
         "tests/ModernAnimationStudioDefaults.test.js",
         "tests/ModernAnimationWorkspaceConcurrency.test.js",
         "tests/ModernAnimationWorkspaceRecovery.test.js",
-        "tests/ModernCameraSpline.test.js"
+        "tests/ModernCameraSpline.test.js",
+        "tests/ModernReferenceImageLibrary.test.js"
       ],
       "commonJsToolCallers": []
     },
