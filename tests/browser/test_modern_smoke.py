@@ -325,8 +325,37 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertIsNone(second.evaluate("()=>store.getDocument('doc')"))
             self.assertEqual(second.evaluate('id=>store.collectGarbage(id)',resource),{'collected':True})
             self.assertIsNone(second.evaluate('id=>store.get(id)',resource))
+            # Verify the user's actual recovery path: close the holding tab,
+            # not an application-specific release or synchronization message.
+            abandoned=self.page.evaluate("""async()=>{
+                const row=await store.createAndAttach({documentId:'abandoned',kind:'test',
+                    expectedRevision:0,metadata:{},slot:'value',type:'test',version:1,payload:'retained'});
+                window.abandonedHolding=false;
+                window.abandonedTask=store.withRetained(row.id,()=>new Promise(()=>{
+                    window.abandonedHolding=true;
+                }));
+                return row.id;
+            }""")
+            self.page.wait_for_function('window.abandonedHolding === true')
+            self.assertTrue(second.evaluate("""async()=>{
+                try{await store.removeDocument({documentId:'abandoned',expectedRevision:1});}
+                catch(error){return /close the corresponding editor/.test(error.message);}
+                return false;
+            }"""))
+            # Browser termination releases the live-only resource lock.
+            self.page.close()
+            result=second.evaluate("""async id=>{
+                const removed=await store.removeDocument({documentId:'abandoned',expectedRevision:1});
+                const gc=await store.collectGarbage(id);
+                return {removed:removed.removed,collected:gc.collected,missing:await store.get(id)===null};
+            }""",abandoned)
+            self.assertEqual(result, {'removed': True, 'collected': True, 'missing': True})
         finally:
-            second.close()
+            # Retain a live page for the smoke harness's failure diagnostics.
+            if self.page.is_closed():
+                self.page=second
+            else:
+                second.close()
 
     def test_managed_object_store_abort_cycle_and_competing_writers(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
