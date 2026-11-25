@@ -7008,7 +7008,7 @@
     var c=experimentPreview.controller,view=c&&c.state();
     return sharedHistoryAvailable()&&['scene','compare'].includes(currentWorkspaceMode())&&
       !persistence.dirty&&!experimentPreview.calibrationBusy&&!view?.busy&&
-      ['clean','committed'].includes(view?.status)&&view.row?.draft===null&&
+      ['clean','committed'].includes(view?.status)&&view.row&&view.draft===null&&
       ['scene','compare'].includes(view.row.envelope.workspace);
   }
   // Hydrate the already registered global History preference without a

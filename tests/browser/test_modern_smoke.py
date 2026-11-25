@@ -14090,7 +14090,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         restored=self.page.evaluate(read)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old)
         self.assertEqual(restored['doc']['revision'],changed['doc']['revision']+1)
-        self.assertIsNone(restored['doc']['draft'])
+        self.assertIsNone(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.draft'))
         self.assertEqual(restored['doc']['envelope']['documents']['animation'],changed['doc']['envelope']['documents']['animation'])
         self.assertEqual(restored['doc']['envelope']['documents']['calibration'],changed['doc']['envelope']['documents']['calibration'])
         self.page.locator('#ModernHistoryToggle').click()
