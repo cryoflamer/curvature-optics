@@ -706,6 +706,116 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'revision': 1, 'resources': 2})
 
+    def test_managed_store_photo_autosave_performance_profile(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave;
+            // Deterministic high-entropy PNG: realistic byte load without
+            // a personal photograph, external file or network dependency.
+            const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;
+            const ctx=canvas.getContext('2d'),image=ctx.createImageData(1024,1024);
+            let seed=123456789;
+            for(let i=0;i<image.data.length;i+=4){
+                seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;
+                image.data[i]=seed&255;image.data[i+1]=(seed>>>8)&255;
+                image.data[i+2]=(seed>>>16)&255;image.data[i+3]=255;
+            }
+            ctx.putImageData(image,0,0);
+            const dataUrl=canvas.toDataURL('image/png');
+            const bytes=atob(dataUrl.split(',')[1]).length;
+            const original={dataUrl,width:1024,height:1024};
+            const photo={version:1,id:'benchmark_photo',title:'Original',author:'A',original};
+            const saved=await adapter.saveObservation({id:photo.id,revision:1,record:photo});
+            const second={...photo,id:'benchmark_alias',author:'B'};
+            const shared=await adapter.saveObservation({id:second.id,revision:1,record:second},
+                {originalId:saved.originalId});
+            ok(saved.originalId===shared.originalId,'binary deduplication failed');
+            let managedRevision=0,sourceRevision=0;
+            const samples=[];
+            function stats(values){
+                const ordered=values.slice().sort((a,b)=>a-b);
+                return {medianMs:Math.round(ordered[Math.floor(ordered.length/2)]*10)/10,
+                    maxMs:Math.round(ordered.at(-1)*10)/10,n:ordered.length};
+            }
+            for(const ids of [[],[photo.id],[photo.id,second.id]]){
+                const writes=[],reads=[];
+                for(let k=0;k<5;k++){
+                    sourceRevision++;
+                    const cp=A.checkpoint({draft:{name:'Photo benchmark '+k,description:'',mode:'auto',
+                        target:'auto',source:'history',frames:Array.from({length:20},(_,i)=>({
+                            key:'frame_'+i,sourceSnapshotId:null,name:'Frame '+i,experiment,
+                            travelMs:i?1000:0,holdMs:0,easing:'linear',
+                            ...(ids.length?{referenceImageIds:ids}:{})}))},
+                        selectedKey:'frame_0',quality:'auto',prepared:false,positionMs:k},100+sourceRevision);
+                    const row={version:1,revision:sourceRevision,collection:A.collection('draft_benchmark',cp,1000+sourceRevision),
+                        revisions:[{id:'draft_benchmark',revision:sourceRevision}],receipt:null};
+                    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(row)));
+                    row.digest='sha256:'+Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+                    let start=performance.now();
+                    const write=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:managedRevision});
+                    const writeMs=performance.now()-start;
+                    managedRevision=write.managedRevision;
+                    start=performance.now();
+                    const read=await adapter.readAnimationWorkingCollection();
+                    const readMs=performance.now()-start;
+                    ok(read.row.digest===row.digest&&read.referenceImages.length===ids.length,'photo recovery mismatch');
+                    ok(read.referenceImages.every(record=>record.original.dataUrl===dataUrl),'original bytes changed');
+                    if(k){writes.push(writeMs);reads.push(readMs);}
+                }
+                samples.push({aliases:ids.length,uniqueOriginals:ids.length?1:0,write:stats(writes),read:stats(reads)});
+            }
+            const integrity=await adapter.store.verifyIntegrity();
+            return {bytes,frameCount:20,samples,valid:integrity.valid};
+        }""")
+        self.assertTrue(result['valid'])
+        self.assertGreater(result['bytes'],2*1024*1024)
+        self.assertEqual(len(result['samples']),3)
+        print("MANAGED_PHOTO_AUTOSAVE_PROFILE "+__import__('json').dumps(result,sort_keys=True),flush=True)
+
     def test_managed_store_autosave_performance_profile(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
