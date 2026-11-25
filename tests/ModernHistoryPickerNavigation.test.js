@@ -80,6 +80,7 @@ function createHistoryNavigationHarness(){
   let render,renderCount=0,preferencesWrites=0,physicsRestores=0;
   const state={physics:{height:15},draft:{frames:['existing']}};
   const ctx={
+    experimentPreview:{live:false},
     ...state,Promise,Map,Set,Object,String,Array,Number,RangeError,Error,
     historyFocusFromPickerId:'',historyOpenedFromPicker:false,
     historyWizardReferenceChoosing:false,
@@ -207,6 +208,7 @@ test('Explicit Restore after Picker navigation switches to physical workspace an
     ['ModernHistoryClose',{hidden:true}],
     ['ModernReturnToAnimation',{hidden:true}]]);
   const ctx={
+    experimentPreview:{live:false},
     Promise,JSON,Error,RangeError,historyRestoreBusy:false,presetSwitchBusy:false,calibrationApplyBusy:false,
     previousExperimentHistoryId:null,updatePresetNavigation(){},
     refreshCalibrationApplicability(){},

@@ -122,7 +122,7 @@ test('Wizard step 4 delegates filtering and selection to the shared Picker witho
   }};
   const otherPrefs=filters.update(filters.normalize(),'geometry','flat');
   const captures=[];
-  const ctx={Promise,Map,Object,Number,String,RangeError,Error,document:{},
+  const ctx={Promise,Map,Object,Number,String,RangeError,Error,document:{},experimentPreview:{live:false,animationContext:null},
     studioWizard:w,studioWizardError:'',studioLibraryBusy:false,
     studioWizardPickerFilters:filters.normalize(),studioWizardPickerQueryDraft:'',
     studioWizardPickerAdvancedOpen:false,studioWizardPickerScroll:0,
@@ -200,7 +200,7 @@ test('Wizard bulk picker actions use only filtered entries and preserve other Pi
   }};
   const captures=[];
   const independentPrefs=filters.update(filters.normalize(),'geometry','flat');
-  const ctx={Promise,Map,Object,Number,String,RangeError,Error,document:{},
+  const ctx={Promise,Map,Object,Number,String,RangeError,Error,document:{},experimentPreview:{live:false,animationContext:null},
     studioWizard:w,studioWizardError:'',studioLibraryBusy:false,
     studioWizardPickerFilters:filters.normalize(),studioWizardPickerQueryDraft:'',
     studioWizardPickerAdvancedOpen:false,studioWizardPickerScroll:0,

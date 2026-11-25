@@ -63,6 +63,12 @@ jobs:
             tests/ModernAnimationLibrary.test.js \
             tests/ModernAnimationLibraryActions.test.js \
             tests/ModernAnimationProjectWizard.test.js \
+            tests/ModernAnimationExportPreferences.test.js \
+            tests/ModernAnimationVideoFilenamePreview.test.js \
+            tests/ModernStatusMessageExportUI.test.js \
+            tests/ModernAnimationWizardReuse.test.js \
+            tests/ModernAnimationWorkspaceConcurrency.test.js \
+            tests/ModernHistoryPickerNavigation.test.js \
             tests/ModernAnimationSequences.test.js \
             tests/ModernAnimationSplinePreview.test.js \
             tests/ModernAnimationKeyframeEditSession.test.js \

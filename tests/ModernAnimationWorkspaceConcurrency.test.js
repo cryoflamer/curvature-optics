@@ -210,7 +210,7 @@ test('Animation Studio redirects a conflicting opened project into an independen
   const inEditor=autosave.withWorkspace(base,'project_alpha',
     draft('Editor work',310,'alpha'),311);
   const notices=[];
-  const ctx={Promise,Date,Math,Object,studioDraftAutosave:autosave,
+  const ctx={Promise,Date,Math,Object,experimentPreview:{live:false},studioDraftAutosave:autosave,
     studioWorkspaces:inEditor,studioIndexedBaseline:base,studioDraftGeneration:1,
     studioWorkspaceId:'project_alpha',studioLibraryActive:{id:'alpha'},
     studioLibraryPending:null,studioLibraryMessage:'',studioLibraryError:false,

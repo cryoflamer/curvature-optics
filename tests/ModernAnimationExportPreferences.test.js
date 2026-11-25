@@ -17,7 +17,7 @@ function reload(storage,disabledDisk=false){
     nodes[prefix+'Narrative']={type:'checkbox',checked:true,addEventListener(event,fn){this.change=fn;}};
     nodes[prefix+'Progress']={value:0};
   }
-  const context=vm.createContext({root:{localStorage:storage},newUiEl:id=>nodes[id]});
+  const context=vm.createContext({sharedPresentationRequested:false,experimentPreview:{live:false},studioExportPreferenceBindings:{},root:{localStorage:storage},newUiEl:id=>nodes[id]});
   vm.runInContext(helper+"\nbindStudioExportPreferences('Frame');bindStudioExportPreferences('Video');",context);
   return nodes;
 }

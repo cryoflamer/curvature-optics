@@ -23,6 +23,7 @@ function harness(picker){
   const project=require('../src/animation/ModernDemoCatalog').load()[0].project;
   let shouldFail=true,runCount=0,received,download;
   const context=vm.createContext({
+    sharedPresentationRequested:false,experimentPreview:{live:false},studioExportPreferenceBindings:{},
     newUiEl:id=>items[id],studioFrameExportTask:null,studioVideoExportTask:null,
     studioDraft:{frames:[{},{},{}]},studioPrepared:null,studioPlayback:null,
     studioApi:{build:()=>project},
