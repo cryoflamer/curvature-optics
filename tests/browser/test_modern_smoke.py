@@ -14186,11 +14186,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernHeight').fill(str(height+2))
         self.page.locator('#ModernHeight').press('Tab')
         expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Document session saved',timeout=30000)
-        self.page.wait_for_function("""async () => {
-            const entries=await CurvatureModernApp.getHistoryStore().list();
-            return entries.length===1&&entries[0].source==='auto';
-        }""",timeout=30000)
+        # Poll the mounted acknowledgement, not an async JS predicate whose
+        # returned Promise can be treated as truthy before the IDB read.
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text(
+            'Already in History · automatic',timeout=30000)
         entries=self.page.evaluate(history)
+        self.assertEqual(len(entries),1)
+        self.assertEqual(entries[0]['source'],'auto')
         bound=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment')
         self.assertEqual(entries[0]['experiment'],bound)
         self.assertFalse(entries[0]['pinned'])
