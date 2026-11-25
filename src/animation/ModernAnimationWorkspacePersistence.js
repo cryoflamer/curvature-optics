@@ -96,7 +96,12 @@
     async function bind(reference){
       if(binding||running||owner&&(owner.latest||owner.receipt||owner.error))
         throw Error('Resolve shared Animation edits before binding a different document');
-      const wanted=copy(reference);
+      if(!reference||Object.keys(reference).length!==3||
+         !['id','revision','recovery'].every(key=>Object.hasOwn(reference,key)))
+        throw Error('Exact shared Animation reference required');
+      // Session checkpoint serialization canonicalizes object-key order.
+      // Domain reference identity must not depend on the input property order.
+      const wanted={id:reference.id,revision:reference.revision,recovery:reference.recovery};
       binding=true;notify();
       try{
         return await selection.coordinate(async()=>{

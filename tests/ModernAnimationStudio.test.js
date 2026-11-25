@@ -485,6 +485,7 @@ test('App timeline actions undo/redo through autosaved drafts without touching H
     stopStudioPlayback(){},saveStudioDraft(){autosaves++;return true;},
     applySuggestedStudioName(v){return v;},root:{},document:doc,animationWorkspaceOpen:true,
     Promise,Map,Set,Array,Object,String,Number,Date,RangeError,Error};
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(render,ctx);
   ctx.renderAnimationStudio(entries);
   actions.frame('history-2','holdMs','1.5');
@@ -795,6 +796,7 @@ test('Live Picker actions filter independently, keep hidden selections and inser
     saveApplicationPreferences(){preferencesSaved++;},saveStudioDraft(){draftSaved++;},
     applySuggestedStudioName(v){return v;},stopStudioPlayback(){},root:{},
     Promise,Array,Object,Number,RangeError,Error};
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(functions+'\n'+render,ctx);
   ctx.renderAnimationStudio(entries);
   assert.deepEqual(Array.from(picker.shown,e=>e.id),[3,1,2]);
@@ -980,6 +982,7 @@ test('Locked v2 Picker filters by contract, protects hidden selections and block
     saveApplicationPreferences(){},saveStudioDraft(){edits++;return true;},
     applySuggestedStudioName:v=>v,stopStudioPlayback(){},root:{},
     Promise,Array,Object,Map,Set,Number,String,RangeError,Error};
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(functions+'\n'+render,ctx);
   ctx.renderAnimationStudio(entries);
   assert.deepEqual(Array.from(picker.shown,e=>e.id),[1,2,5]);

@@ -402,6 +402,7 @@ test('Stash/Discard app flow commits backups before switching, rejects failed wr
         assert.equal(kind,'restore');assert.equal(updated.updatedAt,51);
         ctx.studioDraft=autosave.getWorkspace(ctx.studioWorkspaces,'project_saved_project').draft;
       }};
+    ctx.experimentPreview={live:false};
     vm.runInNewContext(code,ctx);
     return {ctx,events,record,configure(o){
       failSecond=!!o.failSecond;stale=!!o.stale;
@@ -1022,4 +1023,12 @@ test('shared Animation can create independent drafts without reselecting or revi
   assert.equal(autosave.documentReference(added,'draft_new').revision,'rev:2');
   await assert.rejects(a.createDraft(added,'draft_new',f.cp),/identity is already used/);
   assert.deepEqual(await a.read(),added);
+});
+
+test('shared Animation writer binds a canonicalized session reference regardless of property order',async()=>{
+  const h=await sharedWriterFixture(),ref=h.pointer();
+  const canonical={id:ref.id,recovery:ref.recovery,revision:ref.revision};
+  assert.notEqual(JSON.stringify(canonical),JSON.stringify(ref));
+  assert.deepEqual(await h.coordinator.bind(canonical),h.cp);
+  assert.deepEqual(h.coordinator.state().reference,ref);
 });

@@ -11965,7 +11965,6 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationTab').click()
         expect(self.page.locator('#ModernSharedAnimationNewDraft')).to_be_enabled()
         self.page.locator('#ModernSharedAnimationNewDraft').click()
-        name=self.page.locator('#ModernAnimationStudio').get_by_text('Project name',exact=True)
         self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
             .row.envelope.workspace==='animation'&&CurvatureModernApp.getAnimationStudioView()==='editor'""")
         # Use the existing editor's labelled field, not a direct store write.
@@ -11988,7 +11987,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertIsNone(result['legacy'])
         self.assertIsNone(result['tab'])
         self.page.reload(wait_until='load')
-        self.page.wait_for_function(ready,timeout=30000)
+        self.page.wait_for_function("""() => CurvatureModernApp.getExperimentSessionPreview().status==='failed'||
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        restored=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview()')
+        self.assertEqual(restored['status'],'clean',restored)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'animation')
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),ref['id'])
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Shared working draft test')

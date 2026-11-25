@@ -109,6 +109,7 @@ test('view changes leave background export and the active draft untouched',()=>{
     workspaceViewEditGeneration:{animation:0,calibration:0},
     workspaceUiRegistryPreview:{status:'disabled',bridge:null}
   };
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(source.slice(start,end)+'\nthis.changeView=setStudioView;',ctx);
   assert.equal(ctx.changeView('editor',false),true);
   assert.equal(cancels,1);assert.equal(halts,1);assert.equal(backups,1);

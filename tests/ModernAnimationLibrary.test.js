@@ -822,6 +822,7 @@ function projectLifecycleHarness(){
       rename(db,id,name){const old=stored.get(id);const saved={...old,updatedAt:old.updatedAt+1,
         project:{...old.project,name}};stored.set(id,saved);return Promise.resolve(saved);}}
   };
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(
     excerpt('function studioHasUnsavedWork(){','function renderStudioLibrary(){')+'\n'+
     excerpt('var studioLibraryActionController=null;','function studioLibraryThumbnail(')+'\n'+
@@ -1281,10 +1282,11 @@ test('detached demo autosave returns before reading or writing workspace storage
   const start=source.indexOf('  function saveStudioDraft(throttled){');
   const end=source.indexOf('  function restoreStudioDraft(record){',start);
   const ctx={studioActiveDemo:{id:'soundly'},keyframeEditSession:null};
+  ctx.experimentPreview={live:false};
   vm.runInNewContext(source.slice(start,end),ctx);
   assert.equal(ctx.saveStudioDraft(false),true);
   assert.equal(ctx.saveStudioDraft(true),true);
-  assert.deepEqual(Object.keys(ctx).sort(),['keyframeEditSession','saveStudioDraft','studioActiveDemo']);
+  assert.deepEqual(Object.keys(ctx).sort(),['experimentPreview','keyframeEditSession','saveStudioDraft','studioActiveDemo']);
 });
 
 test('read-only Studio shows keyframes without mutation controls and offers independent copy and export',()=>{

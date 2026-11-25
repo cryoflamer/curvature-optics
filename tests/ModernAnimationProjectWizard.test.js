@@ -285,6 +285,7 @@ function switchHarness(libraryFails=false,draftFails=false){
     newUiEl(){return null;},experimentHistory:null,
     dropStudioWorkspace(){},semanticNaming:null,
   };
+  ctx.experimentPreview={live:false};
   vm.createContext(ctx);vm.runInContext(code,ctx);
   return {ctx,records,checkpoints,events,
     async flush(){for(let i=0;i<6;i++)await new Promise(resolve=>setImmediate(resolve));}};

@@ -2863,7 +2863,9 @@
     }
     function group(title){
       var section=element('div','modern-animation-library-action-group');
-      section.appendChild(element('span','modern-animation-library-action-label',title));host.appendChild(section);return section;
+      section.appendChild(element('span','modern-animation-library-action-label',title));
+      var wrapper=element('div','modern-animation-library-controls');
+      wrapper.appendChild(section);host.appendChild(wrapper);return section;
     }
     function action(parent,label,fn,disabled=false,attrs={}){
       var button=element('button','modern-ghost-button',label);button.type='button';
@@ -2871,7 +2873,8 @@
       Object.keys(attrs).forEach(k=>button.setAttribute(k,attrs[k]));
       button.addEventListener('click',fn);parent.appendChild(button);return button;
     }
-    host.appendChild(element('div','modern-animation-library-heading','Shared Animation working drafts'));
+    var heading=element('div','modern-animation-library-heading');
+    heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
       'Working drafts are saved in IndexedDB. Named Library changes and temporary keyframe editing are not enabled in this preview.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
@@ -2883,7 +2886,7 @@
       var recovery=group('Unsaved working draft');
       action(recovery,'Retry shared save',()=>void persistStudioWorkspace({retry:true}),!status.error);
       action(recovery,'Download unsaved draft',()=>downloadHistoryJson(
-        {format:'curvature-shared-animation-recovery',version:1,recovery:ctx.writer.recovery()},
+        JSON.stringify({format:'curvature-shared-animation-recovery',version:1,recovery:ctx.writer.recovery()},null,2)+'\n',
         'curvature-animation-recovery.json'),!ctx.writer.recovery());
     }
     if(!ctx.inventory&&!ctx.row){
@@ -2897,7 +2900,7 @@
           inventory.issues.length+' invalid source(s); adoption blocked. Download and preserve the evidence.'));
       }
       action(sources,'Download legacy evidence',()=>downloadHistoryJson(
-        {format:'curvature-animation-legacy-evidence',version:1,evidence:inventory.evidence,issues:inventory.issues},
+        JSON.stringify({format:'curvature-animation-legacy-evidence',version:1,evidence:inventory.evidence,issues:inventory.issues},null,2)+'\n',
         'curvature-animation-legacy-evidence.json'));
       if(!ctx.row){
         inventory.sources.forEach(source=>action(sources,'Adopt '+source.source+' · '+
@@ -2937,16 +2940,23 @@
       var selected=await ctx.coordinate(()=>c.selectWorkspace('animation',ref));
       experimentPreview.status=selected.status;
     }
-    var cp=await ctx.writer.bind(ref);
-    if(experimentPreview.status==='suspended')throw Error('Animation lifetime ended');
-    ctx.row=ctx.writer.acknowledgedRow();studioWorkspaces=ctx.row.collection;
-    stopStudioPlayback(true);studioActiveDemo=null;studioWorkspaceId=ref.id;
-    studioLibrarySelected='';studioWorkspaceReady=true;studioWorkspaceLocalSaved=false;
-    studioDraftGeneration++;studioDiagnosticTransition=null;
-    studioPickerOpen=false;studioPickerChecked=Object.create(null);studioFilmstripScroll=0;
-    restoreStudioDraft(cp);
-    studioDraftStatus('Shared working draft saved in IndexedDB',false);
-    renderAnimationStudio(studioHistoryEntries);
+    try{
+      var cp=await ctx.writer.bind(ref);
+      if(experimentPreview.status==='suspended')throw Error('Animation lifetime ended');
+      ctx.row=ctx.writer.acknowledgedRow();studioWorkspaces=ctx.row.collection;
+      stopStudioPlayback(true);studioActiveDemo=null;studioWorkspaceId=ref.id;
+      studioLibrarySelected='';studioWorkspaceReady=true;studioWorkspaceLocalSaved=false;
+      studioDraftGeneration++;studioDiagnosticTransition=null;
+      studioPickerOpen=false;studioPickerChecked=Object.create(null);studioFilmstripScroll=0;
+      restoreStudioDraft(cp);
+      studioDraftStatus('Shared working draft saved in IndexedDB',false);
+      renderAnimationStudio(studioHistoryEntries);
+    }catch(error){
+      // Acknowledged selection may already have moved. Do not keep editing the
+      // previous document or revert the durable row after an activation failure.
+      if(experimentPreview.status!=='suspended')previewFailure(error);
+      throw error;
+    }
   }
   async function flushSharedAnimation(){
     if(!studioWorkspaceReady)return true;
