@@ -2740,6 +2740,28 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             context.close()
 
+    def test_managed_storage_cutover_blocks_old_modern_startup(self):
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        key='curvature-modern-storage-route-v1'
+        for state in ['preparing','managed','invalid']:
+            raw=json.dumps({'format':'curvature-modern-storage-route','version':1,
+                'state':state,'backupSha256':'a'*64}) if state!='invalid' else 'broken'
+            self.page.evaluate("([key,raw])=>localStorage.setItem(key,raw)",[key,raw])
+            response=self.page.goto(self.base_url,wait_until='load',timeout=30000)
+            self.assertEqual(response.status,200)
+            refusal=self.page.locator('#ModernStorageStartupRefusal')
+            expect(refusal).to_be_visible()
+            expect(refusal).to_contain_text('Modern storage startup blocked')
+            self.assertFalse(self.page.evaluate('!!window.CurvatureModernApp'))
+            self.assertEqual(self.page.evaluate("key=>localStorage.getItem(key)",key),raw)
+            self.assertEqual(self.page.evaluate('async()=>await indexedDB.databases()'),[])
+        self.page.evaluate("key=>localStorage.removeItem(key)",key)
+        self.open_modern()
+        self.assertTrue(self.page.evaluate('!!window.CurvatureModernApp'))
+
     def test_managed_storage_cutover_writer_fence(self):
         def prepare(page):
             page.route(self.base_url, lambda route: route.fulfill(

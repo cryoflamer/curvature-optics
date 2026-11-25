@@ -534,3 +534,12 @@ overwrites it. A stale or invalid backup refuses before the marker or
 target is created. This API does not prove that other tabs are closed,
 does not activate the managed route, and is not yet called by production
 startup or a maintenance UI.
+
+### Startup refusal before production activation
+
+While the Modern application is still wired to the legacy adapters, its
+bootstrap refuses any preparing, managed or invalid cutover marker before
+mounting session restore, autosave or preference writers. The blocked page
+shows an explicit recovery notice and does not clear the marker or either
+store. The normal absent-marker path remains unchanged. This is an interim
+safety gate, not the final managed application route.

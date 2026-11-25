@@ -4,6 +4,38 @@
  */
 (function(root){
   'use strict';
+  // Until every production consumer is routed to managed resources, an
+  // explicit cutover marker must stop this legacy-wired bootstrap before
+  // any session restore, autosave, migration or UI preference is mounted.
+  var startupStorageError=null;
+  try{
+    var startupStorage=root.localStorage,startupBarrier=root.CurvatureModernBackupWriteBarrier;
+    if(startupBarrier&&typeof startupBarrier.readRoute==='function'){
+      var startupRoute=startupBarrier.readRoute(startupStorage);
+      if(startupRoute)startupStorageError='Storage cutover is '+startupRoute.state+
+        '; this application version cannot open the prepared managed route.';
+    }else if(startupStorage&&typeof startupStorage.getItem('curvature-modern-storage-route-v1')==='string'){
+      startupStorageError='Storage cutover marker exists, but the route validator is unavailable.';
+    }
+  }catch(error){startupStorageError='Storage route could not be verified: '+error.message;}
+  if(startupStorageError){
+    function showStorageStartupRefusal(){
+      var main=document.createElement('main'),heading=document.createElement('h1'),
+        notice=document.createElement('p'),guidance=document.createElement('p');
+      main.id='ModernStorageStartupRefusal';
+      main.style.cssText='max-width:44rem;margin:3rem auto;padding:1rem;font-family:system-ui,sans-serif';
+      main.setAttribute('role','alert');
+      heading.textContent='Modern storage startup blocked';
+      notice.textContent=startupStorageError;
+      guidance.textContent='Preserve the backup file and both stores. Do not clear browser data or retry the old route.';
+      main.append(heading,notice,guidance);
+      document.body.replaceChildren(main);
+    }
+    if(document.readyState==='loading')
+      document.addEventListener('DOMContentLoaded',showStorageStartupRefusal,{once:true});
+    else showStorageStartupRefusal();
+    return;
+  }
   var state={mode:'scene',atmosphere:'standard',occlusionRadius:6371000,
     calibrationOrigin:undefined,
     visibility:{enabled:false,rangeKm:60},
