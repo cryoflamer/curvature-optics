@@ -461,27 +461,47 @@
         return {repaired:updateCounts(g,stores,types)};
       });
     }
-    function underResourceLock(id,mode,operation){
-      token(id,'object ID');
+    function underLock(scope,id,mode,operation){
+      token(id,scope+' ID');
       const locks=env.navigator?.locks;
       check(locks&&typeof locks.request==='function','resource coordination unavailable; retry in a supported browser');
-      return locks.request(DATABASE+':resource:'+id,{mode,ifAvailable:true},lock=>{
-        check(lock&&lock.mode===mode,'resource in use; close the corresponding editor or tab and retry');
+      return locks.request(DATABASE+':'+scope+':'+id,{mode,ifAvailable:true},lock=>{
+        check(lock&&lock.mode===mode,scope+' in use; close the corresponding editor or tab and retry');
         return operation();
+      });
+    }
+    const underResourceLock=(id,mode,operation)=>underLock('resource',id,mode,operation);
+    function rootTargets(document){
+      return [...new Set(document.references.filter(ref=>ref.strength==='strong').map(ref=>ref.target))].sort();
+    }
+    function lockTargets(targets,mode,operation,index=0){
+      if(index===targets.length)return operation();
+      return underResourceLock(targets[index],mode,()=>lockTargets(targets,mode,operation,index+1));
+    }
+    // A live editor protects both the logical document from removal and
+    // its exact immutable revision from reclamation. Other tabs can still
+    // edit (CAS) the same document; the old closure remains retained.
+    async function withDocumentRetained(id,operation){
+      check(typeof operation==='function','retained document operation required');
+      return underLock('document',id,'shared',async()=>{
+        const before=await getDocument(id);
+        check(before,'document missing');
+        return lockTargets(rootTargets(before),'shared',async()=>{
+          const graph=await readDocumentGraph(id);
+          check(graph&&graph.document.revision===before.revision,
+            'document changed while opening; reload and retry');
+          return operation(graph);
+        });
       });
     }
     // Explicit user-facing owner removal is not an editing detach. Refuse
     // without modifying the entry if any of its retained resources is in use.
     async function removeDocument({documentId,expectedRevision}){
       token(documentId,'document ID');revision(expectedRevision);
-      const before=await getDocument(documentId);
-      check(before&&before.revision===expectedRevision,'stale or missing document');
-      const targets=[...new Set(before.references.filter(ref=>ref.strength==='strong').map(ref=>ref.target))].sort();
-      function acquire(index,operation){
-        if(index===targets.length)return operation();
-        return underResourceLock(targets[index],'exclusive',()=>acquire(index+1,operation));
-      }
-      return acquire(0,()=>run('readwrite',async stores=>{
+      return underLock('document',documentId,'exclusive',async()=>{
+        const before=await getDocument(documentId);
+        check(before&&before.revision===expectedRevision,'stale or missing document');
+        return lockTargets(rootTargets(before),'exclusive',()=>run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
         await verifyPayloads(g,stores,types);
@@ -492,7 +512,8 @@
         const retired=saveDocument(g,stores,{id:documentId,kind:doc.kind,
           revision:doc.revision+1,deleted:true});
         return {removed:true,revision:retired.revision};
-      }));
+        }));
+      });
     }
     async function withRetained(id,operation){
       check(typeof operation==='function','retained operation required');
@@ -595,7 +616,7 @@
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectUsage,
-      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
+      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));

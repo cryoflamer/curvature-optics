@@ -281,3 +281,13 @@ from gallery reads. The explicit `suggestHistoryId()` includes retired IDs
 when choosing the next numeric alias, but is not an allocation reservation:
 the initial document CAS rejects a competing create. These opt-in read ports
 are preparation for routing, not a second live UI authority.
+
+A live editor may use `withDocumentRetained(id, callback)` to retain both
+its logical document identity and its exact immutable strong closure until
+the callback settles. Explicit removal takes the document's exclusive lock
+before taking its direct target locks. CAS edits in another tab remain
+allowed; if they replace the direct targets, the previous closure remains
+protected from GC by the editor's original shared resource locks. Opening
+rechecks the document revision after acquiring its target locks. All these
+locks are nonblocking, and resource target order is deterministic. This
+mechanism is opt-in and does not yet wire any production editor.

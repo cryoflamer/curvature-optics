@@ -325,6 +325,41 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertIsNone(second.evaluate("()=>store.getDocument('doc')"))
             self.assertEqual(second.evaluate('id=>store.collectGarbage(id)',resource),{'collected':True})
             self.assertIsNone(second.evaluate('id=>store.get(id)',resource))
+            # A logical document remains protected even if a concurrent
+            # revision changes its direct strong target. Its old closure is
+            # retained until the editor actually releases the document.
+            old=self.page.evaluate("""async()=>{
+                const row=await store.createAndAttach({documentId:'revisioned',kind:'test',
+                    expectedRevision:0,metadata:{},slot:'value',type:'test',version:1,payload:'old revision'});
+                window.documentHolding=false;
+                window.documentTask=store.withDocumentRetained('revisioned',async graph=>{
+                    await new Promise(resolve=>{window.releaseDocument=resolve;window.documentHolding=true;});
+                    return graph.resources[0].payload;
+                });
+                return row.id;
+            }""")
+            self.page.wait_for_function('window.documentHolding === true')
+            revised=second.evaluate("""async old=>{
+                const row=await store.createAndAttach({documentId:'revisioned',kind:'test',
+                    expectedRevision:1,metadata:{},slot:'value',type:'test',version:1,payload:'new revision'});
+                let refused=false,oldProtected=false;
+                try{await store.removeDocument({documentId:'revisioned',expectedRevision:2});}
+                catch(error){refused=/close the corresponding editor/.test(error.message);}
+                try{await store.collectGarbage(old);}
+                catch(error){oldProtected=/close the corresponding editor/.test(error.message);}
+                const current=await store.getDocument('revisioned');
+                if(!refused||!oldProtected||current.revision!==2||current.references[0].target!==row.id)
+                    throw Error('Document retention failed after revision change');
+                return row.id;
+            }""",old)
+            self.assertEqual(self.page.evaluate("""async()=>{
+                window.releaseDocument();return documentTask;
+            }"""),'old revision')
+            self.assertTrue(second.evaluate('async id=>(await store.collectGarbage(id)).collected',old))
+            self.assertTrue(second.evaluate("""async()=>{
+                return (await store.removeDocument({documentId:'revisioned',expectedRevision:2})).removed;
+            }"""))
+            self.assertTrue(second.evaluate('async id=>(await store.collectGarbage(id)).collected',revised))
             # Verify the user's actual recovery path: close the holding tab,
             # not an application-specific release or synchronization message.
             abandoned=self.page.evaluate("""async()=>{
