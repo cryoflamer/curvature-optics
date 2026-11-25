@@ -1400,6 +1400,9 @@
         workingReferences:async(db,reference,project)=>{
           bound(db);return (await workingAnimationSource(reference,project)).referenceImages;
         },
+        recoveryReferences:async(db,recovery)=>{
+          bound(db);return readAnimationRecoveryReferences(recovery);
+        },
         update:async(db,project,optics,expected,now,thumbnail)=>{
           bound(db);return changeApplicationAnimation(project.id,expected,old=>animations.nextRecord(old,project,optics,now,thumbnail));
         },
@@ -1614,6 +1617,60 @@
     }
     async function readAnimationWorkingCollection(){
       return loadAnimationWorkingCollection(store.readDocumentGraph);
+    }
+    // A failed editor save carries the preceding acknowledged reference.
+    // A pending receipt may still retain that exact prior collection.
+    // Resolve its photos before considering any newly attached, unsaved IDs.
+    async function readAnimationRecoveryReferences(recovery){
+      const checkpoint=drafts.normalize(recovery?.checkpoint);
+      const ids=[...new Set(checkpoint.draft.frames.flatMap(frame=>frame.referenceImageIds||[]))].sort();
+      if(!ids.length)return [];
+      const barrier=deps.CurvatureModernBackupWriteBarrier;
+      check(barrier&&env.navigator?.locks,'coordinated Animation recovery unavailable');
+      const {value}=await barrier.create(env.navigator.locks).snapshot(async()=>{
+        const graph=await store.inspectDocumentGraph(draftsId);
+        const current=await loadAnimationWorkingCollection(async()=>graph,false);
+        const ref=recovery.reference;
+        check(current&&ref,'acknowledged recovery source missing');
+        const matches=row=>row.revisions.some(item=>item.id===ref.id)&&
+          same(drafts.documentReference(row,ref.id),ref);
+        const active=pick(graph,'collection',DRAFTS);
+        let source=matches(current.row)?active:null;
+        if(!source&&graph.document.references.some(r=>r.slot==='previous')){
+          const previous=pick(graph,'previous',DRAFTS);
+          const old=await drafts.verifySharedRow(previous.payload.row,env.crypto);
+          if(matches(old))source=previous;
+        }
+        check(source,'acknowledged recovery revision is no longer retained; download raw evidence');
+        const retained=new Map(source.payload.observations.map(entry=>[entry.alias,entry.target]));
+        // A matching pending receipt proves the staged successor's new
+        // observations too. An unrelated successor is not recovery evidence.
+        if(source!==active&&recovery.receipt&&same(current.row.receipt,recovery.receipt)){
+          for(const entry of active.payload.observations){
+            if(retained.has(entry.alias))
+              check(retained.get(entry.alias)===entry.target,'conflicting recovery observation versions');
+            else retained.set(entry.alias,entry.target);
+          }
+        }
+        const records=[],verified=new Map();
+        for(const alias of ids){
+          const target=retained.get(alias);
+          if(target){
+            const observation=graph.resources.find(r=>r.id===target);
+            check(observation?.type===OBSERVATION&&observation.payload.id===alias,'recovery observation mismatch');
+            records.push(await materializeObservation(graph,observation,verified));
+          }else{
+            // This alias has not been acknowledged by the recovery owner.
+            // Use the verified current gallery record only for new unsaved
+            // attachments, as the normal working save would.
+            const fresh=await inspectObservation(alias);
+            check(fresh,'new unsaved recovery photograph missing: '+alias);
+            records.push(fresh.row.record);
+          }
+        }
+        return records;
+      });
+      return value;
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
       expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false}={}){

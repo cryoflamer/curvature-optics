@@ -1697,6 +1697,17 @@ class ModernBrowserSmoke(unittest.TestCase):
             await store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
             ok(!(await store.collectGarbage(previous.collectionId)).collected&&
                 !(await store.collectGarbage(photo.observationId)).collected,'receipt lost previous photo');
+            const recoveryPort=L.createPort({managedResources:adapter});
+            const recovery={version:1,reference:A.documentReference(previous.row,id),checkpoint:cp,receipt:row.receipt};
+            const recoveryRecords=await recoveryPort.recoveryReferences(indexedDB,recovery);
+            ok(recoveryRecords.length===1&&recoveryRecords[0].original.dataUrl===record.original.dataUrl,
+                'pending recovery did not resolve the removed historical original');
+            const recoveryText=await A.exportRecovery(recovery,
+                alias=>({record:recoveryRecords.find(v=>v.id===alias)}),
+                value=>CurvatureModernReferenceImageImport.verify(value,window),crypto);
+            const portableRecovery=await A.prepareRecoveryImport(recoveryText,crypto);
+            ok(portableRecovery.referenceImages[0].original.dataUrl===record.original.dataUrl,
+                'recovery portable bytes changed');
             await rejects(()=>stale.saveSelected(previous.row,A.documentReference(previous.row,id),next,base),
                 /CAS conflict/);
             const pendingArchive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
@@ -1710,6 +1721,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             row=await fresh.retire(found,found.receipt);
             ok(!row.receipt&&(await store.collectGarbage(previous.collectionId)).collected&&
                 (await store.collectGarbage(photo.observationId)).collected,'receipt retirement did not release old collection');
+            await rejects(()=>recoveryPort.recoveryReferences(indexedDB,recovery),/revision is no longer retained/);
             const before=await adapter.readAnimationWorkingCollection();
             await rejects(()=>fresh.createDraft(row,'draft_rejected',cp,()=>false),/stale shared Animation/i);
             ok((await adapter.readAnimationWorkingCollection()).row.digest===before.row.digest,'guard failure changed working collection');
@@ -1751,6 +1763,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             const refs=await port.workingReferences(indexedDB,reference,exported);
             ok(refs.length===1&&refs[0].title===retainedRecord.title&&
                 refs[0].original.dataUrl===record.original.dataUrl,'working export lost exact retained photo');
+            const freshRecord={...record,id:'fresh_recovery_photo',title:'Unsaved new attachment'};
+            await adapter.saveObservation({id:freshRecord.id,revision:1,record:freshRecord});
+            const unsaved=A.normalize({...namedCp,draft:{...namedCp.draft,
+                frames:namedCp.draft.frames.map((frame,i)=>i?frame:{...frame,referenceImageIds:[retainedRecord.id,freshRecord.id]})}});
+            const recovered=await port.recoveryReferences(indexedDB,
+                {version:1,reference,checkpoint:unsaved,receipt:null});
+            ok(recovered.length===2&&recovered.find(v=>v.id===retainedRecord.id).title===retainedRecord.title&&
+                recovered.find(v=>v.id===freshRecord.id).title===freshRecord.title,
+                'recovery replaced retained attribution or lost a new unsaved attachment');
+            await store.removeDocument({documentId:'observation:'+freshRecord.id,expectedRevision:1});
             const copy=await port.createFromWorking(indexedDB,exported,'auto',205,null,null,reference);
             const copied=await adapter.readAnimation(copy.id);
             ok(copied.observations[0].target===retainedPhoto.observationId,

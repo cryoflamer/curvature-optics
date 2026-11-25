@@ -3403,8 +3403,10 @@
     var evidence=structuredClone(ctx.writer.recovery());
     ctx.busy=true;ctx.message='Collecting verified recovery originals…';renderSharedAnimationLibrary();
     try{
+      var originals=managedResources?new Map((await studioLibrary.recoveryReferences(root.indexedDB,evidence))
+        .map(record=>[record.id,record])):null;
       var text=await studioDraftAutosave.exportRecovery(evidence,
-        id=>referenceLibrary.inspectOriginal(root.indexedDB,id),
+        id=>originals?(originals.has(id)?{record:originals.get(id)}:null):referenceLibrary.inspectOriginal(root.indexedDB,id),
         record=>root.CurvatureModernReferenceImageImport.verify(record,root),root.crypto);
       downloadHistoryJson(text,'curvature-animation-recovery-with-originals.json');
       ctx.message='Portable recovery exported with original photographs.';
@@ -5128,7 +5130,7 @@
       var ctx=experimentPreview.animationContext,status=ctx?.writer.state();
       if(!status?.reference||status.error||!studioWorkspaceReady)
         throw Error('An acknowledged working Animation is required for original photographs');
-      if((status.unsaved||status.busy)&&!await persistStudioWorkspace({requireDurable:true}))
+      if((status.unsaved||status.pending)&&!await persistStudioWorkspace({requireDurable:true}))
         throw Error('Working Animation is not acknowledged; retry the save');
       check();
       var reference=ctx.writer.state().reference;

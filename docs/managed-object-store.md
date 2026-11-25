@@ -585,3 +585,17 @@ the Animation's semantic fingerprint. Legacy import retains its previous
 separate asset and project transactions. Foreign calibration origins without
 available verified archive evidence still refuse; this is not an implicit
 standalone-provenance downgrade.
+
+
+### Managed portable working recovery originals
+
+A failed working save exports photographs from the exact acknowledged
+workspace reference, including a preceding collection still retained by a
+pending selection receipt. A matching receipt may also prove newly staged
+observations. Previously retained aliases never fall back to mutable gallery
+records. An unacknowledged new attachment can use its verified current gallery
+record under the same coordinated read (its capture-time attribution is not
+independently journaled). A stale reference whose collection is no longer
+retained fails closed, with raw recovery evidence still downloadable. This
+read-only path does not create or upgrade storage, modify a receipt, or enable
+reclamation.
