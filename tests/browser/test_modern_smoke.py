@@ -14206,6 +14206,68 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.wait_for_timeout(1800)
         self.assertEqual(self.page.evaluate(history),entries)
 
+    def test_shared_image_usage_opens_exact_animation_and_shared_draft(self):
+        """Image Library exact named/draft relations select the frame without overwriting its owner."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        saved=self.page.evaluate("""async()=>{
+            const id='shared_usage_photo',canvas=document.createElement('canvas');
+            canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            const original=await CurvatureModernReferenceImageImport.ingest(
+                new File([blob],'Shared use.png',{type:'image/png'}),id,window);
+            await CurvatureModernReferenceImageLibrary.create(indexedDB,original);
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Shared gallery animation';
+            project.keyframes.forEach((frame,i)=>{frame.referenceImageIds=i===1?[id]:[];});
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller')
+        self.page.locator('#ModernImageLibraryTab').click()
+        gallery=self.page.locator('#ModernReferenceImageLibrary')
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('[data-image-id="shared_usage_photo"]').click()
+        where=gallery.locator('.modern-image-usage')
+        old=where.get_by_role('button',name='Open animation Shared gallery animation frame 2 · saved')
+        expect(old).to_be_visible(timeout=30000)
+        latest=self.page.evaluate("""record=>CurvatureModernAnimationLibrary.rename(
+            indexedDB,record.id,'Shared gallery renamed',record.updatedAt,record.updatedAt+1)""",saved)
+        old.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text('navigation was blocked',timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),before['row'])
+        where.get_by_role('button',name='Refresh uses').click()
+        where.get_by_role('button',name='Open animation Shared gallery renamed frame 2 · saved').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(cp['selectedKey'],cp['draft']['frames'][1]['key'])
+        self.assertEqual(cp['libraryRevision'],latest['updatedAt'])
+        self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",latest['id']),latest)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment'),before['bound']['experiment'])
+        self.page.locator('#ModernImageLibraryTab').click()
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('[data-image-id="shared_usage_photo"]').click()
+        draft=where.get_by_role('button',name='Open draft Shared gallery renamed frame 2 · shared checkpoint')
+        expect(draft).to_be_visible(timeout=30000)
+        draft.click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        restored=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(restored['selectedKey'],cp['selectedKey'])
+        self.assertEqual(restored['draft'],cp['draft'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment'),before['bound']['experiment'])
+        self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",latest['id']),latest)
+
 
 if __name__ == '__main__':
     unittest.main()

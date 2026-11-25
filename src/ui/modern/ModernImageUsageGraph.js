@@ -116,6 +116,24 @@
     });
     return uses;
   }
+  // An inventory relation is not a selection authority. Validate the exact
+  // checkpoint revision, whole draft and referenced frame again at opening.
+  function resolveSharedDraft(row,use,imageId){
+    if(!row||row.receipt||row.namedSave||row.keyframeEdit)
+      throw Error('Resolve shared Animation recovery before opening a use');
+    if(use?.type!=='draft'||use.source!=='shared checkpoint'||typeof imageId!=='string'||!imageId)
+      throw Error('Verified shared draft use required');
+    var revision=row.revisions.find(item=>item.id===use.ownerId);
+    var owner=row.collection.workspaces.find(item=>item.id===use.ownerId);
+    var draft=owner?.checkpoint?.draft;
+    if(!revision||'rev:'+revision.revision!==use.revision||!draft||
+       JSON.stringify(draft)!==use.draftContent)
+      throw Error('Shared Animation draft changed since usage inspection; refresh Where used?');
+    var frame=draft.frames[use.frameIndex-1];
+    if(!frame||frame.key!==use.frameKey||!frame.referenceImageIds?.includes(imageId))
+      throw Error('Referenced shared frame changed; refresh Where used?');
+    return {reference:{id:owner.id,revision:use.revision,recovery:null},frameKey:frame.key};
+  }
   function report(selectedId,selectedIdentity,sources,failures){
     var uses=collect(selectedId,selectedIdentity,sources),unavailable=(failures||[]).slice();
     return {uses:uses,count:uses.length,complete:unavailable.length===0,
@@ -227,6 +245,6 @@
       reasons:issues,unavailable:report?report.unavailable.slice():[]};
   }
   return Object.freeze({identityKey:identityKey,imagesFromFrames:imagesFromFrames,
-    demoReferences:demoReferences,collect:collect,report:report,discover:discover,
+    demoReferences:demoReferences,collect:collect,resolveSharedDraft,report:report,discover:discover,
     deletionReview:deletionReview});
 }));

@@ -162,8 +162,16 @@
     usageStatus.className='modern-image-usage-status';usageStatus.setAttribute('aria-live','polite');
     var usageGroups=el('div',undefined,usage);usageGroups.className='modern-image-usage-groups';
     var usageEpoch=0;
+    function sharedAnimationUse(use){
+      return use.type==='animation'&&use.source==='saved'||use.type==='draft'&&use.source==='shared checkpoint';
+    }
     async function navigateUse(use){
       if(busy||!allowDiscard())return;
+      if(sharedPreview()&&sharedAnimationUse(use)){
+        if(!selected||!await env.CurvatureModernApp?.openSharedAnimationImageUse?.(use,selected.id,selected.revision))
+          throw Error('Shared Animation navigation was blocked; refresh Where used?');
+        return;
+      }
       if(sharedPreview()&&use.type!=='calibration')
         throw Error('This use is not yet available in the shared session; open a saved Calibration project instead');
       var tab=null;
@@ -254,11 +262,11 @@
             detail.title=use.ownerId;
             if(use.type==='draft'&&use.source==='recoverable local backup'){
               el('small','Unsent local recovery snapshot · open Animation Studio recovery to restore it before navigating. This snapshot is not the currently loaded workspace.',item);
-            }else if(use.type==='draft'&&use.source==='shared checkpoint'){
-              el('small','Verified shared recovery checkpoint · direct navigation is not yet available.',item);
+            }else if(use.type==='draft'&&use.source==='shared checkpoint'&&!sharedPreview()){
+              el('small','Verified shared recovery checkpoint · open the shared session to navigate.',item);
             }else if(use.type==='animation-intent'){
               el('small','Pending save evidence · resolve the interrupted save in Animation Studio.',item);
-            }else if(sharedPreview()&&use.type!=='calibration'){
+            }else if(sharedPreview()&&use.type!=='calibration'&&!sharedAnimationUse(use)){
               if(['animation','draft','calibration-draft'].includes(use.type))
                 el('small','Direct navigation is not yet available in the shared session.',item);
             }else if(['animation','calibration','draft','calibration-draft'].includes(use.type)){

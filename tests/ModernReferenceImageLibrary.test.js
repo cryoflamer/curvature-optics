@@ -770,3 +770,17 @@ test('Where used includes verified shared workspace revisions and both pending n
   assert.equal(failed.complete,false);
   assert.match(failed.unavailable.join('; '),/Shared Animation recovery.*digest mismatch/);
 });
+
+test('Shared draft image use requires the exact revision, draft and referenced frame',()=>{
+  const photo='photo',draft={name:'Draft',frames:[{key:'first',referenceImageIds:[photo]}]};
+  const row={collection:{workspaces:[{id:'working',checkpoint:{draft}}]},
+    revisions:[{id:'working',revision:4}],receipt:null};
+  const use={type:'draft',source:'shared checkpoint',ownerId:'working',revision:'rev:4',
+    frameKey:'first',frameIndex:1,draftContent:JSON.stringify(draft)};
+  assert.deepEqual(usageGraph.resolveSharedDraft(row,use,photo),{
+    reference:{id:'working',revision:'rev:4',recovery:null},frameKey:'first'});
+  for(const altered of [{revision:'rev:3'},{draftContent:'{}'},{frameKey:'other'},{frameIndex:2}])
+    assert.throws(()=>usageGraph.resolveSharedDraft(row,{...use,...altered},photo),/changed/);
+  assert.throws(()=>usageGraph.resolveSharedDraft(row,use,'other'),/changed/);
+  assert.throws(()=>usageGraph.resolveSharedDraft({...row,keyframeEdit:{}},use,photo),/recovery/);
+});

@@ -10004,7 +10004,82 @@
     try{if(setMode('calibration',false)===false)throw Error('Cannot activate shared Calibration');}
     finally{experimentPreview.calibrationNavigation=false;}
   }
-  async function requestPreviewWorkspace(mode,{reference}={}){
+  // From the transient Image Library, verify the exact owner and original
+  // under the shared operation lock before selecting a document. Never
+  // overwrite an existing working copy just to open a saved-frame relation.
+  async function selectSharedAnimationImageUse(request){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    var use=request.use,imageId=request.imageId;
+    var graph=root.CurvatureModernImageUsageGraph,images=root.CurvatureModernReferenceImageLibrary;
+    var importer=root.CurvatureModernReferenceImageImport;
+    return ctx.coordinate(async()=>{
+      var committed=false;
+      function guard(){
+        ctx.lease.check(true);
+        if(!imageLibraryWorkspaceOpen||experimentPreview.status==='suspended')
+          throw Error('Image Library navigation generation changed');
+        return true;
+      }
+      async function verifyImage(){
+        guard();
+        var row=await images.get(root.indexedDB,imageId);
+        if(!row||row.revision!==request.imageRevision)
+          throw Error('Original photograph changed since usage inspection');
+        return row;
+      }
+      try{
+        await c.assertCleanCheckpoint();
+        var original=await verifyImage();
+        await importer.verifyOriginal(original.record,root);
+        await verifyImage();
+        var store=ctx.makeStore(),row=await store.read(),ref,frameKey,named=null;
+        if(row&&(row.receipt||row.namedSave||row.keyframeEdit))
+          throw Error('Resolve shared Animation recovery before opening a use');
+        if(use.type==='draft'){
+          var selected=graph.resolveSharedDraft(row,use,imageId);
+          ref=selected.reference;frameKey=selected.frameKey;
+        }else if(use.type==='animation'&&use.source==='saved'){
+          named=await studioLibrary.get(root.indexedDB,use.ownerId);
+          if(!named||named.updatedAt!==use.revision)
+            throw Error('Saved Animation changed since usage inspection; refresh Where used?');
+          var index=use.frameIndex-1,frame=named.project.keyframes[index];
+          if(!frame||!frame.referenceImageIds?.includes(imageId))
+            throw Error('Referenced saved frame changed; refresh Where used?');
+          var id=studioDraftAutosave.projectWorkspaceId(named.id),draft=studioApi.fromProject(named.project);
+          frameKey=draft.frames[index].key;
+          var cp=studioDraftAutosave.checkpoint({draft,selectedKey:frameKey,
+            quality:named.quality,prepared:studioApi.inspect(draft).compatible,
+            libraryId:named.id,libraryRevision:named.updatedAt,positionMs:0},Date.now());
+          var existing=row&&studioDraftAutosave.getWorkspace(row.collection,id);
+          if(existing){
+            if(existing.libraryId!==named.id||existing.libraryRevision!==named.updatedAt||
+               JSON.stringify(existing.draft)!==JSON.stringify(cp.draft))
+              throw Error('Saved Animation has a different working copy; use its shared checkpoint instead');
+          }else{
+            await verifySharedAnimationOriginals(named.project,ctx);
+            guard();await verifySharedNamedAnimation(named);await verifyImage();
+            row=row?await store.createLinkedWorkspace(row,cp,guard):
+              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage,guard);
+            ctx.row=row;
+          }
+          ref=studioDraftAutosave.documentReference(row,id);
+          await verifySharedNamedAnimation(named);
+        }else throw Error('Unsupported shared Animation use');
+        await verifyImage();guard();
+        // Exact domain revision is independently read before and after CAS by
+        // the controller. A changed/deleted target cannot be substituted.
+        var selected=await c.selectWorkspace('animation',ref);
+        committed=true;experimentPreview.status=selected.status;
+        if(named)await verifySharedNamedAnimation(named);
+        guard();
+        return {reference:ref,frameKey};
+      }catch(error){
+        if(committed)error.sharedImageSelectionCommitted=true;
+        throw error;
+      }
+    });
+  }
+  async function requestPreviewWorkspace(mode,{reference,animationUse}={}){
     if(experimentPreview.live&&(keyframeEditSession||experimentPreview.animationContext?.busy))return false;
     if(!experimentPreview.live||!['calibration','images','animation'].includes(mode)&&
        !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen&&!animationWorkspaceOpen){
@@ -10017,6 +10092,7 @@
     }
     var from=currentWorkspaceMode();
     if(reference&&(from!=='images'||mode!=='calibration'))return false;
+    if(animationUse&&(from!=='images'||mode!=='animation'||reference))return false;
     if(mode===from)return true;
     experimentPreview.calibrationBusy=true;previewControls();
     var switched=false;
@@ -10042,14 +10118,31 @@
       }else if(mode==='animation'){
         await experimentPreview.calibrationContext.verifyCheckpoint();
         await loadSharedAnimationLibrary();
-        var ref=c.state().row.envelope.documents.animation;
-        if(ref){await bindSharedAnimation(ref);switched=true;}
-        else {studioWorkspaceReady=false;studioWorkspaceId=null;setStudioView('library',false,null,true);}
+        if(animationUse){
+          var usage=await selectSharedAnimationImageUse(animationUse);
+          switched=true;
+          await bindSharedAnimation(usage.reference,true);
+          if(!studioDraft.frames.some(frame=>frame.key===usage.frameKey))
+            throw Error('Selected shared frame is missing after activation');
+        }else{
+          var ref=c.state().row.envelope.documents.animation;
+          if(ref){await bindSharedAnimation(ref);switched=true;}
+          else {studioWorkspaceReady=false;studioWorkspaceId=null;setStudioView('library',false,null,true);}
+        }
       }else await experimentPreview.calibrationContext.verifyCheckpoint();
       if(experimentPreview.status==='suspended')return false;
       experimentPreview.calibrationNavigation=true;
       if(setMode(mode)===false)throw Error('Cannot activate selected workspace');
-      if(mode==='animation')renderStudioLibrary();
+      if(mode==='animation'){
+        if(animationUse){
+          studioSelectedKey=usage.frameKey;
+          if(!setStudioView('editor',true)||!saveStudioDraft(false)||
+             !await persistStudioWorkspace({requireDurable:true}))
+            throw Error('Shared frame selection was not acknowledged; reload or recover the working draft');
+          renderAnimationStudio(studioHistoryEntries);
+        }
+        renderStudioLibrary();
+      }
       if(mode==='images'&&from==='calibration'){
         root.CurvatureImageLibraryReturnToCalibration=true;
         var library=newUiEl('ModernReferenceImageLibrary');
@@ -10062,7 +10155,7 @@
       return true;
     }catch(error){
       if(experimentPreview.status==='suspended')return false;
-      if(c.state().status==='failed'||switched)previewFailure(error);
+      if(c.state().status==='failed'||switched||error.sharedImageSelectionCommitted)previewFailure(error);
       else{
         persistenceStatus(error.message,true);
         var notice=newUiEl('ModernCalibrationStorage');if(notice)notice.textContent=error.message;
@@ -10893,6 +10986,12 @@
       if(!sharedPresentationActive()||!imageLibraryWorkspaceOpen||
          !Number.isSafeInteger(revision)||revision<1)return Promise.resolve(false);
       return requestPreviewWorkspace('calibration',{reference:{id:id,revision:'rev:'+revision,recovery:null}});
+    },
+    openSharedAnimationImageUse:function(use,imageId,imageRevision){
+      if(!sharedPresentationActive()||!imageLibraryWorkspaceOpen||typeof imageId!=='string'||!imageId||
+         !Number.isSafeInteger(imageRevision)||imageRevision<1||!use||
+         !['animation','draft'].includes(use.type))return Promise.resolve(false);
+      return requestPreviewWorkspace('animation',{animationUse:{use,imageId,imageRevision}});
     },
     getAnimationStudioView:function(){return studioView;},
     getAnimationStudioWorkspaceId:function(){return studioWorkspaceId||null;},
