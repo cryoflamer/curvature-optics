@@ -91,7 +91,7 @@ The opt-in core in `src/storage/ModernManagedObjectStore.js` exposes
 `newObjectId`, `createAndAttach`, `writeDocument` (whole root-slot replacement
 and optional atomic batch creation),
 `setReference`, `detach`, `removeDocument`, `get`, `getDocument`,
-`inspectUsage`, `verifyIntegrity`, `recount`, `withRetained` and
+`readDocumentGraph`, `inspectUsage`, `verifyIntegrity`, `recount`, `withRetained` and
 `collectGarbage`. It is not loaded by the application. `detach` is a normal
 revision-checked edit, not a user-facing deletion operation. `removeDocument`
 acquires nonblocking exclusive locks on its direct strong targets, rechecks
@@ -135,15 +135,61 @@ reconstructible. Current original-photo limit is 20 MiB, photo thumbnail
 512 KiB, experiment thumbnail 750000 characters, and shared Animation recovery
 80000000 characters; these are input limits, not measured storage sizes.
 
+## Domain adapter API
+
+`src/storage/ModernManagedResources.js` supplies opt-in adapters for existing
+History, Reference Image Library, saved Animation, Calibration Result and
+Calibration Project formats. Their existing validators remain authoritative.
+The History entry and observation aliases are preserved in namespaced document
+IDs, separately from immutable resource IDs. Managed document revisions are
+separate from legacy source revisions/timestamps. A History metadata edit may
+reuse a snapshot only after comparing its complete validated data and evidence
+mapping, including Compare selection. Image observations may reuse an original
+only after verified dimensions, digest and exact byte equality. Original blobs
+are not resized or reencoded; portable Base64 is reconstructed on read.
+Classification and attribution remain separate per observation.
+
+`readDocumentGraph` reads one revision and its strong closure in one IDB
+transaction; domain materialization verifies target types and identity and
+rechecks original raster/digest before returning portable records.
+Saved Animation owns its full project and retained observation versions.
+Its local sourceSnapshotId is provenance, not a strong dependency. Historical
+image attribution is preserved by the retained observation version.
+Calibration Results retain the verified original; Calibration Projects retain
+their original plus archived results and hydrate existing checkpoint/Undo/Redo
+data through the existing checkpoint adapter with a managed original lookup.
+Locally calibrated snapshots and animations retain exact archived evidence;
+an explicitly standalone portable import with no evidence retains only its
+inline historical origin and is not presented as verified external evidence.
+
+These adapters are not the active Modern UI save path. Updating a retained
+project after its gallery alias has been removed, complete live-use coverage,
+working session/Animation draft adoption, limits and production cutover remain
+required before enabling user-facing deletion.
+
 ## Backup and cutover
 
-Portable backup must capture the canonical graph, payloads and roots with
-closure and hash verification; restore validates types, remaps IDs where
-necessary and recomputes counts. Temporary browser locks are not portable
+Portable backup inventories the managed database as an additional optional V1
+descriptor; earlier archives may omit it while it is absent. Managed operations
+participate in the existing backup writer barrier when provided (including
+schema-capable reads); uncoordinated callers are not eligible for cutover.
+Exact empty-profile restore preserves binary payloads and compound edge keys;
+full graph qualification must additionally validate types, closure and derived
+counts, and recompute counts where needed. Temporary browser locks are not portable
 roots. Reuse the existing structured binary codec and coordinated backup
 barrier, keeping its documented limits. Existing explicit portable exports
 remain self-contained. Preserve exact original bytes, calibration evidence,
 physical invariants and independent Compare A/B atmosphere settings.
+
+The explicit `rehearseLegacyArchive` entry point reads a checksum-verified
+portable archive into a disposable empty browser profile, never opens its
+source databases, and refuses an occupied target. It imports supported owners
+in dependency order, deduplicates verified originals, reports skipped records,
+unresolved standalone evidence and unhandled stores/Web Storage, and verifies
+the resulting graph. An acknowledged row that cannot be reopened fails the
+rehearsal rather than being reported as skipped. This is a best-effort rehearsal,
+not an in-place migration or production activation. It never returns migration
+eligibility, and a failed rehearsal profile can be discarded.
 
 Before adopting destructive operations, verify an external backup, prevent
 old writers from participating, migrate supported local data best-effort and

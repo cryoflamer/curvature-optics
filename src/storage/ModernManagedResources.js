@@ -408,11 +408,18 @@
         async function each(kind,entries,operation){
           imported[kind]=0;
           for(const entry of entries){
+            let acknowledged=false;
             try{
               check(entry.value&&entry.key===entry.value.id,'source row ID mismatch');
-              await operation(entry.value);
+              await operation(entry.value,()=>{acknowledged=true;});
               imported[kind]++;
-            }catch(error){skipped.push({kind,id:String(entry.key),reason:String(error.message||error)});}
+            }catch(error){
+              // A refused write is safely skippable. An acknowledged root
+              // that cannot be verified is not: discard this test profile.
+              if(acknowledged)throw Error('Rehearsal verification failed after commit: '+
+                kind+' '+String(entry.key)+'; discard this disposable profile: '+String(error.message||error));
+              skipped.push({kind,id:String(entry.key),reason:String(error.message||error)});
+            }
           }
         }
         const annotations=rows('curvature-modern-reference-images','annotations');
@@ -422,7 +429,7 @@
           if(!entry.value||entry.value.id!==entry.key||!observations.some(row=>row.key===entry.key))
             skipped.push({kind:'annotation',id:String(entry.key),reason:'invalid or orphan classification'});
         }
-        await each('observation',observations,async row=>{
+        await each('observation',observations,async (row,ack)=>{
           const a=annotationMap.get(row.id);
           if(a)check(a.id===row.id&&positive(a.revision),'invalid classification revision');
           const identity=await deps.CurvatureModernReferenceImageImport.identify(row.record,env);
@@ -430,16 +437,18 @@
           const saved=await adapter.saveObservation({...row,...(a?{
             kind:a.kind,tags:a.tags,collections:a.collections,annotationRevision:a.revision}:{} )},
             {originalId:originals.get(key)});
-          await adapter.readObservation(row.id);
+          ack();
+          check(await adapter.readObservation(row.id),'migrated observation missing');
           originals.set(key,saved.originalId);
         });
         const resultRows=rows('curvature-modern-calibration-results','results');
         const archived=new Set(resultRows.map(row=>row.key));
-        await each('calibration-result',resultRows,async row=>{
+        await each('calibration-result',resultRows,async (row,ack)=>{
           const originalId=originals.get(identityKey(row.record.payload.photo));
           check(originalId,'verified original absent from migrated observations');
           await adapter.saveCalibrationResult(row,{originalId});
-          await adapter.readCalibrationResult(row.id);
+          ack();
+          check(await adapter.readCalibrationResult(row.id),'migrated calibration result missing');
         });
         function standalonePolicy(origins){
           if(!origins.length)return false;
@@ -448,26 +457,29 @@
             'mixed local and unresolved calibration evidence requires explicit recovery');
           return !available.length;
         }
-        await each('history',rows('curvature-modern-experiment-history','snapshots'),async row=>{
+        await each('history',rows('curvature-modern-experiment-history','snapshots'),async (row,ack)=>{
           const mode=standalonePolicy([row.experiment.calibrationOrigin].filter(Boolean));
           await adapter.saveHistory(row,{standalone:mode});
-          await adapter.readHistory(row.id);
+          ack();
+          check(await adapter.readHistory(row.id),'migrated History row missing');
           if(mode)standalone.push({kind:'history',id:row.id,reason:'archive absent in source'});
         });
-        await each('animation',rows('curvature-modern-animation-library','projects'),async row=>{
+        await each('animation',rows('curvature-modern-animation-library','projects'),async (row,ack)=>{
           const project=deps.CurvatureModernAnimationProject.validate(row.project);
           const origins=[project.baseExperiment,...(project.mode==='experimental'?project.keyframes.map(f=>f.value):[])]
             .map(e=>e.calibrationOrigin).filter(Boolean);
           const mode=standalonePolicy(origins);
           await adapter.saveAnimation(row,{standalone:mode});
-          await adapter.readAnimation(row.id);
+          ack();
+          check(await adapter.readAnimation(row.id),'migrated Animation missing');
           if(mode)standalone.push({kind:'animation',id:row.id,reason:'archive absent in source'});
         });
-        await each('calibration',rows('curvature-photo-calibration','projects'),async row=>{
+        await each('calibration',rows('curvature-photo-calibration','projects'),async (row,ack)=>{
           const originalId=row.photo?originals.get(identityKey(row.photo.identity)):null;
           check(!row.photo||originalId,'verified Calibration Project original missing');
           await adapter.saveCalibrationProject(row,{originalId});
-          await adapter.readCalibrationProject(row.id);
+          ack();
+          check(await adapter.readCalibrationProject(row.id),'migrated Calibration Project missing');
         });
         const unhandled=[];
         for(const db of present)for(const store of db.stores){

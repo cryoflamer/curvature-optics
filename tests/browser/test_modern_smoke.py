@@ -827,6 +827,9 @@ class ModernBrowserSmoke(unittest.TestCase):
                 {id:saved.entry.id,experiment,referenceImageIds:['other_alias']}
             ],{id:'legacy_animation',name:'Legacy Animation',mode:'camera'});
             await CurvatureModernAnimationLibrary.create(indexedDB,project,'accurate',100,null,true);
+            const broken=structuredClone(project);broken.id='missing_animation';
+            broken.keyframes[0].referenceImageIds=['missing_photo'];
+            await CurvatureModernAnimationLibrary.create(indexedDB,broken,'accurate',101,null,true);
             sessionStorage.setItem('curvature-test-unhandled','preserve-report');
             const archive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
             return {archive,history:saved.entry,record,project};
@@ -855,7 +858,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(result['report']['imported'],{'observation':2,'calibration-result':0,
                 'history':1,'animation':1,'calibration':0})
             self.assertEqual(result['report']['originals'],1)
-            self.assertEqual(result['report']['skipped'],[])
+            self.assertEqual(len(result['report']['skipped']),1)
+            self.assertEqual(result['report']['skipped'][0]['kind'],'animation')
+            self.assertEqual(result['report']['skipped'][0]['id'],'missing_animation')
+            self.assertIn('required observation missing',result['report']['skipped'][0]['reason'])
+            self.assertIsNone(target.evaluate("""async()=>
+                CurvatureModernManagedResources.create(window).readAnimation('missing_animation')"""))
             self.assertFalse(result['report']['eligibleForMigration'])
             self.assertIn({'source':'sessionStorage','records':1},result['report']['unhandled'])
             self.assertTrue(result['report']['integrity']['valid'])
