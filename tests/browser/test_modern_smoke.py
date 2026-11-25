@@ -12239,7 +12239,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         pointer=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope')
         self.assertEqual(pointer['workspace'],'scene')
         self.assertIsNone(pointer['documents']['animation'])
-        self.page.get_by_role('button',name=re.compile(r'^Recover Historical conflict')).click()
+        maintenance=self.page.locator('.modern-shared-animation-recovery')
+        expect(maintenance).not_to_have_attribute('open','')
+        recover=self.page.get_by_role('button',name=re.compile(r'^Recover Historical conflict'))
+        expect(recover).to_be_hidden()
+        maintenance.locator('summary').click()
+        recover.click()
         recovered=self.page.locator('[data-shared-animation-id^="draft_recovered_"]')
         expect(recovered).to_have_count(1)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope'),pointer)
@@ -12265,6 +12270,41 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(after['row']['collection']['activeId'],'draft_historical')
         self.assertIsNone(after['row']['receipt'])
         self.assertEqual(self.page.url,url)
+
+    def test_shared_animation_equivalent_legacy_sources_adopt_without_prompt(self):
+        """Identical legacy collections migrate once, preserving source bytes and normal navigation."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        evidence=self.page.evaluate("""async()=>{
+            const A=CurvatureModernAnimationDraftAutosave,S=CurvatureModernAnimationStudio;
+            const cp=A.checkpoint({draft:S.edit(S.blank(),'name','Equivalent draft'),
+                selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const collection=A.collection('draft_equivalent',cp,100);
+            await A.writeCollection(indexedDB,collection);
+            localStorage.setItem(A.COLLECTION_KEY,JSON.stringify(collection));
+            return (await A.inspectLegacySources(window)).evidence;
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        draft=self.page.locator('[data-shared-animation-id="draft_equivalent"]')
+        expect(draft).to_be_visible(timeout=30000)
+        expect(self.page.get_by_role('button',name=re.compile(r'^Adopt '))).to_have_count(0)
+        expect(self.page.locator('.modern-shared-animation-recovery')).not_to_have_attribute('open','')
+        draft.click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
+            .row.envelope.workspace==='compare'""",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioWorkspaceId()==='draft_equivalent'")
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Equivalent draft')
+        self.assertEqual(self.page.evaluate("""async()=>
+            (await CurvatureModernAnimationDraftAutosave.inspectLegacySources(window)).evidence"""),evidence)
 
     def test_shared_animation_cross_tab_stale_edit_is_exportable(self):
         """A stale editor cannot overwrite the newer globally acknowledged draft."""
@@ -12434,7 +12474,8 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernSceneTab').click()
         self.page.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='scene'")
         self.page.locator('#ModernAnimationTab').click()
-        expect(button).to_contain_text('New saved revision')
+        expect(button).to_have_attribute('aria-label','Open saved project · New saved revision')
+        expect(self.page.locator('.modern-animation-library-card[data-animation-id="'+saved['id']+'"] .modern-animation-library-card-title')).to_have_text('New saved revision')
         button.click()
         self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
         cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')

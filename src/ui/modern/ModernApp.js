@@ -2989,16 +2989,17 @@
   function renderSharedAnimationLibrary(){
     var ctx=experimentPreview.animationContext,host=newUiEl('ModernAnimationLibrary');
     if(!ctx||!host)return;
+    var recoveryOpen=!!host.querySelector('.modern-shared-animation-recovery')?.open;
     host.replaceChildren();
     function element(tag,cls,text){
       var node=document.createElement(tag);if(cls)node.className=cls;
       if(text!==undefined)node.textContent=text;return node;
     }
-    function group(title){
+    function group(title,parent=host){
       var section=element('div','modern-animation-library-action-group');
       section.appendChild(element('span','modern-animation-library-action-label',title));
       var wrapper=element('div','modern-animation-library-controls');
-      wrapper.appendChild(section);host.appendChild(wrapper);return section;
+      wrapper.appendChild(section);parent.appendChild(wrapper);return section;
     }
     function action(parent,label,fn,disabled=false,attrs={}){
       var button=element('button','modern-ghost-button',label);button.type='button';
@@ -3007,9 +3008,10 @@
       button.addEventListener('click',fn);parent.appendChild(button);return button;
     }
     var heading=element('div','modern-animation-library-heading');
-    heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
+    heading.appendChild(element('strong','','Animation Library'));
+    heading.appendChild(element('small','',(ctx.named||[]).length+' saved projects'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes updates the exact linked saved revision. Temporary keyframe edits have a separate recovery journal.'));
+      'Working drafts are autosaved. Save changes updates the linked saved project; Save as new project keeps the original.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
@@ -3069,8 +3071,13 @@
       host.appendChild(element('p','modern-animation-library-empty','Inspecting retained Animation evidence…'));return;
     }
     var inventory=ctx.inventory;
+    var maintenance=element('details','modern-animation-library-filter-details modern-shared-animation-recovery');
+    maintenance.open=recoveryOpen;
+    maintenance.appendChild(element('summary','','Recovery and migration'));
     if(inventory&&(inventory.sources.length||inventory.issues.length)){
-      var sources=group(ctx.row?'Recover additional historical variants':'Choose initial legacy source');
+      if(!ctx.row)host.appendChild(element('p','modern-animation-library-note',
+        'Different or unreadable versions of your previous drafts were found. Choose the collection to keep working with; all other versions remain available for recovery.'));
+      var sources=group(ctx.row?'Recover additional historical variants':'Choose initial legacy source',ctx.row?maintenance:host);
       if(inventory.issues.length){
         sources.appendChild(element('span','modern-animation-library-message is-error',
           inventory.issues.length+' invalid source(s); adoption blocked. Download and preserve the evidence.'));
@@ -3119,29 +3126,11 @@
         }
       });
     }
-    var named=group('Saved Animation Library');
-    if(ctx.namedError)named.appendChild(element('span','modern-animation-library-message is-error',ctx.namedError));
-    if(ctx.named&&ctx.named.length===0)named.appendChild(element('span','modern-animation-library-note','No saved projects.'));
-    else if(!visibleNamed.length&&allNamed.length)named.appendChild(element('span','modern-animation-library-note','No projects match these filters.'));
-    visibleNamed.forEach(record=>{
-      var id=studioDraftAutosave.projectWorkspaceId(record.id);
-      var existing=ctx.row?.collection.workspaces.find(item=>item.id===id);
-      if(existing){
-        named.appendChild(element('span','modern-animation-library-note',record.project.name+
-          (existing.checkpoint.libraryRevision===record.updatedAt?' · working copy below':
-            ' · saved revision changed; retained working copy below')));
-      }else action(named,'Open saved project · '+record.project.name,
-        ()=>void runSharedAnimationAction('openNamed',record),
-        !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
-        {'data-shared-named-animation-id':record.id});
-      action(named,'Delete saved project · '+record.project.name,
-        ()=>void runSharedAnimationAction('deleteNamed',record),false,
-        {'data-shared-delete-animation-id':record.id});
-    });
+    var named=group('Projects');
     action(named,'Save Changes',()=>void runSharedAnimationAction('saveChanges'),
       !studioWorkspaceReady||!studioLibraryActive||!!status.error,
       {'id':'ModernSharedNamedAnimationSaveChanges'});
-    action(named,'Save current draft as new project',()=>void runSharedAnimationAction('saveAs'),
+    action(named,'Save as new project',()=>void runSharedAnimationAction('saveAs'),
       !studioWorkspaceReady||!!status.error,{'id':'ModernSharedNamedAnimationSaveAs'});
     var namedFile=element('input');namedFile.type='file';namedFile.hidden=true;
     namedFile.id='ModernSharedNamedAnimationImportFile';namedFile.accept='.json,application/json';
@@ -3151,10 +3140,60 @@
     namedFile.addEventListener('change',()=>{
       var file=namedFile.files?.[0];if(file)void runSharedAnimationAction('importNamed',file);
     });
-    var controls=group('Working drafts');
-    action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
+    action(named,'New project',()=>void runSharedAnimationAction('new'),
       !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
       {'id':'ModernSharedAnimationNewDraft'});
+    var section=element('section','modern-animation-library-category modern-my-projects-category');
+    section.appendChild(element('strong','modern-animation-library-category-title','My Projects · '+allNamed.length));
+    if(ctx.namedError)section.appendChild(element('p','modern-animation-library-message is-error',ctx.namedError));
+    if(!visibleNamed.length)section.appendChild(element('p','modern-animation-library-empty',
+      allNamed.length?'No projects match these filters.':'No saved projects.'));
+    var gallery=element('div','modern-animation-library-gallery');
+    gallery.setAttribute('aria-label','Saved animation projects');
+    visibleNamed.forEach(record=>{
+      var id=studioDraftAutosave.projectWorkspaceId(record.id);
+      var existing=ctx.row?.collection.workspaces.find(item=>item.id===id);
+      var active=studioWorkspaceReady&&studioWorkspaceId===id;
+      var card=element('article','modern-animation-library-card'+(active?' is-editing':''));
+      card.setAttribute('data-animation-id',record.id);
+      card.appendChild(studioUI.libraryCardVisual(document,record,record.cover,'Project cover'));
+      var info=element('div','modern-animation-library-card-info');
+      var title=element('strong','modern-animation-library-card-title',record.project.name);
+      title.title=record.project.name;info.appendChild(title);
+      info.appendChild(element('small','modern-animation-library-card-meta',studioUI.libraryCardMeta(record.project)));
+      info.appendChild(element('small','modern-animation-library-card-updated','Updated '+new Date(record.updatedAt).toLocaleString()));
+      if(existing)info.appendChild(element('small','modern-animation-library-card-summary',
+        (active?'Opened · ':'')+(existing.checkpoint.libraryRevision===record.updatedAt?'Working copy available':
+          'Saved revision changed · retained working copy')));
+      card.appendChild(info);
+      var actions=element('div','modern-animation-library-card-actions');
+      var open=()=>void runSharedAnimationAction(existing?'open':'openNamed',
+        existing?studioDraftAutosave.documentReference(ctx.row,id):record);
+      var blocked=!ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0);
+      action(actions,'Open',open,blocked,{'data-shared-named-animation-id':record.id,
+        'aria-label':'Open saved project · '+record.project.name});
+      action(actions,'Delete',()=>void runSharedAnimationAction('deleteNamed',record),false,
+        {'data-shared-delete-animation-id':record.id,'aria-label':'Delete saved project · '+record.project.name});
+      card.addEventListener('dblclick',event=>{
+        if(!blocked&&!ctx.busy&&!experimentPreview.calibrationBusy&&!event.target.closest('button'))open();
+      });
+      card.appendChild(actions);gallery.appendChild(card);
+    });
+    section.appendChild(gallery);host.appendChild(section);
+    var drafts=element('section','modern-animation-workspace-list');
+    drafts.appendChild(element('strong','','Working drafts ('+(ctx.row?.collection.workspaces.length||0)+')'));
+    if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
+      var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
+      var active=studioWorkspaceReady&&studioWorkspaceId===item.id;
+      var line=element('div','modern-animation-workspace-item'+(active?' is-active':''));
+      line.appendChild(element('span','',item.checkpoint.draft.name+' · '+
+        item.checkpoint.draft.frames.length+' frames · '+new Date(item.checkpoint.savedAt).toLocaleString()));
+      action(line,active?'Current':'Open draft',()=>void runSharedAnimationAction('open',ref),active,
+        {'data-shared-animation-id':item.id,'aria-label':'Open draft · '+item.checkpoint.draft.name});
+      drafts.appendChild(line);
+    });
+    host.appendChild(drafts);
+    var controls=group('Recovery files',maintenance);
     var recoveryFile=element('input');recoveryFile.type='file';recoveryFile.hidden=true;
     recoveryFile.id='ModernSharedAnimationRecoveryFile';recoveryFile.accept='.json,application/json';
     controls.appendChild(recoveryFile);
@@ -3164,13 +3203,7 @@
     recoveryFile.addEventListener('change',()=>{
       var file=recoveryFile.files?.[0];if(file)void runSharedAnimationAction('importRecovery',file);
     });
-    if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
-      var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
-      action(controls,(studioWorkspaceId===item.id?'Opened · ':'Open · ')+
-        item.checkpoint.draft.name+' · '+item.checkpoint.draft.frames.length+' frames',
-        ()=>void runSharedAnimationAction('open',ref),studioWorkspaceReady&&studioWorkspaceId===item.id,
-        {'data-shared-animation-id':item.id});
-    });
+    host.appendChild(maintenance);
   }
   async function downloadSharedAnimationRecovery(ctx){
     if(ctx.busy)return;
@@ -3191,8 +3224,21 @@
   async function loadSharedAnimationLibrary(){
     var ctx=experimentPreview.animationContext,store=ctx.makeStore();
     ctx.row=await store.read();
-    try{ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;}
-    catch(error){ctx.inventory=null;ctx.inventoryError='Legacy evidence unavailable: '+error.message;}
+    try{
+      ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;
+      // Only equivalent complete sources are unambiguous. Never infer that a
+      // larger collection or a newer timestamp subsumes divergent evidence.
+      var sources=ctx.inventory.sources,first=sources[0];
+      if(!ctx.row&&first&&!ctx.inventory.issues.length&&
+         ['clean','committed'].includes(experimentPreview.status)&&
+         sources.every(source=>source.kind===first.kind&&JSON.stringify(source.value)===JSON.stringify(first.value))){
+        await ctx.coordinate(async()=>{
+          await experimentPreview.controller.assertCleanCheckpoint();ctx.lease.check(true);
+          ctx.row=await ctx.makeStore().initializeFromLegacy(ctx.inventory,first.source,root.localStorage);
+        });
+        ctx.message='Previous working drafts restored.';
+      }
+    }catch(error){ctx.inventoryError='Legacy draft inspection or migration failed: '+error.message;}
     try{ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;}
     catch(error){ctx.named=null;ctx.namedError='Saved Animation Library unavailable: '+error.message;}
   }

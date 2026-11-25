@@ -1506,5 +1506,6 @@
     showInspector(host.__studioInspectorMode);
   }
   return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,renderLibraryFilters:renderLibraryFilters,
+    libraryCardVisual:libraryCardVisual,libraryCardMeta:libraryCardMeta,
     renderStoryboard:renderStoryboard,createPreviewNavigation:createPreviewNavigation});
 }));
