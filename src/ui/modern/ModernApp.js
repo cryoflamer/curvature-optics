@@ -11289,6 +11289,42 @@
     getHistoryStore:function(){return experimentHistory;},
     // Expose only local provenance/selection evidence, not mutable live
     // drafts or the full physical Undo timeline. Shipped demos are separate.
+    // Local transient ownership evidence only. Copies contain just image
+    // aliases and calibration identity; they cannot be used to reopen a frame.
+    getImageUsageEvidence:function(){
+      var drafts=[],physical=[];
+      function addDraft(id,source,draft){
+        if(!draft)return;
+        drafts.push({id:id||'current',source:source,draft:{name:draft.name,
+          frames:draft.frames.map(function(frame){
+            return {key:frame.key,name:frame.name,referenceImageIds:frame.referenceImageIds||[],
+              experiment:{calibrationOrigin:frame.experiment?.calibrationOrigin||null}};
+          })}});
+      }
+      function addPhysical(key,experiment){
+        if(experiment)physical.push({key:key,title:'Live temporary keyframe editor',
+          experiment:{calibrationOrigin:experiment.calibrationOrigin||null}});
+      }
+      if(!studioActiveDemo){
+        ['past','future'].forEach(function(side){
+          (studioEditHistory?.[side]||[]).forEach(function(item,index){
+            addDraft(studioWorkspaceId,'Studio '+(side==='past'?'Undo':'Redo')+' '+(index+1),item.draft);
+          });
+        });
+        if(keyframeEditDraftAtEntry)
+          addDraft(studioWorkspaceId,'temporary editor entry draft',JSON.parse(keyframeEditDraftAtEntry));
+        var recovery=experimentPreview.animationContext?.writer.recovery();
+        if(recovery?.checkpoint&&JSON.stringify(recovery.checkpoint.draft)!==JSON.stringify(studioDraft))
+          addDraft(recovery.reference?.id,'unacknowledged shared checkpoint',recovery.checkpoint.draft);
+        if(keyframeEditSession?.active()){
+          var edit=keyframeEditSession.recovery();
+          ['original','workspace','candidate'].forEach(side=>addPhysical('temporary edit '+side,edit[side]));
+          ['past','future'].forEach(side=>edit[side].forEach((snapshot,index)=>
+            addPhysical('temporary edit '+side+' '+(index+1),snapshot)));
+        }
+      }
+      return JSON.parse(JSON.stringify({drafts,physical}));
+    },
     getHistoryUsageEvidence:function(){
       var drafts=[],queues=[];
       function add(id,source,draft){

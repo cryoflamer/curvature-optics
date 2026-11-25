@@ -4311,8 +4311,19 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(links).to_contain_text('Reference photographs (1)')
         links.get_by_role('button',name='Unlink reference photograph 1').click()
         expect(links).to_contain_text('Reference photographs (0)')
+        # Unlink removed the current attachment, but Undo still owns it.
+        evidence=self.page.evaluate("""async id=>{
+            const photo=await CurvatureModernReferenceImageLibrary.get(indexedDB,id);
+            const graph=await CurvatureModernImageUsageGraph.discover(window,photo);
+            return graph.uses.filter(use=>use.type==='live-recovery').map(use=>use.source);
+        }""",before['id'])
+        self.assertTrue(any(source.startswith('Studio Undo') for source in evidence),evidence)
         gallery=self.open_image_library()
         gallery.get_by_role('button',name='Inspect lifecycle-photo.png (Local original)').click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Current-tab Undo/Redo and recovery',exact=False)).to_be_visible()
+        expect(where.get_by_text('Retained in-memory edit evidence',exact=False).first).to_be_visible()
+        self.assertEqual(where.get_by_role('button',name=re.compile('Open live-recovery')).count(),0)
         gallery.get_by_role('button',name='Check deletion safety').click()
         expect(deletion).to_contain_text('Deletion blocked')
         expect(remove).to_be_disabled()
@@ -8341,6 +8352,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             ['multiple_first','multiple_second'])
         editor.locator('.modern-studio-edit-undo').last.click()
         expect(links).to_contain_text('Reference photographs (0)')
+        redo_evidence=self.page.evaluate("""async()=>{
+            const photo=await CurvatureModernReferenceImageLibrary.get(indexedDB,'multiple_first');
+            const graph=await CurvatureModernImageUsageGraph.discover(window,photo);
+            return graph.uses.filter(use=>use.type==='live-recovery').map(use=>use.source);
+        }""")
+        self.assertTrue(any(source.startswith('Studio Redo') for source in redo_evidence),redo_evidence)
         editor.locator('.modern-studio-edit-redo').last.click()
         expect(links).to_contain_text('Reference photographs (2)')
         links.get_by_role('button',name='Unlink reference photograph 1').click()

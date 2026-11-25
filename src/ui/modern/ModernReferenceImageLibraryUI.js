@@ -247,6 +247,7 @@
           ['animation-intent','Interrupted Animation saves'],
           ['calibration-draft','Current Calibration'],['calibration-recovery','Legacy Calibration recovery'],
           ['keyframe-recovery','Legacy temporary keyframe recovery'],
+          ['live-recovery','Current-tab Undo/Redo and recovery'],
           ['experiment-provenance','Historical experiment provenance']
         ];
         groups.forEach(function(group){
@@ -270,6 +271,8 @@
               el('small','Retained standalone recovery evidence · adopt or recover explicitly before opening.',item);
             }else if(use.type==='draft'&&use.source==='shared checkpoint'&&!sharedPreview()){
               el('small','Verified shared recovery checkpoint · open the shared session to navigate.',item);
+            }else if(use.type==='live-recovery'){
+              el('small','Retained in-memory edit evidence · not an openable checkpoint.',item);
             }else if(use.type==='animation-intent'){
               el('small','Pending save evidence · resolve the interrupted save in Animation Studio.',item);
             }else if(sharedPreview()&&use.type!=='calibration'&&!sharedAnimationUse(use)){

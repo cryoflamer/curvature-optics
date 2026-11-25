@@ -78,6 +78,17 @@
     (sources.physical||[]).forEach(row=>{
       origin(row.experiment,'physical:'+row.key,row.title,row.revision,row.key);
     });
+    // Current-tab Undo/Redo and unresolved edits can retain originals
+    // after a frame has been unlinked. These are not navigation authorities.
+    (sources.liveEvidence?.drafts||[]).forEach(row=>{
+      var draft=row.draft,content=JSON.stringify(draft);
+      imagesFromFrames(draft.frames,selectedId,'live-recovery',row.id,
+        draft.name||row.id,null,row.source).forEach(use=>{use.draftContent=content;add(use);});
+      draftOrigins(draft,row.id,null,row.source);
+    });
+    (sources.liveEvidence?.physical||[]).forEach(row=>{
+      origin(row.experiment,'live-editor:'+row.key,row.title,null,row.key);
+    });
     (sources.legacyHistory||[]).forEach(row=>{
       origin(row.experiment,'legacy-library:'+row.name,row.name,null,'retained legacy Library evidence');
     });
@@ -175,7 +186,7 @@
       draftOrigins(sources.currentStudio.draft,sources.currentStudioWorkspaceId,sources.currentStudio.savedAt,'current');
     }
     uses.sort(function(a,b){
-      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery','keyframe-recovery','experiment-provenance'];
+      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery','keyframe-recovery','live-recovery','experiment-provenance'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });
@@ -310,11 +321,21 @@
         throw Error('Unbound legacy inline evidence; raw recovery retained');
     },()=>{});
     try{
-      sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;
+      sources.currentStudio=env.CurvatureModernApp?.getBuiltInDemo?.()?null:
+        env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;
       sources.currentStudioWorkspaceId=env.CurvatureModernApp?.getAnimationStudioWorkspaceId?.()||null;
       if(sources.currentStudio&&!sources.currentStudioWorkspaceId)
         failures.push('Current Storyboard workspace identity unavailable');
     }catch(error){failures.push('Current Storyboard: '+error.message);}
+    if(env.CurvatureModernApp)await read('Live Animation recovery and Undo/Redo',()=>{
+      const evidence=env.CurvatureModernApp.getImageUsageEvidence();
+      if(!evidence||!Array.isArray(evidence.drafts)||!Array.isArray(evidence.physical)||
+         evidence.drafts.some(row=>!row||!Array.isArray(row.draft?.frames)||
+           typeof row.id!=='string'||typeof row.source!=='string')||
+         evidence.physical.some(row=>!row||typeof row.key!=='string'||!row.experiment))
+        throw Error('Invalid live recovery evidence');
+      return evidence;
+    },value=>{sources.liveEvidence=value;});
     try{
       var calibration=env.CurvatureModernPhotoCalibrationEditor?.mount?.(env.document);
       var current=calibration?.snapshot?.(),binding=calibration?.projectBinding?.();

@@ -933,3 +933,19 @@ test('Original inspection never creates missing storage and preserves both suppo
   assert.deepEqual(await library.inspectOriginal(db,'one'),await library.get(db,'one'));
   assert.equal(db.version,2);
 });
+
+test('Where used retains current-tab Undo/Redo and temporary editor provenance as read-only evidence',()=>{
+  const photo={version:1,sha256:'a'.repeat(64),width:2,height:2};
+  const experiment={calibrationOrigin:{photo}};
+  const draft={name:'Working draft',frames:[{key:'frame',name:'Frame',experiment,referenceImageIds:['alias']}]};
+  const evidence={drafts:[{id:'work',source:'Studio Undo 1',draft},{id:'work',source:'Studio Redo 1',draft}],
+    physical:[{key:'temporary edit candidate',title:'Temporary editor',experiment}]};
+  const result=usageGraph.report('alias',photo,{liveEvidence:evidence});
+  assert.equal(result.uses.filter(use=>use.type==='live-recovery').length,2);
+  assert.equal(result.uses.filter(use=>use.type==='draft').length,0);
+  assert.equal(result.uses.filter(use=>use.type==='experiment-provenance').length,3);
+  const other=usageGraph.report('other-alias',photo,{liveEvidence:evidence});
+  assert.equal(other.uses.filter(use=>use.type==='live-recovery').length,0);
+  assert.equal(other.uses.filter(use=>use.type==='experiment-provenance').length,3);
+  assert.match(result.note,/never authorize deletion/);
+});
