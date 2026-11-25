@@ -1875,10 +1875,30 @@
           });
         });
       }
+      // Live Recovery must never resolve a historical alias through the gallery.
+      // Serialize materialization with bind/reset so every original stays held
+      // until the portable evidence has been copied out of the managed store.
+      function recoveryReferences(recovery){
+        return serialize(async()=>{
+          if(!owner||owner!==recovery?.reference?.id)return null;
+          const checkpoint=drafts.normalize(recovery.checkpoint);
+          const ids=[...new Set(checkpoint.draft.frames.flatMap(frame=>frame.referenceImageIds||[]))].sort();
+          const records=[],verified=new Map();
+          for(const alias of ids){
+            const target=photos.get(alias);
+            check(target,'live recovery observation was not retained: '+alias);
+            const observation=await store.get(target);
+            check(observation?.type===OBSERVATION&&observation.payload.id===alias,'live recovery observation mismatch');
+            const original=await store.get(observation.payload.originalId);
+            records.push(await materializeObservation({resources:[observation,original]},observation,verified));
+          }
+          return records;
+        });
+      }
       function reset(){
         return serialize(async()=>{await scope.replace([]);photos=new Map();owner=null;});
       }
-      return Object.freeze({bind,photograph,linkedPhotograph,reset,
+      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,reset,
         createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos))});
     }
     // One-shot Recovery import reuses the shared collection transition engine.

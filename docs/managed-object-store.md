@@ -629,3 +629,10 @@ result/physical provenance retention are not yet integrated. Named roots and
 working journals remain durable owners. Production deletion remains disabled.
 
 Linked-photo rows and their details dialog read the exact retained editor observation, independently of the gallery picker. A new picker attachment checks the inspected gallery revision and refuses a conflicting historical alias instead of substituting a different observation. Undo continues to use the captured original version.
+
+Live Animation Recovery materializes the exact observation versions from the
+bound editor retention scope, including unacknowledged reattachments after
+Undo. Materialization is serialized with scope replacement and reset. A live
+scope missing a required alias refuses export rather than using current gallery
+attribution. Recovery without a matching live editor continues through the
+acknowledged managed collection and pending-receipt evidence path.

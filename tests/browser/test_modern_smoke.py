@@ -1858,12 +1858,21 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
             ref=A.documentReference(edited,portableRecovery.id);
             const undo=A.normalize({...importedCp,savedAt:unlinked.savedAt+1});
+            const liveEvidence={version:1,reference:ref,checkpoint:undo,receipt:null};
+            const liveRecords=await live.recoveryReferences(liveEvidence);
+            ok(liveRecords.length===1&&liveRecords[0].title===importedPhoto.row.record.title&&
+                liveRecords[0].original.dataUrl===importedPhoto.row.record.original.dataUrl,
+                'live Recovery substituted current gallery attribution');
+            await rejects(()=>live.recoveryReferences({...liveEvidence,checkpoint:A.normalize({
+                ...undo,draft:{...undo.draft,frames:undo.draft.frames.map(frame=>({
+                    ...frame,referenceImageIds:['fresh_recovery_photo']}))}})}),/live recovery observation was not retained/);
             edited=await editor.saveSelected(edited,ref,undo,base);
             edited=await editor.retire(edited,edited.receipt);
             const restoredOwner=await adapter.readAnimationWorkingCollection();
             ok(restoredOwner.observations.some(v=>v.alias===alias&&v.target===importedPhoto.observationId),
                 'Undo substituted current gallery observation');
             await live.reset();
+            ok(await live.recoveryReferences(liveEvidence)===null,'retired editor supplied stale recovery evidence');
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
             return {valid:(await store.verifyIntegrity()).valid,revision:row.revision,pendingArchive,pendingExpected};
         }""")

@@ -3404,8 +3404,12 @@
     var evidence=structuredClone(ctx.writer.recovery());
     ctx.busy=true;ctx.message='Collecting verified recovery originals…';renderSharedAnimationLibrary();
     try{
-      var originals=managedResources?new Map((await studioLibrary.recoveryReferences(root.indexedDB,evidence))
-        .map(record=>[record.id,record])):null;
+      var originals=null;
+      if(managedResources){
+        var live=ctx.retention?await ctx.retention.recoveryReferences(evidence):null;
+        var records=live===null?await studioLibrary.recoveryReferences(root.indexedDB,evidence):live;
+        originals=new Map(records.map(record=>[record.id,record]));
+      }
       var text=await studioDraftAutosave.exportRecovery(evidence,
         id=>originals?(originals.has(id)?{record:originals.get(id)}:null):referenceLibrary.inspectOriginal(root.indexedDB,id),
         record=>root.CurvatureModernReferenceImageImport.verify(record,root),root.crypto);
