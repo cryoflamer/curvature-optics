@@ -1076,7 +1076,12 @@
        (routeAction==='push'||routeAction==='replace'))
       studioViewsApi.navigate(root,view,routeAction==='replace');
     if(studioViewController)studioViewController.show(view,!!focus);
-    if(view==='library'&&previous!==view)revealStudioOpenedCard();
+    if(view==='library'&&previous!==view){
+      // The hidden shared Library may have been rendered while an editor
+      // save was pending. Recompute actions from the acknowledged owner.
+      if(experimentPreview.live&&experimentPreview.animationContext)renderStudioLibrary();
+      revealStudioOpenedCard();
+    }
     if(view==='preview'&&previous!==view&&studioPlayback&&animationWorkspaceOpen){
       var resized=studioPreviewLifecycle&&studioPreviewLifecycle.checkSize();
       // checkSize() already schedules a paint on a layout change.

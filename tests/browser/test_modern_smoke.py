@@ -12260,8 +12260,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         before=self.page.evaluate(read)
         def delete_button(id):
             return self.page.locator('[data-shared-delete-draft-id="'+id+'"]')
+        self.assertEqual(before['session']['envelope']['documents']['animation']['id'],ids[2])
         expect(delete_button(ids[2])).to_be_disabled()
-        expect(delete_button(ids[0])).to_be_enabled()
+        # The hidden Library must refresh action availability when reopened
+        # after the editor's acknowledged save, without a second F5.
+        expect(delete_button(ids[0])).to_be_enabled(timeout=30000)
         self.page.once('dialog',lambda dialog:dialog.dismiss())
         delete_button(ids[0]).click()
         self.assertEqual(self.page.evaluate(read),before)
