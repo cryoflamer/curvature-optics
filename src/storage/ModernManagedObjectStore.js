@@ -138,12 +138,15 @@
     return {counts,mismatches};
   }
   async function verifyPayloads(g,stores,types){
-    const rows=await request(stores.payloads.getAll());
+    // Keep only one payload in application memory at a time. The metadata
+    // snapshot already contains all keys; the transaction pins their values.
     const edgeCounts=new Map();
     for(const edge of g.refs.values())if(edge.ownerKind==='object')
       edgeCounts.set(edge.ownerId,(edgeCounts.get(edge.ownerId)||0)+1);
-    for(const row of rows){
-      const obj=g.objects.get(row.id);
+    for(const id of g.payloadKeys){
+      const row=await request(stores.payloads.get(id));
+      check(row&&row.id===id,'missing or incorrect payload row');
+      const obj=g.objects.get(id);
       const adapter=obj&&!obj.deleted&&types.get(typeKey(obj.type,obj.version));
       check(adapter&&adapter.validate(clone(row.value))===true,'invalid or unsupported payload');
       const expected=slots(adapter.references(clone(row.value)));

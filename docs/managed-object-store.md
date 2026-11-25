@@ -102,7 +102,12 @@ all new objects must be strongly reachable from a durable document root.
 ID allocation alone does not reserve or persist a resource.
 The initial core keeps document/object ID tombstones, scans metadata on each
 mutation, validates payload/edge agreement during explicit integrity/recount/GC,
-and supports explicit single-object collection or a bounded batch of up to
+without materializing all payloads simultaneously: integrity, recount and
+reclamation inspect one payload at a time within the same transaction.
+This bounds the application-side payload working set by the largest record,
+not by the total stored payload size; graph metadata and browser-internal
+buffering are not included in that bound. The core supports explicit
+single-object collection or a bounded batch of up to
 64 distinct candidate IDs. Batch maintenance acquires nonblocking exclusive
 locks in sorted order, skips busy IDs, verifies the entire graph/payload
 contract once before deletion, rechecks incoming strong counts inside one
