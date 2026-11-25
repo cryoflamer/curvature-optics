@@ -787,8 +787,15 @@ checkpoint and rejects unresolved receipts and changed legacy inline bytes.
 Adoption creates an independent project without selecting it, preserves the
 raw draft and Web Storage evidence, and never repeats a retained marker.
 Concurrent legacy-route editors must remain closed; Web Storage is not part
-of an IndexedDB transaction. Apply, Image Library navigation and mounted
-Animation are not enabled by this contract.
+of an IndexedDB transaction. The Image Library is an explicitly transient
+workspace in this preview. Leaving Calibration flushes the editor and
+acknowledges the physical workspace, preserving the retained Calibration
+reference; F5 in the gallery restores that physical workspace. Return and
+saved Calibration usage navigation verify the exact project revision before
+activation, without a legacy tab marker. Other usage types remain visible
+but cannot navigate until their document owners are migrated. Original
+deletion remains blocked. Apply and mounted Animation are not enabled by
+this contract.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A

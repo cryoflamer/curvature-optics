@@ -12132,6 +12132,94 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             stale.close()
 
+    def test_shared_calibration_image_library_guarded_navigation(self):
+        """Transient gallery browsing preserves the shared physical checkpoint and exact project revisions."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=> {
+            const a=CurvatureModernApp,s=a.getExperimentSessionPreview();
+            return s.status==='failed'||s.status==='clean'&&a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+        data=self.soundly_calibration_experiment()
+        projects=self.page.evaluate("""async data=>{
+            const A=CurvatureModernCalibrationProjectActions;
+            const a=await A.importAsNew(window,data,{title:'Gallery active'});
+            const b=await A.duplicate(window,a.id,a.revision);
+            return [a,b];
+        }""",data)
+        a,b=projects
+        read="""async ids=>{
+            const S=CurvatureModernCalibrationProjectStore,app=CurvatureModernApp;
+            return {a:await S.get(indexedDB,ids[0]),b:await S.get(indexedDB,ids[1]),
+                row:app.getExperimentSessionPreview().controller.row,receipt:await S.readSharedSelectionReceipt(indexedDB)};
+        }"""
+        ids=[a['id'],b['id']]
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        self.page.locator('[data-calibration-project-open="'+a['id']+'"]').click()
+        self.page.wait_for_function("""id=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return e?.projectId===id&&!e.pending&&!e.unsaved;
+        }""",arg=a['id'],timeout=30000)
+        self.page.locator('[data-calibration-stage="calibration"]').click()
+        self.page.wait_for_function("""id=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            const s=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return e?.error||e?.projectId===id&&e.revision>1&&!e.pending&&!e.unsaved&&
+                s.row.envelope.documents.calibration.revision==='rev:'+e.revision;
+        }""",arg=a['id'],timeout=30000)
+        saved=self.page.evaluate(read,ids)
+        self.assertEqual(saved['a']['revision'],a['revision']+1)
+        tools=self.page.locator('#ModernCalibrationReferenceTools')
+        if tools.get_attribute('open') is None:
+            tools.locator('summary').click()
+        self.page.locator('#ModernCalibrationOpenImageLibrary').click()
+        gallery=self.page.locator('#ModernReferenceImageLibrary')
+        expect(gallery).to_be_visible(timeout=30000)
+        expect(gallery.get_by_role('button',name='Return to Calibration')).to_be_visible()
+        browsed=self.page.evaluate(read,ids)
+        self.assertEqual(browsed['a'],saved['a'])
+        self.assertEqual(browsed['b'],saved['b'])
+        self.assertEqual(browsed['row']['envelope']['workspace'],'scene')
+        self.assertEqual(browsed['row']['envelope']['documents'],saved['row']['envelope']['documents'])
+        self.assertIsNone(browsed['receipt'])
+        gallery.get_by_role('button',name='Return to Calibration').click()
+        expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate(read,ids)['a'],saved['a'])
+        self.page.locator('#ModernImageLibraryTab').click()
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('.modern-image-library-card[data-image-id]').first.click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Calibration projects (2)')).to_be_visible(timeout=30000)
+        link=where.get_by_role('button',name='Open calibration Gallery active (copy) · saved')
+        expect(link).to_be_visible()
+        # A competing metadata update after the usage scan invalidates that
+        # link; it must not implicitly open the latest revision.
+        self.page.evaluate("""async b=>CurvatureModernCalibrationProjectStore.rename(
+            indexedDB,b.id,b.revision,'Gallery changed')""",b)
+        before=self.page.evaluate(read,ids)
+        link.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text('changed since usage inspection')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.assertEqual(self.page.evaluate(read,ids),before)
+        where.get_by_role('button',name='Refresh uses').click()
+        where.get_by_role('button',name='Open calibration Gallery changed · saved').click()
+        expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible(timeout=30000)
+        opened=self.page.evaluate(read,ids)
+        self.assertEqual(opened['a'],saved['a'])
+        self.assertEqual(opened['b'],before['b'])
+        self.assertEqual(opened['row']['envelope']['documents']['calibration'],
+            {'id':b['id'],'revision':'rev:'+str(before['b']['revision']),'recovery':None})
+        self.assertIsNone(opened['receipt'])
+        self.page.locator('#ModernImageLibraryTab').click()
+        expect(gallery).to_be_visible(timeout=30000)
+        left=self.page.evaluate(read,ids)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'scene')
+        self.assertEqual(self.page.evaluate(read,ids),left)
+
     def test_shared_calibration_legacy_adoption_preserves_source_and_selection(self):
         """Explicit adoption creates an independent verified project, never a session switch."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

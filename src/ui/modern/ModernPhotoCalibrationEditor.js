@@ -2124,8 +2124,12 @@
     // decoder, SHA-256 ensureOriginal and correspondence-loss confirmation.
     sourcePicker.onchange=()=>{};
     sourceRefresh.onclick=refreshSources;
-    $('ModernCalibrationOpenImageLibrary').onclick=()=>{
-      if(sharedSelection){sourceStatus.textContent='Image Library navigation is not yet enabled in shared-session preview';return;}
+    $('ModernCalibrationOpenImageLibrary').onclick=async()=>{
+      if(sharedSelection){
+        if(!await env.CurvatureModernApp?.openImageLibraryFromCalibration?.())
+          sourceStatus.textContent='Cannot leave Calibration while another operation is active';
+        return;
+      }
       const libraryTab=$('ModernImageLibraryTab'),imageLibrary=$('ModernReferenceImageLibrary');
       if(!libraryTab||!imageLibrary){
         sourceStatus.textContent='Image Library navigation is unavailable';return;

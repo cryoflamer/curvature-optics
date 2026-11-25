@@ -79,8 +79,14 @@
       if(!allowDiscard())return;
       run(pasteClipboardImage);
     });
-    var returnToCalibration=button('Return to Calibration',toolbar,function(){
-      if(busy)return;
+    function sharedPreview(){return !!env.CurvatureModernApp?.isSharedImageLibraryPreview?.();}
+    var returnToCalibration=button('Return to Calibration',toolbar,async function(){
+      if(busy||!allowDiscard())return;
+      if(sharedPreview()){
+        if(!await env.CurvatureModernApp.returnFromSharedImageLibrary())
+          status.textContent='Cannot return to Calibration; resolve the current session first.';
+        return;
+      }
       var tab=doc.getElementById('ModernPhotoCalibrationOpen');
       if(!tab)return;
       tab.click();
@@ -158,6 +164,8 @@
     var usageEpoch=0;
     async function navigateUse(use){
       if(busy||!allowDiscard())return;
+      if(sharedPreview()&&use.type!=='calibration')
+        throw Error('This use is not yet available in the shared session; open a saved Calibration project instead');
       var tab=null;
       if(use.type==='animation'){
         if(!env.CurvatureModernApp?.openImageUsageAnimation)
@@ -176,6 +184,18 @@
           throw Error('Calibration project changed since usage inspection; refresh Where used?');
         if(inspectedEpoch!==usageEpoch||!selected||selected.id!==inspectedImageId)
           throw Error('Image selection changed while checking Calibration; refresh Where used?');
+        if(sharedPreview()){
+          // The usage graph matches content identity rather than an alias
+          // alone. Recheck it before exact-revision activation.
+          var identity=await importer.identify(selected.record,env);
+          if(!owner.photo||JSON.stringify(owner.photo.identity)!==JSON.stringify(identity))
+            throw Error('Calibration original changed; refresh Where used?');
+          if(inspectedEpoch!==usageEpoch||!selected||selected.id!==inspectedImageId)
+            throw Error('Image selection changed while checking Calibration; refresh Where used?');
+          if(!await env.CurvatureModernApp.openSharedCalibrationImageUse(use.ownerId,use.revision))
+            throw Error('Shared Calibration navigation was blocked; refresh Where used?');
+          return;
+        }
         tab=doc.getElementById('ModernPhotoCalibrationOpen');if(!tab)throw Error('Calibration tab unavailable');
         tab.click();
         if(env.CurvatureModernApp?.getWorkspaceMode?.()!=='calibration')throw Error('Calibration navigation was blocked');
@@ -233,6 +253,9 @@
             detail.title=use.ownerId;
             if(use.type==='draft'&&use.source==='recoverable local backup'){
               el('small','Unsent local recovery snapshot · open Animation Studio recovery to restore it before navigating. This snapshot is not the currently loaded workspace.',item);
+            }else if(sharedPreview()&&use.type!=='calibration'){
+              if(['animation','draft','calibration-draft'].includes(use.type))
+                el('small','Direct navigation is not yet available in the shared session.',item);
             }else if(['animation','calibration','draft','calibration-draft'].includes(use.type)){
               var open=button('Open use',item,function(){
                 navigateUse(use).catch(function(error){

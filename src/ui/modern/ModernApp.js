@@ -1795,7 +1795,7 @@
     }catch(error){return null;}
   }
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare'||
-    mode==='calibration'&&sharedPresentationActive()&&!!experimentPreview.calibrationContext;}
+    ['calibration','images'].includes(mode)&&sharedPresentationActive()&&!!experimentPreview.calibrationContext;}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
     var editor=experimentPreview.calibrationEditor,calibration=editor&&editor.projectPersistenceStatus();
@@ -1823,6 +1823,8 @@
     var physical=newUiEl('ModernWorkspace');if(physical)physical.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
     var photo=newUiEl('ModernPhotoCalibration');
     if(photo&&experimentPreview.calibrationEditor)photo.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
+    var images=newUiEl('ModernImageLibraryWorkspace');
+    if(images)images.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
     Object.keys(workspaceTabs).forEach(function(mode){
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
       if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||!previewModeAllowed(mode);
@@ -1970,6 +1972,7 @@
     experimentPreview.controller=controller;
     if(calibrationEnabled)experimentPreview.calibrationContext={
       lease:lease,coordinate:coordinate,
+      verifyCheckpoint:function(){return coordinate(()=>controller.assertCleanCheckpoint());},
       captureBase:function(ref){return controller.captureSelectionBase('calibration',ref);},
       acknowledge:function(receipt){return controller.acknowledgeDocumentRevision('calibration',receipt);},
       verify:function(ref){return coordinate(()=>controller.captureSelectionBase('calibration',ref));},
@@ -8910,7 +8913,8 @@
   // All top-level workspace choices use this one success/remember path.
   // Individual activation branches own only their rendering and lifecycle.
   function setMode(mode,remember){
-    if(experimentPreview.live&&(mode==='calibration'||photoCalibrationWorkspaceOpen)&&
+    if(experimentPreview.live&&(['calibration','images'].includes(mode)||
+       photoCalibrationWorkspaceOpen||imageLibraryWorkspaceOpen)&&
        !experimentPreview.calibrationNavigation)return false;
     if(experimentPreview.live&&(!previewModeAllowed(mode)||
       (persistence.ready&&!['clean','dirty','saving','committed'].includes(experimentPreview.status))))return false;
@@ -8939,42 +8943,59 @@
     try{if(setMode('calibration',false)===false)throw Error('Cannot activate shared Calibration');}
     finally{experimentPreview.calibrationNavigation=false;}
   }
-  async function requestPreviewWorkspace(mode){
-    if(!experimentPreview.live||mode!=='calibration'&&!photoCalibrationWorkspaceOpen){
-      setMode(mode);return;
+  async function requestPreviewWorkspace(mode,{reference}={}){
+    if(!experimentPreview.live||!['calibration','images'].includes(mode)&&
+       !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen){
+      return setMode(mode);
     }
     var c=experimentPreview.controller,editor=experimentPreview.calibrationEditor;
-    if(!editor||!previewModeAllowed(mode)||experimentPreview.calibrationBusy)return;
+    if(!editor||!previewModeAllowed(mode)||experimentPreview.calibrationBusy)return false;
     if(!['clean','committed'].includes(experimentPreview.status)){
-      persistenceStatus('Finish saving the current document before opening Calibration.',true);return;
+      persistenceStatus('Finish saving the current document before switching workspace.',true);return false;
     }
-    if(mode===currentWorkspaceMode())return;
+    var from=currentWorkspaceMode();
+    if(reference&&(from!=='images'||mode!=='calibration'))return false;
+    if(mode===from)return true;
     experimentPreview.calibrationBusy=true;previewControls();
+    var switched=false;
     try{
       if(mode==='calibration'){
-        var ref=c.state().row.envelope.documents.calibration;
-        if(ref)await editor.openSharedProject(ref,false);
-        // No reference: show the existing project library without advancing
-        // the durable pointer. Only explicit verified Open/New may select.
+        // A saved-image use supplies the exact inspected revision, never
+        // an implicit Open of the latest project or of the previous project.
+        var ref=reference||c.state().row.envelope.documents.calibration;
+        if(ref){await editor.openSharedProject(ref,false);switched=true;}
+        else await experimentPreview.calibrationContext.verifyCheckpoint();
+        // No reference: library browsing remains transient.
       }else{
-        await editor.prepareSharedLeave();
-        if(c.state().row.envelope.workspace==='calibration'){
-          var view=await experimentPreview.calibrationContext.leave(state.mode);
-          experimentPreview.status=view.status;
-        }
+        if(from==='calibration'){
+          await editor.prepareSharedLeave();
+          if(c.state().row.envelope.workspace==='calibration'){
+            var view=await experimentPreview.calibrationContext.leave(state.mode);
+            experimentPreview.status=view.status;switched=true;
+          }else await experimentPreview.calibrationContext.verifyCheckpoint();
+        }else await experimentPreview.calibrationContext.verifyCheckpoint();
       }
-      if(experimentPreview.status==='suspended')return;
+      if(experimentPreview.status==='suspended')return false;
       experimentPreview.calibrationNavigation=true;
       if(setMode(mode)===false)throw Error('Cannot activate selected workspace');
+      if(mode==='images'&&from==='calibration'){
+        root.CurvatureImageLibraryReturnToCalibration=true;
+        var library=newUiEl('ModernReferenceImageLibrary');
+        if(library)library.dispatchEvent(new Event('curvature-library-navigation'));
+      }else if(from==='images'){
+        root.CurvatureImageLibraryReturnToCalibration=false;
+        var gallery=newUiEl('ModernReferenceImageLibrary');
+        if(gallery)gallery.dispatchEvent(new Event('curvature-library-navigation'));
+      }
+      return true;
     }catch(error){
-      if(experimentPreview.status==='suspended')return;
-      if(c.state().status==='failed'||(!editor.isSharedLibraryOnly()&&
-         c.state().row?.envelope.workspace!==currentWorkspaceMode()))
-        previewFailure(error);
+      if(experimentPreview.status==='suspended')return false;
+      if(c.state().status==='failed'||switched)previewFailure(error);
       else{
         persistenceStatus(error.message,true);
         var notice=newUiEl('ModernCalibrationStorage');if(notice)notice.textContent=error.message;
       }
+      return false;
     }finally{
       experimentPreview.calibrationNavigation=false;
       experimentPreview.calibrationBusy=false;
@@ -9765,6 +9786,20 @@
       return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
+    isSharedImageLibraryPreview:sharedPresentationActive,
+    openImageLibraryFromCalibration:function(){
+      if(!sharedPresentationActive()||!photoCalibrationWorkspaceOpen)return Promise.resolve(false);
+      return requestPreviewWorkspace('images');
+    },
+    returnFromSharedImageLibrary:function(){
+      if(!sharedPresentationActive()||!imageLibraryWorkspaceOpen)return Promise.resolve(false);
+      return requestPreviewWorkspace('calibration');
+    },
+    openSharedCalibrationImageUse:function(id,revision){
+      if(!sharedPresentationActive()||!imageLibraryWorkspaceOpen||
+         !Number.isSafeInteger(revision)||revision<1)return Promise.resolve(false);
+      return requestPreviewWorkspace('calibration',{reference:{id:id,revision:'rev:'+revision,recovery:null}});
+    },
     getAnimationStudioView:function(){return studioView;},
     getAnimationStudioWorkspaceId:function(){return studioWorkspaceId||null;},
     // A verified saved owner can be opened without relying on visible Library
