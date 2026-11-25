@@ -148,7 +148,7 @@
         source:row.source,pinned:item.pinned,name:item.name,description:item.description,
         thumbnail:item.thumbnail}};
     }
-    async function saveHistory(row,{expectedRevision=0,snapshotId,standalone=false}={}){
+    async function prepareHistory(row,{expectedRevision=0,snapshotId,standalone=false}={}){
       const {item,metadata}=historyFields(row),experiment=item.experiment;
       const prior=expectedRevision===0?null:await readHistory(row.id);
       check(expectedRevision===0||prior?.managedRevision===expectedRevision,'History revision conflict');
@@ -172,9 +172,97 @@
         check(previous&&previous.type===SNAPSHOT&&same(previous.payload,payload),
           'snapshot reuse requires identical complete experiment');
       }else resources=[{id,type:SNAPSHOT,version:1,payload}];
-      const document=await store.writeDocument({documentId:historyId(row.id),kind:'history',
-        expectedRevision,metadata,references:[strong('snapshot',id)],resources});
-      return {snapshotId:id,managedRevision:document.revision};
+      return {snapshotId:id,plan:{documentId:historyId(row.id),kind:'history',
+        expectedRevision,metadata,references:[strong('snapshot',id)],resources},
+        row:historyRow(metadata,experiment)};
+    }
+    async function saveHistory(row,options){
+      const prepared=await prepareHistory(row,options);
+      const document=await store.writeDocument(prepared.plan);
+      return {snapshotId:prepared.snapshotId,managedRevision:document.revision};
+    }
+    function historyRow(metadata,experiment){
+      return {...metadata,experiment,signature:fp.exactSignature(experiment),
+        physicalSignature:fp.physicalSignature(experiment),features:fp.features(experiment)};
+    }
+    function historyInventory(entries){
+      return {kind:'history',documents:entries.map(({row,managedRevision})=>
+        ({id:historyId(row.id),revision:managedRevision}))};
+    }
+    function portableHistoryItems(items){
+      return history.parsePortable(JSON.stringify({format:history.PORTABLE_FORMAT,version:1,snapshots:items}));
+    }
+    // The UI save contract: adjacent automatic deduplication, deliberate
+    // saves reusing any matching entry, and conservative capacity refusal.
+    // Even an unchanged match is checked inside the final transaction.
+    async function recordHistory(experiment,source,thumbnail,{now=Date.now,maxAutoEntries=history.MAX_AUTO,guard=()=>{}}={}){
+      check(['manual','auto','recovery'].includes(source),'invalid History source');
+      check(Number.isInteger(maxAutoEntries)&&maxAutoEntries>=1&&maxAutoEntries<=10000,'invalid auto-history limit');
+      const naming=deps.CurvatureModernSemanticNaming;
+      check(naming,'History naming adapter unavailable');
+      const snapshot=state.validate(experiment),signature=fp.exactSignature(snapshot);
+      const item=portableHistoryItems([{experiment:snapshot,thumbnail:thumbnail||null}])[0];
+      const existing=await listHistory(),expectedInventory=historyInventory(existing);
+      const match=source==='auto'?(existing[0]?.row.signature===signature?existing[0]:null):
+        existing.find(v=>v.row.signature===signature);
+      if(match){
+        const row={...match.row};
+        if(source!=='auto'&&!row.pinned){row.pinned=true;row.source=source;}
+        if(item.thumbnail&&!row.thumbnail)row.thumbnail=item.thumbnail;
+        if(same(row,match.row)){
+          await store.writeDocuments([],{expectedInventory,guard});
+          return {created:false,entry:match.row,managedRevision:match.managedRevision};
+        }
+        const next=await prepareHistory(row,{expectedRevision:match.managedRevision});
+        const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+        return {created:false,entry:next.row,managedRevision:document.revision};
+      }
+      if(source==='auto'&&existing.filter(v=>v.row.source==='auto'&&!v.row.pinned).length>=maxAutoEntries){
+        await store.writeDocuments([],{expectedInventory,guard});
+        return {created:false,entry:null,skipped:'capacity'};
+      }
+      const id=await suggestHistoryId();
+      const next=await prepareHistory({id,version:history.VERSION,createdAt:now(),source,pinned:source!=='auto',
+        name:naming.snapshot(snapshot),description:'',thumbnail:item.thumbnail,experiment:snapshot});
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+      return {created:true,entry:next.row,managedRevision:document.revision};
+    }
+    // Portable import retains the legacy name/notes deduplication contract.
+    // All new and changed owners commit together; no-op matches also take
+    // part in the inventory CAS. Missing foreign fit evidence is explicitly
+    // standalone, while a present but inconsistent archive is a hard error.
+    async function importHistory(items,{now=Date.now,guard=()=>{}}={}){
+      const prepared=portableHistoryItems(items);
+      const existing=await listHistory(),expectedInventory=historyInventory(existing);
+      const records=existing.map(v=>({...v,row:{...v.row}})),changed=new Map();
+      let id=await suggestHistoryId(),created=0,reused=0;
+      for(const item of prepared){
+        const signature=fp.exactSignature(item.experiment);
+        const match=records.find(v=>v.row.signature===signature&&
+          v.row.name===item.name&&v.row.description===item.description);
+        if(match){
+          reused++;
+          const before={...match.row};
+          if(match.row.source==='auto')match.row.source='manual';
+          if(item.pinned)match.row.pinned=true;
+          if(item.thumbnail&&!match.row.thumbnail)match.row.thumbnail=item.thumbnail;
+          if(!same(before,match.row))changed.set(match.row.id,match);
+          continue;
+        }
+        check(positive(id),'History ID exhausted');
+        const row={...item,id:id++,version:history.VERSION,createdAt:item.createdAt??now(),source:'manual',signature};
+        const value={row,managedRevision:0};
+        records.push(value);changed.set(row.id,value);created++;
+      }
+      const plans=[];
+      for(const {row,managedRevision} of changed.values()){
+        const origin=row.experiment.calibrationOrigin;
+        const standalone=managedRevision===0&&!!origin&&!(await readCalibrationResult(origin.resultId));
+        const next=await prepareHistory(row,{expectedRevision:managedRevision,standalone});
+        plans.push(next.plan);
+      }
+      await store.writeDocuments(plans,{expectedInventory,guard});
+      return {created,reused};
     }
     // Exact managed revisions are sufficient for atomic gallery pinning.
     // Retain the legacy protection policy for recovery and unpinned auto
@@ -210,8 +298,7 @@
         await verifyResultOriginal(graph,result);
       }
       const {item,metadata}=historyFields(row);
-      return {row:{...metadata,experiment:item.experiment,signature:fp.exactSignature(item.experiment),
-        physicalSignature:fp.physicalSignature(item.experiment),features:fp.features(item.experiment)},
+      return {row:historyRow(metadata,item.experiment),
         snapshotId:snapshot.id,managedRevision:graph.document.revision,evidence:snapshot.payload.evidence};
     }
     function attribution(record){
@@ -766,7 +853,7 @@
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
-      saveHistory,readHistory,setHistoryPinned,saveObservation,readObservation,saveAnimation,readAnimation,
+      saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }

@@ -265,8 +265,21 @@
     // Bulk edits and imports must acknowledge all root CAS changes together.
     // Resource definitions may be shared between plans but must be supplied
     // once; every new resource must be strongly reachable in the final graph.
-    async function writeDocuments(plans){
-      check(Array.isArray(plans)&&plans.length>0,'nonempty document batch required');
+    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{}}={}){
+      check(typeof guard==='function','invalid write guard');
+      // Gallery deduplication and capacity decisions depend on the entire
+      // live kind inventory, including matches that require no mutation.
+      let inventory=null;
+      if(expectedInventory!==null){
+        const {kind,documents}=expectedInventory;
+        token(kind,'inventory kind');
+        check(Array.isArray(documents),'inventory documents required');
+        const rows=documents.map(({id,revision:rev})=>[token(id,'document ID'),revision(rev)]);
+        check(rows.every(row=>row[1]>0)&&new Set(rows.map(row=>row[0])).size===rows.length,
+          'invalid expected inventory');
+        inventory={kind,rows:rows.sort((a,b)=>a[0].localeCompare(b[0]))};
+      }
+      check(Array.isArray(plans)&&(plans.length>0||inventory),'nonempty document batch required');
       const batch=plans.map(({documentId,kind,expectedRevision,metadata,references,resources=[]})=>{
         token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
         check(Array.isArray(resources),'resources must be an array');
@@ -278,6 +291,13 @@
       check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
+        if(inventory){
+          const actual=[...g.docs.values()].filter(doc=>doc.kind===inventory.kind&&!doc.deleted)
+            .map(doc=>[doc.id,doc.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
+          check(JSON.stringify(actual)===JSON.stringify(inventory.rows),'document inventory changed; reload and retry');
+        }
+        guard();
+        if(!batch.length)return [];
         for(const {documentId,kind,expectedRevision} of batch){
           const old=checkedDocument(g,documentId,expectedRevision);
           check(!old||old.kind===kind,'document kind mismatch');

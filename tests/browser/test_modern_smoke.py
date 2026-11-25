@@ -584,9 +584,17 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(await s.getDocument('copy')===null&&(await s.getDocument('experiment')).revision===1,
                 'stale multi-root batch partially committed');
             await rejects(()=>s.writeDocuments([copy,copy]),/duplicate document ID/);
-            const documents=await s.writeDocuments([update,copy]);
+            const inventory={kind:'history',documents:[{id:'experiment',revision:1}]};
+            const documents=await s.writeDocuments([update,copy],{expectedInventory:inventory});
             ok(documents[0].revision===2&&documents[1].revision===1&&
                 (await s.get(snapshot)).refCount===2,'multi-root sharing failed');
+            await rejects(()=>s.writeDocuments([],{expectedInventory:inventory}),/inventory changed/);
+            await rejects(()=>s.writeDocuments([{...update,expectedRevision:2}],{expectedInventory:inventory}),
+                /inventory changed/);
+            ok((await s.getDocument('experiment')).revision===2,'inventory conflict committed a write');
+            await s.writeDocuments([],{expectedInventory:{kind:'history',documents:[
+                {id:'experiment',revision:2},{id:'copy',revision:1}]}});
+
             const report=await s.verifyIntegrity();
             ok(report.valid&&report.liveObjects===2&&report.unreachable.length===0,'cycle batch leaked objects');
             return {valid:report.valid,objects:report.liveObjects,bytes};
@@ -715,11 +723,36 @@ class ModernBrowserSmoke(unittest.TestCase):
             await adapter.store.removeDocument({documentId:'history:18',expectedRevision:2});
             ok(await adapter.suggestHistoryId()===19,'retired History alias was reused');
             ok((await adapter.listHistory()).length===1,'removed History appeared in inventory');
+            const saved=await adapter.recordHistory(experiment,'manual',null);
+            ok(!saved.created&&saved.entry.id===17&&saved.entry.pinned,'deliberate dedup did not protect entry');
+            ok((await adapter.readHistory(17)).snapshotId===first.snapshotId,'deliberate save copied snapshot');
+            const portable=[{experiment,name:'Imported',description:'Notes',pinned:false},
+                {experiment,name:'Imported',description:'Notes',pinned:true},
+                {experiment,name:'Other imported name'}];
+            await rejects(()=>adapter.importHistory(portable,{guard:()=>{throw Error('stale UI');}}),/stale UI/);
+            ok((await adapter.listHistory()).length===1,'refused import partially committed');
+            const imported=await adapter.importHistory(portable,{now:()=>200});
+            ok(imported.created===2&&imported.reused===1,'portable import deduplication incorrect');
+            const importedRows=await adapter.listHistory();
+            ok(importedRows.map(v=>v.row.id).join(',')==='20,19,17'&&importedRows[1].row.pinned,
+                'import aliases or merged pin incorrect');
+            const again=await adapter.importHistory(portable);
+            ok(again.created===0&&again.reused===3,'portable reimport not idempotent');
+            const newExperiment=structuredClone(experiment);
+            newExperiment.display.horizon=!newExperiment.display.horizon;
+            const automatic=await adapter.recordHistory(newExperiment,'auto',null,{maxAutoEntries:1,now:()=>201});
+            ok(automatic.created&&automatic.entry.source==='auto'&&!automatic.entry.pinned,'automatic save failed');
+            const duplicate=await adapter.recordHistory(newExperiment,'auto',null,{maxAutoEntries:1});
+            ok(!duplicate.created&&duplicate.entry.id===automatic.entry.id,'adjacent automatic dedup failed');
+            const capacityExperiment=structuredClone(newExperiment);
+            capacityExperiment.display.eyeLevel=!capacityExperiment.display.eyeLevel;
+            const capacity=await adapter.recordHistory(capacityExperiment,'auto',null,{maxAutoEntries:1});
+            ok(capacity.skipped==='capacity'&&capacity.entry===null,'capacity did not refuse safely');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};
         }""")
-        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 1})
+        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 4})
 
     def test_managed_object_store_indexed_write_preflight(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

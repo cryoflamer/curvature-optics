@@ -303,3 +303,18 @@ uses the same implementation. The managed History `setHistoryPinned` port
 uses this operation to preserve all-or-nothing bulk pin/unpin, including
 recovery protection and the existing promotion rule for unpinned automatic
 entries. No physical snapshot is rewritten by that operation.
+
+### Managed History save and portable import
+
+The opt-in `recordHistory` and `importHistory` ports preserve deliberate
+save deduplication, adjacent automatic deduplication, recovery protection,
+conservative automatic capacity refusal and portable name/notes identity.
+A portable import may preserve explicitly standalone inline calibration
+provenance if its referenced local archive is absent; a present mismatched
+archive is not accepted. Metadata changes retain the exact existing snapshot.
+A complete live kind inventory (IDs and revisions) is checked inside the
+same transaction as the planned writes, including no-op reuse and capacity
+refusal. Thus concurrent insertion, removal or revision changes cannot
+acknowledge a stale deduplication decision. A synchronous caller guard is
+checked before mutation. No automatic pruning, legacy import receipt,
+production UI routing or cutover is enabled by these ports.
