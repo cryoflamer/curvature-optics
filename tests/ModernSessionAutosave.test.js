@@ -782,3 +782,44 @@ test('atomic Calibration Apply fails closed on stale data, competing revisions a
     }else assert.deepEqual(durable,before,fault);
   }
 });
+
+test('atomic History restore preserves auxiliary selections and rejects stale physical replacement',async()=>{
+  const f=atomicFixture(),a=f.open(),b=f.open();
+  const animation={id:'animation-project',revision:'rev:3',recovery:null};
+  const calibration={id:'calibration-project',revision:'rev:7',recovery:null};
+  const envelope=f.contract.select(f.contract.select(f.contract.select(
+    f.contract.emptyShared(),'animation',animation),'calibration',calibration),'scene');
+  await a.read();const first=await a.initialize(f.base,envelope);await b.read();
+  const controller=f.contract.createAtomicExperimentController({lease:f.lease,checkpoint:f.open(),
+    prepare:()=>{throw Error('Unexpected initialization');},isCurrent:()=>true});
+  await controller.open();
+  const next={display:{mode:'compare'},height:9};
+  const committed=await controller.replaceFromHistory(f.base,next,()=>true);
+  const durable=await f.open().read();
+  assert.equal(committed.status,'committed');
+  assert.equal(durable.revision,first.revision+1);
+  assert.equal(durable.envelope.workspace,'compare');
+  assert.equal(durable.envelope.documents.experiment.revision,'checkpoint:'+durable.revision);
+  assert.deepEqual(durable.envelope.documents.calibration,calibration);
+  assert.deepEqual(durable.envelope.documents.animation,animation);
+  assert.deepEqual(durable.experiment,next);
+  assert.equal(durable.draft,null);
+  await assert.rejects(b.replaceFromHistory(f.base,{...f.base,height:4},first.revision,
+    {isCurrent:()=>true}),/CAS conflict/);
+  assert.deepEqual(await f.open().read(),durable);
+});
+
+test('atomic History restore refuses drafts, auxiliary workspace and lost generation',async()=>{
+  for(const fault of ['draft','auxiliary','generation','outgoing']){
+    const f=atomicFixture(),a=f.open();await a.read();
+    let before=await a.initialize(f.base);
+    if(fault==='draft')before=await a.stage({...f.base,height:5},before.revision);
+    if(fault==='auxiliary')before=await a.selectWorkspace('animation',
+      {id:'anim',revision:'rev:1',recovery:null},before.revision,
+      {readDocument:async(kind,id)=>({kind,id,revision:'rev:1'}),isCurrent:()=>true});
+    await assert.rejects(a.replaceFromHistory(fault==='outgoing'?{...f.base,height:6}:f.base,
+      {display:{mode:'compare'},height:7},before.revision,{isCurrent:()=>fault!=='generation'}),
+      /active clean physical workspace|stale History restore generation|outgoing physical experiment changed/);
+    assert.deepEqual(await f.open().read(),before);
+  }
+});

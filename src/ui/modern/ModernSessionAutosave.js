@@ -391,6 +391,22 @@
           return {envelope:envelopeFor(physical,value,revision),experiment:value,draft:null};
         },[],guard,false,verify);
       }
+      // The caller protects the outgoing exact experiment in History before
+      // invoking this operation. No intermediate draft or workspace switch:
+      // one CAS owns both the replacement and its physical workspace.
+      function replaceFromHistory(expected,next,expectedRevision,{isCurrent}={}){
+        ensure(typeof isCurrent==='function','History restore generation guard required');
+        const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale History restore generation');};
+        const prior=normalizeExperiment(expected),value=normalizeExperiment(next);
+        return mutate(expectedRevision,(before,revision)=>{
+          guard();
+          ensure(before&&before.draft===null&&['scene','compare'].includes(before.envelope.workspace),
+            'active clean physical workspace required for History restore');
+          ensure(canonical(before.experiment)===canonical(prior),
+            'outgoing physical experiment changed before History restore');
+          return {envelope:envelopeFor(before.envelope,value,revision),experiment:value,draft:null};
+        },[],guard);
+      }
       function detachDocument(kind,reference,expectedRevision,{isCurrent}={}){
         ensure(typeof isCurrent==='function','removal generation guard required');
         const guard=()=>{lease.check(true);ensure(isCurrent()===true,'stale removal generation');};
@@ -574,7 +590,7 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,replaceFromHistory,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto}={}){

@@ -395,6 +395,30 @@
       }catch(e){fail(e);throw e;}
       finally{busy=false;selecting=false;}
     }
+    // History restore is a physical-only replacement. The caller owns the
+    // cross-store operation lock and verifies History recovery before CAS.
+    async function replaceFromHistory(before,after,verifyCurrent){
+      guard(true);
+      check(typeof verifyCurrent==='function','History restore guard required');
+      check(row&&!busy&&!pump&&!latest&&!offer&&!error&&!selectionAttempt&&!recoveryReceipt&&
+        row.draft===null&&['clean','committed'].includes(status)&&
+        ['scene','compare'].includes(row.envelope.workspace),
+        'active clean physical workspace required for History restore');
+      check(typeof checkpoint.replaceFromHistory==='function','History restore adapter required');
+      const current=()=>isCurrent()===true&&verifyCurrent()===true;
+      const expected=clone(before),next=clone(after);
+      busy=true;selecting=true;
+      try{
+        check(current(),'stale History restore generation');
+        await verifyNoReceipt();guard(true);
+        const verified=await checkpoint.read();guard(true);
+        check(same(verified,row),'History restore CAS conflict; reload required');
+        row=await checkpoint.replaceFromHistory(expected,next,row.revision,{isCurrent:current});
+        guard(true);status='committed';
+        return state();
+      }catch(e){fail(e);throw e;}
+      finally{busy=false;selecting=false;}
+    }
     // Must be called inside the same mounted auxiliary-operation lock as
     // selection and domain saves. Clear the durable pointer before allowing
     // destructive domain CRUD, never the other way around.
@@ -463,7 +487,7 @@
       return state();
     }
     return Object.freeze({open,markDirty,flushCheckpoint,save,draftOffer,loadDraft,selectWorkspace,
-      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,assertCleanCheckpoint,assertUnselectedDocument,replaceFromCalibration,detachDocument,recoverDocumentSelection,state});
+      retryWorkspaceSelection,captureSelectionBase,acknowledgeDocumentRevision,assertCleanCheckpoint,assertUnselectedDocument,replaceFromCalibration,replaceFromHistory,detachDocument,recoverDocumentSelection,state});
   }
   return Object.freeze({FORMAT,VERSION,SHARED_VERSION,SHARED_ID,KINDS,WORKSPACES,empty,emptyShared,normalize,
     select,planRestore,
