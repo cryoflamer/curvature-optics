@@ -7387,8 +7387,11 @@
     if(pinChecked)pinChecked.addEventListener('click',function(){handle(function(){
       var ids=historyVisibleSelectedIds();
       if(!ids.length)throw RangeError('Select shown snapshots using the card checkboxes');
+      // Capture the displayed records now, not after waiting for the lock.
+      // An asynchronous gallery refresh cannot change the user's intent.
+      var expected=ids.map(id=>historyShownEntries.get(id));
       var operation=sharedPresentationActive()?
-        runSharedHistoryManagement(guard=>experimentHistory.setPinnedExact(ids.map(id=>historyShownEntries.get(id)),true,guard)):
+        runSharedHistoryManagement(guard=>experimentHistory.setPinnedExact(expected,true,guard)):
         Promise.all(ids.map(function(id){return experimentHistory.pin(id,true);}));
       return operation.then(function(){
         historyStatus('Pinned '+ids.length+' selected snapshots.');return refreshHistoryList();
@@ -10990,6 +10993,7 @@
     openSharedAnimationImageUse:function(use,imageId,imageRevision){
       if(!sharedPresentationActive()||!imageLibraryWorkspaceOpen||typeof imageId!=='string'||!imageId||
          !Number.isSafeInteger(imageRevision)||imageRevision<1||!use||
+         typeof use.ownerId!=='string'||!use.ownerId||!Number.isSafeInteger(use.frameIndex)||use.frameIndex<1||
          !['animation','draft'].includes(use.type))return Promise.resolve(false);
       return requestPreviewWorkspace('animation',{animationUse:{use,imageId,imageRevision}});
     },

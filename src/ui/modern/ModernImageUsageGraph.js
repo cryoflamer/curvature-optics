@@ -121,7 +121,8 @@
   function resolveSharedDraft(row,use,imageId){
     if(!row||row.receipt||row.namedSave||row.keyframeEdit)
       throw Error('Resolve shared Animation recovery before opening a use');
-    if(use?.type!=='draft'||use.source!=='shared checkpoint'||typeof imageId!=='string'||!imageId)
+    if(use?.type!=='draft'||use.source!=='shared checkpoint'||typeof imageId!=='string'||!imageId||
+       !Number.isSafeInteger(use.frameIndex)||use.frameIndex<1)
       throw Error('Verified shared draft use required');
     var revision=row.revisions.find(item=>item.id===use.ownerId);
     var owner=row.collection.workspaces.find(item=>item.id===use.ownerId);

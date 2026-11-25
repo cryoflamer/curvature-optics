@@ -14140,6 +14140,22 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernHistoryManage').click()
         self.page.locator('#ModernHistorySelectVisible').click()
         expect(self.page.locator('#ModernHistoryDeleteChecked')).to_be_disabled()
+        self.page.evaluate("""async () => {
+            const h=CurvatureModernExperimentHistory.create({indexedDB});
+            const [entry]=await h.list();
+            await h.updateMetadataExact(entry,'Changed after selection','Foreign notes');
+        }""")
+        self.page.locator('#ModernHistoryPinChecked').click()
+        expect(self.page.locator('#ModernHistoryStatus')).to_contain_text('changed',timeout=30000)
+        self.assertFalse(self.page.evaluate("""async () => {
+            const [entry]=await CurvatureModernApp.getHistoryStore().list();
+            return entry.pinned;
+        }"""))
+        self.page.locator('#ModernHistoryClose').click()
+        self.page.locator('#ModernHistoryToggle').click()
+        expect(card).to_contain_text('Changed after selection',timeout=30000)
+        self.page.locator('#ModernHistoryManage').click()
+        self.page.locator('#ModernHistorySelectVisible').click()
         self.page.locator('#ModernHistoryPinChecked').click()
         expect(card.locator('.modern-history-pin')).to_have_attribute('aria-pressed','true',timeout=30000)
         payload=self.page.evaluate("""async () => {
@@ -14249,10 +14265,26 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(cp['libraryRevision'],latest['updatedAt'])
         self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",latest['id']),latest)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment'),before['bound']['experiment'])
+        editor=self.page.locator('#ModernAnimationStudio')
+        editor.get_by_role('button',name='Inspect project settings').click()
+        name=editor.get_by_label('Project name',exact=True)
+        name.fill('Divergent shared working copy')
+        name.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
+        self.assertEqual(cp['draft']['name'],'Divergent shared working copy')
         self.page.locator('#ModernImageLibraryTab').click()
         expect(gallery).to_be_visible(timeout=30000)
         gallery.locator('[data-image-id="shared_usage_photo"]').click()
-        draft=where.get_by_role('button',name='Open draft Shared gallery renamed frame 2 · shared checkpoint')
+        saved_link=where.get_by_role('button',name='Open animation Shared gallery renamed frame 2 · saved')
+        expect(saved_link).to_be_visible(timeout=30000)
+        before_conflict=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        saved_link.click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text('navigation was blocked',timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'images')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),before_conflict)
+        draft=where.get_by_role('button',name='Open draft Divergent shared working copy frame 2 · shared checkpoint')
         expect(draft).to_be_visible(timeout=30000)
         draft.click()
         expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
