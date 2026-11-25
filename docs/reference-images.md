@@ -647,6 +647,19 @@ The inspector shows their exact shipped keyframe ordinals without importing
 the asset or joining a coincidentally equal local image ID. These read-only
 demo rows currently have no direct frame-navigation action.
 
+Historical experiment provenance is distinct from an attached image alias.
+The inspector matches `calibrationOrigin.photo` by original SHA-256 and
+oriented dimensions, including saved Animation base/experimental-frame
+experiments, retained and working Storyboard drafts, pending named-save
+before/after values, temporary keyframe editor and its Undo/Redo and pending
+History evidence. It also reads History snapshots, the shared physical
+committed/draft checkpoint, retained physical revisions and recovery sources,
+the old named Library and the current tab's legacy temporary editor journal.
+Historical evidence is read-only and never supplies a substitute navigation
+target. History inspection opens only existing supported database versions,
+without creation, upgrade or migration. Corrupt or unreadable sources make
+coverage incomplete and do not authorize deletion.
+
 A projected usage index may accelerate the inspector, but every view must
 reconcile against the appropriate authoritative records; never use cached
 counts or absent index rows as proof of global non-use. Explicitly label

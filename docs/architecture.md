@@ -626,8 +626,11 @@ Legacy bytes are not updated by registry interactions. Global application prefer
 snapshot: first backfill from validated legacy preferences is explicitly
 acknowledged, subsequent restores read IndexedDB without rewriting the
 legacy keys, and conflicting global writes surface the same recovery panel.
-Frame and Video export settings and Animation Library filters are registered
-extensions of this same global owner. Each additive upgrade accepts only an
+Frame and Video export settings, Animation Library filters and Calibration
+landmark orbit sensitivity are registered extensions of this same global owner.
+The Calibration viewer hydrates its sensitivity control without persisting
+at mount; user edits use the global owner, and legacy sensitivity bytes remain
+untouched in the shared route. Each additive upgrade accepts only an
 explicitly supported complete previous key set, validates all retained values,
 reads the missing extension's legacy source, and acknowledges the upgraded
 envelope by revision CAS and exact readback. It never silently fills a
@@ -645,6 +648,17 @@ document. In the combined opt-in preview the shared Calibration and Animation
 workspaces, keyframe editing, History and reference-image navigation now use
 the domain-specific contracts described below and in their own documentation.
 Destructive History and original-photo removal remain disabled in that route.
+History IDs in Animation keyframes (`sourceSnapshotId`) are local
+provenance; playback is self-contained, and portable Animation import clears
+foreign IDs rather than treating them as local screenshot links. Deletion
+must nevertheless preserve exact provenance and retained recovery evidence.
+A numeric snapshot ID alone is not a portable content identity. An eventual
+destructive protocol must coordinate all participating writers, revalidate
+the selected record and all relevant owner revisions inside its protected
+boundary, and account for pending saves, recovery and live Undo/Redo.
+Do not treat the read-only image-usage inventory, a local zero-reference
+count, or a lock used by only some writers as authorization to delete.
+Older clients and foreign-tab memory remain outside current guarantees.
 Startup locks the physical workspace until
 verified binding; absent or conflicting evidence fails closed without
 falling back to the legacy writer. Historical divergent HEADs are handled
