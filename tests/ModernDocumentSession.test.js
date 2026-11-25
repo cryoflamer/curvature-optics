@@ -398,3 +398,58 @@ test('unselected auxiliary metadata guard preserves retained bindings and reject
   await assert.rejects(a.assertUnselectedDocument('calibration',other),/CAS conflict/);
   assert.deepEqual(b.state().row.envelope.documents.calibration,other);
 });
+
+test('shared session restores the exact Animation receipt with multiple domain owners',async()=>{
+  for(const committed of [false,true]){
+    const f=atomicControllerFixture({canonicalBindings:true});let revision='rev:1';
+    const readDocument=async(kind,id)=>({kind,id,revision:kind==='animation'?revision:'rev:1'});
+    const a=f.open({readDocument});await a.open();
+    const calibration={id:'cal-a',revision:'rev:1',recovery:null};
+    const previous={id:'draft_animation',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+    await a.selectWorkspace('calibration',calibration);
+    await a.selectWorkspace('animation',previous);
+    const base=await a.captureSelectionBase('animation',previous);revision='rev:2';
+    let receipt={version:1,base,previous,current,status:'updated'},retired=0;
+    if(committed)await a.acknowledgeDocumentRevision('animation',receipt);
+    const owners=[
+      {kind:'calibration',read:async()=>null,retire:async()=>{throw Error('Wrong owner');}},
+      {kind:'animation',read:async()=>receipt,retire:async value=>{assert.deepEqual(value,receipt);receipt=null;retired++;}}
+    ];
+    const fresh=f.open({readDocument,selectionRecovery:owners});await fresh.open();
+    assert.equal(fresh.state().status,'recovering-selection');
+    assert.equal(fresh.state().selectionRecoveryKind,'animation');
+    const result=await fresh.recoverDocumentSelection(fresh.state().selectionRecovery);
+    assert.equal(result.status,'committed');assert.equal(retired,1);
+    assert.equal(result.selectionRecovery,null);assert.equal(result.selectionRecoveryKind,null);
+    assert.deepEqual(result.row.envelope.documents.animation,current);
+    assert.deepEqual(result.row.envelope.documents.calibration,calibration);
+  }
+});
+test('multiple unresolved domain receipts block restore without choosing or retiring either',async()=>{
+  const f=atomicControllerFixture(),receipt={version:1};
+  const owners=['calibration','animation'].map(kind=>({kind,read:async()=>receipt,
+    retire:async()=>{throw Error('Must not retire');}}));
+  assert.throws(()=>f.open({selectionRecovery:[owners[0],owners[0]]}),/dependencies/);
+  const a=f.open({selectionRecovery:owners});
+  await assert.rejects(a.open(),/multiple unresolved domain/);
+  assert.equal(a.state().status,'failed');assert.equal(a.state().selectionRecovery,null);
+});
+test('late domain receipt blocks ordinary selection and permits only exact acknowledgement',async()=>{
+  const f=atomicControllerFixture();let receipt=null,revision='rev:1';
+  const owner={kind:'animation',read:async()=>receipt,retire:async()=>{receipt=null;}};
+  const readDocument=async(kind,id)=>({kind,id,revision});
+  const a=f.open({readDocument,selectionRecovery:[owner]});
+  await a.open();
+  const previous={id:'draft_animation',revision:'rev:1',recovery:null},current={...previous,revision:'rev:2'};
+  await a.selectWorkspace('animation',previous);
+  const b=f.open({readDocument,selectionRecovery:[owner]});await b.open();
+  const base=await a.captureSelectionBase('animation',previous);
+  const initial=a.state().row;revision='rev:2';receipt={version:1,base,previous,current,status:'updated'};
+  await assert.rejects(b.selectWorkspace('scene'),/unresolved domain selection receipt/);
+  assert.equal(b.state().status,'failed');
+  assert.deepEqual(b.state().row,initial);
+  await a.acknowledgeDocumentRevision('animation',receipt);
+  assert.deepEqual(a.state().row.envelope.documents.animation,current);
+  receipt=null;await a.selectWorkspace('scene');
+  assert.equal(a.state().row.envelope.workspace,'scene');
+});

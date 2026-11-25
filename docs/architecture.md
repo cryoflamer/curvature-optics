@@ -858,6 +858,17 @@ or conflicting evidence fails closed without a repeated project write.
 This is a two-database recovery protocol, not a cross-database atomic
 transaction.
 
+The document-session controller accepts distinct receipt owners for
+Calibration and Animation. Startup inspects every configured owner before
+restore; more than one unresolved receipt is an error rather than an
+implicit ordering decision. Recovery exposes the exact owner and proves
+its original session base or acknowledged successor. Ordinary selections,
+auxiliary domain save bases and destructive operations reject any pending
+receipt, including a receipt committed by another page after startup.
+Only the exact domain acknowledgement may advance the pointer while that
+receipt exists. The caller holds the shared operation lock throughout the
+cross-database protocol.
+
 ### Shared Calibration project removal
 
 Mounted Calibration selection, save/acknowledgement, receipt recovery and

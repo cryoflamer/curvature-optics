@@ -108,12 +108,45 @@
     check(lease&&lease.sessionId===SHARED_ID&&!('tabId' in lease)&&
       checkpoint&&typeof prepare==='function'&&typeof isCurrent==='function',
       'atomic experiment controller dependencies required');
-    if(selectionRecovery)check(['calibration','animation'].includes(selectionRecovery.kind)&&
-      typeof selectionRecovery.read==='function'&&typeof selectionRecovery.retire==='function'&&
-      typeof checkpoint.proveSelectionReceipt==='function','durable selection recovery dependencies required');
+    // A single domain owner remains supported for existing callers; multiple
+    // owners must be distinct. A shared session can have at most one pending
+    // selection receipt, never a queue of unrelated domain transitions.
+    const recoveries=selectionRecovery===null?[]:
+      Array.isArray(selectionRecovery)?selectionRecovery.slice():[selectionRecovery];
+    check(recoveries.every(owner=>owner&&['calibration','animation'].includes(owner.kind)&&
+      typeof owner.read==='function'&&typeof owner.retire==='function')&&
+      new Set(recoveries.map(owner=>owner.kind)).size===recoveries.length&&
+      (!recoveries.length||typeof checkpoint.proveSelectionReceipt==='function'),
+      'durable selection recovery dependencies required');
     const clone=v=>JSON.parse(JSON.stringify(v));
     const guard=(write=false)=>{check(isCurrent()===true,'stale controller generation');lease.check(write);};
-    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false,selecting=false,selectionAttempt=null,recoveryReceipt=null;
+    let row=null,status='idle',busy=false,error=null,offer=null,latest=null,staged=null,pump=null,promoting=false,selecting=false,selectionAttempt=null,recoveryReceipt=null,recoveryKind=null;
+    async function readReceipts(){
+      const found=[];
+      for(const owner of recoveries){
+        const receipt=await owner.read();guard();
+        if(receipt!==null&&receipt!==undefined)found.push({kind:owner.kind,receipt});
+      }
+      check(found.length<=1,'multiple unresolved domain selection receipts; evidence retained');
+      return found[0]||null;
+    }
+    async function verifyNoReceipt(){
+      check(!await readReceipts(),'unresolved domain selection receipt; reload required');
+    }
+    async function verifyAllowedReceipt(allowed){
+      if(!recoveries.length)return;
+      const found=await readReceipts();
+      if(!allowed){
+        check(!found,'unresolved domain selection receipt; reload required');return;
+      }
+      const owner=recoveries.find(item=>item.kind===allowed.kind);
+      if(!owner){
+        check(!found,'unresolved domain selection receipt; reload required');return;
+      }
+      check(found&&found.kind===allowed.kind&&same(binding(found.receipt.previous),allowed.previous)&&
+        same(binding(found.receipt.current),allowed.current)&&same(found.receipt.base,allowed.base),
+        'domain selection receipt changed; evidence retained');
+    }
     function fail(e){error=String(e&&e.message||e);status='failed';}
     function bound(){
       return row?{kind:'experiment',id:'shared-experiment',
@@ -129,7 +162,8 @@
         bound:bound(),draft:draft(),draftOffer:offer,
         checkpoint:error?'failed':latest&&latest!==staged?'pending':draft()?'durable':'none',
         latestInput:latest?latest.experiment:null,
-        ...(selectionRecovery?{selectionRecovery:recoveryReceipt?clone(recoveryReceipt):null}:{}),
+        ...(recoveries.length?{selectionRecovery:recoveryReceipt?clone(recoveryReceipt):null,
+          selectionRecoveryKind:recoveryKind}:{}),
         pendingSelection:selectionAttempt?{baseRevision:selectionAttempt.before.revision,
           workspace:selectionAttempt.mode,document:selectionAttempt.document??null}:null});
     }
@@ -157,9 +191,10 @@
         guard();
         if(explicitIntent){status='external';return;}
         row=await checkpoint.read();guard();
-        if(selectionRecovery){
-          recoveryReceipt=await selectionRecovery.read();guard();
-          if(recoveryReceipt){
+        if(recoveries.length){
+          const found=await readReceipts();
+          if(found){
+            recoveryReceipt=found.receipt;recoveryKind=found.kind;
             // The old pointer may intentionally reference a superseded
             // project revision. Do not run ordinary restore or migration.
             check(row,'selection receipt has no shared checkpoint; evidence retained');
@@ -215,14 +250,18 @@
       finally{promoting=false;busy=false;startPump();}
     }
     async function selectWorkspace(mode,document){
+      return writeSelection(mode,document,null);
+    }
+    async function writeSelection(mode,document,allowed){
       guard(true);
       check(row&&!busy&&!pump&&!latest&&!offer&&!error&&row.draft===null&&
         ['clean','committed'].includes(status),'resolve physical draft before workspace selection');
       check(typeof checkpoint.selectWorkspace==='function','workspace selection adapter required');
       const expected=select(row.envelope,mode,document);
-      selectionAttempt={before:clone(row),expected,mode,document:document===undefined?undefined:clone(document)};
       busy=true;selecting=true;
       try{
+        await verifyAllowedReceipt(allowed);guard(true);
+        selectionAttempt={before:clone(row),expected,mode,document:document===undefined?undefined:clone(document),allowed};
         row=await checkpoint.selectWorkspace(mode,document,row.revision,{readDocument,readRecovery,isCurrent});
         guard(true);status='committed';selectionAttempt=null;
       }catch(e){fail(e);throw e;}
@@ -238,6 +277,7 @@
       const attempt=selectionAttempt,before=attempt.before;
       busy=true;selecting=true;
       try{
+        await verifyAllowedReceipt(attempt.allowed);guard(true);
         const verified=await checkpoint.read();guard(true);
         if(same(verified,before)){
           row=await checkpoint.selectWorkspace(attempt.mode,attempt.document,before.revision,
@@ -271,6 +311,7 @@
         'active clean auxiliary selection required');
       busy=true;
       try{
+        await verifyNoReceipt();guard(true);
         const verified=await checkpoint.read();guard(true);
         check(same(verified,row),'auxiliary selection CAS conflict before domain save');
         return Object.freeze({revision:row.revision,digest:row.digest});
@@ -297,7 +338,7 @@
           'different workspace selection pending; domain receipt retained');
         return retryWorkspaceSelection();
       }
-      return selectWorkspace(kind,after);
+      return writeSelection(kind,after,{kind,previous:before,current:after,base});
     }
     // Metadata changes to an unselected auxiliary document must not
     // advance or invalidate the retained shared reference. The caller holds
@@ -309,6 +350,7 @@
         'resolve pending session work before changing unselected document');
       busy=true;selecting=true;
       try{
+        await verifyNoReceipt();guard(true);
         const verified=await checkpoint.read();guard(true);
         check(same(verified,row),'auxiliary metadata CAS conflict; reload required');
       }catch(e){fail(e);throw e;}
@@ -343,6 +385,7 @@
       busy=true;selecting=true;
       try{
         check(current(),'stale Calibration Apply generation');
+        await verifyNoReceipt();guard(true);
         const verified=await checkpoint.read();guard(true);
         check(same(verified,row),'Calibration Apply CAS conflict; reload required');
         row=await checkpoint.replaceFromCalibration(ref,expected,next,row.revision,{
@@ -365,6 +408,7 @@
         'resolve pending session work before removal');
       busy=true;selecting=true;
       try{
+        await verifyNoReceipt();guard(true);
         const verified=await checkpoint.read();guard(true);
         check(same(verified,row),'auxiliary removal CAS conflict; reload required');
         const selected=binding(row.envelope.documents[kind]);
@@ -381,17 +425,17 @@
     // on explicit request. No inference from the newest domain revision.
     async function recoverDocumentSelection(selection){
       guard(true);
-      check(selectionRecovery&&recoveryReceipt&&!busy&&!pump&&!latest&&!offer&&
+      check(recoveries.length&&recoveryKind&&recoveryReceipt&&!busy&&!pump&&!latest&&!offer&&
         ['recovering-selection','failed'].includes(status)&&same(selection,recoveryReceipt),
         'explicit current durable selection receipt required');
       busy=true;selecting=true;
       try{
-        const kind=selectionRecovery.kind,receipt=recoveryReceipt;
+        const kind=recoveryKind,receipt=recoveryReceipt,owner=recoveries.find(x=>x.kind===kind);
         const before=binding(receipt.previous),after=binding(receipt.current);
         check(before&&after&&before.recovery===null&&after.recovery===null&&!same(before,after),
           'invalid durable selection receipt');
-        const retained=await selectionRecovery.read();guard(true);
-        check(same(retained,receipt),'durable selection receipt changed; evidence retained');
+        const retained=await readReceipts();guard(true);
+        check(retained&&retained.kind===kind&&same(retained.receipt,receipt),'durable selection receipt changed; evidence retained');
         row=await checkpoint.read();guard(true);
         const proof=await checkpoint.proveSelectionReceipt(row,kind,before,after,receipt.base);guard(true);
         check(['pending','committed'].includes(proof),'selection receipt CAS conflict; evidence retained');
@@ -406,10 +450,14 @@
         check(same(confirmed,row)&&await checkpoint.proveSelectionReceipt(confirmed,kind,before,after,receipt.base)==='committed',
           'selection changed before receipt retirement; evidence retained');
         guard(true);
-        await selectionRecovery.retire(receipt);guard(true);
+        const latestReceipt=await readReceipts();guard(true);
+        check(latestReceipt&&latestReceipt.kind===kind&&same(latestReceipt.receipt,receipt),
+          'durable selection receipt changed before retirement; evidence retained');
+        await owner.retire(receipt);guard(true);
+        await verifyNoReceipt();guard(true);
         const final=await checkpoint.read();guard(true);
         check(same(final,confirmed),'selection changed during receipt retirement; reload required');
-        row=final;recoveryReceipt=null;status='committed';error=null;
+        row=final;recoveryReceipt=null;recoveryKind=null;status='committed';error=null;
       }catch(e){fail(e);throw e;}
       finally{busy=false;selecting=false;}
       return state();
