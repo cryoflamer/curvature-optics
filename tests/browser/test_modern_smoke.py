@@ -567,8 +567,17 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(retainedAnimation.referenceImages[0].original.dataUrl===original.dataUrl&&
                 retainedAnimation.referenceImages[0].author==='Observer A',
                 'Animation cannot hydrate original evidence after gallery removal');
-            await adapter.store.removeDocument({documentId:'animation:'+project.id,expectedRevision:1});
+            const changedRow={...retainedAnimation.row,updatedAt:101,
+                project:{...retainedAnimation.row.project,name:'Renamed after removal'}};
+            const edited=await adapter.saveAnimation(changedRow,{expectedRevision:1});
+            const editedRead=await adapter.readAnimation(project.id);
+            ok(editedRead.row.project.name==='Renamed after removal'&&
+                editedRead.observations[0].target===photo.observationId&&
+                editedRead.referenceImages[0].original.dataUrl===original.dataUrl,'edit lost historical original');
+            await rejects(()=>adapter.saveAnimation(changedRow,{expectedRevision:1}),/revision conflict/);
+            await adapter.store.removeDocument({documentId:'animation:'+project.id,expectedRevision:2});
             ok((await adapter.store.collectGarbage(animation.projectId)).collected,'unused Animation not reclaimed');
+            ok((await adapter.store.collectGarbage(edited.projectId)).collected,'edited Animation not reclaimed');
             ok((await adapter.store.collectGarbage(photo.observationId)).collected,'unused observation not reclaimed');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'shared original reclaimed');
             ok((await adapter.readObservation('photo_b')).row.record.original.dataUrl===original.dataUrl,'other observation lost');
@@ -686,6 +695,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             const reopenedAnimation=await adapter.readAnimation(animationProject.id);
             ok(reopenedAnimation.projectId===animation.projectId&&reopenedAnimation.evidence[0].target===saved.resultId,
                 'calibrated Animation lost result after archive removal');
+            const edited=await adapter.saveAnimation({...reopenedAnimation.row,updatedAt:46,
+                project:{...reopenedAnimation.row.project,name:'Retained fit'}},{expectedRevision:1});
+            const editedRead=await adapter.readAnimation(animationProject.id);
+            ok(editedRead.projectId===edited.projectId&&editedRead.evidence[0].target===saved.resultId,
+                'editing Animation lost fit evidence');
+            await rejects(()=>adapter.saveAnimation(editedRead.row,{expectedRevision:2,standalone:true}),
+                /cannot be downgraded/);
             await rejects(()=>adapter.saveHistory({...history,id:73}),/calibration result missing/);
             const standalone=await adapter.saveHistory({...history,id:74},{standalone:true});
             ok((await adapter.readHistory(74)).evidence==='standalone','standalone provenance misrepresented');

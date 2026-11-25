@@ -322,14 +322,28 @@
     }
     async function saveAnimation(row,{expectedRevision=0,standalone=false}={}){
       const {project,metadata}=animationFields(row);
+      // Existing aliases keep their historical evidence, not whatever a
+      // mutable gallery alias happens to resolve to today. The final root
+      // CAS protects this read against a concurrent edit or deletion.
+      const previous=expectedRevision===0?null:await readAnimation(project.id);
+      check(expectedRevision===0||previous?.managedRevision===expectedRevision,
+        'Animation revision conflict');
+      const retainedEvidence=new Map(Array.isArray(previous?.evidence)?
+        previous.evidence.map(entry=>[entry.alias,entry.target]):[]);
+      const retainedObservations=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
       const origins=calibrationOrigins(project);
       let evidence='none';
       if(origins.length){
-        if(standalone===true)evidence='standalone';
-        else{
+        if(standalone===true){
+          check(!origins.some(origin=>retainedEvidence.has(origin.resultId)),
+            'verified calibration evidence cannot be downgraded');
+          evidence='standalone';
+        }else{
           const mapped=new Map();
           for(const origin of origins){
-            const target=await resolveOrigin(origin);
+            let target=retainedEvidence.get(origin.resultId);
+            if(target)checkOrigin(origin,await store.get(target));
+            else target=await resolveOrigin(origin);
             if(mapped.has(origin.resultId))check(mapped.get(origin.resultId)===target,'calibration evidence changed');
             mapped.set(origin.resultId,target);
           }
@@ -338,6 +352,10 @@
       }
       const observations=[];
       for(const alias of aliases(project)){
+        if(retainedObservations.has(alias)){
+          observations.push({alias,target:retainedObservations.get(alias)});
+          continue;
+        }
         const graph=await store.readDocumentGraph(observationId(alias));
         check(graph&&graph.document.kind==='observation','required observation missing: '+alias);
         const value=pick(graph,'observation',OBSERVATION);
