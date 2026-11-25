@@ -628,8 +628,7 @@ read when the serialized pruning operation executes. Pruning is deferred
 during pending saves, recovery, temporary keyframe editing, named-save
 journals, workspace transitions and picker attachment. Newly acquired picker
 observations remain protected until the selection has finished publishing.
-Calibration result/physical provenance retention is not yet integrated. Named
-roots and working journals remain durable owners. Production deletion remains disabled.
+Named roots and working journals remain durable owners. Production deletion remains disabled.
 
 Linked-photo rows and their details dialog read the exact retained editor observation, independently of the gallery picker. A new picker attachment checks the inspected gallery revision and refuses a conflicting historical alias instead of substituting a different observation. Undo continues to use the captured original version.
 
@@ -672,6 +671,11 @@ frame is checked against the exact inspected snapshot before its evidence is
 acquired and the edit is published; Camera Animation import can transfer
 matching working physical evidence. Existing standalone origins are tracked
 explicitly. The working writer restores retained result IDs on Undo/Redo
-without requiring the archive root to exist. Photo pruning does not release
-these results: physical evidence is conservatively retained for the editor
-generation pending exact provenance reachability pruning.
+without requiring the archive root to exist. The same acknowledged reachability
+inventory retains photos, archived results, and exact standalone origins across
+the current draft and both Undo/Redo stacks (including the contract reference).
+Calibrated insertions are serialized with pruning even for already known
+aliases; pruning is deferred until pending evidence acquisition/publication
+finishes. An incomplete inventory refuses to release any existing locks.
+Durable working and named roots remain independent owners. Temporary keyframe,
+named-save and workspace transitions still defer pruning until stable.

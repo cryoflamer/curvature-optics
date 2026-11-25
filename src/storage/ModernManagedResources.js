@@ -2087,18 +2087,34 @@
       // Read the editor's reachability at execution time, not when the
       // maintenance request is queued behind a pending picker operation.
       // A null inventory declines pruning (unacknowledged or changing state).
-      function prune(workspace,readAliases){
+      function prune(workspace,readDrafts){
         return serialize(async()=>{
           if(!owner||owner!==workspace)return false;
-          const aliases=readAliases();
-          if(aliases===null)return false;
-          check(Array.isArray(aliases),'live photo inventory required');
-          const next=new Map();
-          for(const alias of aliases){
-            check(photos.has(alias),'live photo inventory was not retained: '+alias);
-            next.set(alias,photos.get(alias));
+          const reachable=readDrafts();
+          if(reachable===null)return false;
+          check(Array.isArray(reachable),'live Animation draft inventory required');
+          const next=new Map(),results=new Map(),foreign=[];
+          for(const draft of reachable){
+            check(Array.isArray(draft?.frames),'live Animation draft inventory required');
+            for(const frame of draft.frames){
+              for(const alias of frame.referenceImageIds||[]){
+                check(photos.has(alias),'live photo inventory was not retained: '+alias);
+                next.set(alias,photos.get(alias));
+              }
+            }
+            for(const {experiment} of animationDraftOrigins(draft)){
+              const origin=experiment.calibrationOrigin;
+              if(archived.has(origin.resultId)){
+                results.set(origin.resultId,archived.get(origin.resultId));
+              }else{
+                check(standalone.some(old=>same(old,origin)),
+                  'live calibration inventory was not retained: '+origin.resultId);
+                if(!foreign.some(old=>same(old,origin)))foreign.push(origin);
+              }
+            }
           }
-          await scope.replace([...next.values(),...archived.values()]);photos=next;
+          await scope.replace([...next.values(),...results.values()]);
+          photos=next;archived=results;standalone=foreign;
           return true;
         });
       }
@@ -2106,6 +2122,7 @@
         return serialize(async()=>{await scope.replace([]);photos=new Map();archived=new Map();standalone=[];owner=null;});
       }
       return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,prune,reset,needsEvidence,retainDraft,
+        hasOrigins:draft=>animationDraftOrigins(draft).length>0,
         createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos),
           ()=>({results:new Map(archived),standalone:structuredClone(standalone)}))});
     }

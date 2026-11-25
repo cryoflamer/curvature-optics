@@ -4440,12 +4440,12 @@
     studioDraftSavedAt=stamp;
     return record;
   }
-  async function pruneStudioPhotoRetention(ctx){
+  async function pruneStudioRetention(ctx){
     if(!ctx?.retention||!studioWorkspaceId)return;
     var workspace=studioWorkspaceId;
     try{
       await ctx.retention.prune(workspace,function(){
-        if(ctx!==experimentPreview.animationContext||ctx.busy||ctx.photoSelections||
+        if(ctx!==experimentPreview.animationContext||ctx.busy||ctx.photoSelections||ctx.evidenceSelections||
            !animationWorkspaceOpen||!studioWorkspaceReady||studioActiveDemo||
            studioWorkspaceId!==workspace||keyframeEditSession||keyframeEditDraftAtEntry||
            ctx.row?.namedSave||ctx.row?.keyframeEdit)return null;
@@ -4455,12 +4455,12 @@
         var drafts=[studioDraft];
         for(var side of ['past','future'])
           for(var item of studioEditHistory?.[side]||[])drafts.push(item.draft);
-        return [...new Set(drafts.flatMap(draft=>draft.frames.flatMap(frame=>frame.referenceImageIds||[])))];
+        return drafts;
       });
     }catch(error){
       // The acknowledged checkpoint is not a failed save just because
       // optional pruning could not be performed. Keep deletion fail closed.
-      console.warn('Animation live photo retention was not pruned:',error.message||error);
+      console.warn('Animation live resource retention was not pruned:',error.message||error);
     }
   }
   function persistStudioWorkspace(settings){
@@ -4477,7 +4477,7 @@
         studioDraftStatus('Shared working draft saved in IndexedDB',false);
         ctx.error=false;ctx.message='';syncStudioOpenedProject();
         if(studioView==='library')renderStudioLibrary();
-        void pruneStudioPhotoRetention(ctx);
+        void pruneStudioRetention(ctx);
         return true;
       }).catch(function(error){
         ctx.error=true;ctx.message='Shared Animation save not acknowledged: '+error.message;
@@ -7113,15 +7113,21 @@
         if(beforeCommit)beforeCommit();
         return update(next,options);
       }
-      if(!retention||!retention.needsEvidence(next))return publish();
+      if(!retention||!retention.hasOrigins(next))return publish();
       var before=studioDraft,generation=studioDraftGeneration,workspace=studioWorkspaceId;
+      // An already retained alias may be queued for pruning. Always serialize
+      // calibrated insertions, and protect acquisitions until publication.
+      ctx.evidenceSelections=(ctx.evidenceSelections||0)+1;
       return retention.retainDraft(next,workspace).then(function(){
         if(ctx!==experimentPreview.animationContext||studioDraft!==before||
            studioDraftGeneration!==generation||studioWorkspaceId!==workspace||
            !animationWorkspaceOpen||studioActiveDemo||ctx.busy||keyframeEditSession)
           throw Error('Animation changed before calibration evidence was retained; retry the insertion');
         return publish();
-      }).catch(report);
+      }).catch(report).finally(function(){
+        ctx.evidenceSelections--;
+        void pruneStudioRetention(ctx);
+      });
     }
     keyframeEditCommit=function(prepared,historyId){
       var next=historyId===undefined?
@@ -7346,7 +7352,7 @@
         ctx.photoSelections=(ctx.photoSelections||0)+1;
         return function(){
           ctx.photoSelections--;
-          void pruneStudioPhotoRetention(ctx);
+          void pruneStudioRetention(ctx);
         };
       }:null,
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),

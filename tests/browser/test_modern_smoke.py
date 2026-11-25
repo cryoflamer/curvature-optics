@@ -1901,15 +1901,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             const restoredOwner=await adapter.readAnimationWorkingCollection();
             ok(restoredOwner.observations.some(v=>v.alias===alias&&v.target===importedPhoto.observationId),
                 'Undo substituted current gallery observation');
-            ok(await live.prune(portableRecovery.id,()=>[alias]),'retained inventory rejected');
+            ok(await live.prune(portableRecovery.id,()=>[undo.draft]),'retained inventory rejected');
             await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
             ok(!await live.prune(portableRecovery.id,()=>null),'unacknowledged state was pruned');
-            await rejects(()=>live.prune(portableRecovery.id,()=>['missing_live_alias']),/inventory was not retained/);
+            await rejects(()=>live.prune(portableRecovery.id,()=>[{...undo.draft,frames:undo.draft.frames.map(frame=>({...frame,referenceImageIds:['missing_live_alias']}))}]),/inventory was not retained/);
             await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
             ref=A.documentReference(edited,portableRecovery.id);
             edited=await editor.saveSelected(edited,ref,A.normalize({...unlinked,savedAt:undo.savedAt+1}),base);
             edited=await editor.retire(edited,edited.receipt);
-            ok(await live.prune(portableRecovery.id,()=>[]),'empty retained inventory rejected');
+            ok(await live.prune(portableRecovery.id,()=>[unlinked.draft]),'empty retained inventory rejected');
             await rejects(()=>live.linkedPhotograph(alias,portableRecovery.id),/was not retained/);
             await store.collectGarbage(importedPhoto.observationId);
             await live.reset();
@@ -2671,11 +2671,24 @@ class ModernBrowserSmoke(unittest.TestCase):
             animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),A.normalize({...cp,savedAt:202}),base);
             animationRow=await animation.retire(animationRow,animationRow.receipt);
             ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'unlinked calibration still durable');
+            ok(await animationLive.prune(id,()=>[blank,inserted]),'Undo/Redo inventory was refused');
+            ok(!await animationLive.prune(id,()=>null),'pending editor state was pruned');
+            const unknown=structuredClone(inserted);
+            unknown.frames[0].experiment.calibrationOrigin.resultId='missing_result';
+            await rejects(()=>animationLive.prune(id,()=>[unknown]),/calibration inventory was not retained/);
             await rejects(()=>adapter.store.collectGarbage(saved.resultId),/close the corresponding editor/);
             animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),A.normalize({...withFrame,savedAt:203}),base);
             animationRow=await animation.retire(animationRow,animationRow.receipt);
             ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===saved.resultId,
                 'Animation Undo lost retained fit');
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),A.normalize({...cp,savedAt:204}),base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
+            ok(await animationLive.prune(id,()=>[blank]),'branched history did not prune');
+            ok(animationLive.needsEvidence(inserted),'unreachable calibration retained indefinitely');
+            const released=await adapter.store.collectGarbage(saved.resultId);
+            ok(!released.collected&&released.reason==='durable-reference','pruning removed independently owned evidence');
+            await animationLive.retainDraft(inserted,id);
+            ok(!animationLive.needsEvidence(inserted),'reinserted History evidence was not reacquired');
             await animationLive.reset();
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
