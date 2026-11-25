@@ -62,7 +62,7 @@ function createHistoryNavigationHarness(){
     region('  function syncHistoryNavigation(){','  function syncWorkspaceVisibility(){'),
     region('  function openHistoryFromPicker(id){','  function updateHistorySelection(entry){'),
     region('  function refreshHistoryList(selectedId){','  var historyRestoreBusy=false;'),
-    region('  function setHistoryOpen(open){','  function bindHistory(){')
+    region('  function setHistoryOpen(open){','  function bindHistory(')
   ].join('\n');
   const records=[
     {id:1,name:'Compare match',pinned:false,signature:'a'},
