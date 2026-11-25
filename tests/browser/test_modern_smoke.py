@@ -587,6 +587,133 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
 
+    def test_managed_store_autosave_performance_profile(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave,D=CurvatureModernDocumentSession;
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const legacy=S.openSharedCheckpoint(indexedDB,{lease,codec:C,crypto,contract:D});
+            await legacy.read();
+            let working=await legacy.initialize(experiment),revision=0;
+            const samples=[];
+            function stats(values){
+                const sorted=values.slice().sort((a,b)=>a-b);
+                return {medianMs:Math.round(sorted[Math.floor(sorted.length/2)]*10)/10,
+                    maxMs:Math.round(sorted.at(-1)*10)/10,n:sorted.length};
+            }
+            async function timed(action){
+                const start=performance.now();const value=await action();
+                return {value,ms:performance.now()-start};
+            }
+            // Seed unrelated validated snapshots in one atomic batch. The
+            // measurement excludes setup and includes normal IDB/lock costs.
+            let previousSize=0;
+            for(const size of [0,200,1000]){
+                if(size>previousSize){
+                    const resources=Array.from({length:size-previousSize},()=>({
+                        id:adapter.store.newObjectId(),type:api.SNAPSHOT,version:1,
+                        payload:{experiment,evidence:'none'}}));
+                    await adapter.store.writeDocument({documentId:'benchmark:'+size,kind:'benchmark',
+                        expectedRevision:0,metadata:{},resources,
+                        references:resources.map((r,k)=>({slot:'s'+k,target:r.id,strength:'strong'}))});
+                    previousSize=size;
+                }
+                const writes=[],reads=[];
+                for(let k=0;k<7;k++){
+                    const edit=structuredClone(experiment);edit.scene.camera.Height+=k+size+1;
+                    working=await legacy.stage(edit,working.revision);
+                    const write=await timed(()=>adapter.saveWorkingCheckpoint(working,{expectedRevision:revision}));
+                    revision=write.value.managedRevision;
+                    const read=await timed(()=>adapter.readWorkingCheckpoint());
+                    ok(read.value.row.digest===working.digest,'working checkpoint mismatch');
+                    if(k){writes.push(write.ms);reads.push(read.ms);}
+                }
+                samples.push({kind:'physical',unrelatedSnapshots:size,
+                    write:stats(writes),read:stats(reads)});
+            }
+            // The row is sealed using the existing shared format, not a
+            // mock validator; full frame payloads remain intact.
+            let draftRevision=0,sourceRevision=0;
+            for(const frameCount of [1,20,100]){
+                const writes=[],reads=[];
+                let bytes=0;
+                for(let k=0;k<5;k++){
+                    const cp=A.checkpoint({draft:{name:'Benchmark '+k,description:'',mode:'auto',
+                        target:'auto',source:'history',frames:Array.from({length:frameCount},(_,i)=>({
+                            key:'frame_'+i,sourceSnapshotId:null,name:'Frame '+i,experiment,
+                            travelMs:i?1000:0,holdMs:0,easing:'linear'}))},
+                        selectedKey:'frame_0',quality:'auto',prepared:false,positionMs:k},100+k+sourceRevision);
+                    sourceRevision++;
+                    const collection=A.collection('draft_benchmark',cp,1000+sourceRevision);
+                    const row={version:1,revision:sourceRevision,collection,
+                        revisions:[{id:'draft_benchmark',revision:sourceRevision}],receipt:null};
+                    const encoded=new TextEncoder().encode(JSON.stringify(row));
+                    const digest=await crypto.subtle.digest('SHA-256',encoded);
+                    row.digest='sha256:'+Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+                    bytes=encoded.length;
+                    const write=await timed(()=>adapter.saveAnimationWorkingCollection(row,{expectedRevision:draftRevision}));
+                    draftRevision=write.value.managedRevision;
+                    const read=await timed(()=>adapter.readAnimationWorkingCollection());
+                    ok(read.value.row.digest===row.digest,'Animation checkpoint mismatch');
+                    if(k){writes.push(write.ms);reads.push(read.ms);}
+                }
+                samples.push({kind:'animation',unrelatedSnapshots:1000,frameCount,bytes,
+                    write:stats(writes),read:stats(reads)});
+            }
+            const integrity=await adapter.store.verifyIntegrity();
+            return {samples,valid:integrity.valid,liveObjects:integrity.liveObjects,
+                eligible:integrity.eligible.length,unreachable:integrity.unreachable.length};
+        }""")
+        self.assertTrue(result['valid'])
+        self.assertEqual(len(result['samples']),6)
+        self.assertGreaterEqual(result['eligible'],1)
+        print("MANAGED_AUTOSAVE_PROFILE "+__import__('json').dumps(result,sort_keys=True),flush=True)
+
     def test_managed_animation_working_collection_retains_inactive_draft_originals(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
