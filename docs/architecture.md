@@ -822,8 +822,16 @@ shared selection authority. Shared-preview startup resolves link intent
 before initializing Animation: no legacy tab/window identity, local backup
 replay, pruning or pagehide writer is started. Ordinary and explicit
 compatibility routes keep their original recovery behavior. The adapter is
-not yet mounted; other legacy source adoption, conflict recovery, keyframe
-editing and UI remain pending.
+not yet mounted. The shared editor persistence coordinator now binds only
+an exact acknowledged workspace, compares normalized checkpoint content
+without its wall-clock timestamp, and drains captured edits under the
+shared operation lock. It acknowledges each domain receipt before
+retirement; explicit retry of a known receipt never writes the document
+again. A lost retirement acknowledgement can be accepted only by exact
+successor readback and revalidation of the shared selection. A stale
+collection or unknown domain-write outcome blocks rebasing, retaining the
+latest in-memory checkpoint for explicit recovery/export. Other legacy
+source adoption, conflict recovery, keyframe editing and UI remain pending.
 
 The headless Calibration Apply checkpoint adapter supports a single CAS
 from an acknowledged Calibration selection to a new physical experiment.

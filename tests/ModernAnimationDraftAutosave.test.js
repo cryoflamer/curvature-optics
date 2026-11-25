@@ -830,3 +830,92 @@ test('shared Animation rejects corrupted rows and stale lifetime without replaci
     {...f.cp,savedAt:200},f.base),/lifetime ended/);
   assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),row);
 });
+
+async function sharedWriterFixture(){
+  const f=sharedAnimationFixture(),storage=f.open();await storage.read();
+  const row=await storage.initializeEmpty(await f.inspect(),f.collection,f.local);
+  let pointer=autosave.documentReference(row,f.id),captureCount=0,acks=0,domainWrites=0;
+  let failAck=false,failRetirement=false,hold=null;
+  const selection={
+    check:()=>f.lease.check(true),coordinate:async action=>action(),
+    async captureBase(ref){
+      assert.deepEqual(ref,pointer);captureCount++;return f.base;
+    },
+    async acknowledge(receipt){
+      acks++;if(hold)await hold;
+      if(failAck)throw Error('injected pointer failure');
+      assert.deepEqual(receipt.previous,pointer);pointer=receipt.current;
+    }
+  };
+  const adapter={read:()=>storage.read(),
+    saveSelected(...args){domainWrites++;return storage.saveSelected(...args);},
+    async retire(...args){
+      if(failRetirement==='before')throw Error('injected retirement failure');
+      const result=await storage.retire(...args);
+      if(failRetirement==='after')throw Error('retirement acknowledgement lost');
+      return result;
+    }};
+  const coordinator=require('../src/animation/ModernAnimationWorkspacePersistence').createShared({
+    autosave,storage:adapter,selection});
+  await coordinator.bind(pointer);
+  const changed=(name,savedAt)=>({...structuredClone(f.cp),savedAt,draft:{...f.cp.draft,name}});
+  return {...f,row,coordinator,storage,changed,counts:()=>({captureCount,acks,domainWrites}),
+    pointer:()=>pointer,setAckFailure:v=>{failAck=v;},setRetireFailure:v=>{failRetirement=v;},
+    holdAck:()=>{let release;hold=new Promise(resolve=>{release=resolve;});return ()=>{hold=null;release();};}};
+}
+test('shared Animation coordinator does not save viewport-independent timestamp-only hydration',async()=>{
+  const h=await sharedWriterFixture(),c=h.coordinator;
+  c.mark({...h.cp,savedAt:200});await c.save();
+  assert.equal(h.counts().domainWrites,0);assert.equal(c.state().unsaved,false);
+  assert.deepEqual(await h.storage.read(),h.row);
+});
+test('shared Animation coordinator retains later edits and acknowledges them in order',async()=>{
+  const h=await sharedWriterFixture(),c=h.coordinator,release=h.holdAck();
+  c.mark(h.changed('First',200));const saving=c.save();
+  while(!h.counts().acks)await new Promise(setImmediate);
+  c.mark(h.changed('Second',201));
+  assert.equal(c.state().unsaved,true);
+  release();await saving;
+  assert.equal(h.counts().domainWrites,2);assert.equal(h.counts().acks,2);
+  assert.equal(c.state().unsaved,false);assert.equal(c.state().selectionPending,null);
+  const row=await h.storage.read();
+  assert.equal(autosave.getWorkspace(row.collection,h.id).draft.name,'Second');
+  assert.deepEqual(h.pointer(),autosave.documentReference(row,h.id));
+  assert.equal(row.receipt,null);
+});
+test('shared Animation coordinator retries exact receipt, not the domain write',async()=>{
+  const h=await sharedWriterFixture(),c=h.coordinator;
+  h.setAckFailure(true);c.mark(h.changed('Pending',200));
+  await assert.rejects(c.save(),/pointer failure/);
+  const durable=await h.storage.read();
+  assert.ok(durable.receipt);assert.deepEqual(c.state().selectionPending,durable.receipt);
+  assert.equal(c.recovery().checkpoint.draft.name,'Pending');
+  await assert.rejects(c.save(),/Explicit Animation save retry/);
+  h.setAckFailure(false);await c.retry();
+  assert.equal(h.counts().domainWrites,1);assert.equal(h.counts().acks,2);
+  assert.equal(c.state().error,null);assert.equal(c.recovery(),null);
+  assert.equal((await h.storage.read()).receipt,null);
+});
+test('shared Animation coordinator proves exact retirement after lost acknowledgement',async()=>{
+  for(const fault of ['before','after']){
+    const h=await sharedWriterFixture(),c=h.coordinator;
+    h.setRetireFailure(fault);c.mark(h.changed('Linked',200));
+    await assert.rejects(c.save(),/retirement/);
+    assert.equal(h.counts().acks,1);assert.equal(h.counts().domainWrites,1);
+    h.setRetireFailure(false);await c.retry();
+    assert.equal(h.counts().acks,1);assert.equal(h.counts().domainWrites,1);
+    assert.equal(c.state().unsaved,false);
+    assert.equal((await h.storage.read()).receipt,null);
+  }
+});
+test('shared Animation coordinator refuses stale collection without losing unsaved draft',async()=>{
+  const h=await sharedWriterFixture(),c=h.coordinator,other=h.open();
+  const row=await other.read(),ref=autosave.documentReference(row,h.other);
+  const saved=await other.saveSelected(row,ref,h.changed('Competing',200),h.base);
+  await other.retire(saved,saved.receipt);
+  c.mark(h.changed('Unsent',201));
+  await assert.rejects(c.save(),/collection changed/);
+  assert.equal(h.counts().domainWrites,0);assert.equal(c.recovery().checkpoint.draft.name,'Unsent');
+  await assert.rejects(c.bind(h.pointer()),/Resolve shared Animation edits/);
+  assert.equal(autosave.getWorkspace((await other.read()).collection,h.other).draft.name,'Competing');
+});
