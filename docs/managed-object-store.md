@@ -601,3 +601,17 @@ read-only path does not create or upgrade storage, modify a receipt, or enable
 reclamation.
 
 Managed portable Recovery import stages the verified observation mapping and the independent working draft through the existing shared collection transition engine. Gallery inventory and working revision CAS are checked in one transaction; a failed import publishes neither new assets nor the draft. Existing retained alias conflicts are refused rather than silently changing another working copy's evidence. The legacy path is unchanged.
+
+
+### Replaceable transient editor retention sets
+
+The core offers `createRetentionScope()` for a live consumer's exact set of
+immutable resource IDs. `replace(ids)` serializes changes, acquires shared
+locks and verifies existence for all additions before releasing obsolete
+locks; a failed acquisition preserves the previous set. `close()` releases
+the entire scope, and browser termination releases the underlying Web Locks.
+There is no durable tab ID or second persistence authority. A scope is not
+proof that an application editor has enumerated all of its dependencies;
+callers must protect the resource before publishing it into live state and
+keep current, Undo/Redo, and recovery resources until no longer needed.
+Destructive application routes remain disabled pending that integration.

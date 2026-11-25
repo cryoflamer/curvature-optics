@@ -360,6 +360,42 @@ class ModernBrowserSmoke(unittest.TestCase):
                 return (await store.removeDocument({documentId:'revisioned',expectedRevision:2})).removed;
             }"""))
             self.assertTrue(second.evaluate('async id=>(await store.collectGarbage(id)).collected',revised))
+            # A replaceable live-editor scope retains a set across operations
+            # (for example, current and Undo originals) without a durable root.
+            scoped=self.page.evaluate("""async()=>{
+                const make=async id=>store.createAndAttach({documentId:id,kind:'test',
+                    expectedRevision:0,metadata:{},slot:'value',type:'test',version:1,payload:id});
+                const a=await make('scope_a'),b=await make('scope_b');
+                window.scope=store.createRetentionScope();
+                await scope.replace([a.id,b.id,a.id]);
+                return {a:a.id,b:b.id};
+            }""")
+            self.assertTrue(second.evaluate("""async ({a,b})=>{
+                for(const [doc,id] of [['scope_a',a],['scope_b',b]]){
+                    try{await store.removeDocument({documentId:doc,expectedRevision:1});return false;}
+                    catch(error){if(!/in use/.test(error.message))throw error;}
+                    if((await store.getDocument(doc)).references[0].target!==id)return false;
+                }
+                return true;
+            }""",scoped))
+            self.assertTrue(self.page.evaluate("""async ({a,b})=>{
+                try{await scope.replace([a,'missing-resource']);return false;}
+                catch(error){if(!/resource missing/.test(error.message))throw error;}
+                return scope.ids().length===2&&scope.ids().includes(b);
+            }""",scoped))
+            self.assertEqual(self.page.evaluate('({b})=>scope.replace([b])',scoped),[scoped['b']])
+            self.assertTrue(second.evaluate("""async ({a,b})=>{
+                await store.removeDocument({documentId:'scope_a',expectedRevision:1});
+                if(!(await store.collectGarbage(a)).collected)return false;
+                try{await store.removeDocument({documentId:'scope_b',expectedRevision:1});}
+                catch(error){return /in use/.test(error.message);}
+                return false;
+            }""",scoped))
+            self.page.evaluate('()=>scope.close()')
+            self.assertTrue(second.evaluate("""async ({b})=>{
+                await store.removeDocument({documentId:'scope_b',expectedRevision:1});
+                return (await store.collectGarbage(b)).collected;
+            }""",scoped))
             # Verify the user's actual recovery path: close the holding tab,
             # not an application-specific release or synchronization message.
             abandoned=self.page.evaluate("""async()=>{

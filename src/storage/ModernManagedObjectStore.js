@@ -641,6 +641,65 @@
         return operation(value);
       });
     }
+    // A live editor replaces its exact resource set as Undo/Redo and the
+    // working state change. Acquire all additions before releasing anything.
+    // Failed acquisition leaves the preceding set intact. This is transient
+    // Web Lock ownership, not another persisted document or restore identity.
+    function createRetentionScope(){
+      const held=new Map();
+      let closed=false,tail=Promise.resolve();
+      function serialize(operation){
+        const next=tail.then(operation);
+        tail=next.catch(()=>{});
+        return next;
+      }
+      function acquire(id){
+        let release,ready,failed;
+        const acquired=new Promise((resolve,reject)=>{ready=resolve;failed=reject;});
+        const wait=new Promise(resolve=>{release=resolve;});
+        const task=withRetained(id,()=>{
+          ready({release,task});
+          return wait;
+        });
+        task.catch(failed);
+        return acquired;
+      }
+      async function releaseEntries(entries){
+        for(const [,handle] of entries)handle.release();
+        await Promise.all(entries.map(([,handle])=>handle.task));
+      }
+      function replace(ids){
+        check(!closed,'resource retention scope closed');
+        check(Array.isArray(ids),'resource retention IDs required');
+        const wanted=[...new Set(ids.map(id=>token(id,'object ID')))].sort();
+        return serialize(async()=>{
+          check(!closed,'resource retention scope closed');
+          const added=[];
+          try{
+            for(const id of wanted){
+              if(!held.has(id))added.push([id,await acquire(id)]);
+              check(!closed,'resource retention scope closed');
+            }
+          }catch(error){
+            await releaseEntries(added);
+            throw error;
+          }
+          const obsolete=[...held].filter(([id])=>!wanted.includes(id));
+          for(const entry of added)held.set(...entry);
+          for(const [id] of obsolete)held.delete(id);
+          await releaseEntries(obsolete);
+          return [...held.keys()].sort();
+        });
+      }
+      function close(){
+        closed=true;
+        return serialize(async()=>{
+          const entries=[...held];held.clear();
+          await releaseEntries(entries);
+        });
+      }
+      return Object.freeze({replace,close,ids:()=>[...held.keys()].sort()});
+    }
     // Explicit single-object collection; later calls collect newly eligible
     // children. No implicit collection, and no destructive domain integration.
     // Metadata-only candidate discovery. This is a hint, not authorization
@@ -735,7 +794,7 @@
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,inspectDocumentUsage,
-      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
+      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,createRetentionScope,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));
