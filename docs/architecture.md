@@ -1001,7 +1001,11 @@ the archive transfer, exact linked project and pinned recovery readback
 under the shared lock; only then may it update live physics and render.
 An already acknowledged durable row is never rolled back because a live
 render or activation fails. The archive-only Scene-to-Compare action
-remains disabled until its separate shared physical transaction is migrated.
+uses the clean physical checkpoint replacement shared with History Restore.
+Under the operation lock it verifies the immutable archive, exact transfer
+and pinned outgoing History before replacing the physical checkpoint. It
+requires no editable Calibration Project and remains disabled until the
+live physical checkpoint is acknowledged.
 
 The Calibration persistence coordinator optionally uses the shared page
 lifetime and an explicit session-selection acknowledgement callback. A
@@ -1026,6 +1030,14 @@ transaction.
 In the combined shared route, Reset experiment uses the startup default physical snapshot and the existing protected History replacement transaction, not clearing IndexedDB or Web Storage. The top-level Legacy Demos workspace is detached presentation: entering it requires an acknowledged physical state, does not replace that state, and reload resumes the last acknowledged document.
 
 In the shared Animation Library, the normal saved-project gallery uses the existing cover/thumbnail cards and verified shared open/save/delete operations. The existing project wizard creates a named project and a verified linked working copy through the shared owner. The built-in catalog offers detached read-only viewing, independent editable copies and portable exports; opening/playing shipped demos never checkpoints them over a working copy, and ordinary reload resumes the last acknowledged user document. saved project JSON export includes verified linked originals without changing the current working copy. Saved rename and cover changes use the inspected Library revision; an open exact linked working copy advances its existing shared selection receipt while preserving unsaved physical edits. For retained inactive copies the metadata action requires opening the matching copy first; interrupted cross-database updates are not silently rebased. Historical variant adoption and recovery imports are grouped under a collapsed Recovery and migration disclosure after initialization; unresolved write intents remain visible. Identical complete legacy sources (or a single validated source) can be adopted automatically under the same exact-source CAS/readback contract; divergent or unreadable evidence still requires an explicit choice. No source bytes are removed.
+
+Independent inactive drafts may be removed individually or as an exact batch
+under the shared operation lock. The selected working reference must be
+acknowledged and cannot be among the victims. The sealed collection CAS
+preserves surviving revisions and records deletion markers; the historical
+activeId changes only if its row is removed. Named project slots, History,
+original images and retained legacy evidence are preserved. Opening the
+Library refreshes action availability after editor saves.
 
 The document-session controller accepts distinct receipt owners for
 Calibration and Animation. Startup inspects every configured owner before
