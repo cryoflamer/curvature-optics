@@ -817,7 +817,10 @@ own monotonic revision token. The complete row is the CAS baseline, while
 saving an acknowledged workspace changes only its checkpoint and revision
 and atomically writes a selection receipt for the shared document session.
 A receipt must be retired after the exact session acknowledgement, not by
-repeating the document write. The historical collection activeId is not a
+repeating the document write. A key-presence check distinguishes absent IndexedDB records from stored
+null/undefined values. Those invalid values are retained and block adoption,
+including if introduced between inspection and the migration transaction.
+The historical collection activeId is not a
 shared selection authority. Shared-preview startup resolves link intent
 before initializing Animation: no legacy tab/window identity, local backup
 replay, pruning or pagehide writer is started. Ordinary and explicit

@@ -581,7 +581,8 @@
     if(!indexedDB||typeof indexedDB.databases!=='function')
       throw Error('Animation legacy database inventory unavailable');
     const entries=await indexedDB.databases();
-    if(!entries.some(row=>row.name===DATABASE))return {current:null,workspaces:null};
+    if(!entries.some(row=>row.name===DATABASE))return {current:null,workspaces:null,
+      present:{current:false,workspaces:false}};
     return new Promise((resolve,reject)=>{
       let req,db,done=false;
       function finish(error,value){
@@ -600,7 +601,9 @@
         try{
           const tx=db.transaction(STORE,'readonly'),store=tx.objectStore(STORE);
           const one=store.get(KEY),many=store.get(COLLECTION_DB_KEY);
-          tx.oncomplete=()=>finish(null,{current:one.result??null,workspaces:many.result??null});
+          const oneKey=store.getKey(KEY),manyKey=store.getKey(COLLECTION_DB_KEY);
+          tx.oncomplete=()=>finish(null,{current:one.result??null,workspaces:many.result??null,
+            present:{current:oneKey.result!==undefined,workspaces:manyKey.result!==undefined}});
           tx.onabort=tx.onerror=()=>finish(tx.error||Error('Animation legacy inspection failed'));
         }catch(error){finish(error);}
       };
@@ -619,8 +622,8 @@
   }
   function planLegacySources(remote,local){
     const sources=[],issues=[];
-    function collect(source,kind,raw,serialized){
-      if(raw===null||raw===undefined)return;
+    function collect(source,kind,raw,serialized,present=raw!==null&&raw!==undefined){
+      if(!present)return;
       try{
         const value=(kind==='collection'?normalizeCollection:normalize)(serialized?JSON.parse(raw):raw);
         sources.push({source,kind,value});
@@ -628,8 +631,8 @@
         issues.push({source,message:String(error.message||error)});
       }
     }
-    collect('idb:'+COLLECTION_DB_KEY,'collection',remote.workspaces,false);
-    collect('idb:'+KEY,'checkpoint',remote.current,false);
+    collect('idb:'+COLLECTION_DB_KEY,'collection',remote.workspaces,false,remote.present?.workspaces);
+    collect('idb:'+KEY,'checkpoint',remote.current,false,remote.present?.current);
     for(const entry of local)
       collect('local:'+entry.key,entry.key===STORAGE_KEY?'checkpoint':'collection',entry.raw,true);
     // Exact variants, including presentation, timestamps and associations,
@@ -770,10 +773,10 @@
           untrack=lease.track(tx,write);
           const store=tx.objectStore(STORE);
           const read=(key,callback)=>{
-            const op=store.get(key);
-            op.onsuccess=()=>{
+            const op=store.get(key),presence=store.getKey(key);
+            presence.onsuccess=()=>{
               if(finished||error)return;
-              try{requireLease(lease,write);callback(op.result);}catch(cause){abort(cause);}
+              try{requireLease(lease,write);callback(op.result,presence.result!==undefined);}catch(cause){abort(cause);}
             };
           };
           action(store,read,v=>{value=v;});
@@ -791,7 +794,10 @@
       const existing=all.find(x=>x.name===DATABASE);
       if(!existing)return undefined;
       if(existing.version!==1)throw Error('Unsupported Animation database version');
-      return sharedTransaction(db,lease,'readonly',(_store,read,finish)=>read(SHARED_COLLECTION_KEY,finish));
+      return sharedTransaction(db,lease,'readonly',(_store,read,finish)=>read(SHARED_COLLECTION_KEY,(raw,present)=>{
+        if(present&&raw===undefined)throw Error('Invalid shared Animation collection; evidence retained');
+        finish(raw);
+      }));
     }
     async function read(){
       if(busy)throw Error('Shared Animation operation pending');
@@ -817,8 +823,8 @@
         const data=build(prior),row=await seal(data,crypto);check();
         await verifySharedRow(row,crypto);check();
         await sharedTransaction(db,lease,'readwrite',(store,read,finish)=>{
-          read(SHARED_COLLECTION_KEY,raw=>{
-            if(!equal(raw===undefined?null:raw,prior))
+          read(SHARED_COLLECTION_KEY,(raw,present)=>{
+            if(present!==(prior!==null)||!equal(present?raw:null,prior))
               throw Error('Shared Animation collection CAS conflict; evidence retained');
             function put(){
               check();
@@ -827,8 +833,9 @@
               store.put(row,SHARED_COLLECTION_KEY);finish(row);
             }
             if(legacy){
-              read(KEY,one=>read(COLLECTION_DB_KEY,many=>{
-                if(!equal(one??null,legacy.remote.current)||!equal(many??null,legacy.remote.workspaces))
+              read(KEY,(one,onePresent)=>read(COLLECTION_DB_KEY,(many,manyPresent)=>{
+                if(onePresent!==legacy.remote.present.current||manyPresent!==legacy.remote.present.workspaces||
+                   !equal(one??null,legacy.remote.current)||!equal(many??null,legacy.remote.workspaces))
                   throw Error('Animation legacy IndexedDB evidence changed during adoption');
                 put();
               }));
@@ -847,7 +854,11 @@
     }
     function adoption(plan,storage){
       if(!plan?.evidence)throw Error('Explicit Animation source inventory required');
-      const {remote,local}=plan.evidence,checked=planLegacySources(remote,local);
+      const {remote,local}=plan.evidence;
+      if(!exact(remote,['current','workspaces','present'])||!exact(remote.present,['current','workspaces'])||
+         typeof remote.present.current!=='boolean'||typeof remote.present.workspaces!=='boolean')
+        throw Error('Exact Animation legacy record presence required');
+      const checked=planLegacySources(remote,local);
       if(checked.issues.length)throw Error('Invalid Animation migration evidence; resolve or export it first');
       if(!equal(local,legacyLocalEvidence(storage)))
         throw Error('Animation legacy local evidence changed during adoption');

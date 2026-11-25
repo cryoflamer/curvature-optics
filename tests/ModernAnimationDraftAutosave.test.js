@@ -45,6 +45,9 @@ function memoryIndexedDB(){
               op.result=records.get(key);
               if(typeof op.onsuccess==='function')op.onsuccess();
               done();});return op;},
+            getKey(key){const op={result:undefined};queueMicrotask(()=>{
+              op.result=records.has(key)?key:undefined;op.onsuccess?.();done();
+            });return op;},
             put(value,key){assert.equal(mode,'readwrite');records.set(key,structuredClone(value));done();},
           });return tx;
         }};
@@ -733,6 +736,14 @@ function sharedAnimationDB(){
                   op.onsuccess?.();pending--;done();
                 });return op;
               },
+              getKey(key){
+                pending++;const op={};
+                queueMicrotask(()=>{
+                  if(aborted)return;
+                  op.result=staged.has(key)||records.has(key)?key:undefined;
+                  op.onsuccess?.();pending--;done();
+                });return op;
+              },
               put(value,key){
                 assert.equal(mode,'readwrite');pending++;
                 queueMicrotask(()=>{if(aborted)return;
@@ -920,4 +931,41 @@ test('shared Animation coordinator refuses stale collection without losing unsav
   assert.equal(h.counts().domainWrites,0);assert.equal(c.recovery().checkpoint.draft.name,'Unsent');
   await assert.rejects(c.bind(h.pointer()),/Resolve shared Animation edits/);
   assert.equal(autosave.getWorkspace((await other.read()).collection,h.other).draft.name,'Competing');
+});
+
+test('shared Animation inventory distinguishes missing keys from stored null and undefined',async()=>{
+  for(const invalid of [null,undefined]){
+    const f=sharedAnimationFixture(),a=f.open();
+    await autosave.write(f.db,f.cp);
+    f.db.records.set('current',invalid);
+    const plan=await f.inspect();
+    assert.equal(plan.evidence.remote.present.current,true);
+    assert.equal(plan.evidence.remote.present.workspaces,false);
+    assert.equal(plan.issues.length,1);
+    assert.equal(plan.issues[0].source,'idb:current');
+    assert.equal(await a.read(),null);
+    await assert.rejects(async()=>a.initializeEmpty(plan,f.collection,f.local),/Invalid Animation migration evidence/);
+    assert.ok(f.db.records.has('current'));
+    assert.equal(f.db.records.get('current'),invalid);
+  }
+});
+test('shared Animation initialization rejects a present null or undefined shared row',async()=>{
+  for(const invalid of [null,undefined]){
+    const f=sharedAnimationFixture(),a=f.open();await autosave.write(f.db,f.cp);
+    const plan=await f.inspect();assert.equal(await a.read(),null);
+    f.db.records.set(autosave.SHARED_COLLECTION_KEY,invalid);
+    await assert.rejects(a.initializeFromLegacy(plan,'idb:current',f.local),/CAS conflict/);
+    await assert.rejects(f.open().read(),/Invalid shared Animation collection/);
+    assert.ok(f.db.records.has(autosave.SHARED_COLLECTION_KEY));
+    assert.equal(f.db.records.get(autosave.SHARED_COLLECTION_KEY),invalid);
+  }
+});
+test('shared Animation adoption rechecks key presence even if stored null looks absent',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();
+  await autosave.write(f.db,f.cp);
+  const plan=await f.inspect();await a.read();
+  f.db.records.set('workspaces',null);
+  await assert.rejects(a.initializeFromLegacy(plan,'idb:current',f.local),/IndexedDB evidence changed/);
+  assert.equal(f.db.records.get('workspaces'),null);
+  assert.equal(await a.read(),null);
 });
