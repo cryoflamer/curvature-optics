@@ -639,39 +639,35 @@
   var studioLibraryShowDuplicates=false;
   var studioWorkspaces=null,studioWorkspaceId=null,studioWorkspaceReady=false;
   var studioWorkspaceLocalSaved=false;
-  // Each page has its own synchronous recovery slot. Multiple tabs must never
-  // overwrite one another's pending localStorage backups.
-  // sessionStorage survives F5 but is scoped to this browser tab. A fresh
-  // ID on every reload misclassified an old pagehide backup as another tab.
-  // Some scene-only test harnesses omit the optional Animation Studio
-  // persistence module. Do not initialize its recovery identity in that case.
-  var studioWorkspaceSessionId=studioDraftAutosave?
-    studioDraftAutosave.workspaceSessionId((function(){
-      try{return root.sessionStorage;}catch(error){return null;}
-    }()),root.crypto,root):null;
-  // sessionStorage can be copied when window.open creates a new tab.
-  // window.name belongs to the browsing context, survives F5 and is not
-  // inherited by a fresh _blank popup. Never restore an opener's edit there.
-  var keyframeRecoveryWindowId=(function(){
+  // Legacy recovery identity is initialized only after startup intent is
+  // resolved. The shared preview must never mint tab IDs, change window.name,
+  // replay old local backups or register their legacy pagehide writers.
+  var studioWorkspaceSessionId=null,keyframeRecoveryWindowId=null,studioIndexedBaseline=null;
+  function initializeLegacyStudioRecovery(){
+    studioWorkspaceSessionId=studioDraftAutosave?
+      studioDraftAutosave.workspaceSessionId((function(){
+        try{return root.sessionStorage;}catch(error){return null;}
+      }()),root.crypto,root):null;
+    keyframeRecoveryWindowId=(function(){
+      try{
+        var previous=root.name||'';
+        if(/^curvature_optics_keyframe_[A-Za-z0-9_-]{8,110}$/.test(previous))
+          return previous;
+        if(previous)return previous; // Preserve a caller-assigned stable tab name.
+        var token=root.crypto&&typeof root.crypto.randomUUID==='function'?
+          root.crypto.randomUUID().replace(/-/g,''):
+          Math.random().toString(36).slice(2)+Date.now().toString(36);
+        var id='curvature_optics_keyframe_'+token;
+        root.name=id;
+        return root.name===id?id:null;
+      }catch(error){return null;}
+    }());
     try{
-      var previous=root.name||'';
-      if(/^curvature_optics_keyframe_[A-Za-z0-9_-]{8,110}$/.test(previous))
-        return previous;
-      if(previous)return previous; // Preserve a caller-assigned stable tab name.
-      var token=root.crypto&&typeof root.crypto.randomUUID==='function'?
-        root.crypto.randomUUID().replace(/-/g,''):
-        Math.random().toString(36).slice(2)+Date.now().toString(36);
-      var id='curvature_optics_keyframe_'+token;
-      root.name=id;
-      return root.name===id?id:null;
-    }catch(error){return null;}
-  }());
-  var studioIndexedBaseline=null;
-  try{
-    var savedKeyframeRecovery=root.sessionStorage&&
-      root.sessionStorage.getItem(KEYFRAME_EDIT_RECOVERY_KEY);
-    if(savedKeyframeRecovery)keyframeRecoveryPending=JSON.parse(savedKeyframeRecovery);
-  }catch(error){keyframeRecoveryPending=null;}
+      var savedKeyframeRecovery=root.sessionStorage&&
+        root.sessionStorage.getItem(KEYFRAME_EDIT_RECOVERY_KEY);
+      if(savedKeyframeRecovery)keyframeRecoveryPending=JSON.parse(savedKeyframeRecovery);
+    }catch(error){keyframeRecoveryPending=null;}
+  }
   var studioLibraryScroll=0;
   var STUDIO_LIBRARY_FILTER_KEY='curvature-modern-animation-library-filters-v1';
   var studioLibraryFilters=studioLibraryFiltersApi?studioLibraryFiltersApi.normalize():null;
@@ -9543,6 +9539,15 @@
     });
   }
   function bind(){
+    // Resolve link intent once, before any legacy Animation recovery I/O.
+    // Explicit incoming links/compatibility routes retain their old path.
+    var explicitAtStartup=isExplicitSharedExperiment();
+    var previewParams=documentSessionPreviewRequested?
+      new URLSearchParams(root.location&&root.location.search||''):null;
+    var previewRoute=documentSessionPreviewRequested&&studioViewsApi&&studioViewsApi.route&&
+      studioViewsApi.route(root.location&&root.location.href);
+    var useSharedPreview=documentSessionPreviewRequested&&!explicitAtStartup&&!previewRoute&&
+      !previewParams.has('mode')&&!previewParams.has('state')&&!previewParams.has('tab')&&!previewParams.has('model');
     bindStudioViews();
     // History navigation never replays a library operation or replaces a draft.
     if(root.addEventListener)root.addEventListener('popstate',function(){
@@ -9555,7 +9560,10 @@
       if(view)setStudioView(view,false);
       else if(studioRouteReady)setStudioView('library',false);
     });
-    bindStudioDraftPersistence();
+    if(!useSharedPreview){
+      initializeLegacyStudioRecovery();
+      bindStudioDraftPersistence();
+    }
     bindStudioLibrary();
     bindStudioPlayback();
     bindCameraDrag();
@@ -9677,9 +9685,6 @@
     el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
     bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
-    // Resolve link intent once for the whole startup transaction. Do not
-    // reclassify it after the asynchronous checkpoint read.
-    var explicitAtStartup=isExplicitSharedExperiment();
     function finishStartup(remoteRecord,remoteError,preview){
       var restored=false;
       if(experimentPreview.live){
@@ -9804,12 +9809,7 @@
       root.addEventListener('pagehide',checkpointKeyframeOnLeave);
       root.addEventListener('beforeunload',checkpointKeyframeOnLeave);
     }
-    var previewParams=documentSessionPreviewRequested?
-      new URLSearchParams(root.location&&root.location.search||''):null;
-    var previewRoute=documentSessionPreviewRequested&&studioViewsApi&&studioViewsApi.route&&
-      studioViewsApi.route(root.location&&root.location.href);
-    if(documentSessionPreviewRequested&&!explicitAtStartup&&!previewRoute&&
-       !previewParams.has('mode')&&!previewParams.has('state')&&!previewParams.has('tab')&&!previewParams.has('model')){
+    if(useSharedPreview){
       experimentPreview.live=true;experimentPreview.status='loading';previewControls();
       persistenceStatus('Restoring document session…');
       // Pin the resolved startup intent before any asynchronous storage read.

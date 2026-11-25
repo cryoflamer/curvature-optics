@@ -11903,6 +11903,56 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(outcome['calls'],3)
 
 
+    def test_shared_animation_legacy_recovery_is_not_started_in_preview(self):
+        """Opening the preview must not create/modify historical Animation recovery."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => {
+            const app=CurvatureModernApp;
+            return app.getExperimentSessionPreview().status==='clean'&&
+                app.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        empty=self.page.evaluate("""async () => {
+            const A=CurvatureModernAnimationDraftAutosave;
+            return {exists:(await indexedDB.databases()).some(x=>x.name===A.DATABASE),
+                tab:sessionStorage.getItem(A.COLLECTION_KEY+'-tab-id'),name:window.name,
+                backup:localStorage.getItem(A.COLLECTION_KEY),
+                slots:Object.keys(localStorage).filter(k=>k.startsWith(A.SESSION_LOCAL_PREFIX))};
+        }""")
+        self.assertEqual(empty,{'exists':False,'tab':None,'name':'','backup':None,'slots':[]})
+        before=self.page.evaluate("""async () => {
+            const A=CurvatureModernAnimationDraftAutosave;
+            const cp=A.checkpoint({draft:CurvatureModernAnimationStudio.blank(),
+                selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const collection=A.collection('draft_legacy_evidence',cp,100);
+            await A.write(indexedDB,cp);
+            await A.writeCollection(indexedDB,collection);
+            localStorage.setItem(A.COLLECTION_KEY,JSON.stringify(collection));
+            localStorage.setItem(A.SESSION_LOCAL_PREFIX+'oldtab',JSON.stringify(collection));
+            localStorage.setItem(A.SESSION_LOCAL_PREFIX+'broken','{broken');
+            sessionStorage.setItem(A.COLLECTION_KEY+'-tab-id','legacy_tab_123');
+            sessionStorage.setItem('curvature-modern-keyframe-edit-recovery-v1','{raw-keyframe-evidence');
+            window.name='legacy-window-name';
+            return (await A.inspectLegacySources(window)).evidence;
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(self.page.locator('#ModernAnimationTab')).to_be_disabled()
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview()
+            .controller.row.envelope.workspace==='compare'""",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        after=self.page.evaluate("""async () => {
+            const A=CurvatureModernAnimationDraftAutosave;
+            return {evidence:(await A.inspectLegacySources(window)).evidence,
+                tab:sessionStorage.getItem(A.COLLECTION_KEY+'-tab-id'),name:window.name,
+                keyframe:sessionStorage.getItem('curvature-modern-keyframe-edit-recovery-v1')};
+        }""")
+        self.assertEqual(after,{'evidence':before,'tab':'legacy_tab_123',
+            'name':'legacy-window-name','keyframe':'{raw-keyframe-evidence'})
+
     def test_shared_calibration_durable_receipt_recovers_after_reload(self):
         """A fresh page exposes recovery and proves both pointer states without a domain rewrite."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
@@ -11950,6 +12000,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 }""")
                 self.assertIsNone(offered['invalid'])
                 self.assertEqual(offered['offer']['status'],'recovering-selection')
+                self.assertEqual(offered['offer']['selectionRecoveryKind'],'calibration')
                 self.assertEqual(offered['before'],seeded['before'])
                 with self.page.expect_navigation(wait_until='load',timeout=30000):
                     self.page.locator('#ModernDocumentSessionRestoreDraft').click()
