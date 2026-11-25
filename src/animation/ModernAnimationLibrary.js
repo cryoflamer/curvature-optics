@@ -365,13 +365,23 @@
     });
   }
   function update(indexedDB,project,optics,expectedRevision,now,thumbnail){
+    return updateRecord(indexedDB,project,optics,expectedRevision,now,thumbnail,null);
+  }
+  // Shared mutations require the complete inspected record, not just a timestamp.
+  function updateExact(indexedDB,project,optics,expected,now,thumbnail){
+    var wanted=normalize(expected),valid=projects.validate(project);
+    if(valid.id!==wanted.id)throw Error('Saved Animation identity does not match the inspected record');
+    return updateRecord(indexedDB,valid,optics,wanted.updatedAt,now,thumbnail,wanted);
+  }
+  function updateRecord(indexedDB,project,optics,expectedRevision,now,thumbnail,wanted){
     var valid=projects.validate(project);stamp(expectedRevision);
     return transaction(indexedDB,'readwrite',function(store,finish,abort){
       var read=store.get(valid.id);
       read.onsuccess=function(){try{
         if(!read.result)throw Error('Animation Library project was deleted');
         var old=normalize(read.result);
-        if(old.updatedAt!==expectedRevision)
+        if(old.updatedAt!==expectedRevision||
+           (wanted&&JSON.stringify(old)!==JSON.stringify(wanted)))
           throw Error('Animation Library project changed in another tab; reopen it or use Save As');
         // Preserve the old screenshot only while the initial physical state
         // is identical. An edited first frame must not retain a misleading image.
@@ -445,5 +455,5 @@
     MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,
     exportPortable:exportPortable,parsePortable:parsePortable,parseBundle:parseBundle,referenceIds:referenceIds,
     collectReferences:collectReferences,remapReferences:remapReferences,importEntries:importEntries,
-    list:list,get:get,create:create,update:update,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
+    list:list,get:get,create:create,update:update,updateExact:updateExact,rename:rename,setCover:setCover,remove:remove,removeExact:removeExact});
 }));

@@ -1529,3 +1529,27 @@ test('exact named Animation deletion rejects changed or missing rows and preserv
   await assert.rejects(library.removeExact(db,changed),/changed or was removed/);
   assert.deepEqual(await library.get(db,unrelated.id),unrelated);
 });
+
+
+test('exact named Animation update rejects mismatched identity, stale revision and unequal same-revision records',async()=>{
+  const db=memoryIndexedDB(),draft=source();
+  const original=await library.create(db,studio.build(draft,'animation_exact_update'),'auto',100);
+  const other=await library.create(db,studio.build(draft,'animation_other_update'),'auto',101,null,true);
+  const edited=studio.build(studio.edit(draft,'description','Exact update'),original.id);
+  assert.throws(()=>library.updateExact(db,other.project,'auto',original,102),/identity does not match/);
+  await assert.rejects(library.updateExact(db,edited,'auto',{
+    ...original,project:{...original.project,name:'Different inspected bytes'}},103),/changed in another tab/);
+  assert.deepEqual(await library.get(db,original.id),original);
+  const updated=await library.updateExact(db,edited,'accurate',original,104);
+  assert.equal(updated.id,original.id);
+  assert.equal(updated.createdAt,original.createdAt);
+  assert.equal(updated.updatedAt,104);
+  assert.equal(updated.quality,'accurate');
+  assert.equal(updated.project.description,'Exact update');
+  assert.deepEqual(await library.get(db,original.id),updated);
+  await assert.rejects(library.updateExact(db,edited,'auto',original,105),/changed in another tab/);
+  assert.deepEqual(await library.get(db,original.id),updated);
+  assert.deepEqual(await library.get(db,other.id),other);
+  await library.removeExact(db,updated);
+  await assert.rejects(library.updateExact(db,edited,'auto',updated,106),/deleted/);
+});

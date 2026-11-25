@@ -844,7 +844,10 @@ working checkpoint, verifies linked original photographs and reads the
 saved record back. It intentionally retains the source draft and selection;
 opening the new named snapshot is an explicit separate action. No cross-
 database relink is implied by the successful named transaction.
-Save Changes and the temporary keyframe editor remain disabled.
+The named store also exposes an exact-record compare-and-update operation,
+which checks identity and the complete inspected normalized record within
+one readwrite transaction. Save Changes UI and the temporary keyframe editor
+remain disabled until their cross-store recovery and edit lifecycle are ready.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
