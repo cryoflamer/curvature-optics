@@ -6,7 +6,7 @@
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project',RESULT='calibration-result',CALIBRATION='calibration-project',
-    DRAFTS='animation-working-collection';
+    DRAFTS='animation-working-collection',CALIBRATION_RECEIPT='calibration-selection-receipt';
   const check=(ok,message)=>{if(!ok)throw Error('Managed Resources: '+message);};
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&
@@ -925,8 +925,49 @@
       await store.writeDocuments([next.plan],{expectedInventory:next.inventories,guard});
       return project;
     }
-    async function changeApplicationCalibration(id,expected,changes,now,forkId=null,{guard=()=>{}}={}){
+    const calibrationReceiptId='calibration-selection:shared';
+    function receiptInventory(value){
+      return {kind:CALIBRATION_RECEIPT,documents:value?[{id:calibrationReceiptId,revision:value.managedRevision}]:[]};
+    }
+    // A reusable control root, never a resurrected tombstone. An active
+    // receipt owns the exact committed project and, when available, the
+    // exact preceding revision. Retirement clears these strong edges.
+    async function loadCalibrationReceipt(graph){
+      if(!graph)return null;
+      const doc=graph.document;
+      check(doc.id===calibrationReceiptId&&doc.kind===CALIBRATION_RECEIPT&&
+        exact(doc.metadata,['id','receipt'])&&doc.metadata.id==='shared','invalid Calibration receipt root');
+      if(doc.metadata.receipt===null){
+        check(!doc.references.length,'retired Calibration receipt retains edges');
+        return {receipt:null,managedRevision:doc.revision};
+      }
+      const receipt=projectStore.selectionReceipt(doc.metadata.receipt);
+      const target=pick(graph,'current',CALIBRATION);
+      const ref=project=>({id:project.id,revision:'rev:'+project.revision,recovery:null});
+      check(same(ref(target.payload.project),receipt.current),'Calibration receipt target mismatch');
+      const prior=doc.references.find(e=>e.slot==='previous');
+      check(doc.references.length===(prior?2:1),'unexpected Calibration receipt edge');
+      if(prior){
+        const previous=pick(graph,'previous',CALIBRATION);
+        check(same(ref(previous.payload.project),receipt.previous),'Calibration receipt previous mismatch');
+      }
+      const current=await readCalibrationProject(receipt.current.id);
+      check(current&&current.projectId===target.id&&same(ref(current.project),receipt.current),
+        'Receipt project changed; evidence retained');
+      return {receipt,managedRevision:doc.revision,projectId:target.id,current};
+    }
+    async function readCalibrationReceipt(existingOnly=false){
+      const graph=await (existingOnly?store.inspectDocumentGraph(calibrationReceiptId):store.readDocumentGraph(calibrationReceiptId));
+      return loadCalibrationReceipt(graph);
+    }
+    async function changeApplicationCalibration(id,expected,changes,now,forkId=null,{guard=()=>{},lease=null,base=null,requireNoReceipt=false}={}){
       calibrations.id(id);check(positive(expected),'invalid expected project revision');
+      if(lease!==null)projectStore.requireSharedLease(lease);
+      if(base!==null||requireNoReceipt)projectStore.requireSharedLease(lease);
+      if(base!==null)base=projectStore.selectionBase(base);
+      const pending=await readCalibrationReceipt();
+      check(!pending?.receipt||(base===null&&!requireNoReceipt&&pending.receipt.current.id!==id),
+        'Shared Calibration receipt unresolved; evidence retained');
       if(forkId!==null)calibrations.id(forkId);
       const existing=await calibrationProjectInventory(),current=existing.find(v=>v.project.id===id);
       let project,status,expectedRevision;
@@ -941,8 +982,31 @@
         status='updated';expectedRevision=current.managedRevision;
       }
       const next=await planApplicationCalibration(project,existing,current,expectedRevision);
-      await store.writeDocuments([next.plan],{expectedInventory:next.inventories,guard});
-      return {status,project};
+      const plans=[next.plan],inventories=[...next.inventories,receiptInventory(pending)];
+      let selectionReceipt;
+      if(base!==null){
+        selectionReceipt=projectStore.selectionReceipt({version:1,base,
+          previous:{id,revision:'rev:'+expected,recovery:null},
+          current:{id:project.id,revision:'rev:'+project.revision,recovery:null},status});
+        const references=[strong('current',next.projectId)];
+        if(current?.project.revision===expected)references.push(strong('previous',current.projectId));
+        plans.push({documentId:calibrationReceiptId,kind:CALIBRATION_RECEIPT,
+          expectedRevision:pending?.managedRevision??0,metadata:{id:'shared',receipt:selectionReceipt},references});
+      }
+      await store.writeDocuments(plans,{expectedInventory:inventories,guard,lease});
+      return {status,project,...(selectionReceipt?{selectionReceipt}:{})};
+    }
+    async function retireCalibrationReceipt(expected,lease){
+      projectStore.requireSharedLease(lease);
+      const receipt=projectStore.selectionReceipt(expected),pending=await readCalibrationReceipt();
+      check(pending?.receipt&&same(pending.receipt,receipt),'Shared Calibration receipt changed; evidence retained');
+      const existing=await calibrationProjectInventory();
+      check(existing.some(v=>v.project.id===receipt.current.id&&v.projectId===pending.projectId),
+        'Receipt project changed; evidence retained');
+      await store.writeDocuments([{documentId:calibrationReceiptId,kind:CALIBRATION_RECEIPT,
+        expectedRevision:pending.managedRevision,metadata:{id:'shared',receipt:null},references:[]}],{
+        expectedInventory:[receiptInventory(pending),calibrationProjectExpected(existing)],lease});
+      return receipt;
     }
     // A retained photo can be captured again without recreating a deleted
     // gallery entry. A newly selected photo follows the explicit ingestion
@@ -965,7 +1029,17 @@
     function createCalibrationProjectPort(){
       check(projectStore&&calibrations&&checkpoints,'Calibration Project application adapter unavailable');
       function bound(db){check(db===env.indexedDB,'Calibration Project database context mismatch');}
-      const sharedUnavailable=async()=>{throw Error('Managed Calibration shared selection receipts are not integrated');};
+      async function readReceipt(db,lease=null,existingOnly=false){
+        bound(db);
+        if(lease!==null){
+          check(lease.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
+            !('tabId' in lease),'Shared Calibration receipt requires a shared lifetime');
+          lease.check();
+        }
+        const value=await readCalibrationReceipt(existingOnly);
+        lease?.check();
+        return value?.receipt??null;
+      }
       const deletionUnavailable=async()=>{throw Error('Managed Calibration deletion is disabled until coordinated cutover');};
       const legacyUnavailable=async()=>{throw Error('Managed Calibration requires coordinated cutover; legacy adoption is disabled');};
       return Object.freeze({storageKind:'managed',coordination:store.coordination,
@@ -990,12 +1064,20 @@
         },
         saveOrFork:async(db,id,expected,changes,forkId,now=Date.now(),lease=null)=>{
           bound(db);
-          check(lease===null,'Managed Calibration shared selection receipts are not integrated');
-          return changeApplicationCalibration(id,expected,changes,now,forkId);
+          return changeApplicationCalibration(id,expected,changes,now,forkId,{lease});
         },
-        saveOrForkWithSelectionReceipt:sharedUnavailable,readSharedSelectionReceipt:sharedUnavailable,
-        readExistingSharedSelectionReceipt:sharedUnavailable,retireSharedSelectionReceipt:sharedUnavailable,
-        renameSharedUnselected:sharedUnavailable,removeShared:deletionUnavailable,remove:deletionUnavailable,
+        saveOrForkWithSelectionReceipt:async(db,id,expected,changes,forkId,now,base,lease)=>{
+          bound(db);projectStore.requireSharedLease(lease);
+          return changeApplicationCalibration(id,expected,changes,now,forkId,{base,lease});
+        },
+        readSharedSelectionReceipt:readReceipt,
+        readExistingSharedSelectionReceipt:(db,lease)=>readReceipt(db,lease,true),
+        retireSharedSelectionReceipt:async(db,receipt,lease)=>{bound(db);return retireCalibrationReceipt(receipt,lease);},
+        renameSharedUnselected:async(db,id,expected,title,lease,now=Date.now())=>{
+          bound(db);projectStore.requireSharedLease(lease);
+          return (await changeApplicationCalibration(id,expected,{title},now,null,{lease,requireNoReceipt:true})).project;
+        },
+        removeShared:deletionUnavailable,remove:deletionUnavailable,
         legacy:legacyUnavailable,migrationMarker:legacyUnavailable,adoptLegacy:legacyUnavailable
       });
     }
@@ -1340,6 +1422,9 @@
         case 'calibration':
           check(calibrations&&key==='calibration:'+calibrations.id(alias),'restored Calibration root alias mismatch');
           opened=await readCalibrationProject(alias);break;
+        case CALIBRATION_RECEIPT:
+          check(key===calibrationReceiptId,'restored Calibration receipt root alias mismatch');
+          opened=await readCalibrationReceipt();break;
         case 'working-checkpoint':
           check(key===workingId,'restored working root alias mismatch');
           opened=await readWorkingCheckpoint();break;

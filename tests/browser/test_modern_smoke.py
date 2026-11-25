@@ -1734,6 +1734,62 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'revision': 3})
 
+    def test_managed_calibration_selection_receipt_and_lease(self):
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        self.page.add_script_tag(url='/src/storage/ModernManagedResources.js')
+        result=self.page.evaluate("""async()=>{
+            const M=CurvatureModernManagedResources,P=CurvatureModernCalibrationProject,
+                S=CurvatureModernCalibrationProjectStore;
+            const adapter=M.create(window),port=S.createPort({managedResources:adapter});
+            const ok=(v,m)=>{if(!v)throw Error(m);};
+            const rejects=async(fn,pattern)=>{
+                try{await fn();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const base={revision:1,digest:'sha256:'+'1'.repeat(64)};
+            const project=P.fresh({id:P.createId(crypto),title:'Original',now:10});
+            const other=P.fresh({id:P.createId(crypto),title:'Other',now:10});
+            await port.create(indexedDB,project);
+            await port.create(indexedDB,other);
+            const previous=await adapter.readCalibrationProject(project.id);
+            let tracked=0,released=0;
+            const aborted={sessionId:'shared',check(){},track(tx,write){
+                ok(write,'lease not tracked as write');tracked++;tx.abort();return ()=>{released++;};
+            }};
+            await rejects(()=>port.saveOrForkWithSelectionReceipt(indexedDB,project.id,1,
+                {title:'Aborted'},P.createId(crypto),11,base,aborted),/abort|inactive|transaction/i);
+            ok(tracked===1&&released===1&&!(await port.readSharedSelectionReceipt(indexedDB))&&
+                (await port.get(indexedDB,project.id)).revision===1,'aborted transaction escaped lease');
+            const saved=await port.saveOrForkWithSelectionReceipt(indexedDB,project.id,1,
+                {title:'Saved'},P.createId(crypto),12,base,lease);
+            ok(saved.status==='updated'&&saved.project.revision===2,'project update failed');
+            const reloaded=S.createPort({managedResources:M.create(window)});
+            const receipt=await reloaded.readExistingSharedSelectionReceipt(indexedDB,lease);
+            ok(JSON.stringify(receipt)===JSON.stringify(saved.selectionReceipt),'receipt not durable');
+            ok(!(await adapter.store.collectGarbage(previous.projectId)).collected,'previous revision not retained');
+            await rejects(()=>reloaded.rename(indexedDB,project.id,2,'Blocked',13),/receipt unresolved/);
+            await rejects(()=>reloaded.renameSharedUnselected(indexedDB,other.id,1,'Blocked',lease,13),/receipt unresolved/);
+            ok((await reloaded.rename(indexedDB,other.id,1,'Independent',13)).revision===2,'unrelated ordinary write blocked');
+            await rejects(()=>reloaded.retireSharedSelectionReceipt(indexedDB,
+                {...receipt,base:{...base,digest:'sha256:'+'2'.repeat(64)}},lease),/receipt changed/);
+            await reloaded.retireSharedSelectionReceipt(indexedDB,receipt,lease);
+            ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null&&
+                (await adapter.store.collectGarbage(previous.projectId)).collected,'receipt retirement did not release prior');
+            const changes={title:'Conflict',photo:project.photo,checkpoint:project.checkpoint,
+                overview:project.overview,resultIds:project.resultIds};
+            const forkId=P.createId(crypto);
+            const fork=await reloaded.saveOrForkWithSelectionReceipt(indexedDB,project.id,1,
+                changes,forkId,14,base,lease);
+            ok(fork.status==='forked'&&fork.project.id===forkId&&fork.project.revision===1&&
+                (await reloaded.get(indexedDB,project.id)).title==='Saved','conflict fork overwrote remote');
+            await reloaded.retireSharedSelectionReceipt(indexedDB,fork.selectionReceipt,lease);
+            ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null,'second receipt did not retire');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,projects:(await reloaded.list(indexedDB)).length};
+        }""")
+        self.assertEqual(result, {'valid': True, 'projects': 3})
+
     def test_managed_calibration_result_snapshot_evidence(self):
         # Use the existing Modern script dependency order, but create only
         # synthetic managed records. No production routing is changed.
@@ -1902,7 +1958,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 revisedRead.results[0].target===saved.resultId&&
                 JSON.stringify(revisedRead.project)===JSON.stringify(revised),'Calibration edit lost historical evidence');
             await rejects(()=>adapter.saveCalibrationProject(revised,{expectedRevision:1}),/revision conflict/);
-            await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(),/receipts are not integrated/);
+            await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(),/shared lifetime/);
             await rejects(()=>projectPort.remove(indexedDB,calibration.id,2),/deletion is disabled/);
             const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));
             ok(usage.value.projects.length===1&&usage.value.projects[0].revision===2&&usage.value.legacy===null,

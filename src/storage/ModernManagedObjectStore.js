@@ -45,9 +45,13 @@
       };
     });
   }
-  async function transaction(indexedDB,mode,work,existingOnly=false){
+  async function transaction(indexedDB,mode,work,existingOnly=false,lease=null){
+    const checkLease=()=>lease?.check(mode==='readwrite');
+    checkLease();
     const db=await open(indexedDB,existingOnly);
+    let untrack=null;
     try{
+      checkLease();
       const tx=db.transaction(STORES,mode);
       const done=new Promise((resolve,reject)=>{
         tx.oncomplete=resolve;
@@ -57,15 +61,19 @@
       done.catch(()=>{});
       const stores=Object.fromEntries(STORES.map(name=>[name,tx.objectStore(name)]));
       try{
+        if(lease)untrack=lease.track(tx,mode==='readwrite');
+        checkLease();
         const result=await work(stores);
+        checkLease();
         await done;
+        checkLease();
         return result;
       }catch(error){
         try{tx.abort();}catch(ignored){/* already ended */}
         await done.catch(()=>{});
         throw error;
       }
-    }finally{db.close();}
+    }finally{try{if(untrack)untrack();}finally{db.close();}}
   }
   function slots(value){
     check(Array.isArray(value),'references must be an array');
@@ -207,8 +215,8 @@
     const barrier=env.CurvatureModernBackupWriteBarrier;
     const writer=barrier&&env.navigator?.locks?
       barrier.create(env.navigator.locks).registerWriter('managed.objects'):null;
-    const run=(mode,fn)=>{
-      const action=()=>transaction(env.indexedDB,mode,fn);
+    const run=(mode,fn,lease=null)=>{
+      const action=()=>transaction(env.indexedDB,mode,fn,false,lease);
       return writer?writer.commit(action):action();
     };
     const owned=(g,id,slot)=>g.refs.get(edgeId({ownerKind:'document',ownerId:id,slot}));
@@ -265,8 +273,10 @@
     // Bulk edits and imports must acknowledge all root CAS changes together.
     // Resource definitions may be shared between plans but must be supplied
     // once; every new resource must be strongly reachable in the final graph.
-    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{}}={}){
+    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{},lease=null}={}){
       check(typeof guard==='function','invalid write guard');
+      check(lease===null||typeof lease.check==='function'&&typeof lease.track==='function','invalid transaction lease');
+      lease?.check(true);
       // Gallery deduplication and capacity decisions depend on the entire
       // live kind inventory, including matches that require no mutation.
       const inventories=(expectedInventory===null?[]:Array.isArray(expectedInventory)?
@@ -317,7 +327,7 @@
           check(prepared.every(row=>retained.has(row.id)),'new resource is not strongly reachable from a document');
         }
         return documents;
-      });
+      },lease);
     }
     async function setReference({documentId,expectedRevision,slot,target,strength='strong'}){
       token(documentId,'document ID');revision(expectedRevision);

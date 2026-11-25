@@ -414,3 +414,21 @@ coordinator invokes these methods only for an explicitly injected managed
 port. Shared selection receipts, shared lease tracking, legacy adoption
 and destructive removal still refuse; this ordinary port is not sufficient
 for production shared-session activation.
+
+### Shared Calibration selection receipt
+
+The managed Calibration port uses the existing validated receipt contract.
+One reusable control root stores the pending receipt and retains the exact
+committed project resource, plus the preceding resource when its exact
+revision is available. The project change/fork and receipt are committed
+in one root batch under the session lease, including inventory CAS.
+The IndexedDB transaction participates in the lease's abort tracking and
+checks its lifetime before and after durable completion. An unresolved
+receipt blocks a new shared selection change and modifications of its
+current project; ordinary unrelated project edits remain possible. Receipt
+retirement checks the exact receipt and committed project, then clears the
+control root's strong edges, not its identity. This permits subsequent
+receipts without recycling a tombstone. Backup qualification validates the
+receipt and its target, including a retired empty control root. The old
+session-pointer acknowledgement protocol is preserved; startup routing
+and the managed shared physical checkpoint adapter remain separate work.

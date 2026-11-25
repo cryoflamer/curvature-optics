@@ -472,5 +472,5 @@
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
     create,get,list,inspectUsage,coordinateIDB,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
-    readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
+    readExistingSharedSelectionReceipt,retireSharedSelectionReceipt,selectionBase,selectionReceipt,requireSharedLease});
 }));
