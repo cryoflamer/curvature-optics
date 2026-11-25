@@ -87,9 +87,19 @@ handling where it already works; no broad session refactor is required.
 
 ## Lifecycle API
 
-The following are proposed semantic operations, not existing signatures:
-createAndAttach, get, replace, detach, inspectUsage, verifyIntegrity,
-recount and collectGarbage. Writes are revision-checked, repeatable same-slot
+The opt-in core in `src/storage/ModernManagedObjectStore.js` exposes
+`createAndAttach`, `writeDocument` (whole root-slot replacement),
+`setReference`, `detach`, `removeDocument`, `get`, `getDocument`,
+`inspectUsage`, `verifyIntegrity`, `recount`, `withRetained` and
+`collectGarbage`. It is not loaded by the application. `detach` is a normal
+revision-checked edit, not a user-facing deletion operation. `removeDocument`
+acquires nonblocking exclusive locks on its direct strong targets, rechecks
+the document revision, and retires its root slots atomically. `withRetained`
+holds a shared lock only while its asynchronous callback is pending.
+The initial core keeps document/object ID tombstones, scans metadata on each
+mutation, validates payload/edge agreement during explicit integrity/recount/GC,
+and collects one object per call. This prioritizes correctness over throughput;
+performance and backup integration must be qualified before adoption. Writes are revision-checked, repeatable same-slot
 operations are idempotent, and replacement adjusts old and new target counts.
 Zero references means eligible, not necessarily immediately deleted.
 Reclamation rechecks canonical edges and temporary retention, removes outgoing

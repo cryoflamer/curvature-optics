@@ -106,13 +106,13 @@
     for(const id of g.payloadKeys)check(counts.has(id),'orphan payload');
     for(const [id,doc] of g.docs){
       token(id,'document ID');token(doc.kind,'document kind');
-      check(doc.id===id&&revision(doc.revision)>0,'invalid document revision');
+      check(doc.id===id&&revision(doc.revision)>0&&typeof doc.deleted==='boolean','invalid document revision');
     }
     for(const [id,edge] of g.refs){
       check(id===edgeId(edge),'invalid edge key');
       slots([edge]);
       check(edge.ownerKind==='document'||edge.ownerKind==='object','invalid reference owner');
-      check(edge.ownerKind==='document'?g.docs.has(edge.ownerId):counts.has(edge.ownerId),'missing reference owner');
+      check(edge.ownerKind==='document'?g.docs.has(edge.ownerId)&&!g.docs.get(edge.ownerId).deleted:counts.has(edge.ownerId),'missing reference owner');
       check(g.objects.has(edge.target),'unknown reference target');
       if(edge.strength==='weak')continue;
       check(counts.has(edge.target),'missing strong target');
@@ -185,6 +185,7 @@
     function checkedDocument(g,id,expected){
       const doc=g.docs.get(id);
       check((doc?.revision??0)===expected,'stale document revision');
+      check(!doc?.deleted,'document ID retired');
       return doc;
     }
     function saveDocument(g,stores,doc){
@@ -212,9 +213,27 @@
         g.payloadKeys.add(id);stores.payloads.add({id,value});
         for(const ref of refs)setEdge(g,stores,{ownerKind:'object',ownerId:id,...ref});
         setEdge(g,stores,{ownerKind:'document',ownerId:documentId,slot,target:id,strength:'strong'});
-        const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta});
+        const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false});
         updateCounts(g,stores,types);
         return {id,document};
+      });
+    }
+    // Replace the complete root-slot set and metadata in one revision. This
+    // also creates a new owner of already-existing resources without copying.
+    async function writeDocument({documentId,kind,expectedRevision,metadata,references}){
+      token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
+      const refs=slots(references),meta=clone(metadata);
+      return run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const old=checkedDocument(g,documentId,expectedRevision);
+        check(!old||old.kind===kind,'document kind mismatch');
+        const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false});
+        for(const edge of [...g.refs.values()]){
+          if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
+        }
+        for(const ref of refs)setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
+        updateCounts(g,stores,types);
+        return document;
       });
     }
     async function setReference({documentId,expectedRevision,slot,target,strength='strong'}){
@@ -257,7 +276,7 @@
       return run('readonly',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const doc=g.docs.get(id);
-        return doc?{...doc,references:[...g.refs.values()].filter(e=>e.ownerKind==='document'&&e.ownerId===id)
+        return doc&&!doc.deleted?{...doc,references:[...g.refs.values()].filter(e=>e.ownerKind==='document'&&e.ownerId===id)
           .map(({slot,target,strength})=>({slot,target,strength}))}:null;
       });
     }
@@ -292,6 +311,29 @@
         return operation();
       });
     }
+    // Explicit user-facing owner removal is not an editing detach. Refuse
+    // without modifying the entry if any of its retained resources is in use.
+    async function removeDocument({documentId,expectedRevision}){
+      token(documentId,'document ID');revision(expectedRevision);
+      const before=await getDocument(documentId);
+      check(before&&before.revision===expectedRevision,'stale or missing document');
+      const targets=[...new Set(before.references.filter(ref=>ref.strength==='strong').map(ref=>ref.target))].sort();
+      function acquire(index,operation){
+        if(index===targets.length)return operation();
+        return underResourceLock(targets[index],'exclusive',()=>acquire(index+1,operation));
+      }
+      return acquire(0,()=>run('readwrite',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
+        for(const edge of [...g.refs.values()]){
+          if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
+        }
+        updateCounts(g,stores,types);
+        const retired=saveDocument(g,stores,{id:documentId,kind:doc.kind,
+          revision:doc.revision+1,deleted:true});
+        return {removed:true,revision:retired.revision};
+      }));
+    }
     async function withRetained(id,operation){
       check(typeof operation==='function','retained operation required');
       return underResourceLock(id,'shared',async()=>{
@@ -320,7 +362,7 @@
         return {collected:true};
       }));
     }
-    return Object.freeze({createAndAttach,setReference,detach,get,getDocument,inspectUsage,
+    return Object.freeze({createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,inspectUsage,
       verifyIntegrity,recount,withRetained,collectGarbage});
   }
   return Object.freeze({DATABASE,VERSION,create});

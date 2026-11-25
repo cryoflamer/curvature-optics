@@ -216,7 +216,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 expectedRevision:0,metadata:{},slot:'asset',type:'future-geometry',version:1,
                 payload:Uint8Array.from([2,4,8]).buffer});
             ok(new Uint8Array((await s.get(geometry.id)).payload).join(',')==='2,4,8','future type');
-            await s.setReference({documentId:'other',expectedRevision:1,slot:'scene',target:snap.id});
+            await s.writeDocument({documentId:'other',kind:'test',expectedRevision:1,metadata:{},references:[
+                {slot:'asset',target:geometry.id,strength:'strong'},{slot:'scene',target:snap.id,strength:'strong'}]});
+            const shared=await s.writeDocument({documentId:'shared',kind:'test',expectedRevision:0,metadata:{},
+                references:[{slot:'scene',target:snap.id,strength:'strong'}]});
+            ok((await s.get(snap.id)).refCount===4,'new owner without copying');
+            await s.removeDocument({documentId:'shared',expectedRevision:shared.revision});
+            ok(await s.getDocument('shared')===null,'removed owner remains visible');
+            await rejects(()=>s.writeDocument({documentId:'shared',kind:'test',expectedRevision:2,
+                metadata:{},references:[]}),/document ID retired/);
             ok((await s.get(snap.id)).refCount===3,'second document shares snapshot');
             await s.setReference({documentId:'library',expectedRevision:1,slot:'provenance',target:snap.id,strength:'weak'});
             ok((await s.get(snap.id)).refCount===3,'weak link does not retain');
@@ -295,15 +303,25 @@ class ModernBrowserSmoke(unittest.TestCase):
         try:
             prepare(second)
             result=second.evaluate("""async id=>{
-                await store.detach({documentId:'doc',expectedRevision:1,slot:'value'});
                 let refused=false;
-                try{await store.collectGarbage(id);}catch(error){refused=/close the corresponding editor/.test(error.message);}
+                try{await store.removeDocument({documentId:'doc',expectedRevision:1});}
+                catch(error){refused=/close the corresponding editor/.test(error.message);}
+                const before=await store.getDocument('doc');
+                if(before?.revision!==1||before.references[0]?.target!==id)
+                    throw Error('Refusal modified the owner');
+                let gcRefused=false;
+                try{await store.collectGarbage(id);}catch(error){gcRefused=/close the corresponding editor/.test(error.message);}
+                if(!gcRefused)throw Error('GC bypassed active lock');
                 const other=await store.createAndAttach({documentId:'another',kind:'test',expectedRevision:0,
                     metadata:{},slot:'value',type:'test',version:1,payload:'unrelated'});
                 return {refused,original:(await store.get(id)).payload,other:(await store.get(other.id)).payload};
             }""",resource)
             self.assertEqual(result, {'refused': True, 'original': 'original', 'other': 'unrelated'})
             self.assertEqual(self.page.evaluate("""async()=>{window.releaseHold();return holdTask;}"""),'original')
+            self.assertEqual(second.evaluate("""async()=>{
+                return store.removeDocument({documentId:'doc',expectedRevision:1});
+            }"""),{'removed':True,'revision':2})
+            self.assertIsNone(second.evaluate("()=>store.getDocument('doc')"))
             self.assertEqual(second.evaluate('id=>store.collectGarbage(id)',resource),{'collected':True})
             self.assertIsNone(second.evaluate('id=>store.get(id)',resource))
         finally:
