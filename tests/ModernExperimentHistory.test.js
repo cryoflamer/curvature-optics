@@ -739,3 +739,33 @@ test('origin changes exact History identity but not active-physics fingerprint; 
   assert.deepEqual((await remote.list()).filter(e=>e.experiment.calibrationOrigin).map(e=>e.experiment.calibrationOrigin.target).sort(),['A','B']);
   assert.ok(!(await remote.list()).find(e=>!e.experiment.calibrationOrigin).experiment.calibrationOrigin);
 });
+
+test('Shared History management compares exact records and preserves protected recovery',async()=>{
+  const db=indexedDB(),a=history.create({indexedDB:db}),b=history.create({indexedDB:db});
+  const first=(await a.record(experiment(),'manual')).entry;
+  const second=(await a.record(experiment('compare'),'recovery')).entry;
+  const updated=await b.updateMetadataExact(first,'Changed elsewhere','notes');
+  await assert.rejects(a.updateMetadataExact(first,'Stale',''),/snapshot changed/);
+  await assert.rejects(a.setPinnedExact([first,second],false),/snapshot changed/);
+  await assert.rejects(a.setPinnedExact([updated,second],false),/must remain protected/);
+  assert.deepEqual(await a.get(first.id),updated);
+  assert.deepEqual(await a.get(second.id),second);
+  const [unpinned]=await a.setPinnedExact([updated],false);
+  assert.equal(unpinned.pinned,false);
+  assert.equal(unpinned.signature,first.signature);
+  assert.deepEqual(unpinned.experiment,first.experiment);
+  await assert.rejects(a.setPinnedExact([unpinned],true,()=>{throw Error('lifetime ended');}),/lifetime ended/);
+  assert.deepEqual(await a.get(first.id),unpinned);
+  await assert.rejects(a.importEntries([{experiment:experiment(),name:'Import'}],()=>{throw Error('lifetime ended');}),/lifetime ended/);
+  assert.equal((await a.list()).length,2);
+});
+test('Unpinning shared automatic History retains the snapshot outside automatic pruning',async()=>{
+  const h=history.create({indexedDB:indexedDB(),maxAutoEntries:1});
+  const auto=(await h.record(experiment(),'auto')).entry;
+  const [pinned]=await h.setPinnedExact([auto],true);
+  const [unpinned]=await h.setPinnedExact([pinned],false);
+  assert.equal(unpinned.source,'manual');
+  await h.record(experiment('compare'),'auto');
+  assert.equal(await h.clearAuto(),1);
+  assert.deepEqual(await h.get(auto.id),unpinned);
+});

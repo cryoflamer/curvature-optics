@@ -182,7 +182,7 @@
     // manual Save, differently named records with identical physics remain
     // separate so old Library bookmarks do not silently lose their names.
     // Re-importing the same (full state + name + notes) is idempotent.
-    function importEntries(items){
+    function importEntries(items,guard=()=>{}){
       if(!Array.isArray(items)||!items.length||items.length>MAX_PORTABLE_ITEMS)
         throw RangeError('Invalid History import list');
       var prepared=items.map(function(raw){
@@ -195,6 +195,7 @@
       return serialize(function(){return transact('readwrite',function(store,set){
         var allRecords=store.getAll();
         allRecords.onsuccess=function(){
+          try{guard();}catch(error){set({failure:error});return;}
           var records=allRecords.result||[],created=0,reused=0;
           prepared.forEach(function(item){
             var match=records.find(function(entry){return entry.signature===item.signature&&
@@ -219,7 +220,7 @@
           });
           set({created:created,reused:reused});
         };
-      });});
+      });}).then(function(result){if(result.failure)throw result.failure;return result;});
     }
     // Edit user annotations only. Keep the validated experiment and its stable
     // signature, thumbnail, pin, timestamps and history identity untouched.
@@ -240,6 +241,54 @@
           store.put(entry);set(entry);
         };
       });});
+    }
+    // Shared management compares the exact displayed record(s) inside the
+    // same transaction as the write. No stale toggle, partial bulk update or
+    // annotation overwrite can win. This API deliberately cannot delete.
+    function mutateExact(expected,change,guard){
+      if(!Array.isArray(expected)||!expected.length||
+         expected.some(e=>!e||!Number.isSafeInteger(e.id)||e.id<1)||
+         new Set(expected.map(e=>e.id)).size!==expected.length)
+        return Promise.reject(Error('Exact History records required'));
+      const wanted=expected.map(e=>JSON.parse(JSON.stringify(e)));
+      return serialize(()=>transact('readwrite',(store,set)=>{
+        const request=store.getAll();
+        request.onsuccess=()=>{
+          let next;
+          try{
+            guard();
+            const records=request.result||[];
+            next=wanted.map(before=>{
+              const current=records.find(e=>e.id===before.id);
+              if(!current||JSON.stringify(current)!==JSON.stringify(before))
+                throw Error('History snapshot changed; refresh before editing');
+              return change(current);
+            });
+            guard();
+          }catch(error){set({failure:error});return;}
+          next.forEach(entry=>store.put(entry));
+          set({entries:next});
+        };
+      })).then(result=>{if(result.failure)throw result.failure;return result.entries;});
+    }
+    function setPinnedExact(expected,pinned,guard=()=>{}){
+      if(typeof pinned!=='boolean')return Promise.reject(Error('Explicit pin state required'));
+      return mutateExact(expected,entry=>{
+        if(!pinned&&entry.source==='recovery')
+          throw Error('Recovery snapshot must remain protected');
+        // A formerly pinned automatic snapshot may be referenced by a
+        // project. Unpinning must not return it to automatic garbage collection.
+        if(!pinned&&entry.pinned&&entry.source==='auto')entry.source='manual';
+        entry.pinned=pinned;return entry;
+      },guard);
+    }
+    function updateMetadataExact(expected,name,description,guard=()=>{}){
+      const metadata=validatedMetadata(name,description);
+      return mutateExact([expected],entry=>{
+        entry.name=metadata.name;entry.description=metadata.description;
+        if((entry.name||entry.description)&&entry.source==='auto')entry.source='manual';
+        return entry;
+      },guard).then(entries=>entries[0]);
     }
     function remove(id){return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.get(Number(id));
@@ -271,7 +320,7 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,updateMetadata:updateMetadata,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
+    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,updateMetadata:updateMetadata,updateMetadataExact,setPinnedExact,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
   return Object.freeze({DATABASE:DATABASE,VERSION:VERSION,STORE:STORE,
     MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,

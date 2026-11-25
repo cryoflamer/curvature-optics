@@ -14065,8 +14065,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernHistoryPanel')).to_be_visible()
         card=self.page.locator('#ModernHistoryGallery .modern-history-card')
         expect(card).to_have_count(1,timeout=30000)
-        expect(card.locator('.modern-history-pin')).to_be_disabled()
-        expect(self.page.locator('#ModernHistoryManage')).to_be_disabled()
+        expect(card.locator('.modern-history-pin')).to_be_enabled()
+        expect(self.page.locator('#ModernHistoryManage')).to_be_enabled()
+        expect(card.locator('.modern-history-delete')).to_be_disabled()
         self.page.locator('#ModernHistorySize').select_option('medium')
         self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
         opened=self.page.evaluate(read)
@@ -14103,6 +14104,58 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),old)
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
+
+    def test_shared_history_exact_management_and_import(self):
+        """Shared History metadata/pinning/import are independent of physical session; stale edits fail."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() =>
+            CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        read='CurvatureModernApp.getExperimentSessionPreview().controller.row'
+        before=self.page.evaluate(read)
+        self.page.locator('#ModernSnapshotSave').click()
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text('Already in History',timeout=30000)
+        self.page.locator('#ModernHistoryToggle').click()
+        card=self.page.locator('#ModernHistoryGallery .modern-history-card')
+        expect(card).to_have_count(1,timeout=30000)
+        self.page.locator('#ModernHistoryEdit').click()
+        self.page.locator('#ModernHistoryMetadataName').fill('Stale name')
+        self.page.evaluate("""async () => {
+            const h=CurvatureModernExperimentHistory.create({indexedDB});
+            const [entry]=await h.list();
+            await h.updateMetadataExact(entry,'Foreign name','Foreign notes');
+        }""")
+        self.page.locator('#ModernHistoryMetadataSave').click()
+        expect(self.page.locator('#ModernHistoryMetadataError')).to_contain_text('changed',timeout=30000)
+        self.page.locator('#ModernHistoryMetadataCancel').click()
+        self.page.locator('#ModernHistoryEdit').click()
+        expect(self.page.locator('#ModernHistoryMetadataName')).to_have_value('Foreign name')
+        self.page.locator('#ModernHistoryMetadataName').fill('Edited name')
+        self.page.locator('#ModernHistoryMetadataSave').click()
+        expect(card).to_contain_text('Edited name',timeout=30000)
+        card.locator('.modern-history-pin').click()
+        expect(card.locator('.modern-history-pin')).to_have_attribute('aria-pressed','false',timeout=30000)
+        expect(card.locator('.modern-history-delete')).to_be_disabled()
+        self.page.locator('#ModernHistoryManage').click()
+        self.page.locator('#ModernHistorySelectVisible').click()
+        expect(self.page.locator('#ModernHistoryDeleteChecked')).to_be_disabled()
+        self.page.locator('#ModernHistoryPinChecked').click()
+        expect(card.locator('.modern-history-pin')).to_have_attribute('aria-pressed','true',timeout=30000)
+        payload=self.page.evaluate("""async () => {
+            const h=CurvatureModernExperimentHistory.create({indexedDB});
+            const [entry]=await h.list();
+            return CurvatureModernExperimentHistory.exportPortable([{...entry,name:'Imported copy'}]);
+        }""")
+        self.page.locator('#ModernHistoryImportFile').set_input_files({
+            'name':'history.json','mimeType':'application/json','buffer':payload.encode('utf-8')})
+        expect(card).to_have_count(2,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),before)
+        expect(self.page.locator('#ModernHistoryClearAll')).to_be_disabled()
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        self.page.reload(wait_until='load')
+        expect(card).to_have_count(2,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),before)
 
 
 if __name__ == '__main__':

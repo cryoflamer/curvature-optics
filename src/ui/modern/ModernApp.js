@@ -945,7 +945,7 @@
     if(hint)hint.textContent=historyWizardReferenceChoosing?
       'Select a snapshot, inspect its details, then choose Use as project reference. The live scene is not restored.':
       sharedPresentationActive()?
-        'Inspect or export saved snapshots. Restore is available from a saved Scene or Compare; the outgoing experiment is protected first. History management is not yet enabled in the shared session.':
+        'Inspect or export saved snapshots. Restore is available from a saved Scene or Compare; the outgoing experiment is protected first. Metadata, pinning and import are available; deletion remains disabled to protect provenance.':
         'Click a snapshot to inspect its saved image and physical settings, then choose Restore experiment. '+
         'A recovery copy of the current experiment is saved before replacement.';
     ['ModernHistoryRestore','ModernHistoryEdit','ModernHistoryExportSelected'].forEach(function(id){
@@ -2378,7 +2378,7 @@
     }catch(error){modernStatus(status,'Snapshot unavailable: '+error.message,'error');}
   }
   var historyMultiSelection=Object.create(null);
-  var historyShownIds=[];
+  var historyShownIds=[],historyShownEntries=new Map();
   var historySelectedId='';
   var historyManageMode=false;
   var historyRenderedKeys={Scene:null,A:null,B:null};
@@ -2474,7 +2474,7 @@
     if(node)node.textContent=count+' shown '+(count===1?'snapshot':'snapshots')+' selected';
     ['ModernHistoryClearChecked','ModernHistoryPinChecked','ModernHistoryDeleteChecked']
       .forEach(function(id){
-        var button=newUiEl(id);if(button)button.disabled=count===0;
+        var button=newUiEl(id);if(button)button.disabled=count===0||sharedPresentationActive()&&id==='ModernHistoryDeleteChecked';
       });
     var select=newUiEl('ModernHistorySelectVisible');
     if(select)select.disabled=!historyShownIds.length||count===historyShownIds.length;
@@ -6780,14 +6780,14 @@
       scheduleStudioInitialPaint('restored');
     }
   }
-  var historyMetadataEditingId=null;
+  var historyMetadataEditingId=null,historyMetadataExpected=null;
   function closeHistoryMetadataEditor(){
     var dialog=newUiEl('ModernHistoryMetadataDialog');
     if(dialog){
       if(typeof dialog.close==='function'&&dialog.open)dialog.close();
       else if(typeof dialog.removeAttribute==='function')dialog.removeAttribute('open');
     }
-    historyMetadataEditingId=null;
+    historyMetadataEditingId=null;historyMetadataExpected=null;
   }
   function openHistoryMetadataEditor(id){
     var dialog=newUiEl('ModernHistoryMetadataDialog');
@@ -6796,7 +6796,7 @@
     if(!dialog||!name||!description)return Promise.reject(Error('Snapshot editor unavailable'));
     return experimentHistory.get(id).then(function(entry){
       if(!entry)throw RangeError('History snapshot not found');
-      historyMetadataEditingId=entry.id;
+      historyMetadataEditingId=entry.id;historyMetadataExpected=entry;
       name.value=entry.name||'';description.value=entry.description||'';
       var errorNode=newUiEl('ModernHistoryMetadataError');
       if(errorNode)errorNode.textContent='';
@@ -6842,7 +6842,7 @@
     if(useReference)useReference.disabled=!entry;
     var shared=sharedPresentationActive();
     [['ModernHistoryRestore',!!entry&&(!shared||sharedHistoryPhysicalReady())],
-      ['ModernHistoryEdit',!!entry&&!shared],
+      ['ModernHistoryEdit',!!entry&&(!shared||sharedHistoryAvailable())],
       ['ModernHistoryExportSelected',!!entry]].forEach(function(item){
       var node=newUiEl(item[0]);if(node)node.disabled=!item[1];
     });
@@ -6858,13 +6858,30 @@
   }
   var historyCardActionPending=Object.create(null);
   function runHistoryCardAction(id,operation){
-    if(sharedPresentationActive())return Promise.reject(Error('History management is not yet enabled in the shared session'));
     if(historyCardActionPending[id])return Promise.resolve(false);
     historyCardActionPending[id]=true;
     return Promise.resolve().then(operation).finally(function(){delete historyCardActionPending[id];});
   }
-  function pinHistorySnapshot(id){
+  function runSharedHistoryManagement(operation){
+    var ctx=experimentPreview.calibrationContext;
+    function guard(){
+      if(!sharedHistoryAvailable()||experimentPreview.calibrationBusy||experimentPreview.animationContext?.busy)
+        throw Error('Finish the pending shared operation before managing History');
+      ctx.lease.check(true);
+    }
+    guard();
+    return ctx.coordinate(function(){guard();return operation(guard);});
+  }
+  function pinHistorySnapshot(id,expected){
     return runHistoryCardAction(id,function(){
+      if(sharedPresentationActive()){
+        return runSharedHistoryManagement(guard=>experimentHistory.setPinnedExact([expected],!expected.pinned,guard))
+          .then(function(){
+            if(!expected.pinned&&historyPinnedCollapsed){historyPinnedCollapsed=false;saveApplicationPreferences();}
+            historyStatus(expected.pinned?'Snapshot unpinned.':'Snapshot pinned.');
+            return refreshHistoryList(id);
+          });
+      }
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('History snapshot not found');
         return experimentHistory.pin(id,!entry.pinned).then(function(updated){
@@ -6880,6 +6897,7 @@
     });
   }
   function deleteHistorySnapshot(id){
+    if(sharedPresentationActive())return Promise.reject(Error('History deletion is disabled in the shared session'));
     return runHistoryCardAction(id,function(){
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('History snapshot not found');
@@ -6937,6 +6955,7 @@
       historyShownIds=visible.filter(function(entry){return !!entry.pinned&&!pinnedCollapsedForView;})
         .concat(visible.filter(function(entry){return !entry.pinned;}))
         .map(function(entry){return entry.id;});
+      historyShownEntries=new Map(visible.filter(entry=>historyShownIds.includes(entry.id)).map(entry=>[entry.id,entry]));
       historySelectedIds().forEach(function(id){
         if(!historyShownIds.includes(id))delete historyMultiSelection[id];
       });
@@ -6973,14 +6992,14 @@
             else delete historyMultiSelection[id];
             historyMultiCount();
           },
-          pin:function(id){
-            pinHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
+          pin:function(id,entry){
+            pinHistorySnapshot(id,entry).catch(function(error){historyStatus(error.message,true);});
           },
           remove:function(id){
             deleteHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
           }
         },historyMultiSelection,{pinnedCollapsed:pinnedCollapsedForView,
-          manage:historyManageMode,readOnly:sharedPresentationActive(),emptyFiltered:entries.length>0,
+          manage:historyManageMode,protectedManagement:sharedPresentationActive(),emptyFiltered:entries.length>0,
           filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
           hasPinned:entries.some(function(entry){return !!entry.pinned;})});
         if(focused&&chosen&&gallery.querySelectorAll){
@@ -7021,7 +7040,7 @@
     panel.hidden=!shown;panel.inert=!!experimentPreview.calibrationBusy;
     var backdrop=newUiEl('ModernHistoryBackdrop');if(backdrop)backdrop.hidden=!shown;
     toggle.setAttribute('aria-expanded',String(shown));
-    ['ModernHistoryManage','ModernHistoryClearAuto','ModernHistoryClearAll','ModernHistoryImport'].forEach(function(id){
+    ['ModernHistoryClearAuto','ModernHistoryClearAll'].forEach(function(id){
       var node=newUiEl(id);if(node)node.disabled=true;
     });
     var restore=newUiEl('ModernHistoryRestore');
@@ -7193,15 +7212,17 @@
     var metadataDialog=newUiEl('ModernHistoryMetadataDialog');
     var metadataSave=newUiEl('ModernHistoryMetadataSave');
     if(metadataCancel)metadataCancel.addEventListener('click',closeHistoryMetadataEditor);
-    if(metadataDialog)metadataDialog.addEventListener('close',function(){historyMetadataEditingId=null;});
+    if(metadataDialog)metadataDialog.addEventListener('close',function(){historyMetadataEditingId=null;historyMetadataExpected=null;});
     if(metadataForm)metadataForm.addEventListener('submit',function(event){
       if(event&&event.preventDefault)event.preventDefault();
       if(historyMetadataEditingId===null||!metadataSave||metadataSave.disabled)return;
-      var id=historyMetadataEditingId;
+      var id=historyMetadataEditingId,expected=historyMetadataExpected;
+      var name=newUiEl('ModernHistoryMetadataName').value,description=newUiEl('ModernHistoryMetadataDescription').value;
       metadataSave.disabled=true;
-      Promise.resolve().then(function(){return experimentHistory.updateMetadata(id,
-        newUiEl('ModernHistoryMetadataName').value,
-        newUiEl('ModernHistoryMetadataDescription').value);
+      Promise.resolve().then(function(){
+        if(sharedPresentationActive())return runSharedHistoryManagement(guard=>
+          experimentHistory.updateMetadataExact(expected,name,description,guard));
+        return experimentHistory.updateMetadata(id,name,description);
       }).then(function(updated){
         if(!updated)throw RangeError('History snapshot not found');
         closeHistoryMetadataEditor();
@@ -7312,12 +7333,16 @@
     if(pinChecked)pinChecked.addEventListener('click',function(){handle(function(){
       var ids=historyVisibleSelectedIds();
       if(!ids.length)throw RangeError('Select shown snapshots using the card checkboxes');
-      return Promise.all(ids.map(function(id){return experimentHistory.pin(id,true);})).then(function(){
+      var operation=sharedPresentationActive()?
+        runSharedHistoryManagement(guard=>experimentHistory.setPinnedExact(ids.map(id=>historyShownEntries.get(id)),true,guard)):
+        Promise.all(ids.map(function(id){return experimentHistory.pin(id,true);}));
+      return operation.then(function(){
         historyStatus('Pinned '+ids.length+' selected snapshots.');return refreshHistoryList();
       });
     });});
     var deleteChecked=newUiEl('ModernHistoryDeleteChecked');
     if(deleteChecked)deleteChecked.addEventListener('click',function(){handle(function(){
+      if(sharedPresentationActive())throw Error('History deletion is disabled in the shared session');
       var ids=historyVisibleSelectedIds();
       if(!ids.length)throw RangeError('Select shown snapshots using the card checkboxes');
       return experimentHistory.list().then(function(entries){
@@ -7338,6 +7363,7 @@
     });});
     var clearAll=newUiEl('ModernHistoryClearAll');
     if(clearAll)clearAll.addEventListener('click',function(){handle(function(){
+      if(sharedPresentationActive())throw Error('History deletion is disabled in the shared session');
       if(!root.confirm||!root.confirm('Permanently delete ALL history snapshots, including pinned and recovery?'))return;
       return experimentHistory.clearAll().then(function(count){
         historyMultiSelection=Object.create(null);
@@ -7377,6 +7403,7 @@
       return restoreHistorySnapshot(historySelectedId);
     });});
     el('ModernHistoryClearAuto').addEventListener('click',function(){handle(function(){
+      if(sharedPresentationActive())throw Error('History deletion is disabled in the shared session');
       if(!root.confirm||!root.confirm('Delete all unpinned automatic snapshots?'))return;
       return experimentHistory.clearAuto().then(function(count){
         resetHistoryBaseline();
@@ -7422,7 +7449,9 @@
         }
         file.text().then(function(contents){
           var entries=historyFactory.parsePortable(contents);
-          return experimentHistory.importEntries(entries).then(function(result){
+          var imported=sharedPresentationActive()?runSharedHistoryManagement(guard=>
+            experimentHistory.importEntries(entries,guard)):experimentHistory.importEntries(entries);
+          return imported.then(function(result){
             return refreshHistoryList().then(function(){
               historyStatus('Imported '+result.created+' snapshots; '+result.reused+
                 ' already present. Use Restore to load an imported experiment.');

@@ -93,11 +93,12 @@
       // Primary card actions stay visible in every gallery size. They never
       // select a card or restore the current experiment as a side effect.
       var pin=button(doc,'',(entry.pinned?'Unpin ':'Pin ')+displayName(entry),function(){
-        if(actions.pin)actions.pin(entry.id);
+        if(actions.pin)actions.pin(entry.id,entry);
       });
       pin.className='modern-history-pin'+(entry.pinned?' is-pinned':'');
       pin.setAttribute('aria-pressed',String(!!entry.pinned));
-      pin.disabled=!!(options&&options.readOnly);
+      pin.disabled=!!(options&&(options.readOnly||options.protectedManagement&&entry.pinned&&entry.source==='recovery'));
+      if(pin.disabled&&options?.protectedManagement){pin.title='Recovery snapshot must remain protected';pin.setAttribute('aria-label',pin.title);}
       card.appendChild(pin);
       var deleteTitle=entry.pinned?'Unpin '+displayName(entry)+' before deleting':
         'Delete '+displayName(entry);
@@ -105,7 +106,7 @@
         if(actions.remove)actions.remove(entry.id);
       });
       remove.className='modern-history-delete modern-card-delete';
-      remove.disabled=!!entry.pinned||!!(options&&options.readOnly);
+      remove.disabled=!!entry.pinned||!!(options&&(options.readOnly||options.protectedManagement));
       card.appendChild(remove);
       return card;
     }
