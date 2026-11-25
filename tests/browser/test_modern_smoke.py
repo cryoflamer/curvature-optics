@@ -12255,6 +12255,98 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
                          'Independent named snapshot')
 
+    def test_shared_animation_save_changes_and_interrupted_named_commit(self):
+        """Save Changes relinks the acknowledged draft; either interrupted named state completes exactly once."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Original saved project';
+            for(const frame of project.keyframes)delete frame.referenceImageIds;
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        workspace='project_'+source['id']
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            const session=CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope;
+            const ref=session.documents.animation;
+            return {row,session,checkpoint:A.getWorkspace(row.collection,ref.id),
+                ref:A.documentReference(row,ref.id),named:await CurvatureModernAnimationLibrary.list(indexedDB)};
+        }"""
+        message=self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')
+        def rename_draft(name):
+            self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+            studio=self.page.locator('#ModernAnimationStudio')
+            field=studio.get_by_label('Project name',exact=True)
+            if not field.is_visible():
+                studio.get_by_role('button',name='Inspect project settings').click()
+            field.fill(name)
+            field.press('Tab')
+            expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+                'Shared working draft saved in IndexedDB',timeout=30000)
+        rename_draft('Normal saved changes')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        before=self.page.evaluate(read)
+        self.page.locator('#ModernSharedNamedAnimationSaveChanges').click()
+        expect(message).to_contain_text('Saved changes to Normal saved changes')
+        after=self.page.evaluate(read)
+        self.assertEqual(len(after['named']),1)
+        self.assertEqual(after['named'][0]['id'],source['id'])
+        self.assertEqual(after['named'][0]['project']['name'],'Normal saved changes')
+        self.assertGreater(after['named'][0]['updatedAt'],source['updatedAt'])
+        self.assertEqual(after['checkpoint']['draft'],before['checkpoint']['draft'])
+        self.assertEqual(after['checkpoint']['libraryRevision'],after['named'][0]['updatedAt'])
+        self.assertEqual(after['session']['documents']['animation'],after['ref'])
+        self.assertEqual(after['ref']['id'],workspace)
+        self.assertIsNone(after['row']['receipt'])
+        self.assertNotIn('namedSave',after['row'])
+        for committed in [False,True]:
+            with self.subTest(committed=committed):
+                self.page.locator('#ModernAnimationViewEditor').click()
+                rename_draft('Interrupted '+str(committed))
+                seeded=self.page.evaluate("""async committed=>{
+                    const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
+                    const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernAnimationLibrary;
+                    const store=A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto});
+                    const row=await store.read(),ref=CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope.documents.animation;
+                    const cp=A.getWorkspace(row.collection,ref.id),before=await L.get(indexedDB,cp.libraryId);
+                    const plan=L.planExactUpdate(CurvatureModernAnimationStudio.buildSaved(cp.draft,before.id),
+                        cp.quality,before,before.updatedAt+1);
+                    const staged=await store.stageNamedSave(row,ref,plan);
+                    if(committed)await L.commitPlannedUpdate(indexedDB,plan);
+                    return {staged,plan,cp,ref};
+                }""",committed)
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function(ready,timeout=30000)
+                self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioView()'),'library')
+                expect(self.page.locator('#ModernAnimationViewEditor')).to_be_disabled()
+                expect(self.page.locator('#ModernSharedNamedAnimationCompleteSave')).to_be_enabled()
+                self.page.locator('#ModernSharedNamedAnimationCompleteSave').click()
+                expect(message).to_contain_text('Working copy revision acknowledged')
+                current=self.page.evaluate(read)
+                self.assertEqual(current['named'],[seeded['plan']['after']])
+                self.assertEqual(current['checkpoint']['draft'],seeded['cp']['draft'])
+                self.assertEqual(current['checkpoint']['libraryRevision'],seeded['plan']['after']['updatedAt'])
+                self.assertEqual(current['session']['documents']['animation'],current['ref'])
+                self.assertEqual(current['ref']['id'],workspace)
+                self.assertIsNone(current['row']['receipt'])
+                self.assertNotIn('namedSave',current['row'])
+                expect(self.page.locator('#ModernAnimationViewEditor')).to_be_enabled()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),current)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_animation_named_import_preserves_session_and_deduplicates(self):
         """Named portable import remains independent of the shared working selection."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

@@ -973,7 +973,8 @@
   // Switch presentation only: preserve one draft, one edit history and one player.
   function setStudioView(view,focus,routeAction,hydrating){
     if(!['library','editor','preview'].includes(view))return false;
-    if(experimentPreview.live&&view!=='library'&&!studioWorkspaceReady)return false;
+    if(experimentPreview.live&&view!=='library'&&
+       (!studioWorkspaceReady||experimentPreview.animationContext?.row?.namedSave))return false;
     var previous=studioView;
     // User/navigation intent during asynchronous registry hydration must win.
     if(previous!==view&&!hydrating)workspaceViewEditGeneration.animation++;
@@ -2140,7 +2141,8 @@
         var evidence={format:'curvature-experiment-session-recovery',version:1,
           controller:c.state(),migration:experimentPreview.migration,
           live:persistence.ready?experimentSnapshot():null,
-          animation:experimentPreview.animationContext?.writer.recovery()??null};
+          animation:experimentPreview.animationContext?.writer.recovery()??null,
+          namedAnimationSave:experimentPreview.animationContext?.row?.namedSave??null};
         var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
           {type:'application/json'})),link=document.createElement('a');
         link.href=uri;link.download='curvature-experiment-recovery.json';
@@ -2879,12 +2881,30 @@
     var heading=element('div','modern-animation-library-heading');
     heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes and temporary keyframe editing are not yet enabled.'));
+      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes updates the exact linked saved revision. Temporary keyframe editing is not yet enabled.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
-    views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady;});
+    views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady||!!ctx.row?.namedSave;});
     var status=ctx.writer.state();
+    var intent=ctx.row?.namedSave;
+    if(intent){
+      var pending=group('Interrupted Save Changes');
+      pending.appendChild(element('span','modern-animation-library-note',
+        'The exact planned named revision is retained. Complete it or export the evidence and abandon the intent. The working draft remains intact.'));
+      var selected=status.reference&&status.reference.id===intent.reference.id&&
+        status.reference.revision===intent.reference.revision;
+      if(!selected)action(pending,'Open pending working copy',()=>void runSharedAnimationAction('open',intent.reference));
+      action(pending,'Complete Save Changes',()=>void runSharedAnimationAction('completeNamedSave'),!selected,
+        {'id':'ModernSharedNamedAnimationCompleteSave'});
+      action(pending,'Download save evidence',()=>downloadHistoryJson(
+        JSON.stringify({format:'curvature-shared-named-animation-save',version:1,intent,
+          checkpoint:studioDraftAutosave.getWorkspace(ctx.row.collection,intent.reference.id)},null,2)+'\n',
+        'curvature-animation-named-save.json'));
+      action(pending,'Abandon pending save',()=>void runSharedAnimationAction('abandonNamedSave'),false,
+        {'id':'ModernSharedNamedAnimationAbandonSave'});
+      return;
+    }
     if(status.error||status.unsaved){
       var recovery=group('Unsaved working draft');
       action(recovery,'Retry shared save',()=>void persistStudioWorkspace({retry:true}),!status.error);
@@ -2937,6 +2957,9 @@
         ()=>void runSharedAnimationAction('deleteNamed',record),false,
         {'data-shared-delete-animation-id':record.id});
     });
+    action(named,'Save Changes',()=>void runSharedAnimationAction('saveChanges'),
+      !studioWorkspaceReady||!studioLibraryActive||!!status.error,
+      {'id':'ModernSharedNamedAnimationSaveChanges'});
     action(named,'Save current draft as new project',()=>void runSharedAnimationAction('saveAs'),
       !studioWorkspaceReady||!!status.error,{'id':'ModernSharedNamedAnimationSaveAs'});
     var namedFile=element('input');namedFile.type='file';namedFile.hidden=true;
@@ -2999,6 +3022,31 @@
     for(var record of originals)await root.CurvatureModernReferenceImageImport.verify(record,root);
     ctx.lease.check(true);
   }
+  async function completeSharedNamedSave(ctx,c,store,row){
+    var intent=row.namedSave;
+    if(!intent)throw Error('No pending named Animation save');
+    var cp=studioDraftAutosave.getWorkspace(row.collection,intent.reference.id);
+    var project=buildSharedAnimationSnapshot(cp,intent.plan.after.id,false);
+    if(JSON.stringify(project)!==JSON.stringify(intent.plan.after.project)||
+       cp.quality!==intent.plan.after.quality)
+      throw Error('Pending named save does not match the exact working draft');
+    var base=await c.captureSelectionBase('animation',intent.reference);
+    await verifySharedAnimationOriginals(project,ctx);
+    await studioLibrary.commitPlannedUpdate(root.indexedDB,intent.plan,()=>ctx.lease.check(true));
+    ctx.lease.check(true);
+    var confirmed=await studioLibrary.get(root.indexedDB,intent.plan.after.id);
+    if(JSON.stringify(confirmed)!==JSON.stringify(intent.plan.after))
+      throw Error('Named Animation readback differs; save intent retained');
+    ctx.row=await store.finishNamedSave(row,intent,confirmed,base);
+    var result=await c.acknowledgeDocumentRevision('animation',ctx.row.receipt);
+    experimentPreview.status=result.status;
+    ctx.row=await store.retire(ctx.row,ctx.row.receipt);
+    ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;
+    if(!ctx.named.some(record=>JSON.stringify(record)===JSON.stringify(confirmed)))
+      throw Error('Named Animation changed after relinking; reload and inspect Library');
+    ctx.message='Saved changes to '+confirmed.project.name+'. Working copy revision acknowledged.';
+    return studioDraftAutosave.documentReference(ctx.row,intent.reference.id);
+  }
   async function bindSharedAnimation(ref,restore=false,named=null){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!restore){
@@ -3019,7 +3067,9 @@
       restoreStudioDraft(cp);
       var linked=(ctx.named||[]).find(record=>record.id===cp.libraryId&&record.updatedAt===cp.libraryRevision);
       if(linked){studioLibraryActive=linked;studioLibraryPending=null;}
-      studioDraftStatus('Shared working draft saved in IndexedDB',false);
+      studioDraftStatus(ctx.row.namedSave?'Named save pending · Complete or abandon in Library':
+        'Shared working draft saved in IndexedDB',!!ctx.row.namedSave);
+      if(ctx.row.namedSave)setStudioView('library',false,null,true);
       renderAnimationStudio(studioHistoryEntries);
     }catch(error){
       // Acknowledged selection may already have moved. Do not keep editing the
@@ -3029,6 +3079,8 @@
     }
   }
   async function flushSharedAnimation(){
+    if(experimentPreview.animationContext?.row?.namedSave)
+      throw Error('Complete or abandon the pending named Animation save before leaving');
     if(!studioWorkspaceReady)return true;
     stopStudioPlayback(false);
     if(!saveStudioDraft(false)||!await persistStudioWorkspace({requireDurable:true}))
@@ -3043,9 +3095,13 @@
       'Recover this exact historical Animation source? Confirm a verified local backup (or disposable test profile) and close old Modern tabs. Old records will be retained.')))return false;
     if(kind==='deleteNamed'&&(!root.confirm||!root.confirm(
       'Delete the inspected saved Animation project "'+value.project.name+'"? Working drafts, History and reference photographs will be retained.')))return false;
+    if(ctx.row?.namedSave&&!['open','completeNamedSave','abandonNamedSave'].includes(kind))return false;
+    if(kind==='abandonNamedSave'&&(!root.confirm||!root.confirm(
+      'Abandon this pending Save Changes intent? This does not undo any named save that may already have committed. Download the evidence first if needed. The working draft is retained.')))return false;
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
+    var namedMutationStarted=false,relinkRef=null;
     try{
-      if(studioWorkspaceReady)await flushSharedAnimation();
+      if(studioWorkspaceReady&&!ctx.row?.namedSave)await flushSharedAnimation();
       var openRef=null,openNamed=null,recoveryImport=null,namedContents=null;
       if(kind==='importNamed'){
         if(value.size>studioLibrary.MAX_PORTABLE_LENGTH)throw Error('Animation JSON file is too large');
@@ -3083,6 +3139,32 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='saveChanges'){
+            var ref=ctx.writer.state().reference;
+            if(!studioWorkspaceReady||!ref||!row||!studioLibraryActive||
+               JSON.stringify(studioDraftAutosave.documentReference(row,ref.id))!==JSON.stringify(ref))
+              throw Error('An acknowledged linked working draft is required before Save Changes');
+            await c.captureSelectionBase('animation',ref);
+            var cp=studioDraftAutosave.getWorkspace(row.collection,ref.id);
+            var original=await verifySharedNamedAnimation(studioLibraryActive);
+            if(cp.libraryId!==original.id||cp.libraryRevision!==original.updatedAt)
+              throw Error('Saved Animation revision changed; use Save As');
+            var project=buildSharedAnimationSnapshot(cp,original.id,false);
+            await verifySharedAnimationOriginals(project,ctx);
+            var plan=studioLibrary.planExactUpdate(project,cp.quality,original,Date.now(),
+              studioLibraryThumbnail(project));
+            namedMutationStarted=true;
+            ctx.row=await store.stageNamedSave(row,ref,plan);
+            relinkRef=await completeSharedNamedSave(ctx,c,store,ctx.row);
+          }else if(kind==='completeNamedSave'){
+            namedMutationStarted=true;
+            relinkRef=await completeSharedNamedSave(ctx,c,store,row);
+          }else if(kind==='abandonNamedSave'){
+            if(!row?.namedSave)throw Error('No pending named Animation save');
+            namedMutationStarted=true;
+            ctx.row=await store.abandonNamedSave(row,row.namedSave);
+            ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;
+            ctx.message='Pending save abandoned. Named and working project bytes retained.';
           }else if(kind==='saveAs'){
             var ref=ctx.writer.state().reference;
             if(!studioWorkspaceReady||!ref||!row||
@@ -3146,15 +3228,32 @@
           }else throw Error('Unsupported shared Animation action');
         });
       }
-      if(openRef){
-        await bindSharedAnimation(openRef,false,openNamed);setStudioView('editor',true);
+      if(relinkRef){
+        await bindSharedAnimation(relinkRef,true);
+      }else if(openRef){
+        await bindSharedAnimation(openRef,false,openNamed);
+        setStudioView(ctx.row.namedSave?'library':'editor',true);
       }else if(studioWorkspaceReady){
         await bindSharedAnimation(ctx.writer.state().reference,true);
       }
       return true;
     }catch(error){
       ctx.error=true;ctx.message=error.message;
-      if(kind==='openNamed'&&studioWorkspaceReady&&ctx.row&&
+      if(namedMutationStarted){
+        // An exception may be a lost transaction acknowledgement. Continue
+        // only from an exact durable pending intent; otherwise reload and
+        // let the existing selection-receipt recovery own the transition.
+        try{
+          var observed=await ctx.coordinate(()=>ctx.makeStore().read());
+          if(!ctx.row?.namedSave||JSON.stringify(observed)!==JSON.stringify(ctx.row)||
+             !['clean','committed'].includes(c.state().status))
+            throw Error('Named save requires durable reload and readback');
+          setStudioView('library',false,null,true);
+        }catch(recoveryError){
+          if(experimentPreview.status!=='suspended')
+            previewFailure(Error(recoveryError.message+': '+error.message));
+        }
+      }else if(kind==='openNamed'&&studioWorkspaceReady&&ctx.row&&
          JSON.stringify(ctx.writer.acknowledgedRow())!==JSON.stringify(ctx.row))
         previewFailure(Error('Working copy creation requires reload and readback: '+error.message));
       else if(c.state().status==='failed'&&!ctx.writer.state().error)previewFailure(error);
@@ -3805,7 +3904,7 @@
   function saveStudioDraft(throttled){
     if(experimentPreview.live){
       var ctx=experimentPreview.animationContext;
-      if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady)return false;
+      if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady||ctx.row?.namedSave)return false;
       var now=Date.now();
       if(throttled&&now-studioDraftLastPositionSave<1200)return true;
       studioDraftLastPositionSave=now;

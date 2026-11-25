@@ -846,9 +846,9 @@ opening the new named snapshot is an explicit separate action. No cross-
 database relink is implied by the successful named transaction.
 The named store also exposes an exact-record compare-and-update operation,
 which checks identity and the complete inspected normalized record within
-one readwrite transaction. Save Changes UI and the temporary keyframe editor
-remain disabled until their cross-store recovery and edit lifecycle are ready.
-The headless named-save protocol first seals a write-ahead intent in the
+one readwrite transaction. Save Changes is available in the combined shared preview; the temporary
+keyframe editor remains disabled pending its edit lifecycle migration.
+The named-save protocol first seals a write-ahead intent in the
 existing shared Animation row: exact working reference and a deterministic
 before/after named record (including one fixed target timestamp). Ordinary
 collection writes refuse a pending intent. The named transaction accepts
@@ -859,6 +859,14 @@ checkpoint's Library revision while emitting the existing selection receipt.
 The shared session acknowledges that receipt before retirement. Abandoning
 an intent is explicit and metadata-only, never a rollback of named or draft
 bytes. Rows without an intent retain the existing version and digest shape.
+A pending intent forces the Library view, disables editor and Preview
+selection, and exposes explicit completion, evidence download and
+abandonment. Completion revalidates the target against the acknowledged
+draft, verifies linked originals, and accepts no new timestamp or foreign
+revision. If the domain acknowledgement is uncertain, reload is required
+rather than allowing the old editor to continue. Abandoning does not undo
+a possibly completed named transaction; the older draft link remains as
+evidence and can be saved independently with Save As.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
