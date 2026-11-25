@@ -571,3 +571,17 @@ working save where necessary, and refuses if the working document changes.
 Gallery lookup is not a fallback on the managed route. Detached demos retain
 their shipped asset source and the existing non-managed route is unchanged.
 The existing portable asset completeness and size checks still apply.
+
+
+### Atomic named Animation portable bundle import
+
+The managed library action plans verified observation alias remapping and
+named projects before publication. Both kind inventories are checked in one
+managed transaction; guard or validation failure publishes neither new
+observations nor Animation documents. An exported historical observation
+version may differ from a current gallery alias. Bundle deduplication includes
+exact immutable observation and calibration-evidence mappings rather than only
+the Animation's semantic fingerprint. Legacy import retains its previous
+separate asset and project transactions. Foreign calibration origins without
+available verified archive evidence still refuse; this is not an implicit
+standalone-provenance downgrade.

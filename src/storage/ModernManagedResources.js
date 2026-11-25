@@ -530,7 +530,7 @@
     // Portable assets and library backups share one merge planner. Every
     // incoming original is decoded and verified before any root mutation.
     // Local aliases are never overwritten or recycled after retirement.
-    async function mergeObservationRecords(input,annotations,{guard=()=>{}}={}){
+    async function planObservationRecords(input,annotations){
       const incoming=images.validateCollection(input),verified=new Map();
       for(const record of incoming)verified.set(record.id,await originalFrom(record));
       const existing=await observationInventory(),expectedInventory=observationExpected(existing);
@@ -580,8 +580,12 @@
       }
       observationQuota([...byId.values()].map(v=>v.row));
       const plans=[...created.values(),...updates.values()].map(v=>v.plan);
-      await store.writeDocuments(plans,{expectedInventory,guard});
-      return {mapping,created:created.size,annotationsAdded};
+      return {mapping,byId,plans,expectedInventory,created:created.size,annotationsAdded};
+    }
+    async function mergeObservationRecords(input,annotations,{guard=()=>{}}={}){
+      const planned=await planObservationRecords(input,annotations);
+      await store.writeDocuments(planned.plans,{expectedInventory:planned.expectedInventory,guard});
+      return {mapping:planned.mapping,created:planned.created,annotationsAdded:planned.annotationsAdded};
     }
     async function importObservationAssets(records,options){
       return (await mergeObservationRecords(records,new Map(),options)).mapping;
@@ -1287,26 +1291,53 @@
       await store.writeDocuments([next.plan],{expectedInventory:inventory,guard});
       return row;
     }
-    async function importApplicationAnimations(items,now,crypto){
+    async function importApplicationAnimations(items,now,crypto,{assetPlan=null,guard=()=>{}}={}){
       const incoming=animations.parseBundle(JSON.stringify({format:animations.PORTABLE_FORMAT,version:1,animations:items})).animations;
       const existing=await animationInventory(),seen=new Map(),ids=new Set();
       for(const doc of await store.listDocuments('animation',{includeDeleted:true}))ids.add(doc.id.slice('animation:'.length));
-      for(const v of existing){const key=animations.fingerprint(v.row.project);if(!seen.has(key))seen.set(key,v.row.id);}
+      // An identical portable animation may still cite a different immutable
+      // observation version under the same local alias. Do not deduplicate
+      // a bundle against a document retaining different original evidence.
+      const identity=(project,observations,evidence)=>assetPlan?
+        JSON.stringify([animations.fingerprint(project),observations,evidence]):
+        animations.fingerprint(project);
+      for(const v of existing){
+        const key=identity(v.row.project,v.observations,v.evidence);
+        if(!seen.has(key))seen.set(key,v.row.id);
+      }
       const time=now||Date.now(),createdIds=[],reusedIds=[],plans=[];
       for(const item of incoming){
-        const key=animations.fingerprint(item.project);
-        if(seen.has(key)){reusedIds.push(seen.get(key));continue;}
+        const simpleKey=animations.fingerprint(item.project);
+        if(!assetPlan&&seen.has(simpleKey)){reusedIds.push(seen.get(simpleKey));continue;}
         let id,attempt=0;
         do{check(++attempt<=100,'Cannot allocate a unique animation ID');id=animations.makeId(crypto,time+attempt);}while(ids.has(id));
-        ids.add(id);seen.set(key,id);
         const project=projects.validate({...item.project,id,keyframes:item.project.keyframes.map(f=>({...f,sourceSnapshotId:null}))});
         // A foreign calibration origin without an archive cannot silently
         // become verified evidence. Refuse mixed/unavailable evidence here.
         const row=animations.record(project,item.quality,id,item.createdAt??time,item.updatedAt??time,item.thumbnail,item.cover);
-        plans.push((await planAnimation(row,null,0)).plan);createdIds.push(id);
+        const journal=assetPlan?{evidence:[],observations:aliases(project).map(alias=>{
+          const value=assetPlan.byId.get(alias);
+          check(value,'portable observation mapping missing: '+alias);
+          return {alias,target:value.observationId};
+        })}:null;
+        const {plan}=await planAnimation(row,null,0,false,journal);
+        const payload=plan.resources[0].payload,key=identity(project,payload.observations,payload.evidence);
+        if(seen.has(key)){reusedIds.push(seen.get(key));continue;}
+        ids.add(id);seen.set(key,id);plans.push(plan);createdIds.push(id);
       }
-      await store.writeDocuments(plans,{expectedInventory:animationExpected(existing)});
+      const expectedInventory=animationExpected(existing);
+      await store.writeDocuments(assetPlan?[...assetPlan.plans,...plans]:plans,
+        {expectedInventory:assetPlan?[assetPlan.expectedInventory,expectedInventory]:expectedInventory,guard});
       return {created:createdIds.length,reused:reusedIds.length,createdIds,reusedIds};
+    }
+    async function importApplicationAnimationBundle(text,now,crypto,guard=()=>{}){
+      const bundle=animations.parseBundle(text),linked=animations.referenceIds(bundle.animations).length;
+      check(!linked||bundle.referenceImages.length,
+        'Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
+      guard();
+      const assetPlan=linked?await planObservationRecords(bundle.referenceImages,new Map()):null;
+      const resolved=assetPlan?bundle.animations.map(entry=>animations.remapReferences(entry,assetPlan.mapping)):bundle.animations;
+      return importApplicationAnimations(resolved,now,crypto,{assetPlan,guard});
     }
     // A V2 portable bundle has one asset record per alias. Preserve
     // distinct historical observation versions by remapping conflicting
@@ -1389,6 +1420,9 @@
             old.createdAt,Math.max(now||Date.now(),old.updatedAt+1),old.thumbnail,image));
         },
         importEntries:async(db,items,now,crypto)=>{bound(db);return importApplicationAnimations(items,now,crypto);},
+        importPortableBundle:async(db,text,now,crypto,guard)=>{
+          bound(db);return importApplicationAnimationBundle(text,now,crypto,guard);
+        },
         exportRetainedPortable:async(db,entries,lookup,options)=>{
           bound(db);return exportRetainedAnimationPortable(entries,lookup,options);
         },

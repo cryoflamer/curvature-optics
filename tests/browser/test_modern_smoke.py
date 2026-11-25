@@ -1598,9 +1598,27 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(imported.created===1&&imported.reused===1,'portable import dedup failed');
             const again=await port.importEntries(indexedDB,[item],104,crypto);
             ok(again.created===0&&again.reused===1,'portable reimport failed');
+            const bundleText=JSON.stringify({format:L.PORTABLE_FORMAT,version:2,...multi});
+            const oldAnimations=await port.list(indexedDB),oldPhotos=await adapter.listObservations();
+            let guards=0;
+            await rejects(()=>port.importPortableBundle(indexedDB,bundleText,400,crypto,()=>{
+                if(++guards===2)throw Error('Injected atomic import guard');
+            }),/Injected atomic import guard/);
+            ok(JSON.stringify(await port.list(indexedDB))===JSON.stringify(oldAnimations)&&
+                JSON.stringify(await adapter.listObservations())===JSON.stringify(oldPhotos),
+                'failed bundle published part of its assets or projects');
+            const options={crypto:()=>crypto,importReferenceImages(){throw Error('Separate asset import used');}};
+            const merged=await CurvatureModernAnimationLibraryActions.importPortable(port,indexedDB,bundleText,options);
+            ok(merged.created===2&&merged.reused===0,'bundle failed to create distinct historical projects');
+            const importedOriginals=await Promise.all(merged.createdIds.map(id=>port.retainedReferences(indexedDB,id)));
+            ok(importedOriginals[0][0].author==='First'&&importedOriginals[1][0].author==='Second'&&
+                importedOriginals.every(items=>items[0].original.dataUrl===shared.original.dataUrl),
+                'atomic bundle changed historical observations');
+            const reimport=await CurvatureModernAnimationLibraryActions.importPortable(port,indexedDB,bundleText,options);
+            ok(reimport.created===0&&reimport.reused===2,'exact atomic reimport was not idempotent');
             return {valid:(await store.verifyIntegrity()).valid,count:(await port.list(indexedDB)).length};
         }""")
-        self.assertEqual(result, {'valid': True, 'count': 2})
+        self.assertEqual(result, {'valid': True, 'count': 4})
 
 
     def test_managed_animation_working_application_port(self):

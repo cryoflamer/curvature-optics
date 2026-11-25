@@ -34,12 +34,17 @@
     if(linked&&!bundle.referenceImages.length)
       throw Error('Legacy JSON contains only reference IDs. Re-export with originals from the source browser.');
     guard();
-    const mapping=linked?await options.importReferenceImages(bundle.referenceImages):null;
-    const resolved=linked?entries.map(entry=>api.remapReferences(entry,mapping)):entries;
-    // Imported originals may already be durable. Never delete those assets
-    // as compensation if a later project transaction fails or is interrupted.
-    guard();
-    const result=await api.importEntries(db,resolved,undefined,options.crypto());
+    let result;
+    if(typeof api.importPortableBundle==='function'){
+      result=await api.importPortableBundle(db,contents,undefined,options.crypto(),guard);
+    }else{
+      const mapping=linked?await options.importReferenceImages(bundle.referenceImages):null;
+      const resolved=linked?entries.map(entry=>api.remapReferences(entry,mapping)):entries;
+      // Legacy imported originals may already be durable. Never delete those
+      // assets as compensation if the separate project transaction fails.
+      guard();
+      result=await api.importEntries(db,resolved,undefined,options.crypto());
+    }
     if(options.importKeyframeThumbnails){
       try{if(await options.importKeyframeThumbnails(entries)===false)result.thumbnailWarning=true;}
       catch(error){result.thumbnailWarning=true;}
