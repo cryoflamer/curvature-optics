@@ -14479,8 +14479,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.setItem('curvature-modern-animation-library-filters-v1',JSON.stringify({query:'Alpha'}));
             const demo=CurvatureModernDemoCatalog.load()[0].project;
             for(const name of ['Alpha','Beta']){
-                const p=structuredClone(demo);p.name=name;
-                await CurvatureModernAnimationLibrary.create(indexedDB,p,'auto',Date.now());
+                const p=structuredClone(demo);p.id='filter_'+name.toLowerCase();p.name=name;
+                await CurvatureModernAnimationLibrary.create(indexedDB,p,'auto',Date.now(),null,true);
             }
             return await ui.read('global',{});
         }""")
