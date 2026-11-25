@@ -179,7 +179,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                                   'duration': 59100, 'frozen': True, 'display': 'compare'})
 
     def test_managed_object_store_transactional_graph(self):
-        # Isolated origin document: the opt-in core must not alter live app stores.
+        # Isolated origin document: even after batch-write support, the opt-in
+        # core must not alter live app stores.
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
         self.page.goto(self.base_url)
@@ -393,6 +394,51 @@ class ModernBrowserSmoke(unittest.TestCase):
             return {revision:(await s.getDocument('doc')).revision,retained:true};
         }""")
         self.assertEqual(result, {'revision': 2, 'retained': True})
+
+    def test_managed_object_store_atomic_resource_batch(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        result=self.page.evaluate("""async()=>{
+            const s=CurvatureModernManagedObjectStore.create(window,{types:[
+                {type:'asset',version:1,validate:v=>v instanceof Blob,references:()=>[]},
+                {type:'snapshot',version:1,validate:v=>Array.isArray(v?.refs),references:v=>v.refs}
+            ]});
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const asset=s.newObjectId(),snapshot=s.newObjectId(),unused=s.newObjectId();
+            const plan={documentId:'experiment',kind:'history',expectedRevision:0,metadata:{name:'batch'},
+                references:[{slot:'experiment',target:snapshot,strength:'strong'}],
+                resources:[
+                    {id:snapshot,type:'snapshot',version:1,payload:{
+                        refs:[{slot:'photo',target:asset,strength:'strong'}]}},
+                    {id:asset,type:'asset',version:1,payload:new Blob([Uint8Array.from([1,2,3])])}
+                ]};
+            await rejects(()=>s.writeDocument({...plan,resources:[...plan.resources,
+                {id:unused,type:'asset',version:1,payload:new Blob(['orphan'])}]}),/not strongly reachable/);
+            ok(await s.getDocument('experiment')===null,'failed batch created document');
+            ok((await s.verifyIntegrity()).liveObjects===0,'failed batch leaked resources');
+            const row=await s.writeDocument(plan);
+            ok(row.revision===1&&(await s.get(asset)).refCount===1,'batch graph not retained');
+            const bytes=Array.from(new Uint8Array(await (await s.get(asset)).payload.arrayBuffer()));
+            ok(bytes.join(',')==='1,2,3','batch bytes differ');
+            await rejects(()=>s.writeDocument({...plan,expectedRevision:1}),/object ID collision/);
+            ok((await s.getDocument('experiment')).revision===1,'collision overwrote document');
+            const one=s.newObjectId(),two=s.newObjectId();
+            await rejects(()=>s.writeDocument({documentId:'cycle',kind:'test',expectedRevision:0,metadata:{},
+                references:[{slot:'cycle',target:one,strength:'strong'}],resources:[
+                    {id:one,type:'snapshot',version:1,payload:{refs:[{slot:'two',target:two,strength:'strong'}]}},
+                    {id:two,type:'snapshot',version:1,payload:{refs:[{slot:'one',target:one,strength:'strong'}]}}
+                ]}),/strong reference cycle/);
+            const report=await s.verifyIntegrity();
+            ok(report.valid&&report.liveObjects===2&&report.unreachable.length===0,'cycle batch leaked objects');
+            return {valid:report.valid,objects:report.liveObjects,bytes};
+        }""")
+        self.assertEqual(result, {'valid': True, 'objects': 2, 'bytes': [1, 2, 3]})
 
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone

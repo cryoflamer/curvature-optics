@@ -88,7 +88,8 @@ handling where it already works; no broad session refactor is required.
 ## Lifecycle API
 
 The opt-in core in `src/storage/ModernManagedObjectStore.js` exposes
-`createAndAttach`, `writeDocument` (whole root-slot replacement),
+`newObjectId`, `createAndAttach`, `writeDocument` (whole root-slot replacement
+and optional atomic batch creation),
 `setReference`, `detach`, `removeDocument`, `get`, `getDocument`,
 `inspectUsage`, `verifyIntegrity`, `recount`, `withRetained` and
 `collectGarbage`. It is not loaded by the application. `detach` is a normal
@@ -96,6 +97,9 @@ revision-checked edit, not a user-facing deletion operation. `removeDocument`
 acquires nonblocking exclusive locks on its direct strong targets, rechecks
 the document revision, and retires its root slots atomically. `withRetained`
 holds a shared lock only while its asynchronous callback is pending.
+Batch creation permits references to other new IDs in the same transaction;
+all new objects must be strongly reachable from a durable document root.
+ID allocation alone does not reserve or persist a resource.
 The initial core keeps document/object ID tombstones, scans metadata on each
 mutation, validates payload/edge agreement during explicit integrity/recount/GC,
 and collects one object per call. This prioritizes correctness over throughput;

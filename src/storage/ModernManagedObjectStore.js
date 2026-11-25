@@ -211,25 +211,34 @@
       g.docs.set(doc.id,doc);stores.documents.put(doc);
       return clone(doc);
     }
-    async function createAndAttach({documentId,kind,expectedRevision,metadata,slot,type,version,payload}){
-      token(documentId,'document ID');token(kind,'document kind');token(slot,'slot');revision(expectedRevision);
+    // IDs can be allocated before assembling a graph. Allocation does not
+    // reserve a row; the atomic write rejects collisions, including tombstones.
+    function newObjectId(){return token(env.crypto.randomUUID(),'generated object ID');}
+    function prepareResource({id,type,version,payload}){
+      token(id,'object ID');
       const adapter=types.get(typeKey(type,version));check(adapter,'unsupported resource type/version');
-      // Clone before and after adapter calls: neither callers nor adapters retain
-      // a mutable alias into the stored payload. Validators must be synchronous.
       const value=clone(payload);
       check(adapter.validate(clone(value))===true,'invalid payload');
-      const refs=slots(adapter.references(clone(value)));
+      return {id,type,version,value,refs:slots(adapter.references(clone(value)))};
+    }
+    function insertResource(g,stores,{id,type,version,value,refs}){
+      check(!g.objects.has(id),'object ID collision');
+      const row={id,type,version,refCount:0,deleted:false};
+      g.objects.set(id,row);stores.objects.add(row);
+      g.payloadKeys.add(id);stores.payloads.add({id,value});
+      for(const ref of refs)setEdge(g,stores,{ownerKind:'object',ownerId:id,...ref});
+    }
+    async function createAndAttach({documentId,kind,expectedRevision,metadata,slot,type,version,payload}){
+      token(documentId,'document ID');token(kind,'document kind');token(slot,'slot');revision(expectedRevision);
+      // Clone before and after adapter calls: neither callers nor adapters retain
+      // a mutable alias into the stored payload. Validators must be synchronous.
+      const id=newObjectId(),resource=prepareResource({id,type,version,payload});
       const meta=clone(metadata);
-      const id=token(env.crypto.randomUUID(),'generated object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const old=checkedDocument(g,documentId,expectedRevision);
         check(!old||old.kind===kind,'document kind mismatch');
-        check(!g.objects.has(id),'object ID collision');
-        const row={id,type,version,refCount:0,deleted:false};
-        g.objects.set(id,row);stores.objects.add(row);
-        g.payloadKeys.add(id);stores.payloads.add({id,value});
-        for(const ref of refs)setEdge(g,stores,{ownerKind:'object',ownerId:id,...ref});
+        insertResource(g,stores,resource);
         setEdge(g,stores,{ownerKind:'document',ownerId:documentId,slot,target:id,strength:'strong'});
         const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false});
         updateCounts(g,stores,types);
@@ -238,19 +247,27 @@
     }
     // Replace the complete root-slot set and metadata in one revision. This
     // also creates a new owner of already-existing resources without copying.
-    async function writeDocument({documentId,kind,expectedRevision,metadata,references}){
+    async function writeDocument({documentId,kind,expectedRevision,metadata,references,resources=[]}){
       token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
       const refs=slots(references),meta=clone(metadata);
+      check(Array.isArray(resources),'resources must be an array');
+      const prepared=resources.map(prepareResource);
+      check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const old=checkedDocument(g,documentId,expectedRevision);
         check(!old||old.kind===kind,'document kind mismatch');
         const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false});
+        for(const resource of prepared)insertResource(g,stores,resource);
         for(const edge of [...g.refs.values()]){
           if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
         }
         for(const ref of refs)setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
         updateCounts(g,stores,types);
+        if(prepared.length){
+          const retained=reachable(g);
+          check(prepared.every(row=>retained.has(row.id)),'new resource is not strongly reachable from a document');
+        }
         return document;
       });
     }
@@ -382,7 +399,7 @@
         return {collected:true};
       }));
     }
-    return Object.freeze({createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,inspectUsage,
+    return Object.freeze({newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,inspectUsage,
       verifyIntegrity,recount,withRetained,collectGarbage});
   }
   return Object.freeze({DATABASE,VERSION,create});
