@@ -38,10 +38,10 @@
   exportButton.addEventListener('click',async()=>{
     if(busy)return;
     lock(true);
-    message('backup-export-status','Читаю бази й обчислюю контрольні суми…','info');
+    message('backup-export-status','Очікую завершення записів, читаю бази й обчислюю контрольні суми…','info');
     let url=null;
     try{
-      const archive=await api.capture(root);
+      const {archive}=await api.captureCoordinated(root);
       const file=await api.fileBlob(archive,root.crypto);
       url=URL.createObjectURL(file.blob);
       const link=document.createElement('a');
@@ -50,6 +50,7 @@
       message('backup-export-status',
         'Завантаження розпочато: '+file.filename+' ('+
         (file.bytes/1024/1024).toFixed(2)+' MiB).\n'+
+        'Координований знімок отримано; він охоплює завершені записи, що використовують спільний lock.\n'+
         'Переконайся, що файл справді з’явився на диску. '+
         'Не видаляй його до завершення рефакторингу.','success');
     }catch(error){

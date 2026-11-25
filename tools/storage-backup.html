@@ -44,12 +44,12 @@
   </header>
   <main class="backup-page">
     <h1>Дамп та відновлення</h1>
-    <p class="backup-muted">Проста контрольна копія перед рефакторингом. Файл залишається на твоєму комп’ютері.</p>
-    <div class="backup-note"><strong>Для експорту:</strong> закінчи редагування, дочекайся збереження та відкрий цю сторінку в тій самій вкладці й на тому самому localhost/порті.
+    <p class="backup-muted">Локальна резервна копія. Файл залишається на твоєму комп’ютері.</p>
+    <div class="backup-note"><strong>Для експорту:</strong> закінчи редагування, дочекайся збереження, припини редагування в інших вкладках та відкрий цю сторінку в тій самій вкладці й на тому самому localhost/порті.
       <strong>Для перевірки імпорту:</strong> відкрий це саме посилання в <em>новому приватному вікні або чистому профілі</em> та імпортуй туди файл. Робочу базу не очищай.</div>
     <section class="backup-card" aria-labelledby="export-heading">
       <h2 id="export-heading">1. Export — отримати дамп</h2>
-      <p>Читає наявні Curvature IndexedDB, localStorage та sessionStorage й завантажує перевірений JSON. Дані не змінює.</p>
+      <p>Очікує завершення координованих записів, читає наявні Curvature IndexedDB, localStorage та sessionStorage й завантажує перевірений JSON. Дані не змінює. Незбережені зміни інших вкладок не включаються гарантовано.</p>
       <button type="button" id="backup-export" class="modern-primary-button">Експортувати JSON</button>
       <p id="backup-export-status" class="backup-status" role="status" aria-live="polite"></p>
     </section>
@@ -64,6 +64,7 @@
       <p class="backup-muted">Імпорт відмовиться працювати, якщо вже є Curvature-бази або дані. Він не перезаписує і не видаляє записи. Після успіху відкрий Modern у цій вкладці та натисни F5.</p>
     </section>
   </main>
+  <script src="../src/storage/ModernBackupWriteBarrier.js"></script>
   <script src="../src/storage/ModernPortableBackup.js"></script>
   <script src="storage-backup.js"></script>
 </body>

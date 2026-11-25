@@ -9025,8 +9025,30 @@ class ModernBrowserSmoke(unittest.TestCase):
             response = source_page.goto(tool_url, wait_until='load')
             self.assertEqual(response.status, 200)
             expect(source_page.locator('#backup-export')).to_be_enabled()
+            # The ordinary export button must wait for participating writers
+            # in another tab, not call the old uncoordinated capture directly.
+            writer_page=source_context.new_page()
+            writer_page.goto(tool_url, wait_until='load')
+            writer_page.evaluate("""()=>{
+                const writer=CurvatureModernBackupWriteBarrier.create(navigator.locks)
+                    .registerWriter('test.backup.page');
+                window.__writerEntered=false;
+                window.__writerTask=writer.commit(async()=>{
+                    window.__writerEntered=true;
+                    await new Promise(resolve=>window.__writerRelease=resolve);
+                    return true;
+                });
+            }""")
+            writer_page.wait_for_function('window.__writerEntered===true')
             with source_page.expect_download(timeout=30000) as info:
                 source_page.locator('#backup-export').click()
+                source_page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+                    lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='exclusive')""")
+                expect(source_page.locator('#backup-export')).to_be_disabled()
+                expect(source_page.locator('#backup-export-status')).to_contain_text('Очікую завершення записів')
+                writer_page.evaluate('window.__writerRelease()')
+                self.assertTrue(writer_page.evaluate('window.__writerTask'))
+            writer_page.close()
             download=info.value
             self.assertTrue(download.suggested_filename.endswith('.json'))
             payload=Path(download.path()).read_bytes()
@@ -9035,6 +9057,18 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(archive['format'],'curvature-modern-portable-backup')
             expect(source_page.locator('#backup-export-status')).to_contain_text(
                 'Завантаження розпочато')
+
+            expect(source_page.locator('#backup-export-status')).to_contain_text(
+                'Координований знімок отримано')
+            # Lock denial is an explicit failure, not an uncoordinated fallback.
+            source_page.evaluate("""()=>{
+                window.__originalLockRequest=navigator.locks.request;
+                navigator.locks.request=()=>Promise.reject(new Error('fixture lock denied'));
+            }""")
+            source_page.locator('#backup-export').click()
+            expect(source_page.locator('#backup-export-status')).to_contain_text('fixture lock denied')
+            expect(source_page.locator('#backup-export')).to_be_enabled()
+            source_page.evaluate('navigator.locks.request=window.__originalLockRequest')
 
             # The populated source profile must be refused as an import target.
             source_page.locator('#backup-file').set_input_files({

@@ -5,10 +5,10 @@ Browser-based Earth-curvature and atmospheric-refraction visualizations, with **
 - **Demos** (Modern tab backed by `CurvatureDemosHost.html?embed=demos`) — nine original fast illustrated Legacy storyboards, running in their own isolated iframe. The historical `CurvatureApp.html?ui=legacy` page is retained for diagnostics and old saved links.
 - **Modern** (`CurvatureModern.html`) — Scene, Compare and Demos, including physical-scene visualization with CPU ray tracing, a single **Scene** view and an independent **Compare A/B** view. Its Canvas 2D rendering path is the reference; WebGL2 geometry rasterization is an optional experimental backend.
 
-**Before refactoring session persistence — simple local backup:** Open
+**Local data backup and restore check:** Open
 [Storage backup check](tools/storage-backup.html) from the **same localhost
 origin/port** as Modern, ideally in the same browser tab after an acknowledged
-save. Choose **Export JSON**, and keep the downloaded file outside the browser.
+save. Stop editing in other tabs, choose **Export JSON**, and keep the downloaded file outside the browser. Export waits for participating storage writers via Web Locks; it fails visibly if coordination is unavailable.
 To check that it is recoverable, open that same utility URL in a *new private
 window or clean browser profile*, choose **Import**, and confirm that the
 database is empty. Import will reject existing Curvature data rather than

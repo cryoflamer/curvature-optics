@@ -140,7 +140,7 @@ A shared lock covers a **single acknowledged transaction**, not an entire multi-
 
 **Scope is deliberately limited.** The current registration list is local to each JavaScript context; it cannot prove that all browser tabs or older deployed clients participate. Synchronous legacy Web Storage (including tab recovery journals), unflushed in-memory edits/Undo/Redo, in-memory caches, direct external IDB writes and external backups are not covered by this list. If Web Locks are missing, ordinary compatibility saves retain their previous uncoordinated path; a denied available lock must not fall back to an unlocked write. The snapshot continues to report `coordination:'participating-writers-only'` and `eligibleForMigration:false`. Neither a zero-use scan nor this lock alone authorizes deletion or a migration-ready backup.
 
-Targeted tests cover actual History, Animation Library, shared Animation draft, Calibration Project, Image Library, UI Registry and thumbnail-cache writers, plus schema-capable physical checkpoint reads, waiting behind an exclusive inspector, non-creating reads, and transaction-abort acknowledgement. `ModernPortableBackup.captureCoordinated(env)` runs the existing two-pass read-only capture inside an exclusive barrier callback. It returns the archive and live coordination metadata separately; the portable v1 envelope remains conservative (`writerCoordination:false`, `eligibleForMigration:false`). New captures explicitly inventory the UI database and thumbnail cache, including absence; old v1 inventories remain readable. This API does not itself switch the ordinary backup-page route or qualify an archive for migration. Full populated-backup/Opera acceptance and application-wide ownership checks remain independent gates.
+Targeted tests cover actual History, Animation Library, shared Animation draft, Calibration Project, Image Library, UI Registry and thumbnail-cache writers, plus schema-capable physical checkpoint reads, waiting behind an exclusive inspector, non-creating reads, and transaction-abort acknowledgement. `ModernPortableBackup.captureCoordinated(env)` runs the existing two-pass read-only capture inside an exclusive barrier callback. It returns the archive and live coordination metadata separately; the portable v1 envelope remains conservative (`writerCoordination:false`, `eligibleForMigration:false`). New captures explicitly inventory the UI database and thumbnail cache, including absence; old v1 inventories remain readable. The ordinary backup-page export now uses this API and fails visibly if coordination cannot be obtained; it does not qualify an archive for migration. Full populated-backup/Opera acceptance and application-wide ownership checks remain independent gates.
 
 Image ownership discovery and deletion-safety review use the same exclusive read barrier when Web Locks are available. The review keeps the original revision reads and ownership scan inside one lock, using existing-only storage observers. Current-tab Undo/Redo and temporary editor provenance are read-only projections, and current Calibration evidence is inspected by original identity without mounting an editor. A denied available lock fails closed; a compatibility scan without Web Locks is explicitly uncoordinated. Neither `coordinated` nor `localScanComplete` is a deletion authorization. See [image lifecycle policy](reference-images.md#stage-5-lifecycle-review-and-fail-closed-deletion-policy).
 
@@ -748,10 +748,11 @@ tag pointing to the code baseline.
 
 This is a deliberately single-user workflow. Before export, wait until Modern
 reports the last edit as saved; navigate to the backup page in the *same tab*.
-Do not edit in another tab during the backup. The existing two-pass capture
-does not claim cross-database atomicity, and the archive retains its
-`eligibleForMigration:false` marker because it was created without an
-application-wide writer freeze. This marker is **not** a reason to block
+Do not edit in another tab during the backup. The ordinary export runs the two-pass capture under an exclusive Web Lock,
+waiting for participating writers. It fails rather than falling back if that
+lock cannot be obtained. The capture does not claim cross-database atomicity,
+and the archive retains its `eligibleForMigration:false` marker because
+uncoordinated writers and unsaved memory in other tabs are outside the lock. This marker is **not** a reason to block
 the agreed manual one-user rollback drill once the user has verified a real
 download and clean-profile import. A synthetic automated Chromium round trip
 validates the tool's mechanics; only a user-held real-data round trip confirms
