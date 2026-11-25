@@ -203,17 +203,33 @@
     // The UI save contract: adjacent automatic deduplication, deliberate
     // saves reusing any matching entry, and conservative capacity refusal.
     // Even an unchanged match is checked inside the final transaction.
-    async function recordHistory(experiment,source,thumbnail,{now=Date.now,maxAutoEntries=history.MAX_AUTO,guard=()=>{}}={}){
+    async function recordHistory(experiment,source,thumbnail,{now=Date.now,maxAutoEntries=history.MAX_AUTO,guard=()=>{},keyframeRow=null}={}){
       check(['manual','auto','recovery'].includes(source),'invalid History source');
       check(Number.isInteger(maxAutoEntries)&&maxAutoEntries>=1&&maxAutoEntries<=10000,'invalid auto-history limit');
       const naming=deps.CurvatureModernSemanticNaming;
       check(naming,'History naming adapter unavailable');
       const snapshot=state.validate(experiment),signature=fp.exactSignature(snapshot);
       const item=portableHistoryItems([{experiment:snapshot,thumbnail:thumbnail||null}])[0];
-      const existing=await listHistory(),expectedInventory=historyInventory(existing);
+      const existing=await listHistory(),expectedInventory=[historyInventory(existing)];
+      let handoff=null;
+      if(keyframeRow!==null){
+        check(source==='manual','temporary keyframe History must be a manual save');
+        const working=await readAnimationWorkingCollection();
+        check(working&&same(working.row,keyframeRow)&&
+          same(working.row.keyframeEdit?.history?.experiment,snapshot),
+          'Temporary keyframe History intent changed; retain recovery and reload');
+        expectedInventory.push({kind:DRAFTS,documents:[{id:draftsId,revision:working.managedRevision}]});
+        if(snapshot.calibrationOrigin){
+          const entry=working.evidence.find(v=>v.alias===snapshot.calibrationOrigin.resultId);
+          check(entry,'Temporary keyframe calibration evidence missing');
+          handoff={experiment:snapshot,evidence:entry.target===null?'standalone':{result:entry.target}};
+        }
+      }
       const match=source==='auto'?(existing[0]?.row.signature===signature?existing[0]:null):
         existing.find(v=>v.row.signature===signature);
       if(match){
+        if(handoff)check(same(match.evidence,handoff.evidence),
+          'Matching History snapshot has different calibration evidence; retain recovery and resolve the conflict');
         const row={...match.row};
         if(source!=='auto'&&!row.pinned){row.pinned=true;row.source=source;}
         if(item.thumbnail&&!row.thumbnail)row.thumbnail=item.thumbnail;
@@ -230,9 +246,8 @@
         return {created:false,entry:null,skipped:'capacity'};
       }
       const id=await suggestHistoryId();
-      const inventories=[expectedInventory];
-      let handoff=null;
-      if(snapshot.calibrationOrigin&&session&&sessionContract){
+      const inventories=expectedInventory;
+      if(!handoff&&snapshot.calibrationOrigin&&session&&sessionContract){
         const working=await readWorkingCheckpoint();
         if(working){
           const candidates=['committed','draft'].map(slot=>({
@@ -363,6 +378,12 @@
         const {managedRevision,entry,...result}=await recordHistory(experiment,source,thumbnail,{now,maxAutoEntries,guard});
         return {...result,entry:asRow(entry?{row:entry,managedRevision}:null)};
       }
+      async function recordKeyframeHistory(expected,thumbnail,{guard=()=>{}}={}){
+        check(expected?.keyframeEdit?.history,'Pending temporary keyframe History intent required');
+        const {managedRevision,entry,...result}=await recordHistory(expected.keyframeEdit.history.experiment,
+          'manual',thumbnail,{now,maxAutoEntries,guard,keyframeRow:expected});
+        return {...result,entry:asRow({row:entry,managedRevision})};
+      }
       const rejectManagement=async()=>{throw Error('Managed History deletion or non-revisioned management is disabled');};
       const rejectMigration=async()=>{throw Error('Managed History requires coordinated cutover; legacy migration is disabled');};
       return Object.freeze({
@@ -370,7 +391,7 @@
         open:()=>store.listDocuments('history'),
         list:async()=>(await listHistory()).map(asRow),
         get:async id=>asRow(await readHistory(Number(id))),
-        record,importEntries:(items,guard=()=>{})=>importHistory(items,{now,guard}),
+        record,recordKeyframeHistory,importEntries:(items,guard=()=>{})=>importHistory(items,{now,guard}),
         updateMetadataExact,setPinnedExact,
         updateMetadata:rejectManagement,pin:rejectManagement,remove:rejectManagement,
         clearAll:rejectManagement,clearAuto:rejectManagement,

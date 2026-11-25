@@ -679,3 +679,12 @@ aliases; pruning is deferred until pending evidence acquisition/publication
 finishes. An incomplete inventory refuses to release any existing locks.
 Durable working and named roots remain independent owners. Temporary keyframe,
 named-save and workspace transitions still defer pruning until stable.
+
+A temporary keyframe's explicit Apply + History intent is a durable managed
+owner. The managed History port reads the exact verified journal revision,
+transfers its result mapping (or explicit standalone origin), and checks the
+source collection inventory in the History transaction, including deduplication.
+A matching History entry with different retained evidence is a conflict, not
+a substitute. The existing journal/History/selection receipt sequence remains
+retryable; the History root is committed before applying the frame and may
+remain after a cancelled pending intent. This is not a new cross-store writer.

@@ -6373,8 +6373,10 @@
     ctx.lease.check(true);
     // The established manual History transaction is idempotent for an exact
     // experiment. Never attach a provisional ID or delete an external snapshot.
-    var saved=await experimentHistory.record(intent.history.experiment,'manual',thumbnail||null,
-      {retainAuto:true,guard:()=>ctx.lease.check(true)});
+    var options={retainAuto:true,guard:()=>ctx.lease.check(true)};
+    var saved=experimentHistory.storageKind==='managed'?
+      await experimentHistory.recordKeyframeHistory(row,thumbnail||null,options):
+      await experimentHistory.record(intent.history.experiment,'manual',thumbnail||null,options);
     ctx.lease.check(true);
     var confirmed=await experimentHistory.get(saved.entry.id);
     ctx.lease.check(true);

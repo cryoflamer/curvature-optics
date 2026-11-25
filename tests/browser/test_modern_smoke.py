@@ -2689,6 +2689,45 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(!released.collected&&released.reason==='durable-reference','pruning removed independently owned evidence');
             await animationLive.retainDraft(inserted,id);
             ok(!animationLive.needsEvidence(inserted),'reinserted History evidence was not reacquired');
+            // Contracted keyframe: the durable journal, not the current
+            // physical checkpoint or gallery, is the History source.
+            const P=CurvatureModernAnimationProject;
+            const contracted=Studio.fromProject(P.createV2({version:1,mode:'camera',target:null,
+                referenceExperiment:inserted.frames[0].experiment},inserted.frames,{id:'journal_evidence'}));
+            const contractedCp=A.normalize({...cp,draft:contracted,selectedKey:contracted.frames[0].key,savedAt:205});
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),contractedCp,base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
+            await port.replaceFromHistory(final.experiment,uncalibrated,final.revision,{isCurrent:()=>true});
+            await live.reset();
+            await adapter.store.removeDocument({documentId:'history:'+recorded.entry.id,
+                expectedRevision:retained.managedRevision});
+            const original=contracted.frames[0].experiment,candidate=structuredClone(original);
+            candidate.scene.camera.Height+=17;
+            const intent={version:1,reference:A.documentReference(animationRow,id),base,returnView:'editor',
+                compareSelected:'A',session:{version:1,projectId:id,frameKey:contracted.frames[0].key,
+                    mode:'scene',original,workspace:uncalibrated,candidate:original,past:[],future:[]}};
+            animationRow=await animation.stageKeyframeEdit(animationRow,intent);
+            animationRow=await animation.updateKeyframeEdit(animationRow,animationRow.keyframeEdit,
+                {...intent.session,candidate,past:[original]},'A');
+            const pending=await animation.stageKeyframeHistory(animationRow,animationRow.keyframeEdit,base);
+            const staleJournal=structuredClone(pending);staleJournal.digest='sha256:'+'0'.repeat(64);
+            await rejects(()=>historyPort.recordKeyframeHistory(staleJournal,null),/intent changed/);
+            await rejects(()=>historyPort.recordKeyframeHistory(pending,null,{guard:()=>{throw Error('stale journal guard');}}),
+                /stale journal guard/);
+            ok(!(await historyPort.list()).length,'refused journal History write committed');
+            const savedFrame=await historyPort.recordKeyframeHistory(pending,null);
+            const exactFrame=await adapter.readHistory(savedFrame.entry.id);
+            ok(savedFrame.created&&exactFrame.evidence.result===saved.resultId,'journal History lost exact fit');
+            const retryFrame=await historyPort.recordKeyframeHistory(pending,null);
+            ok(!retryFrame.created&&retryFrame.entry.id===savedFrame.entry.id,'journal retry duplicated History');
+            animationRow=await animation.applyKeyframeEditWithHistory(pending,pending.keyframeEdit,base,
+                await historyPort.get(savedFrame.entry.id));
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
+            const appliedFrame=A.getWorkspace(animationRow.collection,id).draft.frames[0];
+            ok(appliedFrame.sourceSnapshotId===savedFrame.entry.id&&
+                JSON.stringify(appliedFrame.experiment)===JSON.stringify(pending.keyframeEdit.history.experiment),
+                'applied keyframe changed journal provenance');
+            await rejects(()=>historyPort.recordKeyframeHistory(pending,null),/intent changed/);
             await animationLive.reset();
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
