@@ -14354,6 +14354,52 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(where.get_by_text('Recoverable Storyboards (1)',exact=True)).to_be_visible()
         self.assertEqual(self.page.evaluate('localStorage.getItem(CurvatureModernAnimationDraftAutosave.STORAGE_KEY)'),'{broken')
 
+    def test_shared_animation_export_preferences_migrate_and_restore_without_web_storage_writes(self):
+        """Existing global envelope gains export keys once; subsequent control edits are CAS-backed."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(self.base_url,wait_until='load')
+        old=self.page.evaluate("""() => {
+            const values={frame:{Fps:'25',Mode:'presentation',Narrative:false},video:{Fps:'10',Size:'960x540'}};
+            Object.entries(values).forEach(([kind,v])=>localStorage.setItem(
+                'curvature.animation.export.'+kind+'.v1',JSON.stringify(v)));
+            return values;
+        }""")
+        self.page.goto(url,wait_until='load')
+        ready="""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        expect(self.page.locator('#ModernAnimationWorkspace')).to_be_visible(timeout=30000)
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        expect(self.page.locator('#ModernAnimationEditorView')).to_be_visible(timeout=30000)
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.locator('#ModernAnimationFrameExportFps').input_value(),'25')
+        self.assertEqual(self.page.locator('#ModernAnimationFrameExportMode').input_value(),'presentation')
+        self.assertFalse(self.page.locator('#ModernAnimationFrameExportNarrative').is_checked())
+        self.assertEqual(self.page.locator('#ModernAnimationVideoExportSize').input_value(),'960x540')
+        read="""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            return {global:await ui.read('global',{}),
+                doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                legacy:Object.fromEntries(['frame','video'].map(k=>[k,JSON.parse(localStorage.getItem('curvature.animation.export.'+k+'.v1'))]))};
+        }"""
+        before=self.page.evaluate(read)
+        self.page.evaluate("""() => {
+            const field=document.getElementById('ModernAnimationFrameExportFps');
+            field.value='30';field.dispatchEvent(new Event('change',{bubbles:true}));
+        }""")
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        saved=self.page.evaluate(read)
+        self.assertEqual(saved['legacy'],old)
+        self.assertEqual(saved['doc'],before['doc'])
+        self.assertEqual(saved['global']['revision'],before['global']['revision']+1)
+        self.assertEqual(saved['global']['envelope']['values']['application.studioFrameExport']['value']['Fps'],'30')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.locator('#ModernAnimationFrameExportFps').input_value(),'30')
+        self.assertEqual(self.page.evaluate(read),saved)
+
 
 if __name__ == '__main__':
     unittest.main()

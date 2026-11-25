@@ -741,6 +741,7 @@
     catch(error){/* Private mode or disabled storage: in-memory filters still work. */}
   }
   var sharedPreferenceOwner=null,sharedPreferencesRestored=false;
+  var studioExportPreferenceBindings={};
   function applyGlobalPreferences(remembered){
     state.opticalQuality=remembered.opticalQuality;
     state.previewDetail=remembered.previewDetail;
@@ -780,10 +781,12 @@
   async function restoreSharedPreferences(){
     sharedPreferenceOwner=applicationPreferences.createShared({
       registryApi:root.CurvatureModernStateRegistry,managerApi:root.CurvatureModernUiSessionManager,
-      store:experimentPreview.ui,storage:preferencesStorage()});
+      store:experimentPreview.ui,storage:preferencesStorage(),
+      extensions:Object.values(studioExportPreferenceBindings).map(binding=>binding.spec)});
     var values=await sharedPreferenceOwner.restore();
     if(experimentPreview.status==='suspended')return;
     applyGlobalPreferences(values);
+    applySharedStudioExportPreferences(values);
     syncSharedGlobalPreferenceControls();
     sharedPreferencesRestored=true;
   }
@@ -805,11 +808,12 @@
     if(!sharedPreferencesRestored||workspaceUiRegistryPreview.status!=='ready')return;
     var defaults=applicationPreferences.defaults(),pending;
     try{
-      pending=sharedPreferenceOwner.save(defaults);
+      pending=sharedPreferenceOwner.save(defaults,{resetExtensions:true});
       syncPreviewUnloadWarning();
       // Only application preferences are reset. Physical state, active
       // document, workspace presentation and legacy bytes are untouched.
       applyGlobalPreferences(defaults);
+      applySharedStudioExportPreferences(sharedPreferenceOwner.values());
       syncSharedGlobalPreferenceControls();
       studioPlaybackFpsMeter.reset();
       stopAutoCameraPreview();
@@ -4611,24 +4615,61 @@
     var prefix='ModernAnimation'+kind+'Export',key='curvature.animation.export.'+kind.toLowerCase()+'.v1';
     var fields=['Renderer','Mode','Fps','Size','PresentationSize','Layout','Stability','Narrative','Workers','CameraHud','Target'].concat(
       kind==='Frame'?['Destination']:['Format','Quality','CompareLayout']);
-    var storage,saved={};
-    try{storage=root.localStorage;if(storage)saved=JSON.parse(storage.getItem(key)||'{}')||{};}catch(error){}
-    function valid(node,value){
+    var storage,saved={},nodes={},defaults={},choices={};
+    function valueOf(node){return node.type==='checkbox'?node.checked:node.value;}
+    function valid(node,value,availableOnly=true){
       return node.type==='checkbox'?typeof value==='boolean':typeof value==='string'&&
-        Array.from(node.options||[]).some(function(option){return option.value===value&&!option.disabled;});
+        Array.from(node.options||[]).some(option=>option.value===value&&(!availableOnly||!option.disabled));
     }
-    function persist(){
-      if(experimentPreview.live)return; // Export settings are not yet migrated.
-      var values={};fields.forEach(function(field){var node=newUiEl(prefix+field);if(!node)return;
-        var value=node.type==='checkbox'?node.checked:node.value;if(valid(node,value))values[field]=value;});
+    if(!sharedPresentationRequested)
+      try{storage=root.localStorage;if(storage)saved=JSON.parse(storage.getItem(key)||'{}')||{};}catch(error){}
+    var name='studio'+kind+'Export';
+    function persist(field){
+      if(experimentPreview.live){
+        if(!sharedPresentationActive()||!sharedPreferencesRestored||!persistence.ready)return;
+        var value=valueOf(nodes[field]);
+        if(!valid(nodes[field],value))return;
+        try{
+          var patch={...sharedPreferenceOwner.values()[name],[field]:value};
+          observeUiRegistrySave(sharedPreferenceOwner.saveExtension(name,patch),'UI Registry export preference save failed: ');
+        }catch(error){preferencesStatus('UI Registry export preference save failed: '+error.message,true);}
+        return;
+      }
+      var values={};Object.keys(nodes).forEach(function(field){
+        var node=nodes[field],value=valueOf(node);if(valid(node,value))values[field]=value;});
       try{if(storage)storage.setItem(key,JSON.stringify(values));}catch(error){}
     }
     fields.forEach(function(field){var node=newUiEl(prefix+field);if(!node)return;
+      nodes[field]=node;defaults[field]=valueOf(node);
+      choices[field]=node.type==='checkbox'?null:Array.from(node.options||[]).map(option=>option.value);
       var value=saved[field];if(valid(node,value)){
         if(node.type==='checkbox')node.checked=value;else node.value=value;
       }
-      node.addEventListener('change',persist);
+      node.addEventListener('change',()=>persist(field));
     });
+    // Register only presentation settings, never export jobs or project data.
+    // Capability-disabled options remain valid stored intent but are not
+    // activated on a host that cannot actually use them.
+    var validate=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&
+      Object.keys(value).every(field=>Object.hasOwn(choices,field)&&
+        (choices[field]===null?typeof value[field]==='boolean':choices[field].includes(value[field])));
+    studioExportPreferenceBindings[kind]={
+      spec:{name,legacyKey:key,defaultValue:{},validate,decodeLegacy:JSON.parse},
+      apply(values){
+        Object.keys(nodes).forEach(field=>{
+          var node=nodes[field],value=Object.hasOwn(values,field)?values[field]:defaults[field];
+          if(!valid(node,value))value=defaults[field];
+          if(valid(node,value)){if(node.type==='checkbox')node.checked=value;else node.value=value;}
+        });
+      },afterHydrate:null
+    };
+  }
+  function applySharedStudioExportPreferences(values){
+    Object.values(studioExportPreferenceBindings).forEach(binding=>{
+      binding.apply(values[binding.spec.name]||{});
+      if(binding.afterHydrate)binding.afterHydrate();
+    });
+    syncStudioFrameExportControls();
   }
   function exportRendererLabel(method){return method==='canvas-direct'?'Canvas Direct (approximate)':'Accurate RK4';}
   function studioVideoExportSelection(){
@@ -4966,6 +5007,7 @@
       ['PresentationSize','Layout','Stability','Narrative'].forEach(function(key){var node=newUiEl('ModernAnimationFrameExport'+key+'Control');if(node)node.hidden=!full;});
       var simulation=newUiEl('ModernAnimationFrameExportSimulationSizeControl');if(simulation)simulation.hidden=!!full;
       if(preview)preview.hidden=!full;clearPreview();}
+    if(studioExportPreferenceBindings.Frame)studioExportPreferenceBindings.Frame.afterHydrate=syncMode;
     if(mode)mode.addEventListener('change',syncMode);
     ['Renderer','PresentationSize','Layout','Stability','Narrative','CameraHud','Target'].forEach(function(key){var node=newUiEl('ModernAnimationFrameExport'+key);if(node)node.addEventListener('change',clearPreview);});
     syncMode();

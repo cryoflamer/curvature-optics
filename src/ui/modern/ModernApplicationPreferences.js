@@ -200,9 +200,23 @@
     raw=storage.getItem(LEGACY_NAVIGATION_KEY);
     return normalize(raw===null?{}:{navigation:parse(raw)});
   }
-  function createShared({registryApi,managerApi,store,storage}={}){
+  function createShared({registryApi,managerApi,store,storage,extensions=[]}={}){
     if(!registryApi||!managerApi||!store)throw Error('Shared application preference dependencies required');
     var manager=null;
+    var extra=new Map();
+    extensions.forEach(function(spec){
+      if(!spec||typeof spec.name!=='string'||! /^[a-z][a-zA-Z0-9]*$/.test(spec.name)||
+         GLOBAL_KEYS.includes(spec.name)||extra.has(spec.name)||typeof spec.validate!=='function'||
+         typeof spec.decodeLegacy!=='function'||typeof spec.legacyKey!=='string'||
+         !spec.validate(spec.defaultValue))
+        throw Error('Invalid global preference extension');
+      extra.set(spec.name,spec);
+    });
+    var names=[...GLOBAL_KEYS,...extra.keys()];
+    function exactKeys(row,fields){
+      return !!row.envelope?.values&&Object.keys(row.envelope.values).length===fields.length&&
+        fields.every(name=>Object.hasOwn(row.envelope.values,key(name)));
+    }
     function requireManager(){
       if(!manager||!manager.isReady())throw Error('Shared application preferences not restored');
       return manager;
@@ -214,12 +228,43 @@
       // manager independently rereads the row and uses its own CAS baseline.
       var before=await store.read('global',{});
       var initial=before.revision===0?globalValues(migrationSource(storage)):globalValues();
+      // Only the precise previous complete key set is an upgrade source.
+      // Partial/newer rows are not missing defaults to be filled silently.
+      var upgrade=extra.size>0&&before.revision>0&&exactKeys(before,GLOBAL_KEYS);
+      var legacy=new Map();
+      for(const [name,spec] of extra){
+        if(before.revision===0||upgrade){
+          const raw=storage.getItem(spec.legacyKey);
+          legacy.set(name,raw);
+          initial[name]=raw===null?spec.defaultValue:spec.decodeLegacy(raw);
+          if(!spec.validate(initial[name]))throw Error('Invalid legacy '+name+' preferences');
+        }else initial[name]=spec.defaultValue;
+      }
+      var registry=registryApi.create();
+      var specs=names.map(name=>({key:key(name),scope:'global',version:1,
+        defaultValue:initial[name],validate:extra.has(name)?extra.get(name).validate:
+          value=>canonical(normalize({[name]:value})[name])===canonical(value)}));
+      // A one-time CAS appends validated extension keys to the original
+      // envelope. Do not change prior values or accept unknown field versions.
+      if(upgrade){
+        specs.forEach(spec=>registry.register(spec));
+        var inspected=registry.hydrate(before.envelope,{});
+        if(inspected.rejected.length)throw Error('Unsupported previous global preferences');
+        for(const [name,raw] of legacy)
+          if(storage.getItem(extra.get(name).legacyKey)!==raw)
+            throw Error('Legacy '+name+' preferences changed during migration');
+        var extended=registry.snapshot('global',{});
+        var saved=await store.write('global',{},extended,before.revision);
+        if(saved.revision!==before.revision+1)throw Error('Global preference migration acknowledgement missing');
+        before=await store.read('global',{});
+        if(before.revision!==saved.revision||canonical(before.envelope)!==canonical(extended))
+          throw Error('Global preference migration changed during readback');
+        registry=registryApi.create();
+      }
       var adapter={
         read:async function(scope,ctx){
           var row=await store.read(scope,ctx);
-          if(row.revision>0&&(!row.envelope||!row.envelope.values||
-             Object.keys(row.envelope.values).length!==GLOBAL_KEYS.length||
-             GLOBAL_KEYS.some(function(name){return !Object.hasOwn(row.envelope.values,key(name));})))
+          if(row.revision>0&&!exactKeys(row,names))
             throw Error('Unsupported or incomplete global preferences; original evidence retained');
           if(row.revision===0&&before.revision>0)
             throw Error('Global preferences disappeared during restore');
@@ -227,32 +272,35 @@
         },
         write:function(scope,ctx,frame,revision){return store.write(scope,ctx,frame,revision);}
       };
-      manager=managerApi.create({registry:registryApi.create(),store:adapter});
-      GLOBAL_KEYS.forEach(function(name){
-        manager.register({key:key(name),scope:'global',version:1,defaultValue:initial[name],
-          validate:function(value){
-            return canonical(normalize({[name]:value})[name])===canonical(value);
-          }});
-      });
+      manager=managerApi.create({registry,store:adapter});
+      specs.forEach(spec=>manager.register(spec));
       var report=await manager.restore();
       if(report.unrecognizedKeys.length)
         throw Error('Unsupported global preferences: '+report.unrecognizedKeys.join(', '));
       // Write only when the authoritative row is absent. A competing
       // initializer must win by CAS, not by silently replacing its values.
+      if(before.revision===0)for(const [name,raw] of legacy)
+        if(storage.getItem(extra.get(name).legacyKey)!==raw)
+          throw Error('Legacy '+name+' preferences changed during migration');
       await manager.initializeScope('global');
       return values();
     }
     function values(){
       var owner=requireManager(),result={};
-      GLOBAL_KEYS.forEach(function(name){result[name]=owner.get(key(name));});
+      names.forEach(function(name){result[name]=owner.get(key(name));});
       return result;
     }
-    function save(input){
+    function save(input,{resetExtensions=false}={}){
       var owner=requireManager(),patch={},data=globalValues(input);
       GLOBAL_KEYS.forEach(function(name){patch[key(name)]=data[name];});
+      if(resetExtensions)for(const [name,spec] of extra)patch[key(name)]=spec.defaultValue;
       return owner.setMany(patch);
     }
-    return Object.freeze({restore,values,save,
+    function saveExtension(name,value){
+      if(!extra.has(name))throw Error('Unregistered global preference extension');
+      return requireManager().set(key(name),value);
+    }
+    return Object.freeze({restore,values,save,saveExtension,
       retryFailed:function(){return requireManager().retryFailed();},
       lastErrors:function(){return manager?manager.lastErrors():[];},
       hasUnacknowledged:function(){return !!manager&&manager.hasUnacknowledged();}});

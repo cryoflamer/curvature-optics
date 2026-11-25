@@ -281,9 +281,9 @@ function sharedFixture(source,initial={revision:0,envelope:null}){
       return {revision:row.revision};
     }
   };
-  const open=(legacy=source)=>preferences.createShared({
+  const open=(legacy=source,extensions=[])=>preferences.createShared({
     registryApi:require('../src/storage/ModernStateRegistry'),
-    managerApi:require('../src/storage/ModernUiSessionManager'),store:backend,storage:legacy});
+    managerApi:require('../src/storage/ModernUiSessionManager'),store:backend,storage:legacy,extensions});
   return {open,read:()=>structuredClone(row),writes:()=>writes};
 }
 test('global preferences migrate exactly once without owning layout or changing legacy bytes',async()=>{
@@ -338,4 +338,34 @@ test('old navigation-only preferences can initialize the shared global envelope'
   assert.deepEqual(a.values().navigation,{speed:100,turnRate:5,wheelStep:1});
   assert.equal(legacy.data.get(preferences.LEGACY_NAVIGATION_KEY),raw);
   assert.equal(f.writes(),1);
+});
+
+test('Global extension migration appends settings once and retains every previous field',async()=>{
+  const legacy=storage({[preferences.STORAGE_KEY]:'{"version":1,"opticalQuality":"fast"}',
+    export:'{"Fps":"25"}'});
+  const f=sharedFixture(legacy);
+  await f.open().restore();
+  const before=f.read();
+  const spec={name:'studioVideoExport',legacyKey:'export',defaultValue:{},
+    validate:v=>!!v&&typeof v==='object'&&!Array.isArray(v)&&
+      Object.keys(v).every(k=>k==='Fps'&&['10','25'].includes(v[k])),decodeLegacy:JSON.parse};
+  const a=f.open(legacy,[spec]);
+  assert.deepEqual((await a.restore()).studioVideoExport,{Fps:'25'});
+  assert.equal(f.writes(),2);
+  for(const [key,value] of Object.entries(before.envelope.values))
+    assert.deepEqual(f.read().envelope.values[key],value);
+  const b=f.open({getItem(){throw Error('legacy already migrated');}},[spec]);await b.restore();
+  assert.equal(f.writes(),2);
+  await a.saveExtension('studioVideoExport',{Fps:'10'});
+  await assert.rejects(b.saveExtension('studioVideoExport',{}),/revision conflict/);
+  const c=f.open(legacy,[spec]);await c.restore();
+  assert.deepEqual(c.values().studioVideoExport,{Fps:'10'});
+  await c.save(preferences.defaults(),{resetExtensions:true});
+  assert.deepEqual(c.values().studioVideoExport,{});
+  assert.equal(legacy.data.get('export'),'{"Fps":"25"}');
+  for(const raw of ['{broken','{"Fps":"bad"}']){
+    const g=sharedFixture(storage({export:raw}),before);
+    await assert.rejects(g.open(undefined,[spec]).restore());
+    assert.equal(g.writes(),0);assert.deepEqual(g.read(),before);
+  }
 });
