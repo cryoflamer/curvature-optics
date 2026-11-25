@@ -11938,7 +11938,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.page.reload(wait_until='load')
         self.page.wait_for_function(ready,timeout=30000)
-        expect(self.page.locator('#ModernAnimationTab')).to_be_disabled()
+        expect(self.page.locator('#ModernAnimationTab')).to_be_enabled()
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='animation'")
         self.page.locator('#ModernCompareTab').click()
         self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview()
             .controller.row.envelope.workspace==='compare'""",timeout=30000)
@@ -11952,6 +11954,53 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(after,{'evidence':before,'tab':'legacy_tab_123',
             'name':'legacy-window-name','keyframe':'{raw-keyframe-evidence'})
+
+    def test_shared_animation_mounted_draft_edit_and_reload(self):
+        """New draft, real Studio editor, exact shared pointer and global F5."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        expect(self.page.locator('#ModernSharedAnimationNewDraft')).to_be_enabled()
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        name=self.page.locator('#ModernAnimationStudio').get_by_text('Project name',exact=True)
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
+            .row.envelope.workspace==='animation'&&CurvatureModernApp.getAnimationStudioView()==='editor'""")
+        # Use the existing editor's labelled field, not a direct store write.
+        field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+        field.fill('Shared working draft test')
+        field.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        result=self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            return {row,session:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+                legacy:await A.readCollection(indexedDB),tab:sessionStorage.getItem(A.COLLECTION_KEY+'-tab-id')};
+        }""")
+        ref=result['session']['envelope']['documents']['animation']
+        self.assertEqual(result['row']['collection']['workspaces'][0]['checkpoint']['draft']['name'],'Shared working draft test')
+        self.assertIsNone(result['row']['receipt'])
+        self.assertIsNone(result['legacy'])
+        self.assertIsNone(result['tab'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'animation')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),ref['id'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Shared working draft test')
+        self.assertEqual(self.page.url,url)
+        self.page.locator('#ModernCompareTab').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
+            .row.envelope.workspace==='compare'""",timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
+            .row.envelope.workspace==='animation'""",timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),ref['id'])
+        self.assertEqual(self.page.url,url)
 
     def test_shared_calibration_durable_receipt_recovers_after_reload(self):
         """A fresh page exposes recovery and proves both pointer states without a domain rewrite."""

@@ -825,7 +825,15 @@ shared selection authority. Shared-preview startup resolves link intent
 before initializing Animation: no legacy tab/window identity, local backup
 replay, pruning or pagehide writer is started. Ordinary and explicit
 compatibility routes keep their original recovery behavior. The adapter is
-not yet mounted. The shared editor persistence coordinator now binds only
+mounted for shared working drafts in the combined document-session/UI-registry
+preview. The existing Studio Editor/Preview can edit an explicitly selected
+working checkpoint; named Library mutations and the temporary keyframe
+editor remain disabled. A transient library visit without a selected
+document does not change the physical session. Migration and creation use
+the existing Library host, explicit source choices and the shared operation
+lock. F5 restores the exact acknowledged Animation workspace; departure
+flushes the coordinator before switching to another workspace. The shared
+editor persistence coordinator binds only
 an exact acknowledged workspace, compares normalized checkpoint content
 without its wall-clock timestamp, and drains captured edits under the
 shared operation lock. It acknowledges each domain receipt before

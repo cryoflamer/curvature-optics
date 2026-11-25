@@ -702,7 +702,8 @@
     new URLSearchParams(root.location&&root.location.search||'').get('document-session');
   var documentSessionPreviewRequested=['shared','preview'].includes(documentSessionRoute);
   var experimentPreview={status:'disabled',controller:null,ui:null,live:false,error:null,recoveryAction:false,
-    migration:null,calibrationContext:null,calibrationEditor:null,calibrationNavigation:false,calibrationBusy:false};
+    migration:null,calibrationContext:null,calibrationEditor:null,calibrationNavigation:false,calibrationBusy:false,
+    animationContext:null};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -734,6 +735,7 @@
     studioLibraryQueryDraft=studioLibraryFilters.query;
   }
   function rememberStudioLibraryFilters(){
+    if(experimentPreview.live)return;
     try{var storage=preferencesStorage();if(storage&&studioLibraryFilters)
       storage.setItem(STUDIO_LIBRARY_FILTER_KEY,JSON.stringify(studioLibraryFilters));}
     catch(error){/* Private mode or disabled storage: in-memory filters still work. */}
@@ -971,6 +973,7 @@
   // Switch presentation only: preserve one draft, one edit history and one player.
   function setStudioView(view,focus,routeAction,hydrating){
     if(!['library','editor','preview'].includes(view))return false;
+    if(experimentPreview.live&&view!=='library'&&!studioWorkspaceReady)return false;
     var previous=studioView;
     // User/navigation intent during asynchronous registry hydration must win.
     if(previous!==view&&!hydrating)workspaceViewEditGeneration.animation++;
@@ -1005,7 +1008,7 @@
         if(notice)notice.textContent='Cannot prepare animation: '+error.message;
       }
     }
-    if(studioRouteReady&&!persistence.explicitUrl&&studioViewsApi&&studioViewsApi.navigate&&
+    if(!experimentPreview.live&&studioRouteReady&&!persistence.explicitUrl&&studioViewsApi&&studioViewsApi.navigate&&
        (routeAction==='push'||routeAction==='replace'))
       studioViewsApi.navigate(root,view,routeAction==='replace');
     if(studioViewController)studioViewController.show(view,!!focus);
@@ -1385,6 +1388,8 @@
           }
         }
       }
+      if(shared&&animationWorkspaceOpen&&studioWorkspaceReady)
+        setStudioView(bridge.getView('animation'),false,null,true);
       if(shared&&experimentPreview.calibrationEditor){
         var calibrationView=bridge.getView('calibration');
         workspaceState.calibrationView=calibrationView;
@@ -1791,11 +1796,14 @@
     }catch(error){return null;}
   }
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare'||
-    ['calibration','images'].includes(mode)&&sharedPresentationActive()&&!!experimentPreview.calibrationContext;}
+    ['calibration','images'].includes(mode)&&sharedPresentationActive()&&!!experimentPreview.calibrationContext||
+    mode==='animation'&&sharedPresentationActive()&&!!experimentPreview.animationContext;}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
   function previewHasUnacknowledged(){
     var editor=experimentPreview.calibrationEditor,calibration=editor&&editor.projectPersistenceStatus();
+    var animation=experimentPreview.animationContext?.writer.state();
     return experimentPreview.live&&(persistence.dirty||experimentPreview.status==='saving'||
+      !!(animation&&(animation.unsaved||animation.pending||animation.selectionPending))||
       !!(calibration&&(calibration.unsaved||calibration.pending||calibration.selectionPending))||
       (sharedPresentationActive()&&registryUnacknowledged()));
   }
@@ -1821,9 +1829,11 @@
     if(photo&&experimentPreview.calibrationEditor)photo.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
     var images=newUiEl('ModernImageLibraryWorkspace');
     if(images)images.inert=!usable||!presentationReady||experimentPreview.calibrationBusy;
+    var animation=newUiEl('ModernAnimationWorkspace'),animationBusy=!!experimentPreview.animationContext?.busy;
+    if(animation)animation.inert=!usable||!presentationReady||experimentPreview.calibrationBusy||animationBusy;
     Object.keys(workspaceTabs).forEach(function(mode){
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
-      if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||!previewModeAllowed(mode);
+      if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||animationBusy||!previewModeAllowed(mode);
     });
     ['ModernResetExperiment','ModernHistoryToggle'].forEach(function(id){
       var button=newUiEl(id);if(button)button.disabled=true;
@@ -1839,9 +1849,10 @@
     var draftOffer=status==='recovering'&&controller&&controller.draftOffer();
     var receipt=controller&&controller.state().selectionRecovery;
     var receiptOffer=receipt&&['recovering-selection','failed'].includes(status);
+    var receiptOwner=controller?.state().selectionRecoveryKind==='animation'?'Animation':'Calibration';
     var message=newUiEl('ModernDocumentSessionRecoveryStatus');
     if(message)modernStatus(message,experimentPreview.error||
-      (receiptOffer?'An interrupted Calibration save was found. Complete its exact durable acknowledgement before opening the editor.':
+      (receiptOffer?'An interrupted '+receiptOwner+' save was found. Complete its exact durable acknowledgement before opening the editor.':
        draftOffer?'Unsaved edits were recovered from IndexedDB. Restore them explicitly; the acknowledged revision remains stored.':
         'Document session preview is unavailable. Remove document-session='+documentSessionRoute+
           ' to use the unchanged legacy working session.'),'error');
@@ -1864,7 +1875,7 @@
     }
     var restore=newUiEl('ModernDocumentSessionRestoreDraft');
     if(restore){
-      restore.textContent=receiptOffer?'Complete Calibration save':'Restore unsaved edits';
+      restore.textContent=receiptOffer?'Complete '+receiptOwner+' save':'Restore unsaved edits';
       restore.hidden=!draftOffer&&!receiptOffer;
       restore.disabled=experimentPreview.recoveryAction||!receiptOffer&&!presentationReady;
     }
@@ -1934,9 +1945,23 @@
     var calibrationApi=root.CurvatureModernCalibrationProjectPersistence;
     var calibrationEnabled=sharedPresentationRequested;
     if(calibrationEnabled&&!calibrationApi)throw Error('Shared Calibration persistence unavailable');
+    var animationEnabled=calibrationEnabled&&studioDraftAutosave&&studioPersistenceApi?.createShared;
+    if(calibrationEnabled&&!animationEnabled)throw Error('Shared Animation persistence unavailable');
+    function animationStore(){return studioDraftAutosave.openSharedCollection(root.indexedDB,{lease,crypto:root.crypto});}
+    var calibrationReader=calibrationEnabled&&calibrationApi.sharedDocumentReader(root);
+    var owners=calibrationEnabled?[calibrationApi.sharedSelectionRecovery(root,lease,{existingOnly:true}),
+      {kind:'animation',
+        read:async()=>{var row=await animationStore().read();return row?.receipt??null;},
+        retire:async receipt=>{var store=animationStore(),row=await store.read();return store.retire(row,receipt);}
+      }]:[];
     var controller=api.createAtomicExperimentController({lease:lease,checkpoint:checkpoint,isCurrent:current,
-      ...(calibrationEnabled?{readDocument:calibrationApi.sharedDocumentReader(root),
-        selectionRecovery:calibrationApi.sharedSelectionRecovery(root,lease,{existingOnly:true})}:{}),
+      ...(calibrationEnabled?{readDocument:async function(kind,id){
+        if(kind!=='animation')return calibrationReader(kind,id);
+        var row=await animationStore().read();
+        if(!row)throw Error('Shared Animation collection missing');
+        var ref=studioDraftAutosave.documentReference(row,id);
+        return {kind,id:ref.id,revision:ref.revision};
+      },selectionRecovery:owners}:{}),
       prepare:async function(){
         var storage=preferencesStorage(),opts={sessions:sessions,storage:storage,coordinate:coordinate,isCurrent:current};
         var old=await sessions.read(),inventory;
@@ -1966,6 +1991,16 @@
       }});
     experimentPreview.ui=ui;
     experimentPreview.controller=controller;
+    if(animationEnabled){
+      var sharedWriter=studioPersistenceApi.createShared({autosave:studioDraftAutosave,storage:animationStore(),
+        selection:{coordinate,check:()=>{lease.check(true);if(!current())throw Error('Animation lifetime ended');},
+          captureBase:ref=>controller.captureSelectionBase('animation',ref),
+          acknowledge:receipt=>controller.acknowledgeDocumentRevision('animation',receipt)},
+        onChange:function(){syncPreviewUnloadWarning();syncStudioOpenedProject();}
+      });
+      experimentPreview.animationContext={lease,coordinate,makeStore:animationStore,writer:sharedWriter,
+        row:null,inventory:null,inventoryError:null,busy:false,message:'',error:false};
+    }
     if(calibrationEnabled)experimentPreview.calibrationContext={
       lease:lease,coordinate:coordinate,
       verifyCheckpoint:function(){return coordinate(()=>controller.assertCleanCheckpoint());},
@@ -2104,7 +2139,8 @@
         if(!c)return;
         var evidence={format:'curvature-experiment-session-recovery',version:1,
           controller:c.state(),migration:experimentPreview.migration,
-          live:persistence.ready?experimentSnapshot():null};
+          live:persistence.ready?experimentSnapshot():null,
+          animation:experimentPreview.animationContext?.writer.recovery()??null};
         var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
           {type:'application/json'})),link=document.createElement('a');
         link.href=uri;link.download='curvature-experiment-recovery.json';
@@ -2240,7 +2276,7 @@
     if(keyframeEditSession)return;
     if(!persistence.ready||!experiments||!root.location)return;
     if(experimentPreview.live&&experimentPreview.controller&&
-       experimentPreview.controller.state().row?.envelope.workspace==='calibration')return;
+       ['calibration','animation'].includes(experimentPreview.controller.state().row?.envelope.workspace))return;
     var snapshot=null;
     if(sharedPresentationActive()&&experimentPreview.controller&&
        ['clean','dirty','saving','committed'].includes(experimentPreview.status)){
@@ -2478,6 +2514,7 @@
     catch(error){return false;}
   }
   function openStudioWizard(){
+    if(experimentPreview.live)return;
     if(!studioWizardApi||!studioWizardUI||studioLibraryBusy||!studioWorkspaceReady){
       studioLibraryNotice('Project wizard is not available until the workspace has loaded.',true);
       return;
@@ -2659,6 +2696,15 @@
     var details=newUiEl('ModernAnimationOpenedProjectState');
     var show=newUiEl('ModernAnimationShowInLibrary');
     if(!name||!details)return;
+    if(experimentPreview.live&&experimentPreview.animationContext){
+      var shared=experimentPreview.animationContext.writer.state();
+      name.textContent=studioWorkspaceReady?studioDraft.name:'No shared working draft selected';
+      details.textContent=!studioWorkspaceReady?'Select or create a verified working draft':
+        shared.error?'Shared draft not acknowledged · recovery available':
+        shared.unsaved||shared.pending?'Saving shared working draft…':'Shared working draft · Saved in IndexedDB';
+      if(show){show.hidden=true;show.disabled=true;}
+      return;
+    }
     if(studioActiveDemo){
       name.textContent=studioActiveDemo.project.name;
       details.textContent='Built-in demo · Read-only · Not saved to your Library';
@@ -2709,6 +2755,7 @@
   }
   function renderStudioLibrary(){
     syncStudioOpenedProject();
+    if(experimentPreview.live&&experimentPreview.animationContext){renderSharedAnimationLibrary();return;}
     if(!studioUI||!studioUI.renderLibrary)return;
     var host=newUiEl('ModernAnimationLibrary');
     var previous=host&&host.querySelector&&host.querySelector('.modern-animation-library-gallery:not(.modern-demo-gallery)');
@@ -2805,6 +2852,153 @@
       }
     }
     renderStudioWizard();
+  }
+  function renderSharedAnimationLibrary(){
+    var ctx=experimentPreview.animationContext,host=newUiEl('ModernAnimationLibrary');
+    if(!ctx||!host)return;
+    host.replaceChildren();
+    function element(tag,cls,text){
+      var node=document.createElement(tag);if(cls)node.className=cls;
+      if(text!==undefined)node.textContent=text;return node;
+    }
+    function group(title){
+      var section=element('div','modern-animation-library-action-group');
+      section.appendChild(element('span','modern-animation-library-action-label',title));host.appendChild(section);return section;
+    }
+    function action(parent,label,fn,disabled=false,attrs={}){
+      var button=element('button','modern-ghost-button',label);button.type='button';
+      button.disabled=!!(ctx.busy||experimentPreview.calibrationBusy||disabled);
+      Object.keys(attrs).forEach(k=>button.setAttribute(k,attrs[k]));
+      button.addEventListener('click',fn);parent.appendChild(button);return button;
+    }
+    host.appendChild(element('div','modern-animation-library-heading','Shared Animation working drafts'));
+    host.appendChild(element('p','modern-animation-library-note',
+      'Working drafts are saved in IndexedDB. Named Library changes and temporary keyframe editing are not enabled in this preview.'));
+    var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
+    message.setAttribute('role','status');host.appendChild(message);
+    var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
+    views.forEach(id=>{var tab=newUiEl(id);if(tab)tab.disabled=!studioWorkspaceReady;});
+    var status=ctx.writer.state();
+    if(status.error||status.unsaved){
+      var recovery=group('Unsaved working draft');
+      action(recovery,'Retry shared save',()=>void persistStudioWorkspace({retry:true}),!status.error);
+      action(recovery,'Download unsaved draft',()=>downloadHistoryJson(
+        {format:'curvature-shared-animation-recovery',version:1,recovery:ctx.writer.recovery()},
+        'curvature-animation-recovery.json'),!ctx.writer.recovery());
+    }
+    if(!ctx.inventory&&!ctx.row){
+      host.appendChild(element('p','modern-animation-library-empty','Inspecting retained Animation evidence…'));return;
+    }
+    var inventory=ctx.inventory;
+    if(inventory&&(inventory.sources.length||inventory.issues.length)){
+      var sources=group(ctx.row?'Recover additional historical variants':'Choose initial legacy source');
+      if(inventory.issues.length){
+        sources.appendChild(element('span','modern-animation-library-message is-error',
+          inventory.issues.length+' invalid source(s); adoption blocked. Download and preserve the evidence.'));
+      }
+      action(sources,'Download legacy evidence',()=>downloadHistoryJson(
+        {format:'curvature-animation-legacy-evidence',version:1,evidence:inventory.evidence,issues:inventory.issues},
+        'curvature-animation-legacy-evidence.json'));
+      if(!ctx.row){
+        inventory.sources.forEach(source=>action(sources,'Adopt '+source.source+' · '+
+          (source.kind==='collection'?source.value.workspaces.length+' workspaces':source.value.draft.name),
+          ()=>void runSharedAnimationAction('adopt',source.source),!!inventory.issues.length));
+      }else{
+        inventory.variants.forEach(variant=>{
+          if(ctx.row.collection.workspaces.some(item=>item.id===variant.id&&
+             JSON.stringify(item.checkpoint)===JSON.stringify(variant.checkpoint)))return;
+          action(sources,'Recover '+variant.checkpoint.draft.name+' · '+variant.sources[0],
+            ()=>void runSharedAnimationAction('recover',{id:variant.id,checkpoint:variant.checkpoint,source:variant.sources[0]}),
+            !!inventory.issues.length);
+        });
+      }
+    }
+    var controls=group('Working drafts');
+    action(controls,'New shared draft',()=>void runSharedAnimationAction('new'),
+      !ctx.row&&(!inventory||inventory.sources.length>0||inventory.issues.length>0),
+      {'id':'ModernSharedAnimationNewDraft'});
+    if(ctx.row)ctx.row.collection.workspaces.forEach(item=>{
+      var ref=studioDraftAutosave.documentReference(ctx.row,item.id);
+      action(controls,(studioWorkspaceId===item.id?'Opened · ':'Open · ')+
+        item.checkpoint.draft.name+' · '+item.checkpoint.draft.frames.length+' frames',
+        ()=>void runSharedAnimationAction('open',ref),studioWorkspaceReady&&studioWorkspaceId===item.id,
+        {'data-shared-animation-id':item.id});
+    });
+  }
+  async function loadSharedAnimationLibrary(){
+    var ctx=experimentPreview.animationContext,store=ctx.makeStore();
+    ctx.row=await store.read();
+    try{ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;}
+    catch(error){ctx.inventory=null;ctx.inventoryError='Legacy evidence unavailable: '+error.message;}
+  }
+  async function bindSharedAnimation(ref,restore=false){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!restore){
+      var selected=await ctx.coordinate(()=>c.selectWorkspace('animation',ref));
+      experimentPreview.status=selected.status;
+    }
+    var cp=await ctx.writer.bind(ref);
+    if(experimentPreview.status==='suspended')throw Error('Animation lifetime ended');
+    ctx.row=ctx.writer.acknowledgedRow();studioWorkspaces=ctx.row.collection;
+    stopStudioPlayback(true);studioActiveDemo=null;studioWorkspaceId=ref.id;
+    studioLibrarySelected='';studioWorkspaceReady=true;studioWorkspaceLocalSaved=false;
+    studioDraftGeneration++;studioDiagnosticTransition=null;
+    studioPickerOpen=false;studioPickerChecked=Object.create(null);studioFilmstripScroll=0;
+    restoreStudioDraft(cp);
+    studioDraftStatus('Shared working draft saved in IndexedDB',false);
+    renderAnimationStudio(studioHistoryEntries);
+  }
+  async function flushSharedAnimation(){
+    if(!studioWorkspaceReady)return true;
+    stopStudioPlayback(false);
+    if(!saveStudioDraft(false)||!await persistStudioWorkspace({requireDurable:true}))
+      throw Error('Current shared Animation draft is not acknowledged; retry or download it first');
+    return true;
+  }
+  async function runSharedAnimationAction(kind,value){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!ctx||ctx.busy||!animationWorkspaceOpen||experimentPreview.calibrationBusy||
+       !['clean','committed'].includes(experimentPreview.status))return false;
+    if(['adopt','recover'].includes(kind)&&(!root.confirm||!root.confirm(
+      'Recover this exact historical Animation source? Confirm a verified local backup (or disposable test profile) and close old Modern tabs. Old records will be retained.')))return false;
+    ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
+    try{
+      if(studioWorkspaceReady)await flushSharedAnimation();
+      var openRef=null;
+      if(kind==='open')openRef=value;
+      else{
+        await ctx.coordinate(async function(){
+          await c.assertCleanCheckpoint();ctx.lease.check(true);
+          var store=ctx.makeStore(),row=await store.read();
+          if(JSON.stringify(row)!==JSON.stringify(ctx.row))
+            throw Error('Shared Animation collection changed; reload before writing');
+          if(kind==='adopt'){
+            ctx.row=await store.initializeFromLegacy(ctx.inventory,value,root.localStorage);
+            ctx.message='Historical source adopted. Choose the document to open.';
+          }else if(kind==='recover'){
+            ctx.row=await store.adoptLegacyVariant(row,ctx.inventory,value,root.localStorage);
+            ctx.message='Historical variant recovered as an independent draft.';
+          }else if(kind==='new'){
+            var id=studioDraftAutosave.makeWorkspaceId(root.crypto);
+            var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,
+              quality:'canvas-direct',prepared:false,positionMs:0},Date.now());
+            ctx.row=row?await store.createDraft(row,id,cp):
+              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage);
+            openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else throw Error('Unsupported shared Animation action');
+        });
+      }
+      if(openRef){
+        await bindSharedAnimation(openRef);setStudioView('editor',true);
+      }else if(studioWorkspaceReady){
+        await bindSharedAnimation(ctx.writer.state().reference,true);
+      }
+      return true;
+    }catch(error){
+      ctx.error=true;ctx.message=error.message;
+      if(c.state().status==='failed'&&!ctx.writer.state().error)previewFailure(error);
+      return false;
+    }finally{ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();}
   }
   function studioLibraryNotice(message,error){
     studioLibraryMessage=message;studioLibraryError=!!error;renderStudioLibrary();
@@ -3004,6 +3198,7 @@
         active:!studioActiveDemo&&entry.id===studioWorkspaceId};});
   }
   function saveNamedAnimation(replace){
+    if(experimentPreview.live)return Promise.resolve(false);
     if(!studioLibrary||studioLibraryBusy||studioActiveDemo)return Promise.resolve(false);
     var project,quality=studioPlaybackQuality,active=studioLibraryActive;
     try{
@@ -3051,6 +3246,7 @@
   // Restore the saved Library revision without overwriting a retained stash.
   // Stage the entire collection in durable storage *before* changing the editor.
   function restoreSavedAnimation(stash){
+    if(experimentPreview.live)return Promise.resolve(false);
     if(studioLibraryBusy||!studioLibraryActive||!studioLibraryDirty()||
        !studioWorkspaceReady||!studioDraftAutosave)return Promise.resolve(false);
     if(!stash&&typeof root.confirm==='function'&&!root.confirm(
@@ -3133,6 +3329,7 @@
   // Durable checkpoint-and-open sequencing is independent of UI/physics.
   // The application retains ownership of the live editor and preview state.
   function requestStudioSwitch(kind,id){
+    if(experimentPreview.live)return Promise.resolve(false);
     if(!studioSwitchApi){
       studioLibraryNotice('Animation workspace switch module failed to load.',true);
       return;
@@ -3263,6 +3460,7 @@
     else renderAnimationStudio([]);
   }
   function deleteStudioWorkspace(id){
+    if(experimentPreview.live)return;
     if(!studioWorkspaceReady||studioLibraryBusy||!studioWorkspaces||
        id===studioWorkspaceId)return;
     var draft=studioDraftAutosave.getWorkspace(studioWorkspaces,id);
@@ -3273,6 +3471,7 @@
     studioLibraryNotice('Autosaved draft deleted. Named projects were not changed.',false);
   }
   function deleteAllStudioDrafts(keepCurrent){
+    if(experimentPreview.live)return Promise.resolve(false);
     if(!studioDraftAutosave||!studioWorkspaceReady||!studioWorkspaces||
        studioLibraryBusy||studioActiveDemo){
       studioLibraryNotice('Open the editable Animation Studio workspace before clearing drafts.',true);
@@ -3326,6 +3525,7 @@
     }).then(function(ok){studioLibraryBusy=false;renderStudioLibrary();return ok;});
   }
   function deleteNamedAnimation(id){
+    if(experimentPreview.live)return;
     var actions=studioLibraryActions();
     if(actions)return actions.remove(id);
     studioLibraryNotice('Animation Library actions module failed to load.',true);
@@ -3374,6 +3574,21 @@
   }
   function persistStudioWorkspace(settings){
     if(studioDraftSaveTimer!==null){clearTimeout(studioDraftSaveTimer);studioDraftSaveTimer=null;}
+    if(experimentPreview.live){
+      var ctx=experimentPreview.animationContext;
+      if(!ctx||!studioWorkspaceReady)return Promise.resolve(false);
+      var job=settings?.retry?ctx.writer.retry():ctx.writer.save();
+      return job.then(function(saved){
+        ctx.row=ctx.writer.acknowledgedRow();studioWorkspaces=ctx.row.collection;
+        studioDraftSavedAt=studioDraftAutosave.getWorkspace(ctx.row.collection,saved.reference.id).savedAt;
+        experimentPreview.status=experimentPreview.controller.state().status;
+        studioDraftStatus('Shared working draft saved in IndexedDB',false);
+        ctx.error=false;ctx.message='';syncStudioOpenedProject();return true;
+      }).catch(function(error){
+        ctx.error=true;ctx.message='Shared Animation save not acknowledged: '+error.message;
+        studioDraftStatus(ctx.message,true);renderStudioLibrary();return false;
+      }).finally(syncPreviewUnloadWarning);
+    }
     if(!studioWorkspaces||!studioDraftAutosave)return Promise.resolve(false);
     if(!studioPersistenceCoordinator){
       if(!studioPersistenceApi){
@@ -3425,6 +3640,23 @@
     studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
   }
   function saveStudioDraft(throttled){
+    if(experimentPreview.live){
+      var ctx=experimentPreview.animationContext;
+      if(!ctx||!animationWorkspaceOpen||!studioWorkspaceReady)return false;
+      var now=Date.now();
+      if(throttled&&now-studioDraftLastPositionSave<1200)return true;
+      studioDraftLastPositionSave=now;
+      try{
+        studioDraftGeneration++;
+        var saved=ctx.writer.mark(studioDraftRecord());
+        if(saved.unsaved&&!saved.error){
+          studioDraftStatus('Saving shared working draft…',false);
+          if(studioDraftSaveTimer!==null)clearTimeout(studioDraftSaveTimer);
+          studioDraftSaveTimer=setTimeout(writeStudioDraftIndexedDB,450);
+        }
+        syncPreviewUnloadWarning();return true;
+      }catch(error){studioDraftStatus('Shared Animation draft validation failed: '+error.message,true);return false;}
+    }
     if(keyframeEditSession)return studioWorkspaceLocalSaved;
     if(studioActiveDemo)return true; // runtime playback must never checkpoint a demo
     if(!studioDraftAutosave||!studioDraft||!studioWorkspaceReady)return false;
@@ -4038,6 +4270,7 @@
         Array.from(node.options||[]).some(function(option){return option.value===value&&!option.disabled;});
     }
     function persist(){
+      if(experimentPreview.live)return; // Export settings are not yet migrated.
       var values={};fields.forEach(function(field){var node=newUiEl(prefix+field);if(!node)return;
         var value=node.type==='checkbox'?node.checked:node.value;if(valid(node,value))values[field]=value;});
       try{if(storage)storage.setItem(key,JSON.stringify(values));}catch(error){}
@@ -4861,8 +5094,8 @@
   function syncLegacyHistorySelection(entries){
     var banner=newUiEl('ModernAnimationLegacySelection');
     if(!banner)return;
-    banner.hidden=!historyStoryboardQueue.length;
-    if(!historyStoryboardQueue.length)return;
+    banner.hidden=experimentPreview.live||!historyStoryboardQueue.length;
+    if(banner.hidden)return;
     var available=new Set(entries.map(function(entry){return entry.id;}));
     var count=historyStoryboardQueue.filter(function(id){return available.has(id);}).length;
     var label=newUiEl('ModernAnimationLegacyCount');
@@ -5340,6 +5573,7 @@
   // inert. Stage 2 must implement the full contract-based control allowlist
   // before any editable input or Apply action is enabled.
   function beginStudioKeyframeEdit(key,commit){
+    if(experimentPreview.live)throw Error('Temporary keyframe editing is not migrated to shared sessions');
     if(typeof commit!=='function')throw TypeError('Animation Studio commit callback is required');
     if(keyframeEditSession||!keyframeEditApi||!studioContractApi||!keyframeControlLocksApi||
        !studioWorkspaceReady||!persistence.ready||studioLibraryBusy)
@@ -5579,6 +5813,9 @@
   function renderAnimationStudio(entries){
     var host=newUiEl('ModernAnimationStudio');
     if(!studioApi||!studioUI||!host)return;
+    if(experimentPreview.live&&experimentPreview.animationContext&&!studioWorkspaceReady){
+      renderStudioLibrary();return;
+    }
     syncLegacyHistorySelection(entries);
     if(!studioDraft)studioDraft=studioApi.blank();
     animationPickerPruneSelection(entries);
@@ -5748,6 +5985,7 @@
         }catch(error){report(error);}
       },
       canEditKeyframe:function(key){
+        if(experimentPreview.live)return false;
         var frame=studioDraft.frames.find(function(item){return item.key===key;});
         if(!frame||!studioDraft.contract||studioDraft.contract.mode==='experimental'||
            !studioContractApi||!keyframeEditApi)return false;
@@ -5759,7 +5997,7 @@
         catch(error){report(error);}
       },
       duplicateEditKeyframe:function(key){
-        if(studioActiveDemo)return;
+        if(studioActiveDemo||experimentPreview.live)return;
         // Commit duplication through the ordinary Studio Undo and persistence
         // path. The new frame remains independent even when editing is Cancelled.
         try{
@@ -8976,8 +9214,8 @@
   // All top-level workspace choices use this one success/remember path.
   // Individual activation branches own only their rendering and lifecycle.
   function setMode(mode,remember){
-    if(experimentPreview.live&&(['calibration','images'].includes(mode)||
-       photoCalibrationWorkspaceOpen||imageLibraryWorkspaceOpen)&&
+    if(experimentPreview.live&&(['calibration','images','animation'].includes(mode)||
+       photoCalibrationWorkspaceOpen||imageLibraryWorkspaceOpen||animationWorkspaceOpen)&&
        !experimentPreview.calibrationNavigation)return false;
     if(experimentPreview.live&&(!previewModeAllowed(mode)||
       (persistence.ready&&!['clean','dirty','saving','committed'].includes(experimentPreview.status))))return false;
@@ -9007,8 +9245,8 @@
     finally{experimentPreview.calibrationNavigation=false;}
   }
   async function requestPreviewWorkspace(mode,{reference}={}){
-    if(!experimentPreview.live||!['calibration','images'].includes(mode)&&
-       !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen){
+    if(!experimentPreview.live||!['calibration','images','animation'].includes(mode)&&
+       !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen&&!animationWorkspaceOpen){
       return setMode(mode);
     }
     var c=experimentPreview.controller,editor=experimentPreview.calibrationEditor;
@@ -9022,25 +9260,35 @@
     experimentPreview.calibrationBusy=true;previewControls();
     var switched=false;
     try{
+      if(from==='calibration'){
+        await editor.prepareSharedLeave();
+        if(c.state().row.envelope.workspace==='calibration'){
+          var view=await experimentPreview.calibrationContext.leave(state.mode);
+          experimentPreview.status=view.status;switched=true;
+        }
+      }else if(from==='animation'){
+        await flushSharedAnimation();
+        if(c.state().row.envelope.workspace==='animation'){
+          var view=await experimentPreview.calibrationContext.leave(state.mode);
+          experimentPreview.status=view.status;switched=true;
+        }
+      }
       if(mode==='calibration'){
-        // A saved-image use supplies the exact inspected revision, never
-        // an implicit Open of the latest project or of the previous project.
+        // A saved-image use supplies the exact inspected revision.
         var ref=reference||c.state().row.envelope.documents.calibration;
         if(ref){await editor.openSharedProject(ref,false);switched=true;}
         else await experimentPreview.calibrationContext.verifyCheckpoint();
-        // No reference: library browsing remains transient.
-      }else{
-        if(from==='calibration'){
-          await editor.prepareSharedLeave();
-          if(c.state().row.envelope.workspace==='calibration'){
-            var view=await experimentPreview.calibrationContext.leave(state.mode);
-            experimentPreview.status=view.status;switched=true;
-          }else await experimentPreview.calibrationContext.verifyCheckpoint();
-        }else await experimentPreview.calibrationContext.verifyCheckpoint();
-      }
+      }else if(mode==='animation'){
+        await experimentPreview.calibrationContext.verifyCheckpoint();
+        await loadSharedAnimationLibrary();
+        var ref=c.state().row.envelope.documents.animation;
+        if(ref){await bindSharedAnimation(ref);switched=true;}
+        else {studioWorkspaceReady=false;studioWorkspaceId=null;setStudioView('library',false,null,true);}
+      }else await experimentPreview.calibrationContext.verifyCheckpoint();
       if(experimentPreview.status==='suspended')return false;
       experimentPreview.calibrationNavigation=true;
       if(setMode(mode)===false)throw Error('Cannot activate selected workspace');
+      if(mode==='animation')renderStudioLibrary();
       if(mode==='images'&&from==='calibration'){
         root.CurvatureImageLibraryReturnToCalibration=true;
         var library=newUiEl('ModernReferenceImageLibrary');
@@ -9081,7 +9329,7 @@
     if(mode!=='animation'&&animationWorkspaceOpen){
       if(studioPresentation)studioPresentation.leave();
       cancelStudioInitialPaint();stopStudioPlayback(false);
-      if(studioPlayback&&!keyframeEditSession)saveStudioDraft(false);
+      if(studioPlayback&&!keyframeEditSession&&!experimentPreview.live)saveStudioDraft(false);
     }
     if(mode==='images'){
       // A first-class, data-independent workspace: no Studio render or optics change.
@@ -9682,7 +9930,7 @@
       historyStoryboardQueue=[];saveApplicationPreferences();
       syncLegacyHistorySelection(studioHistoryEntries);
     });
-    el('ModernBackToScene').addEventListener('click',function(){setMode('scene');});
+    el('ModernBackToScene').addEventListener('click',function(){void requestPreviewWorkspace('scene');});
     bindHistory();
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     function finishStartup(remoteRecord,remoteError,preview){
@@ -9714,7 +9962,7 @@
       if(experimentPreview.live){
         allowStudioRoute=false;
         startupMode=preview&&preview.row&&preview.row.envelope?preview.row.envelope.workspace:'scene';
-        if(!previewModeAllowed(startupMode)&&startupMode!=='calibration')startupMode='scene';
+        if(!previewModeAllowed(startupMode)&&!['calibration','animation'].includes(startupMode))startupMode='scene';
       }
       if(!experimentPreview.live&&!persistence.explicitUrl&&workspaceState.compareModel)state.compareSelected=workspaceState.compareModel;
       if(['A','B'].includes(explicitModel))state.compareSelected=explicitModel;
@@ -9731,6 +9979,21 @@
       if(experimentPreview.live){
         updateSnapshotSaveAction();resetHistoryBaseline();refreshCalibrationApplicability();
         previewControls();
+        if(experimentPreview.status==='clean'&&startupMode==='animation'){
+          experimentPreview.status='loading';previewControls();
+          Promise.resolve().then(async function(){
+            await loadSharedAnimationLibrary();
+            await bindSharedAnimation(preview.row.envelope.documents.animation,true);
+            if(experimentPreview.status==='suspended')return;
+            experimentPreview.status='clean';experimentPreview.calibrationNavigation=true;
+            try{if(setMode('animation',false)===false)throw Error('Cannot activate shared Animation');}
+            finally{experimentPreview.calibrationNavigation=false;}
+            persistenceStatus('Document session restored');
+            if(sharedPreferencesRestored)startWorkspaceUiRegistryPreview();
+            previewControls();
+          }).catch(function(error){if(experimentPreview.status!=='suspended')previewFailure(error);});
+          return;
+        }
         if(experimentPreview.status==='clean'&&startupMode==='calibration'){
           experimentPreview.status='loading';previewControls();
           restoreSharedCalibration(preview.row.envelope.documents.calibration).then(function(){
@@ -9872,6 +10135,7 @@
     // A verified saved owner can be opened without relying on visible Library
     // cards (which may be filtered). Existing switch guards own unsaved drafts.
     openImageUsageAnimation:async function(id,frameKey,expectedUpdatedAt,frameIndex,imageId){
+      if(experimentPreview.live)throw Error('Saved Animation image navigation is not migrated');
       if(!studioLibrary||!root.indexedDB)throw Error('Animation Library unavailable');
       var record=await studioLibrary.get(root.indexedDB,id);
       if(!record)throw Error('Saved animation no longer exists');
@@ -9910,6 +10174,7 @@
     // Recoverable drafts are opened through the existing guarded workspace
     // switch; unavailable snapshots are never silently reconstructed by ID.
     openImageUsageDraft:async function(workspaceId,frameKey,expectedSavedAt,imageId,source,expectedDraftContent){
+      if(experimentPreview.live)throw Error('Animation image usage navigation is not migrated');
       if(!studioDraftAutosave||!studioWorkspaces)
         throw Error('Recoverable Storyboards are not ready; inspect recovery before opening');
       if(typeof imageId!=='string'||!imageId)

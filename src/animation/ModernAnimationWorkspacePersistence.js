@@ -191,7 +191,8 @@
       return copy({version:1,reference:owner.reference,
         checkpoint:owner.latest?.checkpoint??null,receipt:owner.receipt?.value??null});
     }
-    return Object.freeze({bind,mark,save:()=>save(false),retry:()=>save(true),state,recovery});
+    return Object.freeze({bind,mark,save:()=>save(false),retry:()=>save(true),state,recovery,
+      acknowledgedRow:()=>owner&&!owner.receipt?copy(owner.row):null});
   }
   return Object.freeze({create:create,createShared:createShared});
 }));
