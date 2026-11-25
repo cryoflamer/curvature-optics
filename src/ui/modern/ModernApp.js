@@ -2147,7 +2147,8 @@
           live:persistence.ready?experimentSnapshot():null,
           animation:experimentPreview.animationContext?.writer.recovery()??null,
           namedAnimationSave:experimentPreview.animationContext?.row?.namedSave??null,
-          keyframeEdit:sharedKeyframeWriter?.recovery()??experimentPreview.animationContext?.row?.keyframeEdit??null};
+          keyframeEdit:sharedKeyframeWriter?.recovery()??null,
+          keyframeIntent:experimentPreview.animationContext?.row?.keyframeEdit??null};
         var uri=root.URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)+'\n'],
           {type:'application/json'})),link=document.createElement('a');
         link.href=uri;link.download='curvature-experiment-recovery.json';
@@ -2894,12 +2895,15 @@
     var status=ctx.writer.state();
     var edit=ctx.row?.keyframeEdit;
     if(edit){
-      var pending=group('Interrupted temporary keyframe edit');
-      pending.appendChild(element('span','modern-animation-library-note',
+      var pending=group(edit.history?'Interrupted Apply + Save to History':'Interrupted temporary keyframe edit');
+      pending.appendChild(element('span','modern-animation-library-note',edit.history?
+        'Complete the exact planned History link or discard the temporary journal. Any History snapshot already saved is retained.':
         'Resume the exact retained candidate and Undo/Redo history, or discard the temporary journal. No working frame has been replaced.'));
       var selected=status.reference&&status.reference.id===edit.reference.id&&
         status.reference.revision===edit.reference.revision;
-      action(pending,'Resume keyframe edit',()=>void enterSharedKeyframeEdit(null,true),!selected,
+      if(edit.history)action(pending,'Complete Apply + Save to History',()=>void completeSharedKeyframeHistoryFromLibrary(),!selected,
+        {'id':'ModernSharedKeyframeCompleteHistory'});
+      else action(pending,'Resume keyframe edit',()=>void enterSharedKeyframeEdit(null,true),!selected,
         {'id':'ModernSharedKeyframeResume'});
       action(pending,'Download keyframe evidence',()=>downloadHistoryJson(
         JSON.stringify({format:'curvature-shared-keyframe-recovery',version:1,intent:edit},null,2)+'\n',
@@ -5635,7 +5639,7 @@
         var workspace=experiments.validate(c.state().bound.experiment);
         if(resume){
           var saved=row.keyframeEdit;
-          if(!saved||JSON.stringify(saved.reference)!==JSON.stringify(ref)||
+          if(!saved||saved.history||JSON.stringify(saved.reference)!==JSON.stringify(ref)||
              JSON.stringify(saved.base)!==JSON.stringify(base)||
              JSON.stringify(saved.session.workspace)!==JSON.stringify(workspace))
             throw Error('Temporary edit belongs to a different session revision; export or discard it');
@@ -5676,7 +5680,7 @@
   async function discardSharedKeyframeJournal(){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!ctx?.row?.keyframeEdit||ctx.busy||keyframeEditSession||
-       !root.confirm('Discard the retained temporary keyframe edits? Working draft and named project will not change.'))return;
+       !root.confirm('Discard the retained temporary keyframe edits? Working draft and named project will not change. Any History snapshot already saved will be retained.'))return;
     ctx.busy=true;previewControls();
     try{
       await ctx.coordinate(async()=>{
@@ -5690,7 +5694,62 @@
     }catch(error){ctx.error=true;ctx.message=error.message;previewFailure(error);}
     finally{ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();}
   }
-  async function finishSharedKeyframeEdit(apply){
+  async function commitSharedKeyframeHistory(ctx,store,row,base,thumbnail){
+    var intent=row.keyframeEdit;
+    if(!experimentHistory||!intent?.history)throw Error('Pending keyframe History intent and storage required');
+    ctx.lease.check(true);
+    // The established manual History transaction is idempotent for an exact
+    // experiment. Never attach a provisional ID or delete an external snapshot.
+    var saved=await experimentHistory.record(intent.history.experiment,'manual',thumbnail||null);
+    ctx.lease.check(true);
+    var confirmed=await experimentHistory.get(saved.entry.id);
+    ctx.lease.check(true);
+    ctx.row=await store.applyKeyframeEditWithHistory(row,intent,base,confirmed);
+    return confirmed;
+  }
+  async function acknowledgeSharedKeyframeResult(ctx,c,store,reference){
+    if(ctx.row.receipt){
+      var result=await c.acknowledgeDocumentRevision('animation',ctx.row.receipt);
+      experimentPreview.status=result.status;
+      ctx.row=await store.retire(ctx.row,ctx.row.receipt);
+    }
+    return studioDraftAutosave.documentReference(ctx.row,reference.id);
+  }
+  async function completeSharedKeyframeHistoryFromLibrary(){
+    var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
+    if(!ctx?.row?.keyframeEdit?.history||ctx.busy||keyframeEditSession||
+       !studioWorkspaceReady||!['clean','committed'].includes(experimentPreview.status))return;
+    ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
+    try{
+      var outcome=await ctx.coordinate(async()=>{
+        await c.assertCleanCheckpoint();
+        var store=ctx.makeStore(),row=await store.read(),intent=row?.keyframeEdit;
+        if(!intent?.history||JSON.stringify(row)!==JSON.stringify(ctx.row))
+          throw Error('Pending keyframe History intent changed; reload');
+        var base=await c.captureSelectionBase('animation',intent.reference);
+        if(JSON.stringify(base)!==JSON.stringify(intent.base))
+          throw Error('Shared session changed; export or discard retained evidence');
+        if(studioLibraryActive)await verifySharedNamedAnimation(studioLibraryActive);
+        var entry=await commitSharedKeyframeHistory(ctx,store,row,base,null);
+        return {entry,ref:await acknowledgeSharedKeyframeResult(ctx,c,store,intent.reference),returnView:intent.returnView};
+      });
+      await bindSharedAnimation(outcome.ref,true);
+      ctx.message='Keyframe applied with History snapshot #'+outcome.entry.id+'.';
+      setStudioView(outcome.returnView||'editor',true,null,true);
+      renderAnimationStudio(studioHistoryEntries);
+      var note=newUiEl('ModernAnimationStudioMessage');if(note)note.textContent=ctx.message;
+      void refreshHistoryList(outcome.entry.id);
+    }catch(error){
+      ctx.error=true;ctx.message=error.message;
+      try{
+        var observed=await ctx.coordinate(()=>ctx.makeStore().read());
+        if(!ctx.row?.keyframeEdit?.history||JSON.stringify(observed)!==JSON.stringify(ctx.row)||
+           !['clean','committed'].includes(c.state().status))
+          throw Error('Reload required to inspect keyframe History outcome');
+      }catch(failure){if(experimentPreview.status!=='suspended')previewFailure(failure);}
+    }finally{ctx.busy=false;previewControls();renderStudioLibrary();syncPreviewUnloadWarning();}
+  }
+  async function finishSharedKeyframeEdit(apply,saveToHistory=false){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller,
       writer=sharedKeyframeWriter,session=keyframeEditSession;
     if(!writer||!session||keyframeEditApplying||
@@ -5704,7 +5763,7 @@
       if(apply&&!validateKeyframePreview())throw Error('Candidate violates project contract');
       await persistSharedKeyframe(!!writer.state().error);
       var before=studioDraft,previousSelection=studioSelectedKey,history=studioEditHistory,
-        returnView=keyframeEditReturnView;
+        returnView=keyframeEditReturnView,historyEntry=null;
       var ref=await ctx.coordinate(async()=>{
         var store=ctx.makeStore(),row=await store.read(),intent=row?.keyframeEdit;
         if(!intent||JSON.stringify(row)!==JSON.stringify(writer.acknowledgedRow()))
@@ -5714,14 +5773,13 @@
           throw Error('Shared session changed during keyframe edit');
         if(apply&&studioLibraryActive)await verifySharedNamedAnimation(studioLibraryActive);
         mutationStarted=true;
-        ctx.row=apply?await store.applyKeyframeEdit(row,intent,base):
+        if(apply&&saveToHistory){
+          ctx.row=await store.stageKeyframeHistory(row,intent,base);
+          historyEntry=await commitSharedKeyframeHistory(ctx,store,ctx.row,base,
+            historyThumbnail(ctx.row.keyframeEdit.history.experiment));
+        }else ctx.row=apply?await store.applyKeyframeEdit(row,intent,base):
           await store.cancelKeyframeEdit(row,intent);
-        if(ctx.row.receipt){
-          var result=await c.acknowledgeDocumentRevision('animation',ctx.row.receipt);
-          experimentPreview.status=result.status;
-          ctx.row=await store.retire(ctx.row,ctx.row.receipt);
-        }
-        return studioDraftAutosave.documentReference(ctx.row,intent.reference.id);
+        return acknowledgeSharedKeyframeResult(ctx,c,store,intent.reference);
       });
       sharedKeyframeWriter=null;
       cancelStudioKeyframeEdit();
@@ -5735,7 +5793,9 @@
       renderAnimationStudio(studioHistoryEntries);
       studioDraftStatus('Shared working draft saved in IndexedDB',false);
       var note=newUiEl('ModernAnimationStudioMessage');
-      if(note)note.textContent=apply?'Keyframe applied to the acknowledged working draft.':'Temporary edit cancelled. Working draft unchanged.';
+      if(note)note.textContent=apply?'Keyframe applied to the acknowledged working draft.'+
+        (historyEntry?' History snapshot #'+historyEntry.id+' linked.':''):'Temporary edit cancelled. Working draft unchanged.';
+      if(historyEntry)void refreshHistoryList(historyEntry.id);
     }catch(error){
       sharedKeyframeNotice('Temporary edit not completed: '+error.message+' · Download recovery before reloading');
       if(mutationStarted)previewFailure(error);
@@ -5758,7 +5818,8 @@
   function saveKeyframeEditRecovery(){
     if(!keyframeEditSession||keyframeEditEntering||keyframeEditRestoring)return;
     if(experimentPreview.live){
-      if(!sharedKeyframeWriter)return;
+      var intent=experimentPreview.animationContext?.row?.keyframeEdit;
+      if(!sharedKeyframeWriter||!intent||intent.history)return;
       try{
         sharedKeyframeWriter.mark(keyframeEditSession.recovery(),state.compareSelected);
         if(!sharedKeyframeWriter.state().error)void persistSharedKeyframe(false).catch(()=>{});
@@ -5923,7 +5984,7 @@
   // A second tab's divergent edit must fork instead of overwriting it.
   async function applyStudioKeyframeEdit(button,commit,saveToHistory){
     if(experimentPreview.live){
-      if(!saveToHistory)await finishSharedKeyframeEdit(true);
+      await finishSharedKeyframeEdit(true,saveToHistory);
       return;
     }
     if(!keyframeEditSession||keyframeEditApplying)return;
@@ -6129,8 +6190,8 @@
     applyWithHistory.addEventListener('click',function(){
       applyStudioKeyframeEdit(applyWithHistory,commit,true);
     });
-    if(!experimentPreview.live)actions.appendChild(applyWithHistory);
-    else{
+    actions.appendChild(applyWithHistory);
+    if(experimentPreview.live){
       var retry=document.createElement('button');
       retry.type='button';retry.className='modern-keyframe-edit-cancel';
       retry.textContent='Retry recovery save';
@@ -6141,7 +6202,8 @@
       download.textContent='Download recovery';
       download.addEventListener('click',()=>downloadHistoryJson(
         JSON.stringify({format:'curvature-shared-keyframe-recovery',version:1,
-          recovery:sharedKeyframeWriter?.recovery(),live:keyframeEditSession?.recovery()},null,2)+'\n',
+          recovery:sharedKeyframeWriter?.recovery(),live:keyframeEditSession?.recovery(),
+          durableIntent:experimentPreview.animationContext?.row?.keyframeEdit??null},null,2)+'\n',
         'curvature-keyframe-recovery.json'));
       actions.appendChild(download);
     }

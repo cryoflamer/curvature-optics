@@ -12433,6 +12433,102 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read),durable)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_keyframe_apply_history_and_interrupted_link(self):
+        """Apply+History links an exact pinned snapshot and recovers an interrupted cross-store write."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const P=CurvatureModernAnimationProject;
+            const first=structuredClone(CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment);
+            const second=structuredClone(first);second.scene.camera.Height+=5;
+            const project=P.createV2({version:1,mode:'camera',target:null,referenceExperiment:first},
+                [{name:'First',experiment:first},{name:'Second',experiment:second}],
+                {id:'shared_history_test',name:'Keyframe History test'});
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            const row=await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            const cp=A.getWorkspace(row.collection,c.row.envelope.documents.animation.id);
+            return {row,session:c.row,bound:c.bound,cp,
+                history:await CurvatureModernApp.getHistoryStore().list(),
+                named:await CurvatureModernAnimationLibrary.list(indexedDB)};
+        }"""
+        start=self.page.evaluate(read)
+        studio=self.page.locator('#ModernAnimationStudio')
+        banner=self.page.locator('#ModernKeyframeEditBanner')
+        def edit_height(delta):
+            self.page.locator('#ModernAnimationViewEditor').click()
+            studio.locator('.modern-studio-filmstrip-item').first.get_by_role(
+                'button',name=re.compile(r'^Edit ')).click()
+            expect(banner).to_be_visible(timeout=30000)
+            h=self.page.evaluate('CurvatureModernApp.getModel().Height')+delta
+            self.page.locator('#ModernHeight').fill(str(h))
+            self.page.locator('#ModernHeight').press('Tab')
+            self.page.wait_for_function("""async h=>{
+                const U=CurvatureModernUiSessionStore.create(window);U.sharedDocumentSessions(CurvatureModernDocumentSession);
+                const row=await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+                return row.keyframeEdit?.session.candidate.scene.camera.Height===h;
+            }""",arg=h)
+            return h
+        def verify_link(current,height):
+            frame=current['cp']['draft']['frames'][0]
+            self.assertEqual(frame['experiment']['scene']['camera']['Height'],height)
+            entry=next(e for e in current['history'] if e['id']==frame['sourceSnapshotId'])
+            self.assertTrue(entry['pinned'])
+            self.assertEqual(entry['experiment'],frame['experiment'])
+            self.assertEqual(current['cp']['draft']['frames'][1],start['cp']['draft']['frames'][1])
+            self.assertEqual(current['bound'],start['bound'])
+            self.assertEqual(current['named'],start['named'])
+            self.assertIsNone(current['row']['receipt'])
+            self.assertNotIn('keyframeEdit',current['row'])
+            return entry
+        h=edit_height(3)
+        banner.get_by_role('button',name='Apply + Save to History',exact=True).click()
+        expect(banner).to_have_count(0,timeout=30000)
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text('Shared working draft saved in IndexedDB',timeout=30000)
+        current=self.page.evaluate(read)
+        verify_link(current,h)
+        self.assertEqual(len(current['history']),len(start['history'])+1)
+        for committed in [False,True]:
+            with self.subTest(committed=committed):
+                h=edit_height(4)
+                seeded=self.page.evaluate("""async committed=>{
+                    const U=CurvatureModernUiSessionStore.create(window);U.sharedDocumentSessions(CurvatureModernDocumentSession);
+                    const store=CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                        {lease:U.captureSharedDocumentLifetime(),crypto});
+                    const row=await store.read(),intent=row.keyframeEdit;
+                    const staged=await store.stageKeyframeHistory(row,intent,intent.base);
+                    const saved=committed?await CurvatureModernApp.getHistoryStore().record(staged.keyframeEdit.history.experiment,'manual',null):null;
+                    return {staged,saved};
+                }""",committed)
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function(ready,timeout=30000)
+                expect(self.page.locator('#ModernSharedKeyframeResume')).to_have_count(0)
+                expect(self.page.locator('#ModernAnimationViewEditor')).to_be_disabled()
+                self.page.locator('#ModernSharedKeyframeCompleteHistory').click()
+                expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text('History snapshot',timeout=30000)
+                next_row=self.page.evaluate(read)
+                entry=verify_link(next_row,h)
+                if committed:
+                    self.assertEqual(entry['id'],seeded['saved']['entry']['id'])
+                self.assertEqual(len(next_row['history']),len(current['history'])+1)
+                current=next_row
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),current)
+        self.assertEqual(self.page.url,url)
+
     def test_shared_animation_save_changes_and_interrupted_named_commit(self):
         """Save Changes relinks the acknowledged draft; either interrupted named state completes exactly once."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

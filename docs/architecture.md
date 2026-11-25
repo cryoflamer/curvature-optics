@@ -847,8 +847,8 @@ database relink is implied by the successful named transaction.
 The named store also exposes an exact-record compare-and-update operation,
 which checks identity and the complete inspected normalized record within
 one readwrite transaction. Save Changes and the contract-locked temporary keyframe editor are available
-in the combined shared preview. Apply + Save to History remains disabled until
-its cross-store provenance lifecycle is migrated.
+in the combined shared preview, including the explicit Apply + Save to
+History operation.
 The named-save protocol first seals a write-ahead intent in the
 existing shared Animation row: exact working reference and a deterministic
 before/after named record (including one fixed target timestamp). Ordinary
@@ -903,6 +903,15 @@ Apply, and requires a pinned History readback with the same full experiment
 (ignoring only the A/B editor selection, as History's exact signature does).
 The final domain transaction replaces the frame and attaches the History ID
 as provenance in one CAS. Discard never deletes external History evidence.
+The shared host uses the existing idempotent manual History record transaction
+and reads back the exact pinned snapshot before attaching its ID. On F5,
+a staged History intent offers Complete Apply + Save to History instead of
+resuming the editable candidate; no additional physical edits may change
+the planned snapshot. A thumbnail is included only when the existing
+physical render identity proves it belongs to that frame. Failure after
+History commit leaves the pinned snapshot available rather than rolling it
+back. This is recoverable ordered coordination across databases, not a
+cross-database atomic transaction.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
