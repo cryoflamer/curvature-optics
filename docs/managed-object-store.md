@@ -688,3 +688,13 @@ A matching History entry with different retained evidence is a conflict, not
 a substitute. The existing journal/History/selection receipt sequence remains
 retryable; the History root is committed before applying the frame and may
 remain after a cancelled pending intent. This is not a new cross-store writer.
+
+When a temporary keyframe journal first captures a calibrated surrounding
+Scene/Compare workspace, the managed working port verifies the complete
+committed experiment, captured checkpoint revision and digest. The journal
+acquires the exact physical result mapping in the same collection transaction
+with a physical-root inventory CAS. Standalone evidence is transferred only
+for exact origins, and a conflicting retained mapping refuses staging rather
+than substituting evidence. Later journal edits and recovery use the existing
+owned mapping; cancelling the journal releases its durable edge when it is
+not otherwise needed by the collection.

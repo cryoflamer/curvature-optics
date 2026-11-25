@@ -1833,6 +1833,23 @@
       const oldPhotos=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
       const oldResults=new Map((previous?.evidence||[]).map(entry=>[entry.alias,entry.target]));
       const observations=[],evidence=[];
+      // A new temporary editor journal owns the surrounding physical
+      // workspace as well as the keyframe. Its captured base identifies the
+      // exact acknowledged checkpoint; the archive gallery may be absent.
+      let journalSource=null;
+      if(animationHandoff&&row.keyframeEdit&&!previous?.row.keyframeEdit){
+        const workspace=row.keyframeEdit.session.workspace,origin=workspace.calibrationOrigin;
+        if(origin){
+          const physical=await readWorkingCheckpoint();
+          check(physical&&physical.row.draft===null&&same(physical.row.experiment,workspace)&&
+            same({revision:physical.row.revision,digest:physical.row.digest},row.keyframeEdit.base),
+            'Temporary keyframe physical checkpoint changed; reload before editing');
+          const proof=physical.snapshots.committed.evidence;
+          check(proof==='standalone'||typeof proof==='object','Temporary keyframe physical evidence missing');
+          journalSource={origin,target:proof==='standalone'?null:proof.result,
+            inventory:{kind:'working-checkpoint',documents:[{id:workingId,revision:physical.managedRevision}]}};
+        }
+      }
       // A linked working checkpoint identifies an exact named Library revision.
       // Transfer retained resources from that owner, not a mutable gallery alias.
       // The inventory CAS protects the source until the new root is committed.
@@ -1920,7 +1937,14 @@
         const live=editorEvidence?.results.get(alias);
         check(!target||!live||target===live,'Conflicting live Animation calibration evidence: '+alias);
         if(live)target=live;
-        if(!target){
+        const physical=journalSource?.origin.resultId===alias?journalSource:null;
+        if(physical){
+          check((!oldResults.has(alias)||oldResults.get(alias)===physical.target)&&
+            (!target||target===physical.target),
+            'Conflicting temporary keyframe physical calibration evidence: '+alias);
+          target=physical.target;
+        }
+        if(!target&&!physical){
           const saved=await readCalibrationResult(alias);
           target=saved?.resultId??null;
         }
@@ -1933,7 +1957,10 @@
           const liveStandalone=editorEvidence&&origins.every(origin=>
             editorEvidence.standalone.some(old=>same(old,origin))||
             oldResults.has(alias)&&oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
-          check(standalone===true||allowedStandalone.has(alias)||retained||liveStandalone,
+          const physicalStandalone=physical&&physical.target===null&&origins.every(origin=>
+            same(origin,physical.origin)||editorEvidence?.standalone.some(old=>same(old,origin))||
+            oldResults.has(alias)&&oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
+          check(standalone===true||allowedStandalone.has(alias)||retained||liveStandalone||physicalStandalone,
             'working calibration result missing; standalone recovery must be explicit');
         }
         evidence.push({alias,target});
@@ -1949,7 +1976,8 @@
         expectedRevision,metadata:{sourceRevision:row.revision},references,
         resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]};
       const documents=await store.writeDocuments([...(assetPlan?.plans??[]),workingPlan],{guard,lease,
-        expectedInventory:[...(sourceInventory?[sourceInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[])]});
+        expectedInventory:[...(sourceInventory?[sourceInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[]),
+          ...(journalSource?[journalSource.inventory]:[])]});
       const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }

@@ -2738,6 +2738,35 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'applied keyframe changed journal provenance');
             await rejects(()=>historyPort.recordKeyframeHistory(pending,null),/intent changed/);
             await animationLive.reset();
+            // A different Animation may be uncalibrated while its temporary
+            // journal needs the calibrated surrounding physical workspace.
+            const priorPhysical=await port.read();
+            const surrounding=await port.replaceFromHistory(priorPhysical.experiment,appliedFrame.experiment,
+                priorPhysical.revision,{isCurrent:()=>true});
+            await live.reset();
+            const plain=Studio.fromProject(P.createV2({version:1,mode:'camera',target:null,
+                referenceExperiment:uncalibrated},[{experiment:uncalibrated}],{id:'plain_journal'}));
+            const plainCp=A.normalize({...cp,draft:plain,selectedKey:plain.frames[0].key,
+                savedAt:A.getWorkspace(animationRow.collection,id).savedAt+1});
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),plainCp,base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
+            ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'plain Animation kept old evidence');
+            const physicalBase={revision:surrounding.revision,digest:surrounding.digest};
+            const physicalIntent={version:1,reference:A.documentReference(animationRow,id),base:physicalBase,
+                returnView:'editor',compareSelected:'A',session:{version:1,projectId:id,
+                    frameKey:plain.frames[0].key,mode:'scene',original:plain.frames[0].experiment,
+                    workspace:surrounding.experiment,candidate:plain.frames[0].experiment,past:[],future:[]}};
+            await rejects(()=>animation.stageKeyframeEdit(animationRow,{...physicalIntent,
+                base:{...physicalBase,digest:'sha256:'+'0'.repeat(64)}}),/physical checkpoint changed/);
+            ok((await animation.read()).digest===animationRow.digest,'stale physical source changed Animation');
+            animationRow=await animation.stageKeyframeEdit(animationRow,physicalIntent);
+            const physicalJournal=await adapter.readAnimationWorkingCollection();
+            ok(physicalJournal.evidence[0].target===saved.resultId&&
+                JSON.stringify(physicalJournal.row.keyframeEdit.session.workspace)===JSON.stringify(surrounding.experiment),
+                'temporary journal lost surrounding physical calibration');
+            animationRow=await animation.cancelKeyframeEdit(animationRow,animationRow.keyframeEdit);
+            ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'cancelled journal kept durable evidence');
+            ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'journal cancel lost physical owner');
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};
