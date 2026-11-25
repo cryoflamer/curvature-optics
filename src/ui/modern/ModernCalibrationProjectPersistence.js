@@ -31,7 +31,13 @@
     if(!before)throw Error('Calibration project missing; active editor was not changed');
     if(expectedRevision!==null&&projectReference(before).revision!==expectedRevision)
       throw Error('Calibration project revision changed; active editor was not changed');
-    const prepared=await checkpoint.prepare(before,env,adapter,decoder);current();
+    // A managed owner retains its own immutable original even when the
+    // gallery alias is gone. Never fall back to gallery hydration here.
+    const prepared=storage.storageKind==='managed'?
+      await storage.prepare(env.indexedDB,id):await checkpoint.prepare(before,env,adapter,decoder);
+    current();
+    if(!prepared||JSON.stringify(model.normalize(prepared.project))!==JSON.stringify(model.normalize(before)))
+      throw Error('Calibration project changed during activation preparation');
     if(requireCheckpoint&&!prepared.draft)
       throw Error('Calibration project has no verified editor checkpoint');
     const after=await storage.get(env.indexedDB,id);current();
@@ -171,8 +177,9 @@
         // Verified original is staged before the project transaction.
         // Captured draft, including both views and pending Undo/Redo, is immutable
         // with respect to subsequent editor events and another tab's selection.
-        const parts=await checkpoint.captureVerified(captured.draft,captured.inline,
-          env,adapter,decoder);
+        const parts=storage.storageKind==='managed'?
+          await storage.captureVerified(env.indexedDB,captured.draft,captured.inline,owner.project):
+          await checkpoint.captureVerified(captured.draft,captured.inline,env,adapter,decoder);
         checkLifetime();
         const expected=owner.project;
         const changes={title:captured.title,photo:parts.photo,

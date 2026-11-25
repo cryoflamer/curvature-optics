@@ -397,3 +397,20 @@ independently. `inspectUsage` uses existing-only document inventory/closure
 reads; it can run under the exclusive backup/usage barrier without creating
 or upgrading a database. This port is explicitly injected; no production
 routing or automatic deletion is enabled.
+
+### Ordinary Calibration Project application port
+
+The explicit managed Calibration Project port retains the existing domain
+revision and ordinary conflict-fork contract, while separately checking
+managed root revisions and the project inventory for quota and identity
+decisions. New photo resolution is checked against the observation
+inventory. Existing original and result mappings are retained independently
+of gallery aliases. Managed activation uses the project's own verified
+closure rather than rehydrating through the gallery. Managed checkpoint
+capture with the same original verifies the retained bytes and does not
+recreate a removed observation; a newly selected photo follows normal
+verified ingestion before the project transaction. The existing persistence
+coordinator invokes these methods only for an explicitly injected managed
+port. Shared selection receipts, shared lease tracking, legacy adoption
+and destructive removal still refuse; this ordinary port is not sufficient
+for production shared-session activation.

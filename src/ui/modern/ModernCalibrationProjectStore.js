@@ -463,7 +463,12 @@
         else adopt();
       },lease);
   }
-  return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
+  function createPort({managedResources}={}){
+    if(typeof managedResources?.createCalibrationProjectPort!=='function')
+      throw Error('Explicit managed Calibration Project port required');
+    return managedResources.createCalibrationProjectPort();
+  }
+  return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,createPort,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
     create,get,list,inspectUsage,coordinateIDB,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,

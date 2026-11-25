@@ -1845,7 +1845,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             },CurvatureModernReferenceImageImport);
             const calibration=projectApi.fresh({id:projectApi.createId(crypto),title:'Calibration owner',now:44,
                 ...parts,resultIds:[archived.id]});
-            const project=await adapter.saveCalibrationProject(calibration,{originalId:photo.originalId});
+            const projectPort=CurvatureModernCalibrationProjectStore.createPort({managedResources:adapter});
+            await rejects(async()=>CurvatureModernCalibrationProjectStore.createPort(),/explicit managed Calibration Project/i);
+            const created=await projectPort.create(indexedDB,calibration);
+            ok(JSON.stringify(created)===JSON.stringify(calibration),'project application create changed data');
+            const project=await adapter.readCalibrationProject(calibration.id);
             ok((await adapter.store.get(saved.resultId)).refCount===4,'Calibration Project did not retain result');
             const prepared=await adapter.readCalibrationProject(calibration.id);
             ok(JSON.stringify(prepared.project)===JSON.stringify(calibration),'Calibration Project changed');
@@ -1884,13 +1888,25 @@ class ModernBrowserSmoke(unittest.TestCase):
                 renamedRead.evidence.result===saved.resultId,'History metadata/evidence changed');
             await rejects(()=>adapter.saveHistory(history,{expectedRevision:1}),/revision conflict/);
             await rejects(()=>adapter.saveHistory(history,{expectedRevision:2,standalone:true}),/cannot be downgraded/);
-            const revised=projectApi.revise(calibration,{title:'Renamed retained Calibration'},47);
-            const revisedSaved=await adapter.saveCalibrationProject(revised,{expectedRevision:1});
+            const preparedFromPort=await CurvatureModernCalibrationProjectPersistence.prepareSharedSelection(window,
+                {id:calibration.id,revision:'rev:1',recovery:null},{storage:projectPort});
+            ok(preparedFromPort.photo.original.dataUrl===record.original.dataUrl&&
+                JSON.stringify(preparedFromPort.inline)===JSON.stringify(inline),'managed activation lost retained original');
+            const captured=await projectPort.captureVerified(indexedDB,preparedFromPort.draft,preparedFromPort.inline,calibration);
+            ok(JSON.stringify(captured.photo)===JSON.stringify(calibration.photo)&&
+                !(await adapter.listObservations()).length,'retained capture recreated deleted observation');
+            await rejects(()=>projectPort.rename(indexedDB,calibration.id,9,'Stale',47),/changed or missing/);
+            const revised=await projectPort.rename(indexedDB,calibration.id,1,'Renamed retained Calibration',47);
             const revisedRead=await adapter.readCalibrationProject(calibration.id);
-            ok(revisedRead.projectId===revisedSaved.projectId&&revisedRead.originalId===photo.originalId&&
+            ok(revisedRead.managedRevision===2&&revisedRead.originalId===photo.originalId&&
                 revisedRead.results[0].target===saved.resultId&&
                 JSON.stringify(revisedRead.project)===JSON.stringify(revised),'Calibration edit lost historical evidence');
             await rejects(()=>adapter.saveCalibrationProject(revised,{expectedRevision:1}),/revision conflict/);
+            await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(),/receipts are not integrated/);
+            await rejects(()=>projectPort.remove(indexedDB,calibration.id,2),/deletion is disabled/);
+            const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));
+            ok(usage.value.projects.length===1&&usage.value.projects[0].revision===2&&usage.value.legacy===null,
+                'project usage inspection did not use managed inventory');
             const reopenedAnimation=await adapter.readAnimation(animationProject.id);
             ok(reopenedAnimation.projectId===animation.projectId&&reopenedAnimation.evidence[0].target===saved.resultId,
                 'calibrated Animation lost result after archive removal');
