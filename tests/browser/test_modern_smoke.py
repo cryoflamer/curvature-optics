@@ -650,6 +650,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok((await adapter.store.collectGarbage(photo.observationId)).collected,'unused observation not reclaimed');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'shared original reclaimed');
             ok((await adapter.readObservation('photo_b')).row.record.original.dataUrl===original.dataUrl,'other observation lost');
+            const histories=await adapter.listHistory(),observations=await adapter.listObservations();
+            ok(histories.map(v=>v.row.id).join(',')==='18,17'&&histories[1].managedRevision===2,
+                'History inventory order or revisions lost');
+            ok(observations.length===1&&observations[0].row.id==='photo_b'&&
+                observations[0].row.width===3&&observations[0].row.height===2&&
+                !observations[0].row.record,'observation summary or tombstone filtering incorrect');
+            ok(!(await adapter.listAnimations()).length,'removed Animation appeared in inventory');
+            await adapter.store.removeDocument({documentId:'history:18',expectedRevision:1});
+            ok(await adapter.suggestHistoryId()===19,'retired History alias was reused');
+            ok((await adapter.listHistory()).length===1,'removed History appeared in inventory');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:2};
@@ -1740,8 +1750,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const animation=await adapter.readAnimation(expected.animation.id);
                 const working=await adapter.readAnimationWorkingCollection();
                 const result=await adapter.store.get(expected.resultId);
+                const lists={calibration:await adapter.listCalibrationProjects(),history:await adapter.listHistory(),
+                    animations:await adapter.listAnimations(),photos:await adapter.listObservations(),
+                    results:await adapter.listCalibrationResults()};
                 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-                return {qualified:report.qualification.integrity.valid,
+                return {listsExact:lists.calibration.length===1&&
+                    equal(lists.calibration[0].row,CurvatureModernCalibrationProject.summary(expected.calibration))&&
+                    lists.calibration[0].managedRevision===2&&lists.history.map(v=>v.row.id).join(',')==='74,71'&&
+                    lists.animations.length===1&&equal(lists.animations[0].row.project,expected.animation)&&
+                    lists.photos.length===0&&lists.results.length===0,qualified:report.qualification.integrity.valid,
                     owners:report.qualification.owners,originals:report.qualification.originalsVerified,
                     exact:equal(calibration.project,expected.calibration)&&
                         equal(calibration.inline,expected.inline)&&equal(calibration.draft.undoStack,expected.undo)&&
@@ -1757,7 +1774,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                         !(await adapter.store.collectGarbage(expected.resultId)).collected,
                     eligibleForMigration:report.eligibleForMigration};
             }""",{'archive':archive,'expected':expected})
-            self.assertEqual(restored,{'qualified':True,'originals':1,'exact':True,
+            self.assertEqual(restored,{'listsExact':True,'qualified':True,'originals':1,'exact':True,
                 'galleryAbsent':True,'protected':True,'eligibleForMigration':False,
                 'owners':{'history':2,'calibration':1,'animation':1,'animation-working-collection':1}})
         finally:

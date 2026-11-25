@@ -269,3 +269,15 @@ report skipped records. A controlled clean restart is acceptable for the
 current single-user deployment; silent loss of newly acknowledged data is not.
 Keep existing deletion protections until every relevant owner is integrated
 and verified. No production deletion is authorized by this document alone.
+
+### Domain gallery reads
+
+The managed core exposes a read-only revisioned document inventory by kind.
+Domain adapters return verified rows or existing summary shapes paired with
+`managedRevision`; each closure is read individually, followed by a second
+inventory check. A concurrent add, edit or removal causes a reload/retry
+refusal rather than a mixed-revision list. Retired document IDs are excluded
+from gallery reads. The explicit `suggestHistoryId()` includes retired IDs
+when choosing the next numeric alias, but is not an allocation reservation:
+the initial document CAS rejects a competing create. These opt-in read ports
+are preparation for routing, not a second live UI authority.

@@ -318,6 +318,17 @@
         return {...obj,payload:payload.value};
       });
     }
+    // A revisioned metadata inventory for domain queries. Retired document
+    // identities may be enumerated for monotonic domain alias allocation,
+    // but are never returned by ordinary gallery queries.
+    async function listDocuments(kind,{includeDeleted=false}={}){
+      token(kind,'document kind');
+      check(typeof includeDeleted==='boolean','invalid document inventory option');
+      return run('readonly',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        return [...g.docs.values()].filter(doc=>doc.kind===kind&&(includeDeleted||!doc.deleted));
+      });
+    }
     async function getDocument(id){
       token(id,'document ID');
       return run('readonly',async stores=>{
@@ -583,7 +594,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,readDocumentGraph,inspectUsage,
+      newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

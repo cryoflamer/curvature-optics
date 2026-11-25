@@ -634,6 +634,62 @@
         resources:[{id,type:DRAFTS,version:1,payload:{row,observations,evidence}}]});
       return {collectionId:id,managedRevision:document.revision};
     }
+    // Read verified domain rows, one closure at a time. A second inventory
+    // refuses a mixed-revision list rather than silently dropping changed
+    // documents. Revisions never roll back or reuse retired document IDs.
+    async function listVerified(kind,reader,documentId,project,compare){
+      const before=await store.listDocuments(kind),out=[];
+      for(const doc of before){
+        const alias=doc.metadata?.id;
+        check(doc.id===documentId(alias),'invalid '+kind+' root alias');
+        const value=await reader(alias);
+        check(value&&value.managedRevision===doc.revision,
+          kind+' inventory changed; reload and retry');
+        out.push({row:project(value),managedRevision:value.managedRevision});
+      }
+      const after=await store.listDocuments(kind);
+      check(same(before.map(d=>[d.id,d.revision]),after.map(d=>[d.id,d.revision])),
+        kind+' inventory changed; reload and retry');
+      return out.sort((a,b)=>compare(a.row,b.row));
+    }
+    const byTime=field=>(a,b)=>b[field]-a[field]||a.id.localeCompare(b.id);
+    function listHistory(){
+      return listVerified('history',readHistory,historyId,v=>v.row,(a,b)=>b.id-a.id);
+    }
+    function listObservations(){
+      return listVerified('observation',readObservation,observationId,({row})=>{
+        const {record,...rest}=row;
+        return {...rest,title:record.title,description:record.description||'',author:record.author,
+          license:record.license||'',sourceUrl:record.sourceUrl||'',width:record.original.width,
+          height:record.original.height,thumbnail:record.thumbnail||null};
+      },(a,b)=>a.title.localeCompare(b.title)||a.id.localeCompare(b.id));
+    }
+    function listAnimations(){
+      return listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),v=>v.row,byTime('updatedAt'));
+    }
+    function listCalibrationResults(){
+      check(results,'Calibration result adapter unavailable');
+      return listVerified('calibration-result',readCalibrationResult,resultDocumentId,
+        v=>({...results.summary(v.row.record),createdAt:v.row.createdAt}),byTime('createdAt'));
+    }
+    function listCalibrationProjects(){
+      check(calibrations,'Calibration Project adapter unavailable');
+      return listVerified('calibration',readCalibrationProject,id=>'calibration:'+calibrations.id(id),
+        v=>calibrations.summary(v.project),byTime('updatedAt'));
+    }
+    // This is only a proposed numeric alias. The initial root CAS remains
+    // the reservation; a competing create must obtain a fresh suggestion.
+    async function suggestHistoryId(){
+      const all=await store.listDocuments('history',{includeDeleted:true});
+      let largest=0;
+      for(const doc of all){
+        const id=Number(doc.id.slice('history:'.length));
+        check(doc.id===historyId(id),'invalid History root alias');
+        largest=Math.max(largest,id);
+      }
+      check(largest<Number.MAX_SAFE_INTEGER,'History ID exhausted');
+      return largest+1;
+    }
     // Qualification of an exact restored archive, not a live migration
     // gate. The inventory comes from the verified archive, not a UI list.
     async function qualifyRestoredArchive(database,backup){
@@ -690,7 +746,8 @@
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
-      saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
+      saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
+      listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
   // One-way rehearsal from a verified portable archive into a disposable,
   // empty origin profile. No old database is opened or rewritten. No UI route
