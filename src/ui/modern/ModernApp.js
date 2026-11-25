@@ -727,7 +727,7 @@
   // named Library records, or the autosaved editor workspace.
   if(studioLibraryFiltersApi){
     try{
-      var storedLibraryFilters=preferencesStorage()&&
+      var storedLibraryFilters=!sharedPresentationRequested&&preferencesStorage()&&
         preferencesStorage().getItem(STUDIO_LIBRARY_FILTER_KEY);
       if(storedLibraryFilters)studioLibraryFilters=studioLibraryFiltersApi.normalize(
         JSON.parse(storedLibraryFilters));
@@ -735,7 +735,14 @@
     studioLibraryQueryDraft=studioLibraryFilters.query;
   }
   function rememberStudioLibraryFilters(){
-    if(experimentPreview.live)return;
+    if(experimentPreview.live){
+      if(sharedPresentationActive()&&sharedPreferencesRestored&&persistence.ready){
+        observeUiRegistrySave(sharedPreferenceOwner.saveExtension('studioLibraryFilters',{
+          filters:studioLibraryFilters,advancedOpen:studioLibraryFilterAdvancedOpen}),
+          'Animation Library preferences: ');
+      }
+      return;
+    }
     try{var storage=preferencesStorage();if(storage&&studioLibraryFilters)
       storage.setItem(STUDIO_LIBRARY_FILTER_KEY,JSON.stringify(studioLibraryFilters));}
     catch(error){/* Private mode or disabled storage: in-memory filters still work. */}
@@ -778,15 +785,47 @@
       calibrationView:remembered.workspace.calibrationView,
       sections:Object.assign({},remembered.workspace.sections)};
   }
+  function studioLibraryPreferenceExtension(){
+    if(!studioLibraryFiltersApi)return null;
+    function validFilters(value){
+      if(!value||typeof value!=='object'||Array.isArray(value))return false;
+      var normalized=studioLibraryFiltersApi.normalize(value);
+      return Object.keys(value).length===Object.keys(normalized).length&&
+        Object.keys(normalized).every(k=>Object.hasOwn(value,k)&&value[k]===normalized[k]);
+    }
+    return {name:'studioLibraryFilters',legacyKey:STUDIO_LIBRARY_FILTER_KEY,
+      defaultValue:{filters:studioLibraryFiltersApi.normalize(),advancedOpen:false},
+      validate:value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&
+        Object.keys(value).length===2&&typeof value.advancedOpen==='boolean'&&validFilters(value.filters),
+      decodeLegacy:raw=>{
+        var parsed=JSON.parse(raw);
+        if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('Invalid legacy library filters');
+        var normalized=studioLibraryFiltersApi.normalize(parsed);
+        if(!Object.keys(parsed).every(k=>Object.hasOwn(normalized,k)&&parsed[k]===normalized[k]))
+          throw Error('Invalid legacy library filter value');
+        return {filters:normalized,advancedOpen:false};
+      }};
+  }
+  function applySharedStudioLibraryFilters(values){
+    var value=values.studioLibraryFilters;
+    if(!value)return;
+    studioLibraryFilters=studioLibraryFiltersApi.normalize(value.filters);
+    studioLibraryQueryDraft=studioLibraryFilters.query;
+    studioLibraryFilterAdvancedOpen=value.advancedOpen;
+  }
   async function restoreSharedPreferences(){
+    var extensions=Object.values(studioExportPreferenceBindings).map(binding=>binding.spec);
+    var prior=extensions.map(spec=>spec.name),libraryExtension=studioLibraryPreferenceExtension();
+    if(libraryExtension)extensions.push(libraryExtension);
     sharedPreferenceOwner=applicationPreferences.createShared({
       registryApi:root.CurvatureModernStateRegistry,managerApi:root.CurvatureModernUiSessionManager,
       store:experimentPreview.ui,storage:preferencesStorage(),
-      extensions:Object.values(studioExportPreferenceBindings).map(binding=>binding.spec)});
+      extensions,previousExtensionSets:libraryExtension&&prior.length?[prior]:[]});
     var values=await sharedPreferenceOwner.restore();
     if(experimentPreview.status==='suspended')return;
     applyGlobalPreferences(values);
     applySharedStudioExportPreferences(values);
+    applySharedStudioLibraryFilters(values);
     syncSharedGlobalPreferenceControls();
     sharedPreferencesRestored=true;
   }
@@ -814,7 +853,9 @@
       // document, workspace presentation and legacy bytes are untouched.
       applyGlobalPreferences(defaults);
       applySharedStudioExportPreferences(sharedPreferenceOwner.values());
+      applySharedStudioLibraryFilters(sharedPreferenceOwner.values());
       syncSharedGlobalPreferenceControls();
+      renderSharedAnimationLibrary();
       studioPlaybackFpsMeter.reset();
       stopAutoCameraPreview();
       if(previewLodControllers){previewLodControllers.Scene.reset();previewLodControllers.compare.reset();}
@@ -3025,10 +3066,38 @@
         });
       }
     }
+    var allNamed=ctx.named||[],visibleNamed=allNamed;
+    if(studioLibraryFiltersApi&&studioLibraryFilters&&allNamed.length&&studioUI?.renderLibraryFilters){
+      visibleNamed=studioLibraryFiltersApi.filter(allNamed,studioLibraryFilters);
+      studioUI.renderLibraryFilters(document,host,allNamed,{
+        filters:studioLibraryFilters,search:studioLibraryQueryDraft,visibleEntries:visibleNamed,
+        filtersActive:studioLibraryFiltersApi.active(studioLibraryFilters),
+        filtersAdvancedOpen:studioLibraryFilterAdvancedOpen
+      },{
+        filter(key,value,caret){
+          if(ctx.busy||experimentPreview.calibrationBusy)return;
+          studioLibraryFilters=studioLibraryFiltersApi.update(studioLibraryFilters,key,value);
+          studioLibraryQueryDraft=key==='query'?String(value).slice(0,160):studioLibraryFilters.query;
+          rememberStudioLibraryFilters();renderSharedAnimationLibrary();
+          var control=host.querySelector(key==='query'?'.modern-animation-library-search':'.modern-animation-library-filter-'+key);
+          if(control){control.focus();if(key==='query'&&Number.isInteger(caret))try{control.setSelectionRange(caret,caret);}catch(ignore){}}
+        },
+        clearFilters(){
+          if(ctx.busy||experimentPreview.calibrationBusy)return;
+          studioLibraryFilters=studioLibraryFiltersApi.normalize();studioLibraryQueryDraft='';
+          rememberStudioLibraryFilters();renderSharedAnimationLibrary();
+        },
+        toggleFilterDetails(open){
+          if(studioLibraryFilterAdvancedOpen===!!open)return;
+          studioLibraryFilterAdvancedOpen=!!open;rememberStudioLibraryFilters();
+        }
+      });
+    }
     var named=group('Saved Animation Library');
     if(ctx.namedError)named.appendChild(element('span','modern-animation-library-message is-error',ctx.namedError));
     if(ctx.named&&ctx.named.length===0)named.appendChild(element('span','modern-animation-library-note','No saved projects.'));
-    (ctx.named||[]).forEach(record=>{
+    else if(!visibleNamed.length&&allNamed.length)named.appendChild(element('span','modern-animation-library-note','No projects match these filters.'));
+    visibleNamed.forEach(record=>{
       var id=studioDraftAutosave.projectWorkspaceId(record.id);
       var existing=ctx.row?.collection.workspaces.find(item=>item.id===id);
       if(existing){

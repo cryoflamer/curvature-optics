@@ -14463,5 +14463,58 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read),renamed)
 
 
+    def test_shared_animation_library_filter_upgrade_and_f5(self):
+        """Append library preferences to the export envelope; filters never mutate physical state."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        old=self.page.evaluate("""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const row=await ui.read('global',{});
+            delete row.envelope.values['application.studioLibraryFilters'];
+            row.envelope.values['application.studioVideoExport'].value={Fps:'25'};
+            await ui.write('global',{},row.envelope,row.revision);
+            localStorage.setItem('curvature-modern-animation-library-filters-v1',JSON.stringify({query:'Alpha'}));
+            const demo=CurvatureModernDemoCatalog.load()[0].project;
+            for(const name of ['Alpha','Beta']){
+                const p=structuredClone(demo);p.name=name;
+                await CurvatureModernAnimationLibrary.create(indexedDB,p,'auto',Date.now());
+            }
+            return await ui.read('global',{});
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        host=self.page.locator('#ModernAnimationLibrary')
+        search=host.get_by_role('searchbox',name='Find animation projects')
+        expect(search).to_have_value('Alpha',timeout=30000)
+        expect(host.get_by_role('button',name='Open saved project · Alpha',exact=True)).to_be_visible()
+        expect(host.get_by_role('button',name='Open saved project · Beta',exact=True)).to_have_count(0)
+        read="""async () => ({global:await CurvatureModernUiSessionStore.create(window).read('global',{}),
+            doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+            legacy:localStorage.getItem('curvature-modern-animation-library-filters-v1')})"""
+        before=self.page.evaluate(read)
+        self.assertEqual(before['global']['revision'],old['revision']+1)
+        for key,value in old['envelope']['values'].items():
+            self.assertEqual(before['global']['envelope']['values'][key],value)
+        search.fill('Beta')
+        expect(host.get_by_role('button',name='Open saved project · Beta',exact=True)).to_be_visible()
+        expect(host.get_by_role('button',name='Open saved project · Alpha',exact=True)).to_have_count(0)
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        after=self.page.evaluate(read)
+        self.assertEqual(after['doc'],before['doc'])
+        self.assertEqual(after['legacy'],before['legacy'])
+        self.assertEqual(after['global']['envelope']['values']['application.studioLibraryFilters']['value']['filters']['query'],'Beta')
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        if self.page.evaluate('CurvatureModernApp.getWorkspaceMode()')!='animation':
+            self.page.locator('#ModernAnimationTab').click()
+        expect(search).to_have_value('Beta',timeout=30000)
+        expect(host.get_by_role('button',name='Open saved project · Beta',exact=True)).to_be_visible()
+        self.assertEqual(self.page.evaluate(read)['global'],after['global'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -281,9 +281,9 @@ function sharedFixture(source,initial={revision:0,envelope:null}){
       return {revision:row.revision};
     }
   };
-  const open=(legacy=source,extensions=[])=>preferences.createShared({
+  const open=(legacy=source,extensions=[],previousExtensionSets=[])=>preferences.createShared({
     registryApi:require('../src/storage/ModernStateRegistry'),
-    managerApi:require('../src/storage/ModernUiSessionManager'),store:backend,storage:legacy,extensions});
+    managerApi:require('../src/storage/ModernUiSessionManager'),store:backend,storage:legacy,extensions,previousExtensionSets});
   return {open,read:()=>structuredClone(row),writes:()=>writes};
 }
 test('global preferences migrate exactly once without owning layout or changing legacy bytes',async()=>{
@@ -368,4 +368,23 @@ test('Global extension migration appends settings once and retains every previou
     await assert.rejects(g.open(undefined,[spec]).restore());
     assert.equal(g.writes(),0);assert.deepEqual(g.read(),before);
   }
+});
+
+test('Global extension sets migrate incrementally without rereading acknowledged sources',async()=>{
+  const source=storage({first:'1',second:'2'}),f=sharedFixture(source);
+  const spec=name=>({name,legacyKey:name,defaultValue:0,validate:Number.isInteger,decodeLegacy:JSON.parse});
+  const first=f.open(source,[spec('first')]);await first.restore();
+  await first.saveExtension('first',5);
+  const old=f.read();
+  const second=f.open({getItem(key){assert.equal(key,'second');return source.getItem(key);}},
+    [spec('first'),spec('second')],[['first']]);
+  const values=await second.restore();
+  assert.equal(values.first,5);assert.equal(values.second,2);
+  assert.equal(f.read().revision,old.revision+1);
+  for(const [key,value] of Object.entries(old.envelope.values))
+    assert.deepEqual(f.read().envelope.values[key],value);
+  const bad=structuredClone(old);delete bad.envelope.values['application.opticalQuality'];
+  const g=sharedFixture(source,bad);
+  await assert.rejects(g.open(source,[spec('first'),spec('second')],[['first']]).restore(),/Unsupported/);
+  assert.equal(g.writes(),0);assert.deepEqual(g.read(),bad);
 });

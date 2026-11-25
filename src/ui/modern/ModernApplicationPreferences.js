@@ -200,7 +200,7 @@
     raw=storage.getItem(LEGACY_NAVIGATION_KEY);
     return normalize(raw===null?{}:{navigation:parse(raw)});
   }
-  function createShared({registryApi,managerApi,store,storage,extensions=[]}={}){
+  function createShared({registryApi,managerApi,store,storage,extensions=[],previousExtensionSets=[]}={}){
     if(!registryApi||!managerApi||!store)throw Error('Shared application preference dependencies required');
     var manager=null;
     var extra=new Map();
@@ -213,6 +213,11 @@
       extra.set(spec.name,spec);
     });
     var names=[...GLOBAL_KEYS,...extra.keys()];
+    var previousSets=[GLOBAL_KEYS,...previousExtensionSets.map(set=>{
+      if(!Array.isArray(set)||new Set(set).size!==set.length||set.some(name=>!extra.has(name))||set.length>=extra.size)
+        throw Error('Invalid previous global extension set');
+      return [...GLOBAL_KEYS,...set];
+    })];
     function exactKeys(row,fields){
       return !!row.envelope?.values&&Object.keys(row.envelope.values).length===fields.length&&
         fields.every(name=>Object.hasOwn(row.envelope.values,key(name)));
@@ -230,10 +235,11 @@
       var initial=before.revision===0?globalValues(migrationSource(storage)):globalValues();
       // Only the precise previous complete key set is an upgrade source.
       // Partial/newer rows are not missing defaults to be filled silently.
-      var upgrade=extra.size>0&&before.revision>0&&exactKeys(before,GLOBAL_KEYS);
+      var previous=extra.size>0&&before.revision>0?previousSets.find(fields=>exactKeys(before,fields)):null;
+      var upgrade=!!previous;
       var legacy=new Map();
       for(const [name,spec] of extra){
-        if(before.revision===0||upgrade){
+        if(before.revision===0||upgrade&&!previous.includes(name)){
           const raw=storage.getItem(spec.legacyKey);
           legacy.set(name,raw);
           initial[name]=raw===null?spec.defaultValue:spec.decodeLegacy(raw);

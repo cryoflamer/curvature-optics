@@ -289,6 +289,78 @@
     slot.appendChild(add);
     return slot;
   }
+  function renderLibraryFilters(doc,host,entries,options,actions){
+    var filters=options.filters||{};
+    var filterbar=el(doc,'div','modern-animation-library-filters');
+    var search=el(doc,'input','modern-animation-library-search');
+    search.type='search';search.maxLength=160;search.value=options.search===undefined?(filters.query||''):options.search;
+    search.placeholder='Search project names, notes and physics…';
+    search.setAttribute('aria-label','Find animation projects');
+    search.addEventListener('input',function(){
+      if(actions.filter)actions.filter('query',search.value,search.selectionStart);
+    });
+    filterbar.appendChild(search);
+    function selector(label,key,choices){
+      var field=el(doc,'label','modern-animation-library-filter');
+      field.appendChild(el(doc,'span','',label));
+      var control=el(doc,'select','modern-animation-library-filter-'+key);
+      control.setAttribute('aria-label','Filter animation projects by '+label);
+      choices.forEach(function(pair){
+        var option=el(doc,'option','',pair[1]);option.value=pair[0];control.appendChild(option);
+      });
+      control.value=filters[key]||choices[0][0];
+      control.addEventListener('change',function(){if(actions.filter)actions.filter(key,control.value);});
+      field.appendChild(control);return field;
+    }
+    filterbar.appendChild(selector('Animation','type',[
+      ['all','All types'],['camera','Camera Motion'],['physical','Physics Transition'],
+      ['experimental','Experimental']]));
+    filterbar.appendChild(selector('Sort','sort',[
+      ['updated-desc','Recently updated'],['updated-asc','Oldest updated'],
+      ['name-asc','Name A–Z'],['name-desc','Name Z–A']]));
+    var advanced=el(doc,'details','modern-animation-library-filter-details');
+    advanced.open=!!options.filtersAdvancedOpen;
+    advanced.addEventListener('toggle',function(){
+      if(advanced.isConnected!==false&&actions.toggleFilterDetails)actions.toggleFilterDetails(advanced.open);
+    });
+    advanced.appendChild(el(doc,'summary','', 'Advanced filters'+(options.filtersActive?' · active':'')));
+    var extra=el(doc,'div','modern-animation-library-filter-grid');
+    extra.appendChild(selector('Physical channel','channel',[
+      ['any','Any channel'],['curvature','Curvature'],['gradient','Temperature gradient']]));
+    extra.appendChild(selector('Reference mode','baseMode',[
+      ['all','Scene + Compare'],['scene','Scene'],['compare','Compare A/B']]));
+    extra.appendChild(selector('Reference geometry','geometry',[
+      ['any','Any'],['globe','Globe (either A/B)'],['flat','Flat (either A/B)']]));
+    extra.appendChild(selector('Reference atmosphere','atmosphere',[
+      ['any','Any'],['vacuum','Vacuum'],['standard','Standard'],
+      ['temperature-lapse','Temperature lapse'],['profile-transition','Profile transition'],
+      ['inverse-temperature','Inverse temperature'],['inverse-spherical','Inverse spherical'],
+      ['exponential-occlusion','Exponential occlusion']]));
+    if(filters.baseMode==='compare'){
+      extra.appendChild(selector('Geometry A/B','geometryRelation',[
+        ['any','Any'],['same','Same'],['different','Different']]));
+      extra.appendChild(selector('Refraction A/B','refractionRelation',[
+        ['any','Any'],['same','Same'],['different','Different']]));
+    }
+    extra.appendChild(selector('Scene objects','objects',[
+      ['any','Any count'],['none','No objects'],['1-5','1–5 objects'],['6+','6+ objects']]));
+    extra.appendChild(selector('Keyframes','frames',[
+      ['any','Any'],['zero','0'],['one','1'],['2-5','2–5'],
+      ['6-10','6–10'],['11+','11+']]));
+    extra.appendChild(selector('Duration','duration',[
+      ['any','Any'],['under10','Under 10 s'],['10-30','10–30 s'],['over30','Over 30 s']]));
+    advanced.appendChild(extra);filterbar.appendChild(advanced);
+    var found=options.visibleEntries||entries;
+    var results=el(doc,'div','modern-animation-library-filter-results');
+    results.setAttribute('role','status');
+    results.appendChild(el(doc,'small','',found.length+' of '+entries.length+' projects found'+
+      (options.selectedId&&!found.some(function(e){return e.id===options.selectedId;})?
+        ' · selected backup project hidden by filters':'')));
+    var clear=button(doc,'Clear filters','Reset Animation Library search and filters',actions.clearFilters||function(){});
+    clear.disabled=!options.filtersActive;results.appendChild(clear);
+    filterbar.appendChild(results);host.appendChild(filterbar);
+    return found;
+  }
   // A compact visual library, not another keyframe editor. Preview images are
   // persisted screenshots when available; never pretend a placeholder was
   // calculated from a saved physical project.
@@ -439,75 +511,7 @@
     if(!entries.length){host.appendChild(el(doc,'p','modern-animation-library-empty',
       'No saved projects yet. Add keyframes and click Save project; Preview animation never adds a project.'));return;}
     if(options.expanded===false)return;
-    var filters=options.filters||{};
-    var filterbar=el(doc,'div','modern-animation-library-filters');
-    var search=el(doc,'input','modern-animation-library-search');
-    search.type='search';search.maxLength=160;search.value=options.search===undefined?(filters.query||''):options.search;
-    search.placeholder='Search project names, notes and physics…';
-    search.setAttribute('aria-label','Find animation projects');
-    search.addEventListener('input',function(){
-      if(actions.filter)actions.filter('query',search.value,search.selectionStart);
-    });
-    filterbar.appendChild(search);
-    function selector(label,key,choices){
-      var field=el(doc,'label','modern-animation-library-filter');
-      field.appendChild(el(doc,'span','',label));
-      var control=el(doc,'select','modern-animation-library-filter-'+key);
-      control.setAttribute('aria-label','Filter animation projects by '+label);
-      choices.forEach(function(pair){
-        var option=el(doc,'option','',pair[1]);option.value=pair[0];control.appendChild(option);
-      });
-      control.value=filters[key]||choices[0][0];
-      control.addEventListener('change',function(){if(actions.filter)actions.filter(key,control.value);});
-      field.appendChild(control);return field;
-    }
-    filterbar.appendChild(selector('Animation','type',[
-      ['all','All types'],['camera','Camera Motion'],['physical','Physics Transition'],
-      ['experimental','Experimental']]));
-    filterbar.appendChild(selector('Sort','sort',[
-      ['updated-desc','Recently updated'],['updated-asc','Oldest updated'],
-      ['name-asc','Name A–Z'],['name-desc','Name Z–A']]));
-    var advanced=el(doc,'details','modern-animation-library-filter-details');
-    advanced.open=!!options.filtersAdvancedOpen;
-    advanced.addEventListener('toggle',function(){
-      if(actions.toggleFilterDetails)actions.toggleFilterDetails(advanced.open);
-    });
-    advanced.appendChild(el(doc,'summary','', 'Advanced filters'+(options.filtersActive?' · active':'')));
-    var extra=el(doc,'div','modern-animation-library-filter-grid');
-    extra.appendChild(selector('Physical channel','channel',[
-      ['any','Any channel'],['curvature','Curvature'],['gradient','Temperature gradient']]));
-    extra.appendChild(selector('Reference mode','baseMode',[
-      ['all','Scene + Compare'],['scene','Scene'],['compare','Compare A/B']]));
-    extra.appendChild(selector('Reference geometry','geometry',[
-      ['any','Any'],['globe','Globe (either A/B)'],['flat','Flat (either A/B)']]));
-    extra.appendChild(selector('Reference atmosphere','atmosphere',[
-      ['any','Any'],['vacuum','Vacuum'],['standard','Standard'],
-      ['temperature-lapse','Temperature lapse'],['profile-transition','Profile transition'],
-      ['inverse-temperature','Inverse temperature'],['inverse-spherical','Inverse spherical'],
-      ['exponential-occlusion','Exponential occlusion']]));
-    if(filters.baseMode==='compare'){
-      extra.appendChild(selector('Geometry A/B','geometryRelation',[
-        ['any','Any'],['same','Same'],['different','Different']]));
-      extra.appendChild(selector('Refraction A/B','refractionRelation',[
-        ['any','Any'],['same','Same'],['different','Different']]));
-    }
-    extra.appendChild(selector('Scene objects','objects',[
-      ['any','Any count'],['none','No objects'],['1-5','1–5 objects'],['6+','6+ objects']]));
-    extra.appendChild(selector('Keyframes','frames',[
-      ['any','Any'],['zero','0'],['one','1'],['2-5','2–5'],
-      ['6-10','6–10'],['11+','11+']]));
-    extra.appendChild(selector('Duration','duration',[
-      ['any','Any'],['under10','Under 10 s'],['10-30','10–30 s'],['over30','Over 30 s']]));
-    advanced.appendChild(extra);filterbar.appendChild(advanced);
-    var found=options.visibleEntries||entries;
-    var results=el(doc,'div','modern-animation-library-filter-results');
-    results.setAttribute('role','status');
-    results.appendChild(el(doc,'small','',found.length+' of '+entries.length+' projects found'+
-      (options.selectedId&&!found.some(function(e){return e.id===options.selectedId;})?
-        ' · selected backup project hidden by filters':'')));
-    var clear=button(doc,'Clear filters','Reset Animation Library search and filters',actions.clearFilters||function(){});
-    clear.disabled=!options.filtersActive;results.appendChild(clear);
-    filterbar.appendChild(results);host.appendChild(filterbar);
+    var found=renderLibraryFilters(doc,host,entries,options,actions);
     host.appendChild(el(doc,'p','modern-animation-library-hint',
       'Single-click selects for JSON backup (blue outline) · Open or double-click opens a project (Opened badge)'));
     var list=el(doc,'div','modern-animation-library-gallery');
@@ -1501,6 +1505,6 @@
       'PNG/video export is in Preview, permanent project saves are in Library.'));
     showInspector(host.__studioInspectorMode);
   }
-  return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,
+  return Object.freeze({render:render,renderPicker:renderPicker,renderLibrary:renderLibrary,renderLibraryFilters:renderLibraryFilters,
     renderStoryboard:renderStoryboard,createPreviewNavigation:createPreviewNavigation});
 }));
