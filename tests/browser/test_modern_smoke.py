@@ -2901,6 +2901,50 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.assertEqual(restored, {'valid': True, 'count': 2})
         finally:
             destination.close()
+        # Import Recovery alone: no prior named owner or Calibration Gallery.
+        # Both proof statuses must survive independently, including rollback.
+        for recovery_only in [recovery, standalone_recovery]:
+            isolated=self.browser.new_context()
+            try:
+                page=isolated.new_page()
+                page.goto(self.base_url,wait_until='load',timeout=30000)
+                for script in ['ModernManagedObjectStore.js','ModernManagedResources.js']:
+                    page.add_script_tag(url='/src/storage/'+script)
+                outcome=page.evaluate("""async text=>{
+                    const adapter=CurvatureModernManagedResources.create(window),port=adapter.createAnimationLibraryPort();
+                    const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+                    const ok=(value,msg)=>{if(!value)throw Error(msg);};
+                    const canonical=value=>JSON.stringify(value,(_,v)=>
+                        v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
+                    const evidence=JSON.parse(text).calibrationEvidence;
+                    let refused=false;
+                    try{
+                        await adapter.importAnimationRecovery(indexedDB,lease,null,text,()=>{throw Error('Recovery guard refused');});
+                    }catch(e){if(!/Recovery guard refused/.test(e.message))throw e;refused=true;}
+                    ok(refused&&!(await adapter.readAnimationWorkingCollection())&&
+                        (await adapter.store.verifyIntegrity()).liveObjects===0,'failed isolated Recovery left objects');
+                    const row=await adapter.importAnimationRecovery(indexedDB,lease,null,text);
+                    const working=await adapter.readAnimationWorkingCollection();
+                    ok(working.evidence.length===1&&working.evidence[0].alias===evidence[0].alias&&
+                        (working.evidence[0].target===null)===(evidence[0].proof===null),'isolated Recovery status changed');
+                    if(evidence[0].proof){
+                        const target=await adapter.store.get(working.evidence[0].target);
+                        ok(canonical(target.payload.record)===canonical(evidence[0].proof.record),
+                            'isolated Recovery result differs');
+                        ok(await adapter.store.get(target.payload.originalId),'isolated Recovery original missing');
+                    }
+                    ok(!(await port.list(indexedDB)).length&&!(await adapter.listCalibrationResults()).length&&
+                        !(await adapter.listObservations()).length,'Recovery fabricated gallery or named roots');
+                    const A=CurvatureModernAnimationDraftAutosave,id=row.collection.activeId;
+                    const again=await port.exportRecovery(indexedDB,{version:1,reference:A.documentReference(row,id),
+                        checkpoint:A.getWorkspace(row.collection,id),receipt:null});
+                    ok(canonical(JSON.parse(again).calibrationEvidence)===canonical(evidence),
+                        'isolated Recovery re-export differs');
+                    return {valid:(await adapter.store.verifyIntegrity()).valid};
+                }""",recovery_only)
+                self.assertEqual(outcome, {'valid': True})
+            finally:
+                isolated.close()
 
     def test_managed_calibration_result_snapshot_evidence(self):
         # Use the existing Modern script dependency order, but create only
