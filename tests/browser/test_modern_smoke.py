@@ -2824,8 +2824,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
             const project=P.createV2(contract,[{experiment},{experiment}],{
                 id:'managed_retained_animation',name:'Managed retained Animation'});
-            const linked=P.validate({...project,keyframes:project.keyframes.map(f=>({
-                ...f,referenceImageIds:[retained.id]}))});
+            const linked=P.validate({...project,keyframes:project.keyframes.map((f,i)=>({
+                ...f,travelMs:i?200:0,holdMs:100,referenceImageIds:[retained.id]}))});
             await adapter.saveAnimation(L.record(linked,'auto',linked.id,100,100,null));
             await adapter.store.removeDocument({documentId:'observation:'+retained.id,expectedRevision:1});
             const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
@@ -2904,6 +2904,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         exported=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
         self.assertEqual(exported['referenceImages'][0]['original']['dataUrl'],original)
         self.assertEqual(exported['referenceImages'][0]['title'],'Retained animation original')
+        # Exercise the actual full-presentation workers with a short two-frame
+        # project, not a synthetic gallery lookup or simulation-only export.
+        import struct
+        import zipfile
+        before=self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs')
+        for kind in ['Frame','Video']:
+            prefix='#ModernAnimation'+kind+'Export'
+            self.page.locator(prefix+'Section summary').click()
+            self.page.locator(prefix+'Mode').select_option('presentation')
+            self.page.locator(prefix+'PresentationSize').select_option('1280')
+            self.page.locator(prefix+'Layout').select_option('side')
+            self.page.locator(prefix+'Fps').select_option('5')
+            self.page.locator(prefix+'Renderer').select_option('canvas-direct')
+            self.page.locator(prefix+'Workers').select_option('1')
+            if kind=='Frame':
+                self.page.locator(prefix+'Destination').select_option('memory')
+            else:
+                self.page.locator(prefix+'Format').select_option('webm')
+            with self.page.expect_download(timeout=120000) as download:
+                self.page.locator(prefix+'Start').click()
+            path=Path(download.value.path())
+            if kind=='Frame':
+                with zipfile.ZipFile(path) as archive:
+                    self.assertIsNone(archive.testzip())
+                    frames=[name for name in archive.namelist() if name.endswith('.png')]
+                    self.assertGreaterEqual(len(frames),2)
+                    first=archive.read(frames[0])
+                    self.assertEqual(first[:8],b'\x89PNG\r\n\x1a\n')
+                    self.assertEqual(struct.unpack('>II',first[16:24]),(1280,720))
+                expect(self.page.locator(prefix+'Status')).to_contain_text('PNG archive ready')
+            else:
+                data=path.read_bytes()
+                self.assertTrue(data.startswith(b'\x1a\x45\xdf\xa3'))
+                self.assertGreater(len(data),1000)
+                expect(self.page.locator(prefix+'Status')).to_contain_text('export ready:')
+            self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'),before)
         self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
             [CurvatureModernManagedObjectStore.DATABASE,CurvatureModernUiSessionStore.DATABASE].includes(db.name))"""),
             self.page.evaluate('async()=>await indexedDB.databases()'))
