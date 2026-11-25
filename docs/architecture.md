@@ -796,6 +796,15 @@ activation, without a legacy tab marker. Other usage types remain visible
 but cannot navigate until their document owners are migrated. Original
 deletion remains blocked. Mounted Animation is not enabled by this contract.
 
+Animation migration starts with a read-only inventory of the existing v1
+IndexedDB checkpoint, v2 collection, legacy local checkpoint/collection and
+all discoverable per-tab local backup slots. The inventory retains raw
+source evidence and explicitly reports invalid records. It does not create
+an absent database, choose a winner by timestamp, merge or prune sources.
+Exact normalized variants retain source attribution, including divergent
+checkpoints with identical timestamps. Source selection and durable migration
+are separate operations; temporary keyframe recovery is not yet included.
+
 The headless Calibration Apply checkpoint adapter supports a single CAS
 from an acknowledged Calibration selection to a new physical experiment.
 It checks the entire outgoing physical payload, exact selected domain

@@ -574,6 +574,88 @@
       };
     });
   }
+  // Shared migration inventories the actual old sources, not the legacy
+  // timestamp-based merged view. Read-only inspection must not create a
+  // missing database or discard corrupt/unsupported evidence.
+  async function readExistingLegacy(indexedDB){
+    if(!indexedDB||typeof indexedDB.databases!=='function')
+      throw Error('Animation legacy database inventory unavailable');
+    const entries=await indexedDB.databases();
+    if(!entries.some(row=>row.name===DATABASE))return {current:null,workspaces:null};
+    return new Promise((resolve,reject)=>{
+      let req,db,done=false;
+      function finish(error,value){
+        if(done)return;done=true;if(db)db.close();
+        if(error)reject(error);else resolve(value);
+      }
+      try{req=indexedDB.open(DATABASE,1);}catch(error){finish(error);return;}
+      req.onupgradeneeded=()=>{
+        try{req.transaction.abort();}catch(ignore){}
+        finish(Error('Animation legacy database changed during inspection'));
+      };
+      req.onerror=()=>finish(req.error||Error('Animation legacy database unavailable'));
+      req.onblocked=()=>finish(Error('Animation legacy database blocked'));
+      req.onsuccess=()=>{
+        db=req.result;if(done){db.close();return;}
+        try{
+          const tx=db.transaction(STORE,'readonly'),store=tx.objectStore(STORE);
+          const one=store.get(KEY),many=store.get(COLLECTION_DB_KEY);
+          tx.oncomplete=()=>finish(null,{current:one.result??null,workspaces:many.result??null});
+          tx.onabort=tx.onerror=()=>finish(tx.error||Error('Animation legacy inspection failed'));
+        }catch(error){finish(error);}
+      };
+    });
+  }
+  function legacyLocalEvidence(storage){
+    if(!storage||typeof storage.getItem!=='function'||typeof storage.key!=='function'||
+       !Number.isSafeInteger(storage.length))
+      throw Error('Animation legacy localStorage inventory unavailable');
+    const keys=new Set([STORAGE_KEY,COLLECTION_KEY]);
+    for(let i=0;i<storage.length;i++){
+      const key=storage.key(i);
+      if(typeof key==='string'&&key.startsWith(SESSION_LOCAL_PREFIX))keys.add(key);
+    }
+    return [...keys].sort().map(key=>({key,raw:storage.getItem(key)})).filter(item=>item.raw!==null);
+  }
+  function planLegacySources(remote,local){
+    const sources=[],issues=[];
+    function collect(source,kind,raw,serialized){
+      if(raw===null||raw===undefined)return;
+      try{
+        const value=(kind==='collection'?normalizeCollection:normalize)(serialized?JSON.parse(raw):raw);
+        sources.push({source,kind,value});
+      }catch(error){
+        issues.push({source,message:String(error.message||error)});
+      }
+    }
+    collect('idb:'+COLLECTION_DB_KEY,'collection',remote.workspaces,false);
+    collect('idb:'+KEY,'checkpoint',remote.current,false);
+    for(const entry of local)
+      collect('local:'+entry.key,entry.key===STORAGE_KEY?'checkpoint':'collection',entry.raw,true);
+    // Exact variants, including presentation, timestamps and associations,
+    // are deliberately not collapsed by draft name or savedAt.
+    const variants=[];
+    for(const source of sources){
+      const items=source.kind==='collection'?source.value.workspaces:
+        [{id:source.value.libraryId?projectWorkspaceId(source.value.libraryId):null,checkpoint:source.value}];
+      for(const item of items){
+        const existing=variants.find(v=>v.id===item.id&&
+          JSON.stringify(v.checkpoint)===JSON.stringify(item.checkpoint));
+        if(existing)existing.sources.push(source.source);
+        else variants.push({id:item.id,checkpoint:item.checkpoint,sources:[source.source]});
+      }
+    }
+    return {sources,variants,issues};
+  }
+  async function inspectLegacySources(env){
+    // Read local bytes before and after the async remote inventory. A
+    // changed source must be inspected again, not mixed into an old plan.
+    const local=legacyLocalEvidence(env?.localStorage);
+    const remote=await readExistingLegacy(env?.indexedDB);
+    if(JSON.stringify(local)!==JSON.stringify(legacyLocalEvidence(env.localStorage)))
+      throw Error('Animation legacy local evidence changed during inspection');
+    return {...planLegacySources(remote,local),evidence:{remote,local}};
+  }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}
   function write(indexedDB,record){var valid=normalize(record);
@@ -602,5 +684,6 @@
     reconcileCollection:reconcileCollection,writeCollectionMerged:writeCollectionMerged,
     writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
-    SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId});
+    SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
+    inspectLegacySources,planLegacySources});
 }));

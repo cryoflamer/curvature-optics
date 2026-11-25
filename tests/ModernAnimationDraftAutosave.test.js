@@ -29,7 +29,7 @@ function storage(){
 }
 function memoryIndexedDB(){
   const records=new Map();
-  return {open(name,version){
+  return {databases:async()=>records.has('created')?[{name:autosave.DATABASE,version:1}]:[],open(name,version){
     assert.equal(name,autosave.DATABASE);assert.equal(version,1);
     const request={result:null,error:null};
     queueMicrotask(()=>{
@@ -651,4 +651,54 @@ test('atomic unchanged-draft Apply guard rejects a stale remote while preserving
     return '22222222222244448888222222222222';}},
     {id:'draft_atomic_a',serializedDraft:JSON.stringify(updated.draft)});
   assert.equal(permitted.staleWorkspace,undefined);
+});
+
+function inventoryStorage(){
+  const data=new Map();
+  return {get length(){return data.size;},key:i=>Array.from(data.keys())[i]??null,
+    getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),
+    removeItem:k=>data.delete(k)};
+}
+test('shared Animation legacy inventory is read-only, does not create absent databases and reports corrupt sources',async()=>{
+  const db=memoryIndexedDB(),local=inventoryStorage();
+  const cp=autosave.checkpoint({draft:physicalDraft(),selectedKey:null,quality:'auto',
+    prepared:false,positionMs:0},100);
+  local.setItem(autosave.STORAGE_KEY,JSON.stringify(cp));
+  local.setItem(autosave.SESSION_LOCAL_PREFIX+'broken','{invalid');
+  local.setItem('unrelated','unchanged');
+  const plan=await autosave.inspectLegacySources({indexedDB:db,localStorage:local});
+  assert.deepEqual(await db.databases(),[]);
+  assert.equal(plan.sources.length,1);
+  assert.deepEqual(plan.sources[0].value,cp);
+  assert.equal(plan.issues.length,1);
+  assert.equal(plan.issues[0].source,'local:'+autosave.SESSION_LOCAL_PREFIX+'broken');
+  assert.equal(plan.evidence.local.find(x=>x.key.endsWith('broken')).raw,'{invalid');
+  assert.equal(local.getItem('unrelated'),'unchanged');
+  assert.equal(local.length,3);
+});
+test('shared Animation legacy inventory retains divergent equal-timestamp checkpoints and all raw sources',async()=>{
+  const db=memoryIndexedDB(),local=inventoryStorage(),id='draft_example';
+  const cp=autosave.checkpoint({draft:physicalDraft(),selectedKey:null,quality:'auto',
+    prepared:false,positionMs:0},100);
+  const altered=structuredClone(cp);altered.draft.name='Divergent same timestamp';
+  const old=autosave.collection(id,cp,100),other=autosave.collection(id,altered,100);
+  await autosave.write(db,cp);await autosave.writeCollection(db,old);
+  local.setItem(autosave.COLLECTION_KEY,JSON.stringify(old));
+  local.setItem(autosave.SESSION_LOCAL_PREFIX+'alternate',JSON.stringify(other));
+  const plan=await autosave.inspectLegacySources({indexedDB:db,localStorage:local});
+  assert.equal(plan.sources.length,4);assert.equal(plan.issues.length,0);
+  const variants=plan.variants.filter(v=>v.id===id);
+  assert.equal(variants.length,2);
+  assert.equal(variants.find(v=>v.checkpoint.draft.name===cp.draft.name).sources.length,2);
+  assert.equal(variants.find(v=>v.checkpoint.draft.name===altered.draft.name).sources.length,1);
+  assert.deepEqual(plan.evidence.remote.workspaces,old);
+  assert.deepEqual(await autosave.readCollection(db),old);
+  assert.equal(local.getItem(autosave.SESSION_LOCAL_PREFIX+'alternate'),JSON.stringify(other));
+});
+test('shared Animation inspection refuses changing or inaccessible legacy evidence',async()=>{
+  const db=memoryIndexedDB(),local=inventoryStorage();
+  const changing={databases:async()=>{local.setItem(autosave.STORAGE_KEY,'changed');return [];}};
+  await assert.rejects(autosave.inspectLegacySources({indexedDB:changing,localStorage:local}),/changed during inspection/);
+  await assert.rejects(autosave.inspectLegacySources({indexedDB:{},localStorage:local}),/database inventory unavailable/);
+  await assert.rejects(autosave.inspectLegacySources({indexedDB:db,localStorage:null}),/localStorage inventory unavailable/);
 });
