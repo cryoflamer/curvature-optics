@@ -318,3 +318,15 @@ refusal. Thus concurrent insertion, removal or revision changes cannot
 acknowledge a stale deduplication decision. A synchronous caller guard is
 checked before mutation. No automatic pruning, legacy import receipt,
 production UI routing or cutover is enabled by these ports.
+
+The existing `ModernExperimentHistory.create` factory accepts an explicit
+`managedResources` dependency with `protectedRetention: true` and returns
+the managed application port rather than opening the old database. Every
+displayed row carries `managedRevision`. Exact-row metadata and pin edits
+reject stale displayed records and honor the transaction guard. Existing
+list/get/record/import return shapes are preserved, with the additional
+revision. Destructive and non-revisioned management and legacy migration
+methods explicitly refuse; an invalid dependency never falls back to the
+legacy writer. This is the factory seam for controlled activation, not a
+user-selectable production route: startup must still establish a single
+authority and handle the old migration receipt before supplying it.

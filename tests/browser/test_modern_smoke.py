@@ -748,6 +748,34 @@ class ModernBrowserSmoke(unittest.TestCase):
             capacityExperiment.display.eyeLevel=!capacityExperiment.display.eyeLevel;
             const capacity=await adapter.recordHistory(capacityExperiment,'auto',null,{maxAutoEntries:1});
             ok(capacity.skipped==='capacity'&&capacity.entry===null,'capacity did not refuse safely');
+            await rejects(async()=>CurvatureModernExperimentHistory.create({managedResources:null,
+                protectedRetention:true}),/explicit protected managed History port/i);
+            await rejects(async()=>CurvatureModernExperimentHistory.create({managedResources:adapter}),
+                /explicit protected managed History port/i);
+            const history=CurvatureModernExperimentHistory.create({managedResources:adapter,
+                protectedRetention:true,now:()=>202,maxAutoEntries:1});
+            await history.open();
+            ok(history.storageKind==='managed','factory did not select managed History');
+            const expected=await history.get(17);
+            const renamed=await history.updateMetadataExact(expected,'  Edited from UI  ','  New notes  ');
+            ok(renamed.name==='Edited from UI'&&renamed.description==='New notes'&&
+                renamed.managedRevision===expected.managedRevision+1,'exact metadata port failed');
+            ok((await adapter.readHistory(17)).snapshotId===first.snapshotId,'UI metadata edit rewrote evidence');
+            await rejects(()=>history.updateMetadataExact(expected,'Stale',''),/snapshot changed/);
+            const before=(await history.list()).find(row=>row.id===19);
+            await rejects(()=>history.setPinnedExact([renamed,before],false,()=>{throw Error('stale UI');}),/stale UI/);
+            ok((await history.get(17)).pinned&&(await history.get(19)).pinned,'refused pin changed rows');
+            const unpinned=await history.setPinnedExact([renamed,before],false);
+            ok(unpinned.length===2&&unpinned.every(row=>!row.pinned),'UI bulk pin port failed');
+            await rejects(()=>history.setPinnedExact([renamed],true),/snapshot changed/);
+            const rerecorded=await history.record(experiment,'manual',null);
+            ok(!rerecorded.created&&rerecorded.entry.managedRevision>0,'UI record shape lost revision');
+            const replay=await history.importEntries([{experiment,name:'Other imported name'}]);
+            ok(replay.created===0&&replay.reused===1,'UI import contract failed');
+            await rejects(()=>history.remove(17),/disabled/);
+            await rejects(()=>history.pin(17,true),/disabled/);
+            await rejects(()=>history.clearAuto(),/disabled/);
+            await rejects(()=>history.migrationReceipt(),/coordinated cutover/);
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};

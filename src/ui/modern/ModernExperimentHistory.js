@@ -253,6 +253,14 @@
   }
   function create(options){
     options=options||{};
+    // An explicit managed dependency selects the protected application port.
+    // An invalid dependency is an error, never a fallback to the old writer.
+    // Startup does not supply this option until the coordinated cutover.
+    if(Object.hasOwn(options,'managedResources')){
+      if(options.protectedRetention!==true||typeof options.managedResources?.createHistoryPort!=='function')
+        throw Error('Explicit protected managed History port required');
+      return options.managedResources.createHistoryPort({now:options.now,maxAutoEntries:options.maxAutoEntries});
+    }
     var factory=options.indexedDB,now=options.now||Date.now;
     // The shared route chooses this immutable capability at startup. UI
     // controls are not the enforcement boundary for this store instance.

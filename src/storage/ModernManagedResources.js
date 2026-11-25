@@ -267,7 +267,7 @@
     // Exact managed revisions are sufficient for atomic gallery pinning.
     // Retain the legacy protection policy for recovery and unpinned auto
     // snapshots. No physical state or archive mapping is rewritten.
-    async function setHistoryPinned(entries,pinned){
+    async function setHistoryPinned(entries,pinned,{guard=()=>{}}={}){
       check(typeof pinned==='boolean'&&Array.isArray(entries)&&entries.length>0,'explicit History pin batch required');
       const plans=[],updated=[];
       for(const {id,managedRevision} of entries){
@@ -282,7 +282,7 @@
           metadata,references:[strong('snapshot',current.snapshotId)]});
         updated.push(row);
       }
-      const documents=await store.writeDocuments(plans);
+      const documents=await store.writeDocuments(plans,{guard});
       return updated.map((row,i)=>({row,managedRevision:documents[i].revision}));
     }
     async function readHistory(id){
@@ -300,6 +300,56 @@
       const {item,metadata}=historyFields(row);
       return {row:historyRow(metadata,item.experiment),
         snapshotId:snapshot.id,managedRevision:graph.document.revision,evidence:snapshot.payload.evidence};
+    }
+    // The existing protected History UI expects rows and exact displayed
+    // records, not a separate managed envelope. Keep the revision attached
+    // to every returned row and fail closed on unsupported legacy methods.
+    function createHistoryPort({now=Date.now,maxAutoEntries=history.MAX_AUTO}={}){
+      check(typeof now==='function'&&Number.isInteger(maxAutoEntries)&&maxAutoEntries>=1&&
+        maxAutoEntries<=10000,'invalid History port options');
+      const asRow=value=>value?{...value.row,managedRevision:value.managedRevision}:null;
+      async function exactRow(expected){
+        check(expected&&positive(expected.id)&&positive(expected.managedRevision),
+          'exact managed History record required');
+        const current=await readHistory(expected.id);
+        check(current&&same(asRow(current),expected),'History snapshot changed; refresh before editing');
+        return current;
+      }
+      async function updateMetadataExact(expected,name,description,guard=()=>{}){
+        const current=await exactRow(expected);
+        const row={...current.row,name,description};
+        const {metadata}=historyFields(row);
+        if((metadata.name||metadata.description)&&row.source==='auto')row.source='manual';
+        const next=await prepareHistory(row,{expectedRevision:current.managedRevision});
+        const [document]=await store.writeDocuments([next.plan],{guard});
+        return asRow({row:next.row,managedRevision:document.revision});
+      }
+      async function setPinnedExact(expected,pinned,guard=()=>{}){
+        check(Array.isArray(expected)&&expected.length>0,'exact managed History records required');
+        const entries=[];
+        for(const row of expected){
+          const current=await exactRow(row);
+          entries.push({id:current.row.id,managedRevision:current.managedRevision});
+        }
+        return (await setHistoryPinned(entries,pinned,{guard})).map(asRow);
+      }
+      async function record(experiment,source,thumbnail,{guard=()=>{}}={}){
+        const {managedRevision,entry,...result}=await recordHistory(experiment,source,thumbnail,{now,maxAutoEntries,guard});
+        return {...result,entry:asRow(entry?{row:entry,managedRevision}:null)};
+      }
+      const rejectManagement=async()=>{throw Error('Managed History deletion or non-revisioned management is disabled');};
+      const rejectMigration=async()=>{throw Error('Managed History requires coordinated cutover; legacy migration is disabled');};
+      return Object.freeze({
+        storageKind:'managed',coordination:store.coordination,
+        open:()=>store.listDocuments('history'),
+        list:async()=>(await listHistory()).map(asRow),
+        get:async id=>asRow(await readHistory(Number(id))),
+        record,importEntries:(items,guard=()=>{})=>importHistory(items,{now,guard}),
+        updateMetadataExact,setPinnedExact,
+        updateMetadata:rejectManagement,pin:rejectManagement,remove:rejectManagement,
+        clearAll:rejectManagement,clearAuto:rejectManagement,
+        migrateLegacy:rejectMigration,migrationReceipt:rejectMigration
+      });
     }
     function attribution(record){
       const {id,version,original,thumbnail,...rest}=record;
@@ -853,7 +903,7 @@
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
-      saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,saveObservation,readObservation,saveAnimation,readAnimation,
+      saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
