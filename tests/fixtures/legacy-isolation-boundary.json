@@ -529,6 +529,7 @@
       "src/diagnostics/LegacyDemoPerformance.js",
       "src/jsg.js",
       "src/jsgx3d.js",
+      "src/storage/ModernManagedObjectStore.js",
       "src/storage/ModernPortableBackup.js",
       "src/tabs.js",
       "src/ui/legacy/LegacyDemoDomMount.js",
@@ -536,7 +537,7 @@
       "src/xtc.js"
     ]
   },
-  "sourceJsCount": 242,
+  "sourceJsCount": 243,
   "sourceModules": {
     "src/ControlPanel.js": {
       "directHtmlLoads": [],
@@ -2944,6 +2945,12 @@
         "tests/ModernSessionAutosave.test.js",
         "tests/ModernUiSessionStore.test.js"
       ],
+      "commonJsToolCallers": []
+    },
+    "src/storage/ModernManagedObjectStore.js": {
+      "directHtmlLoads": [],
+      "commonJsSourceCallers": [],
+      "commonJsTestCallers": [],
       "commonJsToolCallers": []
     },
     "src/storage/ModernPortableBackup.js": {
