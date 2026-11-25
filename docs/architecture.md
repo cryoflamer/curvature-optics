@@ -805,6 +805,22 @@ Exact normalized variants retain source attribution, including divergent
 checkpoints with identical timestamps. Source selection and durable migration
 are separate operations; temporary keyframe recovery is not yet included.
 
+The headless shared Animation adapter uses a versioned, SHA-256 sealed row
+under a new key in the existing Animation draft store, without a schema
+upgrade. The older v1/v2 keys remain untouched as migration evidence. Only
+explicit adoption of an inspected source or verified absence of legacy
+sources can initialize this row; divergent unselected sources remain raw
+recovery evidence, not silently merged. Adoption checks the old IndexedDB
+keys inside its transaction and local evidence immediately before writing;
+concurrent legacy-route editors must remain closed. Each workspace has its
+own monotonic revision token. The complete row is the CAS baseline, while
+saving an acknowledged workspace changes only its checkpoint and revision
+and atomically writes a selection receipt for the shared document session.
+A receipt must be retired after the exact session acknowledgement, not by
+repeating the document write. The historical collection activeId is not a
+shared selection authority. The adapter is not yet mounted; other legacy
+source adoption, conflict recovery, keyframe editing and UI remain pending.
+
 The headless Calibration Apply checkpoint adapter supports a single CAS
 from an acknowledged Calibration selection to a new physical experiment.
 It checks the entire outgoing physical payload, exact selected domain

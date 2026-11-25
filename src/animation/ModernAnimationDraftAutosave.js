@@ -656,6 +656,258 @@
       throw Error('Animation legacy local evidence changed during inspection');
     return {...planLegacySources(remote,local),evidence:{remote,local}};
   }
+  // One shared domain row in the existing draft store. Legacy keys remain
+  // read-only migration evidence in this preview, not a second live owner.
+  const SHARED_COLLECTION_KEY='shared-workspaces-v1';
+  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  function exact(value,keys){
+    return object(value)&&Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
+  }
+  function requireLease(lease,write=false){
+    if(!lease||lease.sessionId!=='shared'||'tabId' in lease||
+       typeof lease.check!=='function'||typeof lease.track!=='function')
+      throw Error('Shared Animation lifetime required');
+    lease.check(write);
+  }
+  function positive(value){return Number.isSafeInteger(value)&&value>0;}
+  function reference(id,revision){
+    if(!positive(revision))throw Error('Invalid Animation workspace revision');
+    return {id:workspaceId(id),revision:'rev:'+revision,recovery:null};
+  }
+  function validateReference(value){
+    if(!exact(value,['id','revision','recovery'])||value.recovery!==null||
+       typeof value.revision!=='string'||!/^rev:[1-9][0-9]*$/.test(value.revision))
+      throw Error('Invalid shared Animation reference');
+    return reference(value.id,Number(value.revision.slice(4)));
+  }
+  function selectionBase(value){
+    if(!exact(value,['revision','digest'])||!positive(value.revision)||
+       value.revision>=Number.MAX_SAFE_INTEGER||typeof value.digest!=='string'||
+       !/^sha256:[0-9a-f]{64}$/.test(value.digest))
+      throw Error('Invalid Animation selection base');
+    return {revision:value.revision,digest:value.digest};
+  }
+  function validateReceipt(value){
+    if(!exact(value,['version','base','previous','current','status'])||
+       value.version!==1||value.status!=='updated')
+      throw Error('Invalid shared Animation receipt');
+    const base=selectionBase(value.base),previous=validateReference(value.previous),
+      current=validateReference(value.current);
+    if(previous.id!==current.id||Number(previous.revision.slice(4))>=Number(current.revision.slice(4)))
+      throw Error('Invalid Animation receipt transition');
+    return {version:1,base,previous,current,status:'updated'};
+  }
+  function documentReference(row,id){
+    const item=row.revisions.find(x=>x.id===id);
+    if(!item)throw Error('Animation workspace missing');
+    return reference(item.id,item.revision);
+  }
+  function normalizeSharedRow(raw){
+    if(!exact(raw,['version','revision','collection','revisions','receipt','digest'])||
+       raw.version!==1||!positive(raw.revision)||!Array.isArray(raw.revisions)||
+       typeof raw.digest!=='string'||!/^sha256:[0-9a-f]{64}$/.test(raw.digest))
+      throw Error('Invalid shared Animation collection');
+    const collection=normalizeCollection(raw.collection);
+    if(!equal(raw.collection,collection)||raw.revisions.length!==collection.workspaces.length)
+      throw Error('Invalid shared Animation collection payload');
+    const revisions=raw.revisions.map((item,i)=>{
+      if(!exact(item,['id','revision'])||item.id!==collection.workspaces[i].id||
+         !positive(item.revision)||item.revision>raw.revision)
+        throw Error('Invalid Animation workspace revision inventory');
+      return {id:item.id,revision:item.revision};
+    });
+    const receipt=raw.receipt===null?null:validateReceipt(raw.receipt);
+    const row={version:1,revision:raw.revision,collection,revisions,receipt,digest:raw.digest};
+    if(receipt&&!equal(documentReference(row,receipt.current.id),receipt.current))
+      throw Error('Animation receipt does not match durable workspace');
+    if(!equal(row,raw))throw Error('Noncanonical shared Animation row');
+    return row;
+  }
+  async function seal(data,crypto){
+    if(!crypto?.subtle||typeof crypto.subtle.digest!=='function')
+      throw Error('Web Crypto SHA-256 required for shared Animation');
+    const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(data)));
+    const digest='sha256:'+Array.from(new Uint8Array(bytes),n=>n.toString(16).padStart(2,'0')).join('');
+    return {...data,digest};
+  }
+  async function verifySharedRow(raw,crypto){
+    const row=normalizeSharedRow(raw),{digest,...data}=row;
+    if((await seal(data,crypto)).digest!==digest)
+      throw Error('Shared Animation digest mismatch; evidence retained');
+    return row;
+  }
+  function sharedTransaction(db,lease,mode,action,allowCreate=false){
+    return new Promise((resolve,reject)=>{
+      let req,connection,tx,untrack=null,finished=false,value,error;
+      const write=mode==='readwrite';
+      function finish(failure){
+        if(finished)return;finished=true;if(untrack)untrack();if(connection)connection.close();
+        if(failure)reject(failure);else resolve(value);
+      }
+      function abort(cause){
+        error=cause;
+        try{tx.abort();}catch(ignore){finish(cause);}
+      }
+      try{requireLease(lease,write);req=db.open(DATABASE,1);}catch(cause){finish(cause);return;}
+      req.onupgradeneeded=()=>{
+        try{
+          requireLease(lease,write);
+          if(!allowCreate)throw Error('Shared Animation database changed during read');
+          if(!req.result.objectStoreNames.contains(STORE))req.result.createObjectStore(STORE);
+        }catch(cause){try{req.transaction.abort();}catch(ignore){}finish(cause);}
+      };
+      req.onerror=()=>finish(req.error||Error('Shared Animation database unavailable'));
+      req.onblocked=()=>finish(Error('Shared Animation database blocked'));
+      req.onsuccess=()=>{
+        connection=req.result;if(finished){connection.close();return;}
+        try{
+          requireLease(lease,write);tx=connection.transaction(STORE,mode);
+          tx.onabort=()=>finish(error||tx.error||Error('Shared Animation transaction aborted'));
+          tx.onerror=()=>{error=error||tx.error||Error('Shared Animation transaction failed');};
+          tx.oncomplete=()=>{
+            try{requireLease(lease,write);finish();}catch(cause){finish(cause);}
+          };
+          untrack=lease.track(tx,write);
+          const store=tx.objectStore(STORE);
+          const read=(key,callback)=>{
+            const op=store.get(key);
+            op.onsuccess=()=>{
+              if(finished||error)return;
+              try{requireLease(lease,write);callback(op.result);}catch(cause){abort(cause);}
+            };
+          };
+          action(store,read,v=>{value=v;});
+        }catch(cause){if(tx)abort(cause);else finish(cause);}
+      };
+    });
+  }
+  function openSharedCollection(db,{lease,crypto}={}){
+    requireLease(lease);
+    if(!db||typeof db.databases!=='function')throw Error('Shared Animation inventory unavailable');
+    let observed,loaded=false,busy=false;
+    async function fetch(){
+      requireLease(lease);
+      const all=await db.databases();requireLease(lease);
+      const existing=all.find(x=>x.name===DATABASE);
+      if(!existing)return undefined;
+      if(existing.version!==1)throw Error('Unsupported Animation database version');
+      return sharedTransaction(db,lease,'readonly',(_store,read,finish)=>read(SHARED_COLLECTION_KEY,finish));
+    }
+    async function read(){
+      if(busy)throw Error('Shared Animation operation pending');
+      busy=true;loaded=false;observed=undefined;
+      try{
+        const raw=await fetch();
+        const row=raw===undefined?null:await verifySharedRow(raw,crypto);
+        requireLease(lease);observed=row;loaded=true;
+        return row===null?null:JSON.parse(JSON.stringify(row));
+      }finally{busy=false;}
+    }
+    async function commit(expected,build,guard=()=>true,legacy=null){
+      if(busy||!loaded||!equal(observed,expected))
+        throw Error('Read exact shared Animation row before write');
+      const prior=observed;
+      const check=()=>{
+        requireLease(lease,true);
+        if(guard()!==true)throw Error('Stale shared Animation operation');
+      };
+      busy=true;loaded=false;observed=undefined;
+      try{
+        check();
+        const data=build(prior),row=await seal(data,crypto);check();
+        await verifySharedRow(row,crypto);check();
+        await sharedTransaction(db,lease,'readwrite',(store,read,finish)=>{
+          read(SHARED_COLLECTION_KEY,raw=>{
+            if(!equal(raw===undefined?null:raw,prior))
+              throw Error('Shared Animation collection CAS conflict; evidence retained');
+            function put(){
+              check();
+              if(legacy&&!equal(legacy.local,legacyLocalEvidence(legacy.storage)))
+                throw Error('Animation legacy local evidence changed during adoption');
+              store.put(row,SHARED_COLLECTION_KEY);finish(row);
+            }
+            if(legacy){
+              read(KEY,one=>read(COLLECTION_DB_KEY,many=>{
+                if(!equal(one??null,legacy.remote.current)||!equal(many??null,legacy.remote.workspaces))
+                  throw Error('Animation legacy IndexedDB evidence changed during adoption');
+                put();
+              }));
+            }else put();
+          });
+        },prior===null);
+        const saved=await fetch(),verified=await verifySharedRow(saved,crypto);check();
+        if(!equal(verified,row))throw Error('Shared Animation readback conflict');
+        observed=verified;loaded=true;return JSON.parse(JSON.stringify(verified));
+      }finally{busy=false;}
+    }
+    function initial(collection){
+      const normalized=normalizeCollection(collection);
+      return {version:1,revision:1,collection:normalized,
+        revisions:normalized.workspaces.map(item=>({id:item.id,revision:1})),receipt:null};
+    }
+    function adoption(plan,storage){
+      if(!plan?.evidence)throw Error('Explicit Animation source inventory required');
+      const {remote,local}=plan.evidence,checked=planLegacySources(remote,local);
+      if(checked.issues.length)throw Error('Invalid Animation migration evidence; resolve or export it first');
+      if(!equal(local,legacyLocalEvidence(storage)))
+        throw Error('Animation legacy local evidence changed during adoption');
+      return {checked,legacy:{remote,local,storage}};
+    }
+    function initializeFromLegacy(plan,source,storage,guard){
+      const {checked,legacy}=adoption(plan,storage);
+      const selected=checked.sources.find(item=>item.source===source);
+      if(!selected)throw Error('Select an exact Animation legacy source');
+      const value=selected.kind==='collection'?selected.value:migrate(selected.value,crypto);
+      return commit(null,()=>initial(value),guard,legacy);
+    }
+    function initializeEmpty(plan,value,storage,guard){
+      const {checked,legacy}=adoption(plan,storage);
+      if(checked.sources.length)throw Error('Animation legacy sources require explicit adoption');
+      return commit(null,()=>initial(value),guard,legacy);
+    }
+    function nextRevision(row){
+      if(!row||row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
+      if(row.receipt)throw Error('Resolve pending Animation selection receipt before writing');
+      return row.revision+1;
+    }
+    function saveSelected(expected,ref,checkpoint,base,guard){
+      const previous=validateReference(ref),bound=selectionBase(base),value=normalize(checkpoint);
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        if(!equal(documentReference(row,previous.id),previous))
+          throw Error('Animation selected revision changed');
+        const prior=getWorkspace(row.collection,previous.id);
+        if(value.savedAt<=prior.savedAt)throw Error('Animation checkpoint timestamp must advance');
+        const next=withWorkspace(row.collection,previous.id,value,value.savedAt);
+        // The shared envelope, not the historical collection activeId,
+        // owns navigation. Save must not alter that compatibility field.
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        const current=reference(previous.id,revision);
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===previous.id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),
+          receipt:{version:1,base:bound,previous,current,status:'updated'}};
+      },guard);
+    }
+    function retire(expected,receipt,guard){
+      const acknowledged=validateReceipt(receipt);
+      return commit(expected,row=>{
+        if(!row||!equal(row.receipt,acknowledged)||
+           !equal(documentReference(row,acknowledged.current.id),acknowledged.current))
+          throw Error('Animation selection receipt changed; evidence retained');
+        if(row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
+        return {version:1,revision:row.revision+1,collection:row.collection,
+          revisions:row.revisions,receipt:null};
+      },guard);
+    }
+    async function prepareReference(ref){
+      const expected=validateReference(ref),row=await read();
+      if(!row||!equal(documentReference(row,expected.id),expected))
+        throw Error('Animation workspace revision changed; activation blocked');
+      return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
+    }
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,saveSelected,retire,prepareReference});
+  }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}
   function write(indexedDB,record){var valid=normalize(record);
@@ -685,5 +937,5 @@
     writeSessionLocal:writeSessionLocal,readSessionLocals:readSessionLocals,
     combineCollections:combineCollections,pruneSessionLocals:pruneSessionLocals,
     SESSION_LOCAL_PREFIX:SESSION_LOCAL_PREFIX,workspaceSessionId:workspaceSessionId,
-    inspectLegacySources,planLegacySources});
+    inspectLegacySources,planLegacySources,SHARED_COLLECTION_KEY,openSharedCollection,documentReference});
 }));

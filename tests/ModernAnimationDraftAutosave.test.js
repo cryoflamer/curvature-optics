@@ -702,3 +702,131 @@ test('shared Animation inspection refuses changing or inaccessible legacy eviden
   await assert.rejects(autosave.inspectLegacySources({indexedDB:{},localStorage:local}),/database inventory unavailable/);
   await assert.rejects(autosave.inspectLegacySources({indexedDB:db,localStorage:null}),/localStorage inventory unavailable/);
 });
+
+function sharedAnimationDB(){
+  const records=new Map();let created=false;
+  const db={records,databases:async()=>created?[{name:autosave.DATABASE,version:1}]:[],
+    open(name,version){
+      assert.equal(name,autosave.DATABASE);assert.equal(version,1);
+      const req={};
+      queueMicrotask(()=>{
+        const connection={objectStoreNames:{contains:()=>created},
+          createObjectStore(){created=true;},close(){},
+          transaction(_name,mode){
+            let pending=0,aborted=false,completed=false;
+            const staged=new Map(),tx={error:null,abort(){
+              if(aborted||completed)return;aborted=true;
+              queueMicrotask(()=>tx.onabort?.());
+            }};
+            function done(){
+              if(!pending&&!aborted&&!completed){
+                completed=true;for(const [k,v] of staged)records.set(k,v);
+                tx.oncomplete?.();
+              }
+            }
+            tx.objectStore=()=>({
+              get(key){
+                pending++;const op={};
+                queueMicrotask(()=>{
+                  if(aborted)return;
+                  op.result=structuredClone(staged.has(key)?staged.get(key):records.get(key));
+                  op.onsuccess?.();pending--;done();
+                });return op;
+              },
+              put(value,key){
+                assert.equal(mode,'readwrite');pending++;
+                queueMicrotask(()=>{if(aborted)return;
+                  staged.set(key,structuredClone(value));pending--;done();
+                });
+              }
+            });
+            return tx;
+          }};
+        req.result=connection;
+        if(!created)req.onupgradeneeded?.();
+        req.onsuccess?.();
+      });return req;
+    }};
+  return db;
+}
+function animationSharedLease(){
+  let active=true;const tracked=new Set();
+  return {sessionId:'shared',check(){if(!active)throw Error('Animation lifetime ended');},
+    track(tx){tracked.add(tx);return ()=>tracked.delete(tx);},
+    end(){active=false;for(const tx of tracked)tx.abort();}};
+}
+function sharedAnimationFixture(){
+  const db=sharedAnimationDB(),local=inventoryStorage(),lease=animationSharedLease(),
+    crypto=require('node:crypto').webcrypto;
+  const cp=autosave.checkpoint({draft:physicalDraft(),selectedKey:null,quality:'auto',
+    prepared:false,positionMs:0},100),id='draft_shared',other='draft_other';
+  const collection=autosave.withWorkspace(autosave.collection(id,cp,100),other,cp,101);
+  const open=()=>autosave.openSharedCollection(db,{lease,crypto});
+  const inspect=()=>autosave.inspectLegacySources({indexedDB:db,localStorage:local});
+  const base={revision:7,digest:'sha256:'+'a'.repeat(64)};
+  return {db,local,lease,crypto,cp,id,other,collection,open,inspect,base};
+}
+test('shared Animation adoption selects only explicit verified evidence and preserves old bytes',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();
+  const divergent=structuredClone(f.collection);divergent.workspaces[0].checkpoint.draft.name='other variant';
+  await autosave.writeCollection(f.db,f.collection);
+  f.local.setItem(autosave.COLLECTION_KEY,JSON.stringify(divergent));
+  const plan=await f.inspect();assert.equal(await a.read(),null);
+  await assert.rejects(async()=>a.initializeFromLegacy(plan,'missing',f.local),/exact Animation legacy source/);
+  const row=await a.initializeFromLegacy(plan,'idb:workspaces',f.local);
+  assert.deepEqual(row.collection,f.collection);assert.equal(row.revision,1);
+  assert.equal(row.receipt,null);assert.deepEqual(await f.open().read(),row);
+  assert.deepEqual(await autosave.readCollection(f.db),f.collection);
+  assert.equal(f.local.getItem(autosave.COLLECTION_KEY),JSON.stringify(divergent));
+  assert.deepEqual(await f.open().prepareReference(autosave.documentReference(row,f.id)),
+    {reference:autosave.documentReference(row,f.id),checkpoint:f.cp});
+});
+test('shared Animation initialization refuses stale sources and existing shared rows',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();assert.equal(await a.read(),null);
+  const empty=await f.inspect();
+  f.local.setItem(autosave.STORAGE_KEY,JSON.stringify(f.cp));
+  await assert.rejects(async()=>a.initializeEmpty(empty,f.collection,f.local),/local evidence changed/);
+  const plan=await f.inspect();
+  await assert.rejects(async()=>a.initializeEmpty(plan,f.collection,f.local),/explicit adoption/);
+  await autosave.write(f.db,f.cp);
+  await assert.rejects(a.initializeFromLegacy(plan,'local:'+autosave.STORAGE_KEY,f.local),/IndexedDB evidence changed/);
+  assert.equal(await a.read(),null);
+  const fresh=await f.inspect(),row=await a.initializeFromLegacy(fresh,'idb:current',f.local);
+  assert.equal(row.revision,1);assert.equal(row.collection.workspaces.length,1);
+  await assert.rejects(a.initializeFromLegacy(fresh,'idb:current',f.local),/Read exact/);
+});
+test('shared Animation save atomically carries receipt, preserves other revisions, and rejects stale writer',async()=>{
+  const f=sharedAnimationFixture(),a=f.open(),b=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  assert.deepEqual(await b.read(),row);
+  const ref=autosave.documentReference(row,f.id),other=autosave.documentReference(row,f.other);
+  const next=structuredClone(f.cp);next.savedAt=200;next.draft.name='New animation';
+  const saved=await a.saveSelected(row,ref,next,f.base);
+  assert.equal(saved.revision,2);assert.equal(saved.collection.activeId,f.other);
+  assert.deepEqual(saved.receipt,{version:1,base:f.base,previous:ref,
+    current:autosave.documentReference(saved,f.id),status:'updated'});
+  assert.deepEqual(autosave.documentReference(saved,f.other),other);
+  assert.deepEqual(await f.open().read(),saved);
+  await assert.rejects(b.saveSelected(row,ref,next,f.base),/CAS conflict/);
+  await assert.rejects(a.saveSelected(saved,saved.receipt.current,{...next,savedAt:201},f.base),/pending Animation/);
+  assert.deepEqual(await a.read(),saved);
+  await assert.rejects(f.open().prepareReference(ref),/revision changed/);
+  const cleared=await a.retire(saved,saved.receipt);
+  assert.equal(cleared.revision,3);assert.equal(cleared.receipt,null);
+  assert.deepEqual(cleared.revisions,saved.revisions);assert.deepEqual(cleared.collection,saved.collection);
+  assert.deepEqual(await f.open().prepareReference(saved.receipt.current),
+    {reference:saved.receipt.current,checkpoint:next});
+});
+test('shared Animation rejects corrupted rows and stale lifetime without replacing evidence',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const bad=structuredClone(row);bad.collection.workspaces[0].checkpoint.draft.name='tampered';
+  f.db.records.set(autosave.SHARED_COLLECTION_KEY,bad);
+  await assert.rejects(f.open().read(),/digest mismatch/);
+  assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),bad);
+  f.db.records.set(autosave.SHARED_COLLECTION_KEY,row);
+  f.lease.end();
+  await assert.rejects(a.saveSelected(row,autosave.documentReference(row,f.id),
+    {...f.cp,savedAt:200},f.base),/lifetime ended/);
+  assert.deepEqual(f.db.records.get(autosave.SHARED_COLLECTION_KEY),row);
+});
