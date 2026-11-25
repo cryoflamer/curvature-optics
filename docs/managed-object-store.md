@@ -291,3 +291,15 @@ protected from GC by the editor's original shared resource locks. Opening
 rechecks the document revision after acquiring its target locks. All these
 locks are nonblocking, and resource target order is deterministic. This
 mechanism is opt-in and does not yet wire any production editor.
+
+### Atomic multi-document changes
+
+`writeDocuments(plans)` extends the single-document CAS contract to a
+nonempty set of distinct roots. Every expected revision is checked before
+mutation; new resource definitions are unique across the batch, and the
+final graph is checked and reference counts derived in the same IDB
+transaction. No partial success is returned. The existing single-root API
+uses the same implementation. The managed History `setHistoryPinned` port
+uses this operation to preserve all-or-nothing bulk pin/unpin, including
+recovery protection and the existing promotion rule for unpinned automatic
+entries. No physical snapshot is rewritten by that operation.

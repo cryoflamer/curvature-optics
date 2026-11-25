@@ -259,28 +259,44 @@
     }
     // Replace the complete root-slot set and metadata in one revision. This
     // also creates a new owner of already-existing resources without copying.
-    async function writeDocument({documentId,kind,expectedRevision,metadata,references,resources=[]}){
-      token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
-      const refs=slots(references),meta=clone(metadata);
-      check(Array.isArray(resources),'resources must be an array');
-      const prepared=resources.map(prepareResource);
+    async function writeDocument(plan){
+      return (await writeDocuments([plan]))[0];
+    }
+    // Bulk edits and imports must acknowledge all root CAS changes together.
+    // Resource definitions may be shared between plans but must be supplied
+    // once; every new resource must be strongly reachable in the final graph.
+    async function writeDocuments(plans){
+      check(Array.isArray(plans)&&plans.length>0,'nonempty document batch required');
+      const batch=plans.map(({documentId,kind,expectedRevision,metadata,references,resources=[]})=>{
+        token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
+        check(Array.isArray(resources),'resources must be an array');
+        return {documentId,kind,expectedRevision,meta:clone(metadata),refs:slots(references),
+          prepared:resources.map(prepareResource)};
+      });
+      check(new Set(batch.map(row=>row.documentId)).size===batch.length,'duplicate document ID');
+      const prepared=batch.flatMap(row=>row.prepared);
       check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
-        const old=checkedDocument(g,documentId,expectedRevision);
-        check(!old||old.kind===kind,'document kind mismatch');
-        const document=saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false});
-        for(const resource of prepared)insertResource(g,stores,resource);
-        for(const edge of [...g.refs.values()]){
-          if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
+        for(const {documentId,kind,expectedRevision} of batch){
+          const old=checkedDocument(g,documentId,expectedRevision);
+          check(!old||old.kind===kind,'document kind mismatch');
         }
-        for(const ref of refs)setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
+        for(const resource of prepared)insertResource(g,stores,resource);
+        const documents=[];
+        for(const {documentId,kind,expectedRevision,meta,refs} of batch){
+          documents.push(saveDocument(g,stores,{id:documentId,kind,revision:expectedRevision+1,metadata:meta,deleted:false}));
+          for(const edge of [...g.refs.values()]){
+            if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
+          }
+          for(const ref of refs)setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
+        }
         updateCounts(g,stores,types);
         if(prepared.length){
           const retained=reachable(g);
           check(prepared.every(row=>retained.has(row.id)),'new resource is not strongly reachable from a document');
         }
-        return document;
+        return documents;
       });
     }
     async function setReference({documentId,expectedRevision,slot,target,strength='strong'}){
@@ -615,7 +631,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectUsage,
+      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

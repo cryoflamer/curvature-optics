@@ -575,6 +575,18 @@ class ModernBrowserSmoke(unittest.TestCase):
                     {id:one,type:'snapshot',version:1,payload:{refs:[{slot:'two',target:two,strength:'strong'}]}},
                     {id:two,type:'snapshot',version:1,payload:{refs:[{slot:'one',target:one,strength:'strong'}]}}
                 ]}),/strong reference cycle/);
+            const existing=await s.getDocument('experiment');
+            const update={documentId:'experiment',kind:'history',expectedRevision:1,metadata:{name:'edited'},
+                references:existing.references};
+            const copy={documentId:'copy',kind:'history',expectedRevision:0,metadata:{name:'copy'},
+                references:existing.references};
+            await rejects(()=>s.writeDocuments([copy,{...update,expectedRevision:9}]),/stale document revision/);
+            ok(await s.getDocument('copy')===null&&(await s.getDocument('experiment')).revision===1,
+                'stale multi-root batch partially committed');
+            await rejects(()=>s.writeDocuments([copy,copy]),/duplicate document ID/);
+            const documents=await s.writeDocuments([update,copy]);
+            ok(documents[0].revision===2&&documents[1].revision===1&&
+                (await s.get(snapshot)).refCount===2,'multi-root sharing failed');
             const report=await s.verifyIntegrity();
             ok(report.valid&&report.liveObjects===2&&report.unreachable.length===0,'cycle batch leaked objects');
             return {valid:report.valid,objects:report.liveObjects,bytes};
@@ -692,14 +704,22 @@ class ModernBrowserSmoke(unittest.TestCase):
                 observations[0].row.width===3&&observations[0].row.height===2&&
                 !observations[0].row.record,'observation summary or tombstone filtering incorrect');
             ok(!(await adapter.listAnimations()).length,'removed Animation appeared in inventory');
-            await adapter.store.removeDocument({documentId:'history:18',expectedRevision:1});
+            await rejects(()=>adapter.setHistoryPinned([{id:18,managedRevision:1},{id:17,managedRevision:1}],false),
+                /revision conflict/);
+            ok((await adapter.readHistory(18)).row.pinned,'stale pin batch partially committed');
+            const pins=await adapter.setHistoryPinned([{id:18,managedRevision:1},{id:17,managedRevision:2}],false);
+            ok(pins.every(v=>!v.row.pinned)&&pins[0].managedRevision===2&&pins[1].managedRevision===3,
+                'bulk unpin did not acknowledge both roots');
+            ok((await adapter.readHistory(17)).snapshotId===first.snapshotId&&
+                (await adapter.readHistory(18)).snapshotId===first.snapshotId,'pin batch replaced snapshots');
+            await adapter.store.removeDocument({documentId:'history:18',expectedRevision:2});
             ok(await adapter.suggestHistoryId()===19,'retired History alias was reused');
             ok((await adapter.listHistory()).length===1,'removed History appeared in inventory');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
-            return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:2};
+            return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};
         }""")
-        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
+        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 1})
 
     def test_managed_object_store_indexed_write_preflight(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

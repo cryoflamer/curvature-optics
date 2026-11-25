@@ -176,6 +176,27 @@
         expectedRevision,metadata,references:[strong('snapshot',id)],resources});
       return {snapshotId:id,managedRevision:document.revision};
     }
+    // Exact managed revisions are sufficient for atomic gallery pinning.
+    // Retain the legacy protection policy for recovery and unpinned auto
+    // snapshots. No physical state or archive mapping is rewritten.
+    async function setHistoryPinned(entries,pinned){
+      check(typeof pinned==='boolean'&&Array.isArray(entries)&&entries.length>0,'explicit History pin batch required');
+      const plans=[],updated=[];
+      for(const {id,managedRevision} of entries){
+        const current=await readHistory(id);
+        check(current&&positive(managedRevision)&&current.managedRevision===managedRevision,
+          'History revision conflict');
+        check(pinned||current.row.source!=='recovery','Recovery snapshot must remain protected');
+        const row={...current.row,pinned};
+        if(!pinned&&current.row.pinned&&row.source==='auto')row.source='manual';
+        const {metadata}=historyFields(row);
+        plans.push({documentId:historyId(id),kind:'history',expectedRevision:managedRevision,
+          metadata,references:[strong('snapshot',current.snapshotId)]});
+        updated.push(row);
+      }
+      const documents=await store.writeDocuments(plans);
+      return updated.map((row,i)=>({row,managedRevision:documents[i].revision}));
+    }
     async function readHistory(id){
       const graph=await store.readDocumentGraph(historyId(id));
       if(!graph)return null;
@@ -745,7 +766,7 @@
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
-      saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
+      saveHistory,readHistory,setHistoryPinned,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
