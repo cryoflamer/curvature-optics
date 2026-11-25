@@ -8,7 +8,7 @@
   // explicit cutover marker must stop this legacy-wired bootstrap before
   // any session restore, autosave, migration or UI preference is mounted.
   var startupStorageError=null,managedResources=null,startupRoute=null;
-  var managedPreviewRequested=new URLSearchParams(root.location?.search||'')
+  var managedPreviewRequested=typeof URLSearchParams==='function'&&new URLSearchParams(root.location?.search||'')
     .get('document-session')==='managed-preview';
   try{
     var startupStorage=root.localStorage,startupBarrier=root.CurvatureModernBackupWriteBarrier;
