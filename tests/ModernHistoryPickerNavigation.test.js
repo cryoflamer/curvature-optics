@@ -80,14 +80,14 @@ function createHistoryNavigationHarness(){
   let render,renderCount=0,preferencesWrites=0,physicsRestores=0;
   const state={physics:{height:15},draft:{frames:['existing']}};
   const ctx={
-    experimentPreview:{live:false},
+    experimentPreview:{live:false},sharedPresentationActive:()=>false,
     ...state,Promise,Map,Set,Object,String,Array,Number,RangeError,Error,
     historyFocusFromPickerId:'',historyOpenedFromPicker:false,
     historyWizardReferenceChoosing:false,
     animationReturnAfterRestore:false,animationWorkspaceOpen:true,
     historyPanelOpen:false,historyGallerySize:'medium',historyPinnedCollapsed:true,
     historyManageMode:false,historyMultiSelection:Object.create(null),
-    historyShownIds:[],historySelectedId:'',savedHistorySignatures:new Map(),
+    historyShownIds:[],historyShownEntries:new Map(),historySelectedId:'',savedHistorySignatures:new Map(),
     historyLoadError:null,snapshotSaveError:null,studioHistoryEntries:[],
     historyFilters:{query:'Only compare',mode:'compare'},
     historyFiltersApi:{filter(entries){return entries.filter(e=>e.id===1);},active(){return true;}},

@@ -8237,6 +8237,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         banner=self.page.locator('#ModernKeyframeEditBanner')
         banner.get_by_role('button',name='Apply + Save to History').click()
         expect(banner).to_have_count(0,timeout=30000)
+        # Returning to Studio precedes the asynchronous History/link transaction.
+        # Require the actual success acknowledgement, not just a removed banner.
+        expect(self.page.locator('#ModernAnimationStudioMessage')).to_contain_text(
+            re.compile(r'History snapshot #\d+ (saved|reused)'),timeout=30000)
         saved=self.page.evaluate("""async () => ({
             key: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].key,
             id: CurvatureModernApp.getAnimationStudioDraft().draft.frames[3].sourceSnapshotId,
@@ -12599,7 +12603,8 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'buffer':json.dumps(exported).encode('utf-8')})
             recovered=second.locator('[data-shared-animation-id^="draft_imported_"]')
             expect(recovered).to_have_count(1)
-            expect(recovered).to_contain_text('Unsent second tab edit')
+            expect(recovered).to_have_attribute('aria-label','Open draft · Unsent second tab edit')
+            expect(recovered.locator('xpath=..')).to_contain_text('Unsent second tab edit')
             self.assertEqual(second.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope'),pointer)
             after=second.evaluate("""async()=>{
                 const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
@@ -13306,7 +13311,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.reload(wait_until='load')
         self.page.wait_for_function(ready,timeout=30000)
         self.page.locator('#ModernAnimationViewLibrary').click()
-        expect(delete_button).to_contain_text('Newer deletion fixture')
+        expect(delete_button).to_have_attribute('aria-label','Delete saved project · Newer deletion fixture')
+        expect(delete_button.locator('xpath=../..').locator('.modern-animation-library-card-title')).to_have_text(
+            'Newer deletion fixture')
         before=self.page.evaluate("""async()=>{
             const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
             U.sharedDocumentSessions(D);
