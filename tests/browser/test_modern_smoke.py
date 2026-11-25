@@ -7541,6 +7541,12 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertLess(fitted['fit']['result']['evaluation']['rmsPx'],15)
         self.assertEqual(durable(b),snapshot_b,
                          'fitting A must not mutate B or its original photo')
+        self.page.wait_for_function("""() => {
+            const s=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return s && !s.unsaved && !s.pending && !s.error;
+        }""",timeout=30000)
+        before_apply_revision=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a)
         before_history=history()
         self.page.once('dialog',lambda dialog:dialog.accept())
         apply.click()
@@ -7552,6 +7558,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             const p=await CurvatureModernCalibrationProjectStore.get(indexedDB,id);
             return p?.resultIds.length===1;
         }""",arg=a,timeout=30000)
+        after_apply_revision=self.page.evaluate("""async id =>
+            (await CurvatureModernCalibrationProjectStore.get(indexedDB,id)).revision""",a)
+        self.assertGreaterEqual(after_apply_revision,before_apply_revision+2,
+                                'Apply must acknowledge both checkpoint and archived result link')
         result_id=durable(a)['resultIds'][0]
         self.assertEqual(durable(b),snapshot_b)
         after_history=history()

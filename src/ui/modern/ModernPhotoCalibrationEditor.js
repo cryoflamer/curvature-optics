@@ -2957,7 +2957,7 @@
       try{
         await env.CurvatureModernApp.applyCalibrationToTarget({
           candidate:applyCandidate,target:()=>selectedApplyTarget,
-          revision:()=>applyRevision+':'+loadToken,saveDraft:()=>persist(!!sharedSelection),
+          revision:()=>applyRevision+':'+loadToken,saveDraft:()=>persist(true),
           projectBinding,linkArchivedResult
         },info.target);
         applyMessage('Applied to '+info.label+'. Calibration draft retained.');
