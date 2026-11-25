@@ -12206,6 +12206,55 @@ class ModernBrowserSmoke(unittest.TestCase):
                                            latest['id']),latest)
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_save_as_creates_independent_named_snapshot(self):
+        """Save As captures the durable working draft without replacing its source or selection."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        source=self.page.evaluate("""async()=>{
+            const project=structuredClone(CurvatureModernDemoCatalog.load()[0].project);
+            project.name='Original saved project';
+            for(const frame of project.keyframes)delete frame.referenceImageIds;
+            return CurvatureModernAnimationLibrary.create(indexedDB,project,'auto',Date.now());
+        }""")
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('[data-shared-named-animation-id="'+source['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.locator('#ModernAnimationStudio').get_by_role('button',name='Inspect project settings').click()
+        name=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+        name.fill('Independent named snapshot')
+        name.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        read="""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return {draft:await CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read(),
+                session:CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope};
+        }"""
+        before=self.page.evaluate(read)
+        self.page.locator('#ModernSharedNamedAnimationSaveAs').click()
+        expect(self.page.locator('#ModernAnimationLibrary .modern-animation-library-message')).to_contain_text(
+            'Saved new animation: Independent named snapshot')
+        entries=self.page.evaluate('CurvatureModernAnimationLibrary.list(indexedDB)')
+        self.assertEqual(len(entries),2)
+        original=next(row for row in entries if row['id']==source['id'])
+        saved=next(row for row in entries if row['id']!=source['id'])
+        self.assertEqual(original,source)
+        self.assertEqual(saved['project']['name'],'Independent named snapshot')
+        self.assertEqual(self.page.evaluate(read),before)
+        self.page.locator('[data-shared-named-animation-id="'+saved['id']+'"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),'project_'+saved['id'])
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                         'Independent named snapshot')
+
     def test_shared_animation_named_import_preserves_session_and_deduplicates(self):
         """Named portable import remains independent of the shared working selection."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

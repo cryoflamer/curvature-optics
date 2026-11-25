@@ -839,7 +839,12 @@ portable named import uses the same parser, deduplication and reference
 original verification/remapping as ordinary Modern. It leaves working
 selection and drafts unchanged; originals already imported before a
 failed project transaction are retained, not destructively rolled back.
-Other named mutations and the temporary keyframe editor remain disabled.
+Save As builds an independent named project from the exact acknowledged
+working checkpoint, verifies linked original photographs and reads the
+saved record back. It intentionally retains the source draft and selection;
+opening the new named snapshot is an explicit separate action. No cross-
+database relink is implied by the successful named transaction.
+Save Changes and the temporary keyframe editor remain disabled.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

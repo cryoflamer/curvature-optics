@@ -2879,7 +2879,7 @@
     var heading=element('div','modern-animation-library-heading');
     heading.appendChild(element('strong','','Shared Animation working drafts'));host.appendChild(heading);
     host.appendChild(element('p','modern-animation-library-note',
-      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Saved projects can be deleted without deleting their working copies. Saving named changes and temporary keyframe editing are not enabled in this preview.'));
+      'Working drafts are saved in IndexedDB. You can open a saved project as a working copy. Save a new named snapshot or delete a saved project without replacing its working copy. Save Changes and temporary keyframe editing are not yet enabled.'));
     var message=element('p','modern-animation-library-message'+(ctx.error?' is-error':''),ctx.message||ctx.inventoryError||'');
     message.setAttribute('role','status');host.appendChild(message);
     var views=['ModernAnimationViewEditor','ModernAnimationViewPreview'];
@@ -2937,6 +2937,8 @@
         ()=>void runSharedAnimationAction('deleteNamed',record),false,
         {'data-shared-delete-animation-id':record.id});
     });
+    action(named,'Save current draft as new project',()=>void runSharedAnimationAction('saveAs'),
+      !studioWorkspaceReady||!!status.error,{'id':'ModernSharedNamedAnimationSaveAs'});
     var namedFile=element('input');namedFile.type='file';namedFile.hidden=true;
     namedFile.id='ModernSharedNamedAnimationImportFile';namedFile.accept='.json,application/json';
     named.appendChild(namedFile);
@@ -2979,6 +2981,23 @@
     if(!record||JSON.stringify(record)!==JSON.stringify(expected))
       throw Error('Saved Animation changed since inspection; reopen the Library before creating a working copy');
     return record;
+  }
+  function buildSharedAnimationSnapshot(checkpoint,id,asNew){
+    var draft=checkpoint.draft;
+    if(asNew&&draft.cameraHudAppearance==null)
+      draft=studioApi.edit(draft,'cameraHudAppearance',cameraHudAppearance);
+    if(asNew&&!checkpoint.libraryId&&semanticNaming&&studioApi.suggestName&&
+       semanticNaming.autoProjectName(draft.name)){
+      var suggested=studioApi.suggestName(draft);
+      if(suggested!=='Animation study')draft=studioApi.edit(draft,'name',suggested);
+    }
+    return studioApi.buildSaved(draft,id);
+  }
+  async function verifySharedAnimationOriginals(project,ctx){
+    var originals=await studioLibrary.collectReferences([{project}],
+      id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+    for(var record of originals)await root.CurvatureModernReferenceImageImport.verify(record,root);
+    ctx.lease.check(true);
   }
   async function bindSharedAnimation(ref,restore=false,named=null){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
@@ -3064,6 +3083,27 @@
             // do not select it as the current saved project.
             await verifySharedNamedAnimation(openNamed);
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
+          }else if(kind==='saveAs'){
+            var ref=ctx.writer.state().reference;
+            if(!studioWorkspaceReady||!ref||!row||
+               JSON.stringify(studioDraftAutosave.documentReference(row,ref.id))!==JSON.stringify(ref))
+              throw Error('An acknowledged working draft is required before saving a named project');
+            await c.captureSelectionBase('animation',ref);
+            var cp=studioDraftAutosave.getWorkspace(row.collection,ref.id);
+            var project=buildSharedAnimationSnapshot(cp,studioLibrary.makeId(root.crypto),true);
+            await verifySharedAnimationOriginals(project,ctx);
+            // Save As deliberately creates a new named snapshot. The source
+            // draft and shared selection are not relinked or deleted.
+            var saved=await studioLibrary.create(root.indexedDB,project,cp.quality,Date.now(),
+              studioLibraryThumbnail(project),true,studioLibraryActive?.cover);
+            ctx.lease.check(true);
+            var verified=await studioLibrary.get(root.indexedDB,saved.id);
+            if(JSON.stringify(verified)!==JSON.stringify(saved))
+              throw Error('New saved Animation could not be confirmed; reload and inspect Library');
+            ctx.named=await studioLibrary.list(root.indexedDB);ctx.namedError=null;
+            if(!ctx.named.some(record=>JSON.stringify(record)===JSON.stringify(saved)))
+              throw Error('New saved Animation changed during readback; reload and inspect Library');
+            ctx.message='Saved new animation: '+saved.project.name+'. Working draft unchanged; open the saved project explicitly.';
           }else if(kind==='importNamed'){
             var result=await studioLibraryActionsApi.importPortable(studioLibrary,root.indexedDB,namedContents,{
               crypto:()=>root.crypto,guard:()=>ctx.lease.check(true),

@@ -61,6 +61,7 @@ jobs:
             tests/ModernAnimationStudio.test.js \
             tests/ModernAnimationCompatibilityDiagnostics.test.js \
             tests/ModernAnimationLibrary.test.js \
+            tests/ModernAnimationLibraryActions.test.js \
             tests/ModernAnimationProjectWizard.test.js \
             tests/ModernAnimationSequences.test.js \
             tests/ModernAnimationSplinePreview.test.js \
