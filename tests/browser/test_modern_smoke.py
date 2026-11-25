@@ -2996,6 +2996,32 @@ class ModernBrowserSmoke(unittest.TestCase):
                 self.assertGreater(len(data),1000)
                 expect(self.page.locator(prefix+'Status')).to_contain_text('export ready:')
             self.assertEqual(self.page.evaluate('CurvatureModernApp.getStudioPlayback().positionMs'),before)
+        # Import through the mounted file input, not just the managed port.
+        recovery=self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernApp.getManagedResources(),A=CurvatureModernAnimationDraftAutosave;
+            const id=CurvatureModernApp.getAnimationStudioWorkspaceId();
+            const {row,referenceImages}=await adapter.readAnimationWorkingCollection();
+            const checkpoint=A.getWorkspace(row.collection,id);
+            const evidence={version:1,reference:A.documentReference(row,id),checkpoint,receipt:null};
+            const text=await A.exportRecovery(evidence,alias=>({record:referenceImages.find(r=>r.id===alias)}),
+                record=>CurvatureModernReferenceImageImport.verify(record,window),crypto);
+            return {text,id,importedId:(await A.prepareRecoveryImport(text,crypto)).id};
+        }""")
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('#ModernSharedAnimationRecoveryFile').set_input_files({
+            'name':'managed-recovery.json','mimeType':'application/json','buffer':recovery['text'].encode()})
+        imported=self.page.locator('[data-shared-animation-id="'+recovery['importedId']+'"]')
+        expect(imported).to_be_visible(timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),recovery['id'])
+        imported.click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(panel.locator('img')).to_have_attribute('src',original,timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),recovery['importedId'])
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(panel.locator('img')).to_have_attribute('src',original,timeout=30000)
         self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
             [CurvatureModernManagedObjectStore.DATABASE,CurvatureModernUiSessionStore.DATABASE].includes(db.name))"""),
             self.page.evaluate('async()=>await indexedDB.databases()'))
