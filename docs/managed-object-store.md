@@ -330,3 +330,19 @@ methods explicitly refuse; an invalid dependency never falls back to the
 legacy writer. This is the factory seam for controlled activation, not a
 user-selectable production route: startup must still establish a single
 authority and handle the old migration receipt before supplying it.
+
+### Managed observation application writes
+
+Single-observation creation, calibration original ingestion, attribution plus
+classification edits and classification-only edits are available as opt-in
+application operations. The existing library validators and quotas apply
+to the verified live collection, and the whole live inventory is checked
+in the commit transaction. Original reuse checks digest, raster dimensions,
+MIME and exact Blob bytes; identical originals can serve distinct observation
+identities. Calibration ingestion preserves the existing observation and
+returns the incoming source separately. Attribution edits create immutable
+observation versions retaining the same original; classification-only edits
+retain the exact observation resource. Original and classification revisions
+remain distinct and stale revisions or caller guards refuse the whole
+operation. This is not the active Image Library route. Bulk portable import,
+backup restore, Where used? integration and global activation remain open.

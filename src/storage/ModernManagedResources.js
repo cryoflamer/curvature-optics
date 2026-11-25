@@ -376,12 +376,12 @@
       const left=new Uint8Array(await a.arrayBuffer()),right=new Uint8Array(await b.arrayBuffer());
       return left.every((byte,i)=>byte===right[i]);
     }
-    async function saveObservation(row,{expectedRevision=0,originalId}={}){
+    async function prepareObservation(row,{expectedRevision=0,originalId,verified=null}={}){
       check(row&&row.record,'observation row required');
       const record=images.validate(row.record);
       check(record.id===row.id,'observation alias mismatch');
       const metadata={id:row.id,revision:row.revision,...classification(row)};
-      const original=await originalFrom(record);
+      const original=verified??await originalFrom(record);
       const binaryId=originalId??store.newObjectId();
       const resources=[];
       if(originalId!==undefined){
@@ -392,9 +392,108 @@
       const id=store.newObjectId();
       resources.push({id,type:OBSERVATION,version:1,payload:{id:record.id,attribution:attribution(record),
         originalId:binaryId,identity:original.identity,thumbnail:record.thumbnail??null}});
-      const document=await store.writeDocument({documentId:observationId(row.id),kind:'observation',
-        expectedRevision,metadata,references:[strong('observation',id)],resources});
-      return {observationId:id,originalId:binaryId,managedRevision:document.revision};
+      return {row:{...metadata,record},observationId:id,originalId:binaryId,
+        plan:{documentId:observationId(row.id),kind:'observation',
+          expectedRevision,metadata,references:[strong('observation',id)],resources}};
+    }
+    async function saveObservation(row,options){
+      const next=await prepareObservation(row,options);
+      const document=await store.writeDocument(next.plan);
+      return {observationId:next.observationId,originalId:next.originalId,managedRevision:document.revision};
+    }
+    // Application operations use one verified gallery inventory and commit
+    // quota, allocation, reuse and revisions against that same inventory.
+    async function observationInventory(){
+      return (await listVerified('observation',readObservation,observationId,v=>v,
+        (a,b)=>a.row.id.localeCompare(b.row.id))).map(v=>v.row);
+    }
+    function observationExpected(existing){
+      return {kind:'observation',documents:existing.map(v=>({id:observationId(v.row.id),
+        revision:v.managedRevision}))};
+    }
+    function observationQuota(rows){
+      library.quota(rows.map(({id,revision,record})=>({id,revision,record})));
+      library.annotationQuota(rows.filter(r=>r.annotationRevision>0).map(r=>({
+        id:r.id,revision:r.annotationRevision,kind:r.kind,tags:r.tags,collections:r.collections})));
+    }
+    async function matchingObservation(existing,original){
+      let found=null;
+      for(const value of existing){
+        const resource=await store.get(value.originalId);
+        check(resource?.type===ORIGINAL,'observation original unavailable');
+        if(resource.payload.identity.sha256!==original.identity.sha256)continue;
+        check(same(resource.payload.identity,original.identity)&&
+          await bytesEqual(resource.payload.blob,original.blob),'reference photo identity collision or inconsistent raster');
+        if(!found)found=value;
+      }
+      return found;
+    }
+    async function createObservation(record,{guard=()=>{}}={}){
+      const source=images.validate(record),original=await originalFrom(source);
+      const existing=await observationInventory(),expectedInventory=observationExpected(existing);
+      check(!existing.some(v=>v.row.id===source.id),'Observation ID already exists');
+      const match=await matchingObservation(existing,original);
+      const next=await prepareObservation({id:source.id,revision:1,record:source},
+        {originalId:match?.originalId,verified:original});
+      observationQuota([...existing.map(v=>v.row),next.row]);
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+      return {row:next.row,observationId:next.observationId,originalId:next.originalId,managedRevision:document.revision};
+    }
+    // Calibration ingestion reuses the original observation without changing
+    // its attribution; the caller still gets the separate incoming source.
+    async function ensureObservationOriginal(record,{guard=()=>{}}={}){
+      const source=images.validate(record),original=await originalFrom(source);
+      const existing=await observationInventory(),expectedInventory=observationExpected(existing);
+      const match=await matchingObservation(existing,original);
+      if(match){
+        await store.writeDocuments([],{expectedInventory,guard});
+        return {identity:original.identity,row:match.row,source,reused:true,
+          originalId:match.originalId,managedRevision:match.managedRevision};
+      }
+      const reserved=new Set((await store.listDocuments('observation',{includeDeleted:true})).map(v=>v.id));
+      let id=source.id,attempts=0;
+      while(reserved.has(observationId(id))){
+        check(++attempts<=100,'Cannot allocate reference image ID');id=library.makeId(env.crypto);
+      }
+      const next=await prepareObservation({id,revision:1,record:{...source,id}},{verified:original});
+      observationQuota([...existing.map(v=>v.row),next.row]);
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+      return {identity:original.identity,row:next.row,source,reused:false,
+        originalId:next.originalId,managedRevision:document.revision};
+    }
+    function retainedObservationPlan(row,current){
+      const metadata={id:row.id,revision:row.revision,...classification(row)};
+      return {row:{...metadata,record:row.record},observationId:current.observationId,originalId:current.originalId,
+        plan:{documentId:observationId(row.id),kind:'observation',expectedRevision:current.managedRevision,
+          metadata,references:[strong('observation',current.observationId)]}};
+    }
+    async function updateObservationDetails(id,expectedRevision,expectedAnnotation,metadata,values,{guard=()=>{}}={}){
+      check(positive(expectedRevision)&&nonnegative(expectedAnnotation),'invalid expected observation revisions');
+      const existing=await observationInventory(),expectedInventory=observationExpected(existing);
+      const current=existing.find(v=>v.row.id===id);
+      check(current&&current.row.revision===expectedRevision,'Observation changed or was removed; reload before editing');
+      check(current.row.annotationRevision===expectedAnnotation,'Image classification changed; reload before saving');
+      const wanted=library.annotation(values),old=library.annotation({kind:current.row.kind,
+        tags:current.row.tags,collections:current.row.collections});
+      const row={...current.row,...wanted,revision:expectedRevision+1,
+        annotationRevision:expectedAnnotation+(same(wanted,old)?0:1),
+        record:library.edited(current.row.record,metadata)};
+      const next=same(row.record,current.row.record)?retainedObservationPlan(row,current):
+        await prepareObservation(row,{expectedRevision:current.managedRevision,originalId:current.originalId});
+      observationQuota(existing.map(v=>v.row.id===id?next.row:v.row));
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+      return {row:next.row,observationId:next.observationId,originalId:next.originalId,managedRevision:document.revision};
+    }
+    async function setObservationAnnotation(id,expectedAnnotation,values,{guard=()=>{}}={}){
+      check(nonnegative(expectedAnnotation),'invalid expected annotation revision');
+      const existing=await observationInventory(),expectedInventory=observationExpected(existing);
+      const current=existing.find(v=>v.row.id===id);
+      check(current&&current.row.annotationRevision===expectedAnnotation,'Image classification changed or was removed; reload before saving');
+      const row={...current.row,...library.annotation(values),annotationRevision:expectedAnnotation+1};
+      const next=retainedObservationPlan(row,current);
+      observationQuota(existing.map(v=>v.row.id===id?next.row:v.row));
+      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
+      return {row:next.row,observationId:next.observationId,originalId:next.originalId,managedRevision:document.revision};
     }
     // A cache belongs to one immutable graph closure only. Never retain
     // verification across transactions or trust an alias as binary identity.
@@ -905,6 +1004,7 @@
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
+      createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
   // One-way rehearsal from a verified portable archive into a disposable,

@@ -776,6 +776,33 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>history.pin(17,true),/disabled/);
             await rejects(()=>history.clearAuto(),/disabled/);
             await rejects(()=>history.migrationReceipt(),/coordinated cutover/);
+            const currentPhoto=await adapter.readObservation('photo_b');
+            const details=await adapter.updateObservationDetails('photo_b',currentPhoto.row.revision,
+                currentPhoto.row.annotationRevision,{title:'Edited observation',author:'Observer B edited'},
+                {kind:'photograph',tags:['calibrated'],collections:['research']});
+            ok(details.row.revision===2&&details.row.annotationRevision===1&&
+                details.originalId===photo.originalId&&details.observationId!==currentPhoto.observationId,
+                'metadata/classification CAS or original retention failed');
+            ok(details.row.record.original.dataUrl===original.dataUrl,'metadata edit changed original bytes');
+            await rejects(()=>adapter.updateObservationDetails('photo_b',1,0,{title:'Stale'},{kind:'photograph'}),
+                /Observation changed/);
+            await rejects(()=>adapter.updateObservationDetails('photo_b',2,0,{title:'Stale'},{kind:'photograph'}),
+                /classification changed/);
+            const classified=await adapter.setObservationAnnotation('photo_b',1,
+                {kind:'photograph',tags:['verified'],collections:['research']});
+            ok(classified.row.revision===2&&classified.row.annotationRevision===2&&
+                classified.observationId===details.observationId&&classified.originalId===details.originalId,
+                'classification-only edit copied immutable resources');
+            await rejects(()=>adapter.setObservationAnnotation('photo_b',2,{kind:'diagram'},
+                {guard:()=>{throw Error('stale photo editor');}}),/stale photo editor/);
+            ok((await adapter.readObservation('photo_b')).row.annotationRevision===2,'refused photo edit changed revision');
+            const reused=await adapter.ensureObservationOriginal({...record,id:'incoming_photo',title:'Incoming calibration'});
+            ok(reused.reused&&reused.row.id==='photo_b'&&reused.source.id==='incoming_photo'&&
+                reused.row.record.author==='Observer B edited'&&reused.source.author==='Observer A',
+                'calibration ingestion overwrote attribution');
+            const independent=await adapter.createObservation({...record,id:'independent_photo',title:'Independent attribution'});
+            ok(independent.originalId===photo.originalId&&independent.observationId!==classified.observationId&&
+                independent.row.record.author==='Observer A','independent observation did not share exact original');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};
