@@ -2648,6 +2648,35 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(JSON.stringify(final.experiment)===JSON.stringify(recovered.draft),'physical evidence changed on promotion');
             await live.reset();
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'durable checkpoint lost archive on scope release');
+            // An Animation editor can acquire an archived result from the
+            // exact History source even after the archive root was removed.
+            const A=CurvatureModernAnimationDraftAutosave,Studio=CurvatureModernAnimationStudio;
+            const animationLive=adapter.createAnimationEditorRetention();
+            const animation=A.openSharedCollection(indexedDB,{lease,crypto,managedResources:animationLive});
+            const id='draft_history_evidence',blank=Studio.blank();
+            const cp=A.checkpoint({draft:blank,selectedKey:null,quality:'auto',prepared:false,positionMs:0},200);
+            let row=await animation.read();
+            row=await animation.initializeManaged(A.collection(id,cp,200));
+            await animationLive.bind(A.documentReference(row,id));
+            const inserted=Studio.insertSnapshots(blank,[recorded.entry.id],[recorded.entry],0);
+            ok(animationLive.needsEvidence(inserted),'new calibrated frame was treated as retained');
+            const stale=structuredClone(inserted);stale.frames[0].experiment.scene.camera.Height+=5;
+            await rejects(()=>animationLive.retainDraft(stale,id),/History changed/);
+            await animationLive.retainDraft(inserted,id);
+            ok(!animationLive.needsEvidence(inserted),'History evidence not retained before edit');
+            const withFrame=A.checkpoint({...cp,draft:inserted,selectedKey:inserted.frames[0].key},201);
+            const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
+            row=await animation.saveSelected(row,A.documentReference(row,id),withFrame,base);
+            row=await animation.retire(row,row.receipt);
+            row=await animation.saveSelected(row,A.documentReference(row,id),A.normalize({...cp,savedAt:202}),base);
+            row=await animation.retire(row,row.receipt);
+            ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'unlinked calibration still durable');
+            await rejects(()=>adapter.store.collectGarbage(saved.resultId),/close the corresponding editor/);
+            row=await animation.saveSelected(row,A.documentReference(row,id),A.normalize({...withFrame,savedAt:203}),base);
+            row=await animation.retire(row,row.receipt);
+            ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===saved.resultId,
+                'Animation Undo lost retained fit');
+            await animationLive.reset();
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};

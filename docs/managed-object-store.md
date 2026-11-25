@@ -665,3 +665,13 @@ Intermediate physical snapshots are not pinned by the live evidence scope.
 The scope conservatively lasts for the controller lifetime; it is not a
 second checkpoint writer. Missing evidence during acquisition refuses the
 read rather than exposing an unprotected snapshot.
+
+Animation live retention also owns archived Calibration evidence from the
+bound draft's contract reference and all frames. A newly inserted History
+frame is checked against the exact inspected snapshot before its evidence is
+acquired and the edit is published; Camera Animation import can transfer
+matching working physical evidence. Existing standalone origins are tracked
+explicitly. The working writer restores retained result IDs on Undo/Redo
+without requiring the archive root to exist. Photo pruning does not release
+these results: physical evidence is conservatively retained for the editor
+generation pending exact provenance reachability pruning.

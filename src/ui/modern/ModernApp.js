@@ -7107,6 +7107,22 @@
       refreshLibrary:renderStudioLibrary
     });
     function update(next,options){return studioEditing.commit(next,options);}
+    function updateWithEvidence(next,options,beforeCommit){
+      var ctx=experimentPreview.animationContext,retention=ctx?.retention;
+      function publish(){
+        if(beforeCommit)beforeCommit();
+        return update(next,options);
+      }
+      if(!retention||!retention.needsEvidence(next))return publish();
+      var before=studioDraft,generation=studioDraftGeneration,workspace=studioWorkspaceId;
+      return retention.retainDraft(next,workspace).then(function(){
+        if(ctx!==experimentPreview.animationContext||studioDraft!==before||
+           studioDraftGeneration!==generation||studioWorkspaceId!==workspace||
+           !animationWorkspaceOpen||studioActiveDemo||ctx.busy||keyframeEditSession)
+          throw Error('Animation changed before calibration evidence was retained; retry the insertion');
+        return publish();
+      }).catch(report);
+    }
     keyframeEditCommit=function(prepared,historyId){
       var next=historyId===undefined?
         studioApi.replaceFrameExperiment(studioDraft,prepared.frameKey,prepared.experiment):
@@ -7159,8 +7175,9 @@
           'This replaces the current working timeline. Save it separately first if needed.')))
           return;
         var previousSelection=studioSelectedKey;
-        studioSelectedKey=null;studioFilmstripScroll=0;
-        update(replacement,{beforeSelectedKey:previousSelection});
+        updateWithEvidence(replacement,{beforeSelectedKey:previousSelection},function(){
+          studioSelectedKey=null;studioFilmstripScroll=0;
+        });
       });},
       edit:function(field,value){safe(function(){
         update(studioApi.edit(studioDraft,field,value),{group:'project:'+field,endGroup:true});
@@ -7285,14 +7302,14 @@
           var selectedBefore=studioSelectedKey;
           var next=drag.kind==='frame'?studioApi.reorder(studioDraft,drag.key,index):
             studioApi.insertSnapshots(studioDraft,drag.ids,entries,index);
-          if(drag.kind==='snapshots'){
-            drag.ids.forEach(function(id){delete studioPickerChecked[id];});
-            // Selection follows the first newly inserted snapshot, if any.
-            var added=next.frames.find(function(f){return drag.ids.includes(f.sourceSnapshotId)&&
-              !studioDraft.frames.some(function(old){return old.key===f.key;});});
-            if(added)studioSelectedKey=added.key;
-          }else studioSelectedKey=drag.key;
-          update(next,{beforeSelectedKey:selectedBefore});
+          updateWithEvidence(next,{beforeSelectedKey:selectedBefore},function(){
+            if(drag.kind==='snapshots'){
+              drag.ids.forEach(function(id){delete studioPickerChecked[id];});
+              var added=next.frames.find(function(f){return drag.ids.includes(f.sourceSnapshotId)&&
+                !studioDraft.frames.some(function(old){return old.key===f.key;});});
+              if(added)studioSelectedKey=added.key;
+            }else studioSelectedKey=drag.key;
+          });
         });
       },
       dragEnd:function(){studioDragSession=null;},
@@ -7306,11 +7323,12 @@
           studioDraft.frames.length;
         if(gap<0)gap=studioDraft.frames.length;
         var next=studioApi.insertSnapshots(studioDraft,ids,entries,gap);
-        ids.forEach(function(id){delete studioPickerChecked[id];});
-        var added=next.frames.find(function(f){return ids.includes(f.sourceSnapshotId)&&
-          !studioDraft.frames.some(function(old){return old.key===f.key;});});
-        if(added)studioSelectedKey=added.key;
-        update(next,{beforeSelectedKey:selectedBefore});
+        updateWithEvidence(next,{beforeSelectedKey:selectedBefore},function(){
+          ids.forEach(function(id){delete studioPickerChecked[id];});
+          var added=next.frames.find(function(f){return ids.includes(f.sourceSnapshotId)&&
+            !studioDraft.frames.some(function(old){return old.key===f.key;});});
+          if(added)studioSelectedKey=added.key;
+        });
       });}
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
@@ -7436,8 +7454,9 @@
               var at=studioSelectedKey?studioDraft.frames.findIndex(function(f){return f.key===studioSelectedKey;})+1:studioDraft.frames.length;
               if(at<0)at=studioDraft.frames.length;
               var next=studioApi.insertSnapshots(studioDraft,selected,entries,at);
-              selected.forEach(function(id){delete studioPickerChecked[id];});
-              update(next);
+              updateWithEvidence(next,undefined,function(){
+                selected.forEach(function(id){delete studioPickerChecked[id];});
+              });
             });
           }
         }

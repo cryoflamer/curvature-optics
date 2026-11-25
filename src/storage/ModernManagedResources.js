@@ -1794,7 +1794,7 @@
       return value;
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null,editorPhotos=null}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null,editorPhotos=null,editorEvidence=null}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -1891,6 +1891,9 @@
         check(!target||!retainedTarget||target===retainedTarget,
           'Conflicting retained Animation calibration evidence: '+alias+'; retire the conflicting working copy and retry');
         if(!target)target=retainedTarget;
+        const live=editorEvidence?.results.get(alias);
+        check(!target||!live||target===live,'Conflicting live Animation calibration evidence: '+alias);
+        if(live)target=live;
         if(!target){
           const saved=await readCalibrationResult(alias);
           target=saved?.resultId??null;
@@ -1901,7 +1904,10 @@
         }else{
           const retained=oldResults.has(alias)&&oldResults.get(alias)===null&&
             origins.every(origin=>oldInventory.origins.some(old=>same(origin,old)));
-          check(standalone===true||allowedStandalone.has(alias)||retained,
+          const liveStandalone=editorEvidence&&origins.every(origin=>
+            editorEvidence.standalone.some(old=>same(old,origin))||
+            oldResults.has(alias)&&oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
+          check(standalone===true||allowedStandalone.has(alias)||retained||liveStandalone,
             'working calibration result missing; standalone recovery must be explicit');
         }
         evidence.push({alias,target});
@@ -1921,7 +1927,7 @@
       const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }
-    function createAnimationWorkingPort(db,lease,assetPlan=null,editorPhotos=null){
+    function createAnimationWorkingPort(db,lease,assetPlan=null,editorPhotos=null,editorEvidence=null){
       draftContracts();
       check(db===env.indexedDB,'Animation working database context mismatch');
       check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
@@ -1940,16 +1946,21 @@
           check(previous||row.revision===1,'initial Animation working revision must be one');
           await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
             expectedRow:before,guard,lease,animationHandoff:true,assetPlan,
-            editorPhotos:editorPhotos?.()??null});
+            editorPhotos:editorPhotos?.()??null,editorEvidence:editorEvidence?.()??null});
         }
       });
     }
-    // Retain exact observations used by the live Animation editor, including
+    function animationDraftOrigins(draft){
+      return [...draft.frames.map(frame=>({experiment:frame.experiment,historyId:frame.sourceSnapshotId})),
+        {experiment:draft.contract?.referenceExperiment,historyId:null}]
+        .filter(entry=>entry.experiment?.calibrationOrigin);
+    }
+    // Retain exact observations and physical evidence used by the live Animation editor, including
     // ones removed from the durable draft but still reachable via Undo/Redo.
     // A generation ends on switching to another workspace, not on autosave.
     function createAnimationEditorRetention(){
       const scope=store.createRetentionScope();
-      let owner=null,photos=new Map(),tail=Promise.resolve();
+      let owner=null,photos=new Map(),archived=new Map(),standalone=[],tail=Promise.resolve();
       function serialize(operation){
         const next=tail.then(operation);tail=next.catch(()=>{});return next;
       }
@@ -1967,8 +1978,65 @@
               'Conflicting retained Animation observation: '+alias);
             next.set(alias,target);
           }
-          await scope.replace([...next.values()]);photos=next;owner=ref.id;
+          const nextResults=owner===ref.id?new Map(archived):new Map();
+          const foreign=owner===ref.id?standalone.slice():[];
+          for(const {experiment} of animationDraftOrigins(cp.draft)){
+            const origin=experiment.calibrationOrigin;
+            const entry=value.evidence.find(item=>item.alias===origin.resultId);
+            check(entry,'Animation calibration evidence missing from bound workspace');
+            if(entry.target){
+              check(!nextResults.has(origin.resultId)||nextResults.get(origin.resultId)===entry.target,
+                'Conflicting retained Animation calibration evidence');
+              nextResults.set(origin.resultId,entry.target);
+            }else if(!foreign.some(old=>same(old,origin)))foreign.push(origin);
+          }
+          await scope.replace([...next.values(),...nextResults.values()]);
+          photos=next;archived=nextResults;standalone=foreign;owner=ref.id;
         }));
+      }
+      function needsEvidence(draft){
+        return animationDraftOrigins(draft).some(({experiment})=>{
+          const origin=experiment.calibrationOrigin;
+          return !archived.has(origin.resultId)&&!standalone.some(old=>same(old,origin));
+        });
+      }
+      // Verify exact History inputs and acquire their evidence before a
+      // new frame is published. A source alias alone is not evidence.
+      function retainDraft(draft,workspace){
+        return serialize(async()=>{
+          check(owner&&owner===workspace,'Animation editor changed before calibration retention');
+          const next=new Map(archived),foreign=standalone.slice();
+          for(const {experiment,historyId} of animationDraftOrigins(draft)){
+            const origin=experiment.calibrationOrigin;
+            if(next.has(origin.resultId)){
+              checkOrigin(origin,await store.get(next.get(origin.resultId)));continue;
+            }
+            if(foreign.some(old=>same(old,origin)))continue;
+            let evidence=null;
+            if(historyId!==null&&historyId!==undefined){
+              const source=await readHistory(historyId);
+              check(source&&same(source.row.experiment,experiment),'History changed before Animation evidence retention');
+              evidence=source.evidence;
+            }else{
+              const working=await readWorkingCheckpoint();
+              if(working){
+                const candidates=['committed','draft'].map(slot=>({
+                  experiment:slot==='committed'?working.row.experiment:working.row.draft,
+                  ref:working.snapshots[slot]})).filter(item=>same(item.experiment?.calibrationOrigin,origin));
+                evidence=(candidates.find(item=>typeof item.ref.evidence==='object')??candidates[0])?.ref.evidence??null;
+              }
+              if(!evidence)evidence={result:await resolveOrigin(origin)};
+            }
+            if(typeof evidence==='object'&&evidence){
+              checkOrigin(origin,await store.get(evidence.result));next.set(origin.resultId,evidence.result);
+            }else{
+              check(evidence==='standalone','Animation calibration evidence unavailable');
+              foreign.push(origin);
+            }
+          }
+          await scope.replace([...photos.values(),...next.values()]);
+          archived=next;standalone=foreign;
+        });
       }
       function linkedPhotograph(alias,workspace){
         return serialize(async()=>{
@@ -1991,7 +2059,7 @@
             check(!photos.has(alias)||photos.get(alias)===value.observationId,
               'A different historical version is retained by this editor; reopen the workspace before attaching this observation');
             const next=new Map(photos);next.set(alias,value.observationId);
-            await scope.replace([...next.values()]);photos=next;
+            await scope.replace([...next.values(),...archived.values()]);photos=next;
             return value.row;
           });
         });
@@ -2030,15 +2098,16 @@
             check(photos.has(alias),'live photo inventory was not retained: '+alias);
             next.set(alias,photos.get(alias));
           }
-          await scope.replace([...next.values()]);photos=next;
+          await scope.replace([...next.values(),...archived.values()]);photos=next;
           return true;
         });
       }
       function reset(){
-        return serialize(async()=>{await scope.replace([]);photos=new Map();owner=null;});
+        return serialize(async()=>{await scope.replace([]);photos=new Map();archived=new Map();standalone=[];owner=null;});
       }
-      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,prune,reset,
-        createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos))});
+      return Object.freeze({bind,photograph,linkedPhotograph,recoveryReferences,prune,reset,needsEvidence,retainDraft,
+        createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos),
+          ()=>({results:new Map(archived),standalone:structuredClone(standalone)}))});
     }
     // One-shot Recovery import reuses the shared collection transition engine.
     // Its staged assets exist only in this operation, never as a second writer.
