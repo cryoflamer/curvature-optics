@@ -1863,6 +1863,85 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'revision': 3})
 
+    def test_managed_working_checkpoint_application_port(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const S=CurvatureModernSessionAutosave,C=CurvatureModernExperimentState,D=CurvatureModernDocumentSession;
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const open=(options={})=>S.openSharedCheckpoint(indexedDB,{
+                lease,codec:C,crypto,contract:D,managedResources:adapter,...options});
+            const port=open();
+            ok(await port.read()===null&&!(await indexedDB.databases()).length,'managed read created schema');
+            const initial=await port.initialize(experiment);
+            const first=await adapter.readWorkingCheckpoint();
+            const stale=open();await stale.read();
+            const edited=structuredClone(experiment);edited.compare.selected='A';
+            const staged=await port.stage(edited,initial.revision);
+            const second=await adapter.readWorkingCheckpoint();
+            ok(second.row.digest===staged.digest&&second.row.experiment.compare.selected==='B'&&
+                second.row.draft.compare.selected==='A','committed/draft independence lost');
+            ok(second.snapshots.committed.id===first.snapshots.committed.id,'committed snapshot duplicated');
+            await rejects(()=>stale.stage(edited,initial.revision),/CAS conflict/);
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const observed=await barrier.snapshot(()=>open({existingOnly:true}).read());
+            ok(observed.value.digest===staged.digest,'observational barrier read failed');
+            const readOnly=open({existingOnly:true});await readOnly.read();
+            await rejects(()=>readOnly.promote(staged.revision),/observational checkpoint reader/);
+            const fresh=open();const recovered=await fresh.read();
+            ok(recovered.digest===staged.digest&&recovered.draft.compare.selected==='A','recovery changed');
+            const promoted=await fresh.promote(recovered.revision);
+            const last=await adapter.readWorkingCheckpoint();
+            ok(last.row.digest===promoted.digest&&last.row.draft===null&&
+                last.snapshots.committed.id===second.snapshots.draft.id,'promotion lost or duplicated draft');
+            await rejects(()=>fresh.initializeEmpty(experiment),/coordinated cutover/);
+            ok((await indexedDB.databases()).length===1,'managed backend opened historical database');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,revision:last.managedRevision};
+        }""")
+        self.assertEqual(result, {'valid': True, 'revision': 3})
+
     def test_managed_working_checkpoint_preserves_compare_and_recovery(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
@@ -1957,7 +2036,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const D=CurvatureModernDocumentSession,C=CurvatureModernExperimentState,
                 PERSIST=CurvatureModernCalibrationProjectPersistence;
             const checkpoint=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
-                lease,codec:C,crypto,contract:D});
+                lease,codec:C,crypto,contract:D,managedResources:adapter});
             const controller=storage=>D.createAtomicExperimentController({
                 lease,checkpoint:checkpoint(),isCurrent:()=>true,
                 prepare:()=>{throw Error('Unexpected migration');},

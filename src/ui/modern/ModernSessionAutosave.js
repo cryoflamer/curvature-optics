@@ -238,7 +238,8 @@
     }
     // Atomic replacement primitive. Migration and activation are deliberately
     // separate: no old preview rows or other domain slots are rewritten here.
-    function openSharedCheckpoint(indexedDB,{lease,codec,crypto,contract,existingOnly=false}={}){
+    function openSharedCheckpoint(indexedDB,options={}){
+      const {lease,codec,crypto,contract,existingOnly=false}=options;
       ensure(writer,'coordinated working-session writer required');
       ensure(indexedDB&&typeof indexedDB.open==='function','IndexedDB required');
       ensure(sharedLease(lease)&&typeof lease.check==='function'&&typeof lease.track==='function',
@@ -248,6 +249,15 @@
         typeof contract.select==='function'&&typeof contract.emptyShared==='function',
         'shared checkpoint contracts required');
       lease.check();
+      let managed=null;
+      if(Object.hasOwn(options,'managedResources')){
+        ensure(typeof options.managedResources?.createWorkingCheckpointPort==='function',
+          'explicit managed working checkpoint port required');
+        managed=options.managedResources.createWorkingCheckpointPort(indexedDB,lease);
+      }
+      function requireLegacy(){
+        ensure(!managed,'managed checkpoint legacy migration requires coordinated cutover');
+      }
       const key='shared-checkpoint',format=SHARED_CHECKPOINT_FORMAT;
       let observed=null,busy=false;
       const clone=value=>JSON.parse(canonical(value));
@@ -262,6 +272,10 @@
           {id:SHARED_COPY_ID,revision:'checkpoint:'+revision,recovery:null});
       }
       async function fetch(){
+        if(managed){
+          const row=await managed.read();
+          return row===null?{present:false}:{present:true,row};
+        }
         if(existingOnly&&!await existingDatabase(indexedDB))return {present:false};
         return readTransaction(indexedDB,store=>{
           const out={result:null},req=store.get(key);
@@ -305,7 +319,10 @@
           if(verify){await verify(row.envelope);guard();}
           let failure;
           try{
-            await transaction(indexedDB,store=>{
+            if(managed){
+              ensure(!evidence.length&&!requireEmpty,'managed checkpoint legacy migration requires coordinated cutover');
+              await managed.commit(before.present?before.row:null,row,guard);
+            }else await transaction(indexedDB,store=>{
               const req=store.get(key);
               req.onsuccess=()=>{
                 try{
@@ -479,6 +496,7 @@
       // cross-store writes. Old sessions must not be edited outside it while
       // migrating. The working-store evidence is also compared atomically.
       async function legacyPlan(sessions){
+        requireLegacy();
         ensure(sessions&&typeof sessions.read==='function','legacy shared session reader required');
         const saved=await sessions.read();lease.check();
         ensure(saved&&Number.isSafeInteger(saved.revision)&&saved.revision>=1&&saved.envelope,
@@ -537,6 +555,7 @@
       // No bound shared metadata: select directly from historical evidence,
       // including orphaned shared rows, without creating an old import.
       async function sourcePlan(sessions,storage){
+        requireLegacy();
         ensure(sessions&&typeof sessions.read==='function','legacy shared session reader required');
         const saved=await sessions.read();lease.check();
         ensure(saved&&Number.isSafeInteger(saved.revision)&&saved.revision>=0&&
@@ -557,6 +576,7 @@
       // Fresh initialization is distinct from migration. Never treat an
       // invalid source or detached historical metadata as an empty profile.
       async function initializeEmpty(experiment,{sessions,storage,coordinate,isCurrent}={}){
+        requireLegacy();
         ensure(typeof coordinate==='function'&&typeof isCurrent==='function'&&
           sessions&&typeof sessions.inspectLegacyDocuments==='function',
           'empty initialization dependencies required');
@@ -621,7 +641,8 @@
           },evidence,verify);
         });
       }
-      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,replaceFromHistory,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource});
+      return Object.freeze({read,initialize,initializeEmpty,stage,promote,selectWorkspace,replaceFromCalibration,replaceFromHistory,detachDocument,proveSelectionReceipt,inspectLegacy,migrateLegacy,inspectSources,migrateSource,
+        ...(managed?{storageKind:'managed'}:{})});
     }
     // Read-only historical revision, HEAD and recovery evidence.
     function openWorkingCopy(indexedDB,{lease,codec,crypto,existingOnly=false}={}){

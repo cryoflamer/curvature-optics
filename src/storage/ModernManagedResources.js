@@ -1315,7 +1315,8 @@
       for(const id of ids)resultDocumentId(id);
       return new Set(ids);
     }
-    async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false,standaloneResultIds=[]}={}){
+    async function saveWorkingCheckpoint(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
+      expectedRow=undefined,guard=()=>{},lease=null}={}){
       workingContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await session.validateSharedCheckpoint(input,state,env.crypto,sessionContract);
@@ -1323,6 +1324,8 @@
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'working checkpoint revision conflict');
       check(!previous||row.revision===previous.row.revision+1,'working checkpoint source revision must advance once');
+      if(expectedRow!==undefined)check(same(previous?.row??null,expectedRow),
+        'shared checkpoint CAS conflict; evidence retained');
       const retained=[];
       if(previous)for(const [slot,experiment] of [['committed',previous.row.experiment],['draft',previous.row.draft]]){
         if(experiment)retained.push({id:previous.snapshots[slot].id,
@@ -1353,9 +1356,31 @@
         references.push(strong(slot,snapshot.id));
       }
       const {experiment,draft,...metadata}=row;
-      const saved=await store.writeDocument({documentId:workingId,kind:'working-checkpoint',
-        expectedRevision,metadata,references,resources});
+      const [saved]=await store.writeDocuments([{documentId:workingId,kind:'working-checkpoint',
+        expectedRevision,metadata,references,resources}],{guard,lease});
       return {managedRevision:saved.revision};
+    }
+    function createWorkingCheckpointPort(db,lease){
+      workingContracts();
+      check(db===env.indexedDB,'working checkpoint database context mismatch');
+      check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
+        !('tabId' in lease),'shared document lifetime required');
+      lease.check();
+      return Object.freeze({
+        async read(){
+          lease.check();
+          const value=await loadWorkingCheckpoint(store.inspectDocumentGraph);
+          lease.check();return value?.row??null;
+        },
+        async commit(before,row,guard){
+          lease.check(true);
+          const previous=await loadWorkingCheckpoint(store.readDocumentClosureForWrite);
+          check(same(previous?.row??null,before),'shared checkpoint CAS conflict; evidence retained');
+          check(previous||row.revision===1,'initial working checkpoint revision must be one');
+          await saveWorkingCheckpoint(row,{expectedRevision:previous?.managedRevision??0,
+            expectedRow:before,guard,lease});
+        }
+      });
     }
     const draftsId='animation-working:shared';
     function draftContracts(){
@@ -1602,7 +1627,7 @@
       }
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
-    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,
+    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,

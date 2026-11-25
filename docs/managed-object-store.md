@@ -467,3 +467,17 @@ A newly created selection receipt also roots the previous collection
 resource until retirement, including its original photos and fit evidence.
 A historical imported receipt without its previous collection cannot
 reconstruct that resource. This is an opt-in port, not production routing.
+
+### Managed shared physical checkpoint
+
+The existing `openSharedCheckpoint` transition engine accepts an explicit
+managed dependency. Canonical checksum, Scene/Compare transitions, stage,
+promote, auxiliary selection and receipt proof are unchanged. The managed
+backend compares the exact observed row and root revision, uses the shared
+lifetime transaction lease, and reads existing-only storage. The injected
+route never opens the historical working-session database. An observational
+adapter cannot mutate. Explicit initialization is for controlled startup;
+legacy inspection/adoption and empty-profile migration decisions remain
+fenced until the coordinated cutover. Restoring a physical payload whose
+archived fit is no longer listed may still require an explicit evidence
+handoff from its current owner; this port does not authorize a downgrade.
