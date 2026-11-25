@@ -578,6 +578,82 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 2})
 
+    def test_managed_calibration_result_snapshot_evidence(self):
+        # Use the existing Modern script dependency order, but create only
+        # synthetic managed records. No production routing is changed.
+        self.open_modern()
+        self.page.add_script_tag(url='/src/storage/ModernManagedObjectStore.js')
+        self.page.add_script_tag(url='/src/storage/ModernManagedResources.js')
+        fixture=json.loads((ROOT/'tests/fixtures/soundly-mixed-calibration.json').read_text(encoding='utf-8'))
+        result=self.page.evaluate("""async fixture=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            // Same mixed authored topology as the existing result contract
+            // test, with a real decodable generated raster. Fit metrics are
+            // synthetic and are not a new optical-fit measurement.
+            const m=structuredClone(fixture.model),observations=structuredClone(fixture.observations);
+            observations[1].included=false;
+            const canvas=document.createElement('canvas');canvas.width=1176;canvas.height=791;
+            const ctx=canvas.getContext('2d');ctx.fillStyle='#7c5a30';ctx.fillRect(0,0,1176,791);
+            const record={version:1,id:'managed_soundly',title:'Soundly evidence test',author:'Test source',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:1176,height:791}};
+            const photo=await adapter.saveObservation({id:record.id,revision:1,record});
+            const freeParameters=fixture.options.freeParameters.slice();
+            const physics={atmosphere:'vacuum',temperatureProfile:structuredClone(fixture.options.temperatureProfile)};
+            const points=observations.filter(r=>r.included).map(r=>({id:r.landmark.id,status:'visible',
+                observed:r.pixel.slice(),predicted:[r.pixel[0]+3,r.pixel[1]+4],weight:r.weight}));
+            const editor=CurvatureModernPhotoCalibrationEditor;
+            const fit={status:'stalled',reason:'Step tolerance',pose:{...m,Height:42.8},
+                method:'canvas-direct',atmosphere:'vacuum',initialRmsPx:300,evaluations:20,
+                acceptedSteps:4,iterations:5,freeParameters,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,cost:points.reduce((n,p)=>n+25*p.weight/2,0),points},
+                materialBinding:editor.fitBinding(observations,freeParameters,m,physics,1176,791)};
+            const input={format:'curvature-photo-calibration',version:3,scene:{model:m,physics},
+                referenceImage:record,referenceSource:{source:'local',links:[]},observations,
+                fit:{method:'canvas-direct',maxIterations:80,freeParameters,result:fit,status:'stalled',running:false}};
+            const resultApi=CurvatureModernCalibrationResult;
+            const archived=await resultApi.create(input,window);
+            const row={id:archived.id,createdAt:42,record:archived};
+            const saved=await adapter.saveCalibrationResult(row,{originalId:photo.originalId});
+            const read=await adapter.readCalibrationResult(archived.id);
+            ok(read.original.original.dataUrl===record.original.dataUrl,'archived original bytes changed');
+            ok(JSON.stringify(read.row.record)===JSON.stringify(archived),'archived fit changed');
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A',calibrationOrigin:resultApi.origin(archived,'Scene')});
+            const history={id:71,version:1,createdAt:43,source:'manual',pinned:true,
+                name:'Calibrated',description:'',thumbnail:null,experiment};
+            const snap=await adapter.saveHistory(history);
+            ok((await adapter.store.get(saved.resultId)).refCount===2,'snapshot did not retain archive');
+            const corrupt=structuredClone(history);corrupt.id=72;
+            corrupt.experiment.calibrationOrigin.historicalFit.rmsPx=123;
+            await rejects(()=>adapter.saveHistory(corrupt),/calibration origin evidence mismatch/);
+            // Remove both gallery roots; snapshot still owns result and original.
+            await adapter.store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
+            await adapter.store.collectGarbage(photo.observationId);
+            await adapter.store.removeDocument({documentId:'result:'+archived.id,expectedRevision:1});
+            ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'snapshot lost fit evidence');
+            ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'snapshot lost photo evidence');
+            ok((await adapter.readHistory(71)).evidence.result===saved.resultId,'snapshot cannot reopen evidence');
+            await rejects(()=>adapter.saveHistory({...history,id:73}),/calibration result missing/);
+            const standalone=await adapter.saveHistory({...history,id:74},{standalone:true});
+            ok((await adapter.readHistory(74)).evidence==='standalone','standalone provenance misrepresented');
+            return {valid:(await adapter.store.verifyIntegrity()).valid,fit:read.row.record.payload.fit.result.evaluation.rmsPx,
+                snapshot:snap.snapshotId!==standalone.snapshotId};
+        }""",fixture)
+        self.assertEqual(result, {'valid': True, 'fit': 5, 'snapshot': True})
+
     def test_offline_presentation_compositor_pixels(self):
         # Deliberately no navigation or live app: the compositor is a standalone
         # consumer of exact-size physical pixels and decoded observation assets.
