@@ -12384,6 +12384,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             node.open=!node.open;}""")
         self.page.wait_for_timeout(150)
         self.assertEqual(self.page.evaluate(read)['layout'],staged['layout'])
+        # Reopen the intentionally collapsed camera pose section before typing.
+        self.page.evaluate("document.getElementById('ModernCameraPoseSection').open=true")
+        expect(self.page.locator('#ModernHeight')).to_be_visible()
         other=self.page.context.new_page()
         try:
             other.goto(url,wait_until='load')
