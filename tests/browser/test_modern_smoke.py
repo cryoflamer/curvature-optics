@@ -1758,7 +1758,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const ctx=canvas.getContext('2d');ctx.fillStyle='#7c5a30';ctx.fillRect(0,0,1176,791);
             const record={version:1,id:'managed_soundly',title:'Soundly evidence test',author:'Test source',
                 original:{dataUrl:canvas.toDataURL('image/png'),width:1176,height:791}};
-            const photo=await adapter.saveObservation({id:record.id,revision:1,record});
+            const archivePort=CurvatureModernCalibrationResultArchive.createPort({managedResources:adapter});
+            await rejects(async()=>CurvatureModernCalibrationResultArchive.createPort(),/explicit managed Calibration archive/i);
             const freeParameters=fixture.options.freeParameters.slice();
             const physics={atmosphere:'vacuum',temperatureProfile:structuredClone(fixture.options.temperatureProfile)};
             const points=observations.filter(r=>r.included).map(r=>({id:r.landmark.id,status:'visible',
@@ -1775,7 +1776,27 @@ class ModernBrowserSmoke(unittest.TestCase):
             const resultApi=CurvatureModernCalibrationResult;
             const archived=await resultApi.create(input,window);
             const row={id:archived.id,createdAt:42,record:archived};
+            await rejects(()=>adapter.archiveCalibrationExperiment(input,{guard:()=>{throw Error('stale calibration editor');}}),
+                /stale calibration editor/);
+            ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length&&
+                (await adapter.store.verifyIntegrity()).liveObjects===0,'refused archive partially committed');
+            const committed=await archivePort.archiveExperiment(indexedDB,input,window);
+            ok(!committed.reused&&!committed.photoReused&&committed.photoId===record.id&&
+                committed.row.id===archived.id,'atomic archive port result incorrect');
+            const photo=await adapter.readObservation(record.id);
             const saved=await adapter.saveCalibrationResult(row,{originalId:photo.originalId});
+            ok(saved.reused,'low-level archive did not reuse result');
+            const again=await archivePort.archiveExperiment(indexedDB,{...input,
+                referenceImage:{...record,id:'new_photo_alias',author:'Another attribution'}},window);
+            ok(again.reused&&again.photoReused&&again.row.createdAt===committed.row.createdAt&&
+                JSON.stringify(again.row.record)===JSON.stringify(committed.row.record),
+                'repeated archival changed first evidence');
+            const portable=await archivePort.save(indexedDB,archived,window);
+            ok(portable.reused&&portable.row.id===archived.id,'portable archive save not idempotent');
+            const listed=await archivePort.list(indexedDB);
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspected=await barrier.snapshot(()=>archivePort.inspectUsage(indexedDB));
+            ok(listed.length===1&&JSON.stringify(listed)===JSON.stringify(inspected.value),'archive inspection failed');
             const read=await adapter.readCalibrationResult(archived.id);
             ok(read.original.original.dataUrl===record.original.dataUrl,'archived original bytes changed');
             ok(JSON.stringify(read.row.record)===JSON.stringify(archived),'archived fit changed');

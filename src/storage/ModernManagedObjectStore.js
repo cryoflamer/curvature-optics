@@ -269,17 +269,17 @@
       check(typeof guard==='function','invalid write guard');
       // Gallery deduplication and capacity decisions depend on the entire
       // live kind inventory, including matches that require no mutation.
-      let inventory=null;
-      if(expectedInventory!==null){
-        const {kind,documents}=expectedInventory;
+      const inventories=(expectedInventory===null?[]:Array.isArray(expectedInventory)?
+        expectedInventory:[expectedInventory]).map(({kind,documents})=>{
         token(kind,'inventory kind');
         check(Array.isArray(documents),'inventory documents required');
         const rows=documents.map(({id,revision:rev})=>[token(id,'document ID'),revision(rev)]);
         check(rows.every(row=>row[1]>0)&&new Set(rows.map(row=>row[0])).size===rows.length,
           'invalid expected inventory');
-        inventory={kind,rows:rows.sort((a,b)=>a[0].localeCompare(b[0]))};
-      }
-      check(Array.isArray(plans)&&(plans.length>0||inventory),'nonempty document batch required');
+        return {kind,rows:rows.sort((a,b)=>a[0].localeCompare(b[0]))};
+      });
+      check(new Set(inventories.map(v=>v.kind)).size===inventories.length,'duplicate expected inventory kind');
+      check(Array.isArray(plans)&&(plans.length>0||inventories.length>0),'nonempty document batch required');
       const batch=plans.map(({documentId,kind,expectedRevision,metadata,references,resources=[]})=>{
         token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
         check(Array.isArray(resources),'resources must be an array');
@@ -291,7 +291,7 @@
       check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
-        if(inventory){
+        for(const inventory of inventories){
           const actual=[...g.docs.values()].filter(doc=>doc.kind===inventory.kind&&!doc.deleted)
             .map(doc=>[doc.id,doc.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
           check(JSON.stringify(actual)===JSON.stringify(inventory.rows),'document inventory changed; reload and retry');
@@ -358,9 +358,17 @@
     // identities may be enumerated for monotonic domain alias allocation,
     // but are never returned by ordinary gallery queries.
     async function listDocuments(kind,{includeDeleted=false}={}){
+      return listDocumentRows(kind,includeDeleted,work=>run('readonly',work));
+    }
+    async function inspectDocuments(kind){
+      token(kind,'document kind');
+      if(!await existingDatabase())return [];
+      return listDocumentRows(kind,false,work=>transaction(env.indexedDB,'readonly',work,true));
+    }
+    async function listDocumentRows(kind,includeDeleted,read){
       token(kind,'document kind');
       check(typeof includeDeleted==='boolean','invalid document inventory option');
-      return run('readonly',async stores=>{
+      return read(async stores=>{
         const g=await graph(stores);inspect(g,types);
         return [...g.docs.values()].filter(doc=>doc.kind===kind&&(includeDeleted||!doc.deleted));
       });
@@ -381,12 +389,16 @@
     }
     // Observational reads inside an exclusive backup/usage barrier must
     // not request the shared writer lock or create a database.
-    async function inspectDocumentGraph(id){
-      token(id,'document ID');
+    async function existingDatabase(){
       check(typeof env.indexedDB.databases==='function','database inventory unavailable');
       const existing=(await env.indexedDB.databases()).find(db=>db.name===DATABASE);
-      if(!existing)return null;
+      if(!existing)return false;
       check(existing.version===VERSION,'unsupported managed database version');
+      return true;
+    }
+    async function inspectDocumentGraph(id){
+      token(id,'document ID');
+      if(!await existingDatabase())return null;
       return readGraph(id,work=>transaction(env.indexedDB,'readonly',work,true));
     }
     async function readGraph(id,read){
@@ -664,7 +676,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,
+      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

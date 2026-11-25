@@ -156,5 +156,10 @@
     const saved=await commit(db,results.validate(record));
     return Object.freeze({...saved,photoId:durable.row.id,photoReused:durable.reused});
   }
-  return Object.freeze({DATABASE,STORE,VERSION,MAX_ITEMS,MAX_CHARS,validId,quota,get,list,inspectUsage,save,archiveExperiment});
+  function createPort({managedResources}={}){
+    if(typeof managedResources?.createCalibrationArchivePort!=='function')
+      throw Error('Explicit managed Calibration archive port required');
+    return managedResources.createCalibrationArchivePort();
+  }
+  return Object.freeze({DATABASE,STORE,VERSION,MAX_ITEMS,MAX_CHARS,validId,quota,get,list,inspectUsage,save,archiveExperiment,createPort});
 }));

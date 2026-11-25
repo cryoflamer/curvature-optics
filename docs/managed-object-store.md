@@ -382,3 +382,18 @@ the normal read; an absent database returns null, an unsupported version or
 concurrent failed open refuses. The Image Library port uses it for
 `inspectOriginal`. This does not migrate the old Where used? scan to the
 managed graph or authorize deletion. No default route has changed.
+
+### Calibration archive application port
+
+The managed archive port retains the current archive API, result validator,
+append-only identity, first archived attribution/time, and quota. Unlike
+the previous cross-database ingestion, the managed `archiveExperiment`
+plans the original observation (if needed) and the result root together.
+Both complete kind inventories are CAS-checked in the same transaction,
+including reuse decisions, and no partial original/result publication is
+acknowledged. A portable result save still requires a verified current
+gallery original. Previously archived results retain their original
+independently. `inspectUsage` uses existing-only document inventory/closure
+reads; it can run under the exclusive backup/usage barrier without creating
+or upgrading a database. This port is explicitly injected; no production
+routing or automatic deletion is enabled.

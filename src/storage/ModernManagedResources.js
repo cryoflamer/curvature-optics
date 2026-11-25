@@ -60,7 +60,8 @@
       images=deps.CurvatureModernReferenceImage,importer=deps.CurvatureModernReferenceImageImport,
       library=deps.CurvatureModernReferenceImageLibrary,
       projects=deps.CurvatureModernAnimationProject,animations=deps.CurvatureModernAnimationLibrary,
-      results=deps.CurvatureModernCalibrationResult,calibrations=deps.CurvatureModernCalibrationProject,
+      results=deps.CurvatureModernCalibrationResult,archiveApi=deps.CurvatureModernCalibrationResultArchive,
+      calibrations=deps.CurvatureModernCalibrationProject,
       checkpoints=deps.CurvatureModernCalibrationProjectCheckpoint,
       session=deps.CurvatureModernSessionAutosave,sessionContract=deps.CurvatureModernDocumentSession,
       drafts=deps.CurvatureModernAnimationDraftAutosave;
@@ -444,14 +445,13 @@
     }
     // Calibration ingestion reuses the original observation without changing
     // its attribution; the caller still gets the separate incoming source.
-    async function ensureObservationOriginal(record,{guard=()=>{}}={}){
+    async function prepareObservationIngestion(record){
       const source=images.validate(record),original=await originalFrom(source);
       const existing=await observationInventory(),expectedInventory=observationExpected(existing);
       const match=await matchingObservation(existing,original);
       if(match){
-        await store.writeDocuments([],{expectedInventory,guard});
         return {identity:original.identity,row:match.row,source,reused:true,
-          originalId:match.originalId,managedRevision:match.managedRevision};
+          originalId:match.originalId,managedRevision:match.managedRevision,expectedInventory,plan:null};
       }
       const reserved=new Set((await store.listDocuments('observation',{includeDeleted:true})).map(v=>v.id));
       let id=source.id,attempts=0;
@@ -460,9 +460,13 @@
       }
       const next=await prepareObservation({id,revision:1,record:{...source,id}},{verified:original});
       observationQuota([...existing.map(v=>v.row),next.row]);
-      const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
       return {identity:original.identity,row:next.row,source,reused:false,
-        originalId:next.originalId,managedRevision:document.revision};
+        originalId:next.originalId,expectedInventory,plan:next.plan};
+    }
+    async function ensureObservationOriginal(record,{guard=()=>{}}={}){
+      const {plan,expectedInventory,...value}=await prepareObservationIngestion(record);
+      const [document]=await store.writeDocuments(plan?[plan]:[],{expectedInventory,guard});
+      return {...value,managedRevision:document?.revision??value.managedRevision};
     }
     function retainedObservationPlan(row,current){
       const metadata={id:row.id,revision:row.revision,...classification(row)};
@@ -614,8 +618,8 @@
         observationId:observation.id,originalId:original.id,managedRevision:graph.document.revision};
     }
     // Gallery lookup, not a search of retired or private archived evidence.
-    async function findObservationOriginal(identity){
-      const wanted=images.validateIdentity(identity),existing=await observationInventory();
+    async function matchObservationIdentity(identity,existing){
+      const wanted=images.validateIdentity(identity);
       let first=null,firstBlob=null;
       for(const value of existing){
         const original=await store.get(value.originalId);
@@ -625,6 +629,10 @@
         if(firstBlob)check(await bytesEqual(firstBlob,original.payload.blob),'reference photo identity collision');
         else{first=value;firstBlob=original.payload.blob;}
       }
+      return first;
+    }
+    async function findObservationOriginal(identity){
+      const existing=await observationInventory(),first=await matchObservationIdentity(identity,existing);
       const after=await store.listDocuments('observation');
       const expected=observationExpected(existing).documents;
       const order=rows=>rows.map(v=>[v.id,v.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
@@ -724,7 +732,13 @@
     }
     async function readCalibrationResult(id){
       check(results,'Calibration result adapter unavailable');
-      const graph=await store.readDocumentGraph(resultDocumentId(id));
+      return loadCalibrationResult(await store.readDocumentGraph(resultDocumentId(id)),id);
+    }
+    async function inspectCalibrationResult(id){
+      check(results,'Calibration result adapter unavailable');
+      return loadCalibrationResult(await store.inspectDocumentGraph(resultDocumentId(id)),id);
+    }
+    async function loadCalibrationResult(graph,id){
       if(!graph)return null;
       check(graph.document.kind==='calibration-result'&&graph.document.references.length===1,
         'invalid calibration archive root');
@@ -733,6 +747,74 @@
       const original=await verifyResultOriginal(graph,result);
       return {row:{id,createdAt:meta.createdAt,record},resultId:result.id,
         originalId:result.payload.originalId,original,managedRevision:graph.document.revision};
+    }
+    async function calibrationResultInventory(){
+      check(archiveApi&&results,'Calibration archive application adapter unavailable');
+      return (await listVerified('calibration-result',readCalibrationResult,resultDocumentId,v=>v,
+        (a,b)=>a.row.id.localeCompare(b.row.id))).map(v=>v.row);
+    }
+    // Plan an append-only archive root against the exact verified inventory.
+    // The original is either retained by the current gallery or staged in
+    // the same transaction; first archived provenance is never replaced.
+    function planCalibrationArchive(record,originalId,existing,now){
+      const expectedInventory={kind:'calibration-result',documents:existing.map(v=>({
+        id:resultDocumentId(v.row.id),revision:v.managedRevision}))};
+      const previous=existing.find(v=>v.row.id===record.id);
+      if(previous){
+        check(results.sameContent(previous.row.record,record),'Calibration result identity collision');
+        return {row:previous.row,reused:true,expectedInventory,plan:null};
+      }
+      const row={id:record.id,createdAt:now(),record};
+      check(positive(row.createdAt),'invalid calibration archive creation time');
+      archiveApi.quota([...existing.map(v=>v.row),row]);
+      const id=store.newObjectId();
+      return {row,reused:false,expectedInventory,plan:{documentId:resultDocumentId(record.id),
+        kind:'calibration-result',expectedRevision:0,metadata:{id:row.id,createdAt:row.createdAt},
+        references:[strong('result',id)],resources:[{id,type:RESULT,version:1,payload:{record,originalId}}]}};
+    }
+    async function archiveCalibrationExperiment(input,{now=Date.now,guard=()=>{},resultOptions}={}){
+      check(archiveApi&&results,'Calibration archive application adapter unavailable');
+      const original=images.validate(input.referenceImage);
+      const record=await results.create(input,env,resultOptions);
+      const photo=await prepareObservationIngestion(original);
+      check(same(record.payload.photo,photo.identity),'Calibration result original identity changed during archival');
+      const archive=planCalibrationArchive(record,photo.originalId,await calibrationResultInventory(),now);
+      await store.writeDocuments([photo.plan,archive.plan].filter(Boolean),{
+        expectedInventory:[photo.expectedInventory,archive.expectedInventory],guard});
+      return {row:archive.row,reused:archive.reused,photoId:photo.row.id,photoReused:photo.reused};
+    }
+    async function saveArchivedCalibration(input,{now=Date.now,guard=()=>{}}={}){
+      check(archiveApi&&results,'Calibration archive application adapter unavailable');
+      const record=results.validate(input);
+      const observations=await observationInventory();
+      const photo=await matchObservationIdentity(record.payload.photo,observations);
+      check(photo,'Calibration result original photo is unavailable');
+      const archive=planCalibrationArchive(record,photo.originalId,await calibrationResultInventory(),now);
+      await store.writeDocuments(archive.plan?[archive.plan]:[],{
+        expectedInventory:[observationExpected(observations),archive.expectedInventory],guard});
+      return {row:archive.row,reused:archive.reused};
+    }
+    function createCalibrationArchivePort(){
+      check(archiveApi&&results,'Calibration archive application adapter unavailable');
+      function bound(db,context=env){
+        check(db===env.indexedDB&&context.indexedDB===db,'Calibration archive database context mismatch');
+      }
+      return Object.freeze({storageKind:'managed',coordination:store.coordination,
+        MAX_ITEMS:archiveApi.MAX_ITEMS,MAX_CHARS:archiveApi.MAX_CHARS,validId:archiveApi.validId,quota:archiveApi.quota,
+        get:async(db,id)=>{bound(db);return (await readCalibrationResult(id))?.row??null;},
+        list:async db=>{bound(db);return (await listCalibrationResults()).map(v=>v.row);},
+        inspectUsage:async db=>{
+          bound(db);
+          return (await listVerified('calibration-result',inspectCalibrationResult,resultDocumentId,
+            v=>({...results.summary(v.row.record),createdAt:v.row.createdAt}),byTime('createdAt'),store.inspectDocuments)).map(v=>v.row);
+        },
+        save:async(db,input,context)=>{
+          bound(db,context);return saveArchivedCalibration(input);
+        },
+        archiveExperiment:async(db,input,context,options)=>{
+          bound(db,context);return archiveCalibrationExperiment(input,{resultOptions:options});
+        }
+      });
     }
     function checkOrigin(origin,result){
       check(results&&result?.type===RESULT&&origin&&
@@ -1050,8 +1132,8 @@
     // Read verified domain rows, one closure at a time. A second inventory
     // refuses a mixed-revision list rather than silently dropping changed
     // documents. Revisions never roll back or reuse retired document IDs.
-    async function listVerified(kind,reader,documentId,project,compare){
-      const before=await store.listDocuments(kind),out=[];
+    async function listVerified(kind,reader,documentId,project,compare,inventory=store.listDocuments){
+      const before=await inventory(kind),out=[];
       for(const doc of before){
         const alias=doc.metadata?.id;
         check(doc.id===documentId(alias),'invalid '+kind+' root alias');
@@ -1060,7 +1142,7 @@
           kind+' inventory changed; reload and retry');
         out.push({row:project(value),managedRevision:value.managedRevision});
       }
-      const after=await store.listDocuments(kind);
+      const after=await inventory(kind);
       check(same(before.map(d=>[d.id,d.revision]),after.map(d=>[d.id,d.revision])),
         kind+' inventory changed; reload and retry');
       return out.sort((a,b)=>compare(a.row,b.row));
@@ -1160,6 +1242,7 @@
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
+      createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,
       createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
       importObservationAssets,exportObservationBackup,restoreObservationBackup,createImageLibraryPort,findObservationOriginal,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
