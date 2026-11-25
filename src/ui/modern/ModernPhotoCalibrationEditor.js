@@ -809,22 +809,34 @@
     // No project owns the live editor until an explicit, fully qualified open.
     let projectSession=null,projectSwitchBusy=false,projectSwitchEpoch=0;
     let editorMutation=0,switchInterference=false,sharedInput=null,sharedWrite=null,sharedPresentationHydrating=false;
+    function coordinateLegacyIDB(operation){
+      const storage=env.CurvatureModernCalibrationProjectStore;
+      if(storage?.coordinateIDB)return storage.coordinateIDB(operation);
+      if(env.navigator?.locks)return Promise.reject(Error('Calibration write barrier unavailable'));
+      return operation();
+    }
     function database(){
+      return dbPromise||coordinateLegacyIDB(databaseRaw);
+    }
+    function databaseRaw(){
       if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
         // Opening without a fixed version also supports the project-store v2
         // schema after an independently verified legacy adoption.
         const request=env.indexedDB.open('curvature-photo-calibration');
+        let blocked=false;
         request.onupgradeneeded=()=>{
+          if(blocked){request.transaction.abort();return;}
           const db=request.result;
           if(!db.objectStoreNames.contains('draft'))db.createObjectStore('draft');
         };
         request.onsuccess=()=>{
           const db=request.result;
+          if(blocked){db.close();return;}
           db.onversionchange=()=>{db.close();dbPromise=null;};
           resolve(db);
         };
-        request.onerror=()=>{dbPromise=null;reject(request.error);};
-        request.onblocked=()=>{dbPromise=null;reject(Error('Calibration storage blocked'));};
+        request.onerror=()=>{if(!blocked)dbPromise=null;reject(request.error);};
+        request.onblocked=()=>{blocked=true;dbPromise=null;reject(Error('Calibration storage blocked'));};
       });
       return dbPromise;
     }
@@ -1639,11 +1651,17 @@
         }catch(error){saved=Promise.reject(error);}
       }else{
         saved=writeQueue.catch(()=>{}).then(async()=>{
-          const db=await database();
-          await new Promise((resolve,reject)=>{
-            const tx=db.transaction('draft','readwrite');
-            tx.objectStore('draft').put(data,'active');
-            tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Draft write failed'));
+          await coordinateLegacyIDB(async()=>{
+            const db=await databaseRaw();
+            await new Promise((resolve,reject)=>{
+              const tx=db.transaction('draft','readwrite');
+              let failure=null;
+              tx.oncomplete=()=>failure?reject(failure):resolve();
+              tx.onerror=()=>{failure=failure||tx.error||Error('Draft write failed');};
+              tx.onabort=()=>reject(failure||tx.error||Error('Draft write aborted'));
+              try{tx.objectStore('draft').put(data,'active');}
+              catch(error){failure=error;try{tx.abort();}catch(ignore){reject(error);}}
+            });
           });
           if(!projectSession?.project())
             $('ModernCalibrationStorage').textContent='Draft saved in this browser.';

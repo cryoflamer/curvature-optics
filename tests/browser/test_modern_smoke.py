@@ -14105,6 +14105,39 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_calibration_project_writer_waits_for_exclusive_backup_barrier(self):
+        """Project and summary writes wait for the same lock as History and Animation."""
+        self.open_modern()
+        self.page.evaluate("""async()=>{
+            const S=CurvatureModernCalibrationProjectStore,M=CurvatureModernCalibrationProject;
+            const p=M.fresh({id:M.createId(crypto),title:'Coordinated calibration',now:100});
+            window.__calBefore=await S.create(indexedDB,p);
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__calEntered=false;
+            window.__calTask=gate.snapshot(async()=>{
+                window.__calEntered=true;
+                await new Promise(resolve=>window.__calRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__calEntered===true')
+        self.page.evaluate("""()=>{
+            const S=CurvatureModernCalibrationProjectStore;
+            window.__calSettled=false;
+            window.__calWrite=S.rename(indexedDB,window.__calBefore.id,1,'Coordinated rename',200)
+                .then(row=>{window.__calSettled=true;return row;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__calSettled'))
+        old=self.page.evaluate("""async()=> (await CurvatureModernCalibrationProjectStore.inspectUsage(indexedDB))
+            .projects.find(row=>row.id===window.__calBefore.id)""")
+        self.assertEqual(old['title'],'Coordinated calibration')
+        self.assertEqual(old['revision'],1)
+        self.page.evaluate("window.__calRelease()")
+        self.assertEqual(self.page.evaluate('window.__calWrite')['title'],'Coordinated rename')
+        self.assertEqual(self.page.evaluate('window.__calTask')['value'],'released')
+
     def test_shared_animation_draft_writer_waits_for_exclusive_backup_barrier(self):
         """A shared draft transaction waits; its verified observer remains read-only."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

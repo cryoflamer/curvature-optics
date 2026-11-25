@@ -1,6 +1,6 @@
 /* Explicit opt-in cooperation barrier for Modern storage writes.
- * Working-session, History and Animation IDB adapters participate. This is
- * not a complete migration safety gate; unregistered writers remain outside its scope.
+ * Working-session, History, Animation and Calibration project/draft IDB
+ * adapters participate. This is not a complete migration safety gate.
  */
 (function(root,factory){
   const api=factory();

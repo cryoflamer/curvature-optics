@@ -2,10 +2,10 @@
  * Upgrade preserves legacy draft/active bytes. No editor or photo I/O.
  */
 (function(root,factory){
-  const api=factory(root.CurvatureModernCalibrationProject||require('./ModernCalibrationProject'));
+  const api=factory(root,root.CurvatureModernCalibrationProject||require('./ModernCalibrationProject'));
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernCalibrationProjectStore=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(model){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,model){
   'use strict';
   const DATABASE='curvature-photo-calibration',VERSION=2;
   const LEGACY='draft',PROJECTS='projects',SUMMARIES='project-summaries',CONTROL='project-control';
@@ -45,9 +45,20 @@
       throw RangeError('Calibration Projects storage limit reached; export your work before adding more');
     return next;
   }
+  function coordinateIDB(operation){
+    const locks=root.navigator?.locks;
+    if(!locks)return operation();
+    const barrier=typeof module==='object'&&module.exports?
+      require('../../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier;
+    if(!barrier)return Promise.reject(Error('Calibration write barrier unavailable'));
+    return barrier.create(locks).registerWriter('calibration.projects').commit(operation);
+  }
   function openTransaction(indexedDB,stores,mode,action,lease=null){
+    return coordinateIDB(()=>openTransactionRaw(indexedDB,stores,mode,action,lease));
+  }
+  function openTransactionRaw(indexedDB,stores,mode,action,lease=null,existingVersion=null){
     return new Promise((resolve,reject)=>{
-      let request,db,tx,done=false,value,untrack=null;
+      let request,db,tx,done=false,value,untrack=null,failure=null;
       function checkLease(){if(lease)lease.check(mode==='readwrite');}
       function release(){if(untrack){untrack();untrack=null;}}
       function fail(error){
@@ -55,16 +66,18 @@
         reject(error||Error('Calibration Projects storage unavailable'));
       }
       function abort(error){
-        try{if(tx)tx.abort();}catch(ignore){}
-        fail(error);
+        failure=error;
+        if(!tx){fail(error);return;}
+        try{tx.abort();}catch(ignore){fail(error);}
       }
       try{
         checkLease();
         if(!indexedDB||typeof indexedDB.open!=='function')throw Error('IndexedDB unavailable');
-        request=indexedDB.open(DATABASE,VERSION);
+        request=indexedDB.open(DATABASE,existingVersion??VERSION);
       }catch(error){fail(error);return;}
       request.onupgradeneeded=()=>{
         try{
+          if(done||existingVersion!==null)throw Error('Calibration database changed during inspection');
           checkLease();
           const database=request.result;
           for(const name of [LEGACY,PROJECTS,SUMMARIES,CONTROL]){
@@ -72,28 +85,30 @@
               database.createObjectStore(name,name===PROJECTS||name===SUMMARIES?{keyPath:'id'}:undefined);
           }
         }catch(error){
-          try{request.transaction.abort();}catch(ignore){}
-          fail(error);
+          failure=error;
+          try{request.transaction.abort();}catch(ignore){fail(error);}
         }
       };
       request.onblocked=()=>fail(Error('Calibration Projects database upgrade blocked by another tab'));
-      request.onerror=()=>fail(request.error);
+      request.onerror=()=>fail(failure||request.error);
       request.onsuccess=()=>{
         db=request.result;
         if(done){db.close();return;}
         try{
           checkLease();tx=db.transaction(stores,mode);
-          if(lease)untrack=lease.track(tx,mode==='readwrite');
-        }catch(error){abort(error);return;}
+        }catch(error){fail(error);return;}
         tx.oncomplete=()=>{
           if(done)return;
+          if(failure){fail(failure);return;}
           try{checkLease();}catch(error){fail(error);return;}
           done=true;release();db.close();resolve(value);
         };
-        tx.onabort=()=>fail(tx.error||Error('Calibration Projects transaction aborted'));
-        tx.onerror=()=>fail(tx.error||Error('Calibration Projects transaction failed'));
+        tx.onabort=()=>fail(failure||tx.error||Error('Calibration Projects transaction aborted'));
+        tx.onerror=()=>{failure=failure||tx.error||Error('Calibration Projects transaction failed');};
+        try{if(lease)untrack=lease.track(tx,mode==='readwrite');}
+        catch(error){abort(error);return;}
         function read(request,fn){
-          request.onsuccess=()=>{if(done)return;try{checkLease();fn(request.result);}catch(error){abort(error);}};
+          request.onsuccess=()=>{if(done||failure)return;try{checkLease();fn(request.result);}catch(error){abort(error);}};
         }
         try{checkLease();action(tx,read,v=>{value=v;});}catch(error){abort(error);}
       };
@@ -144,8 +159,16 @@
   }
   // Inventory actual projects, not only their compact list projection.
   // Include the original standalone draft even after explicit adoption.
-  function inspectUsage(db){
-    return openTransaction(db,[PROJECTS,SUMMARIES,LEGACY],'readonly',(tx,read,finish)=>{
+  async function inspectUsage(db){
+    if(!db||typeof db.databases!=='function')throw Error('Calibration database inventory unavailable');
+    const existing=(await db.databases()).find(row=>row.name===DATABASE);
+    if(!existing)return {projects:[],legacy:null};
+    if(existing.version===1)
+      return openTransactionRaw(db,[LEGACY],'readonly',(tx,read,finish)=>{
+        read(tx.objectStore(LEGACY).get('active'),legacy=>finish({projects:[],legacy:legacy??null}));
+      },null,1);
+    if(existing.version!==VERSION)throw Error('Unsupported Calibration database version; evidence retained');
+    return openTransactionRaw(db,[PROJECTS,SUMMARIES,LEGACY],'readonly',(tx,read,finish)=>{
       read(tx.objectStore(PROJECTS).getAll(),records=>{
         read(tx.objectStore(SUMMARIES).getAll(),summaries=>{
           if(records.length!==summaries.length)throw Error('Calibration project inventory differs from summaries');
@@ -158,7 +181,7 @@
           read(tx.objectStore(LEGACY).get('active'),legacy=>finish({projects,legacy:legacy??null}));
         });
       });
-    });
+    },null,VERSION);
   }
   // One durable receipt in the existing control store, committed in the
   // same transaction as the project and summary. No schema upgrade or
@@ -215,7 +238,10 @@
     const existing=entries.find(entry=>entry.name===DATABASE);
     if(!existing||existing.version<VERSION)return null;
     if(existing.version!==VERSION)throw Error('Unsupported Calibration database version; evidence retained');
-    return readSharedSelectionReceipt(db,lease);
+    return openTransactionRaw(db,[CONTROL],'readonly',(tx,read,finish)=>{
+      read(tx.objectStore(CONTROL).get(SHARED_SELECTION_KEY),raw=>
+        finish(raw===undefined?null:selectionReceipt(raw)));
+    },lease,VERSION);
   }
   // Call only after the session controller has verified the exact receipt
   // acknowledgement. This transaction guards the receipt and domain revision;
@@ -439,7 +465,7 @@
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
-    create,get,list,inspectUsage,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
+    create,get,list,inspectUsage,coordinateIDB,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
     readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
 }));

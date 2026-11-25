@@ -34,7 +34,7 @@ function memoryIndexedDB(legacy={version:2,record:{original:{dataUrl:'data:image
       busy=false;queueMicrotask(drain);
     });
   }
-  return {tables,
+  return {tables,databases:async()=>[{name:store.DATABASE,version}],
     failMutation(storeName,method='add'){fail={storeName,method};},
     get version(){return version;},
     open(name,want){
@@ -1448,4 +1448,17 @@ test('shared legacy adoption preserves raw draft and inline and refuses unresolv
   assert.equal(inlineText,inline);assert.ok(checks>=5);
   assert.equal((await migration.migrate(env,{adapter,decoder:importer,lease,verifyBase})).project.id,saved.project.id);
   assert.equal((await store.list(db)).length,2);
+});
+
+test('Calibration usage inspection preserves V1 standalone evidence without upgrading it',async()=>{
+  const raw={version:2,record:{id:'original'},rows:[]},db=memoryIndexedDB(raw);
+  assert.deepEqual(await store.inspectUsage(db),{projects:[],legacy:raw});
+  assert.equal(db.version,1);
+  assert.deepEqual([...db.tables.keys()],['draft']);
+  const created=await store.create(db,project(A));
+  const before=copy(db.tables.get(store.LEGACY).get('active'));
+  assert.deepEqual(await store.inspectUsage(db),{projects:[model.summary(created)],legacy:raw});
+  assert.deepEqual(db.tables.get(store.LEGACY).get('active'),before);
+  const missing={databases:async()=>[],open(){throw Error('Unexpected open');}};
+  assert.deepEqual(await store.inspectUsage(missing),{projects:[],legacy:null});
 });
