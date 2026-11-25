@@ -342,8 +342,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 catch(error){return /close the corresponding editor/.test(error.message);}
                 return false;
             }"""))
-            # Browser termination releases the live-only resource lock.
+            # Browser termination releases the live-only resource lock
+            # asynchronously. Wait for that observable condition, not a
+            # fixed delay or a forced lock release by the application.
             self.page.close()
+            second.wait_for_function("""async id=>{
+                const name=CurvatureModernManagedObjectStore.DATABASE+':resource:'+id;
+                const state=await navigator.locks.query();
+                return !state.held.some(lock=>lock.name===name);
+            }""",arg=abandoned,timeout=10000)
             result=second.evaluate("""async id=>{
                 const removed=await store.removeDocument({documentId:'abandoned',expectedRevision:1});
                 const gc=await store.collectGarbage(id);
