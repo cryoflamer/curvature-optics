@@ -788,6 +788,26 @@ test('Shared automatic History stops at its limit without pruning linked evidenc
   assert.equal((await h.list()).length,2);
 });
 
+test('Protected shared History store rejects legacy management and cannot prune on record',async()=>{
+  const db=indexedDB(),legacy=history.create({indexedDB:db,maxAutoEntries:1});
+  const first=(await legacy.record(experiment(),'auto')).entry;
+  const shared=history.create({indexedDB:db,maxAutoEntries:1,protectedRetention:true});
+  const next=experiment('compare');
+  assert.deepEqual(await shared.record(next,'auto',null,{retainAuto:false}),
+    {created:false,entry:null,skipped:'capacity'});
+  const recovery=(await shared.record(next,'recovery')).entry;
+  const before=await shared.list();
+  for(const attempt of [
+    ()=>shared.remove(first.id),()=>shared.clearAuto(),()=>shared.clearAll(),
+    ()=>shared.pin(recovery.id,false),()=>shared.updateMetadata(first.id,'Stale','')
+  ])await assert.rejects(attempt(),/Legacy History management is disabled/);
+  assert.deepEqual(await shared.list(),before);
+  const edited=await shared.updateMetadataExact(first,'Retained','Note');
+  assert.equal(edited.source,'manual');
+  assert.deepEqual(await shared.get(first.id),edited);
+  await assert.rejects(shared.setPinnedExact([recovery],false),/must remain protected/);
+  assert.deepEqual(await shared.get(recovery.id),recovery);
+});
 test('History migration imports once and durable receipt prevents resurrection of renamed records',async()=>{
   const db=indexedDB(),h=history.create({indexedDB:db});
   const plan={sourceDigest:'sha256:'+'a'.repeat(64),status:'imported'};

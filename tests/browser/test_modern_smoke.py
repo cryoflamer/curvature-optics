@@ -15070,6 +15070,16 @@ class ModernBrowserSmoke(unittest.TestCase):
         report=self.page.locator('#ModernHistoryUsageReport')
         expect(report).to_contain_text('known local link(s)',timeout=30000)
         expect(report).to_contain_text('Permanent deletion remains disabled.')
+        rejected=self.page.evaluate("""async () => {
+            const h=CurvatureModernApp.getHistoryStore(),[entry]=await h.list();
+            const outcomes=await Promise.allSettled([
+                h.remove(entry.id),h.clearAuto(),h.clearAll(),
+                h.pin(entry.id,true),h.updateMetadata(entry.id,'Unexpected','')
+            ]);
+            return outcomes.map(item=>item.status==='rejected'&&
+                /Legacy History management is disabled/.test(item.reason.message));
+        }""")
+        self.assertEqual(rejected,[True]*5)
         self.assertEqual(self.page.evaluate('async () => CurvatureModernApp.getHistoryStore().list()'),saved)
         self.assertEqual(self.page.evaluate(read),before)
         expect(card.locator('.modern-history-delete')).to_be_disabled()

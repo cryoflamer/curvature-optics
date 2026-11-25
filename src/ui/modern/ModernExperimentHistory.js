@@ -254,6 +254,12 @@
   function create(options){
     options=options||{};
     var factory=options.indexedDB,now=options.now||Date.now;
+    // The shared route chooses this immutable capability at startup. UI
+    // controls are not the enforcement boundary for this store instance.
+    const protectedRetention=options.protectedRetention===true;
+    function rejectLegacyManagement(){
+      return Promise.reject(Error('Legacy History management is disabled for the protected shared store'));
+    }
     var maxAuto=options.maxAutoEntries===undefined?MAX_AUTO:options.maxAutoEntries;
     if(!Number.isInteger(maxAuto)||maxAuto<1||maxAuto>10000)throw RangeError('Invalid auto-history limit');
     // Resolve the barrier at construction time, after the browser scripts
@@ -334,7 +340,9 @@
     });});}
     function record(experiment,source,thumbnail,{retainAuto=false,guard=()=>{}}={}){
       // Shared provenance coverage is not yet complete. Append/protect only;
-      // never prune existing records on the shared route.
+      // never prune existing records on the shared route, even if a caller
+      // omits retainAuto or explicitly passes false.
+      retainAuto=retainAuto||protectedRetention;
       if(!['manual','auto','recovery'].includes(source))throw RangeError('Invalid history source');
       // Validate synchronously before any database mutation. Persist copies,
       // never references to the mutable live Compare/Scene model.
@@ -480,6 +488,7 @@
     // signature, thumbnail, pin, timestamps and history identity untouched.
     // Named automatic entries are promoted to manual retention (not pinned).
     function updateMetadata(id,name,description){
+      if(protectedRetention)return rejectLegacyManagement();
       var metadata=validatedMetadata(name,description);
       if(!Number.isSafeInteger(Number(id))||Number(id)<1)
         return Promise.reject(RangeError('Invalid snapshot id'));
@@ -544,21 +553,27 @@
         return entry;
       },guard).then(entries=>entries[0]);
     }
-    function remove(id){return serialize(function(){return transact('readwrite',function(store,set){
+    function remove(id){
+      if(protectedRetention)return rejectLegacyManagement();
+      return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.get(Number(id));
       request.onsuccess=function(){
         if(!request.result){set(false);return;}
         store.delete(Number(id));set(true);
       };
     });});}
-    function pin(id,pinned){return serialize(function(){return transact('readwrite',function(store,set){
+    function pin(id,pinned){
+      if(protectedRetention)return rejectLegacyManagement();
+      return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.get(Number(id));
       request.onsuccess=function(){
         var entry=request.result;if(!entry){set(false);return;}
         entry.pinned=!!pinned;store.put(entry);set(true);
       };
     });});}
-    function clearAll(){return serialize(function(){return transact('readwrite',function(store,set){
+    function clearAll(){
+      if(protectedRetention)return rejectLegacyManagement();
+      return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.getAll();
       request.onsuccess=function(){
         var entries=request.result||[];
@@ -566,7 +581,9 @@
         set(entries.length);
       };
     });});}
-    function clearAuto(){return serialize(function(){return transact('readwrite',function(store,set){
+    function clearAuto(){
+      if(protectedRetention)return rejectLegacyManagement();
+      return serialize(function(){return transact('readwrite',function(store,set){
       var request=store.getAll();
       request.onsuccess=function(){
         var entries=request.result||[],removed=0;

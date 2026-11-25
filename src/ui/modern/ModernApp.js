@@ -7752,10 +7752,10 @@
       else if(typeof toggle.focus==='function')toggle.focus();
     }
   }
-  function bindHistory(){
+  function bindHistory(protectedRetention=false){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
-    experimentHistory=historyFactory.create({indexedDB:root.indexedDB});
+    experimentHistory=historyFactory.create({indexedDB:root.indexedDB,protectedRetention});
     var metadataForm=newUiEl('ModernHistoryMetadataForm');
     var metadataCancel=newUiEl('ModernHistoryMetadataCancel');
     var metadataDialog=newUiEl('ModernHistoryMetadataDialog');
@@ -11329,7 +11329,7 @@
       syncLegacyHistorySelection(studioHistoryEntries);
     });
     el('ModernBackToScene').addEventListener('click',function(){void requestPreviewWorkspace('scene');});
-    bindHistory();
+    bindHistory(useSharedPreview&&sharedPresentationRequested);
     if(root.CurvatureModernDemos)root.CurvatureModernDemos.init();
     function finishStartup(remoteRecord,remoteError,preview){
       var restored=false;

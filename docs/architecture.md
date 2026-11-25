@@ -661,7 +661,7 @@ export. The shared layout reset does not change physics or the active
 document. In the combined opt-in preview the shared Calibration and Animation
 workspaces, keyframe editing, History and reference-image navigation now use
 the domain-specific contracts described below and in their own documentation.
-Destructive History and original-photo removal remain disabled in that route.
+Destructive History and original-photo removal remain disabled in that route. The shared History store is constructed with immutable `protectedRetention: true` after resolving the startup route. In that instance, legacy remove/clear/pin/metadata methods reject; exact annotation/pin methods remain available and every record operation retains existing automatic snapshots even if the caller omits `retainAuto`. This is an instance-level capability boundary, not a database-wide lockout of older or separately constructed clients.
 History IDs in Animation keyframes (`sourceSnapshotId`) are local
 provenance; playback is self-contained, and portable Animation import clears
 foreign IDs rather than treating them as local screenshot links. Deletion
