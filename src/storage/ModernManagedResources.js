@@ -5,7 +5,7 @@
   root.CurvatureModernManagedResources=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project',RESULT='calibration-result';
+  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project',RESULT='calibration-result',CALIBRATION='calibration-project';
   const check=(ok,message)=>{if(!ok)throw Error('Managed Resources: '+message);};
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&
@@ -23,7 +23,8 @@
       images=deps.CurvatureModernReferenceImage,importer=deps.CurvatureModernReferenceImageImport,
       library=deps.CurvatureModernReferenceImageLibrary,
       projects=deps.CurvatureModernAnimationProject,animations=deps.CurvatureModernAnimationLibrary,
-      results=deps.CurvatureModernCalibrationResult;
+      results=deps.CurvatureModernCalibrationResult,calibrations=deps.CurvatureModernCalibrationProject,
+      checkpoints=deps.CurvatureModernCalibrationProjectCheckpoint;
     check(core&&state&&history&&fp&&images&&importer&&library,'domain dependencies required');
     const types=[
       {type:SNAPSHOT,version:1,validate:v=>{
@@ -61,6 +62,16 @@
     if(results)types.push({type:RESULT,version:1,validate:v=>exact(v,['record','originalId'])&&
       same(results.validate(v.record),v.record)&&objectId(v.originalId),
       references:v=>[strong('original',v.originalId)]});
+    if(calibrations&&checkpoints)types.push({type:CALIBRATION,version:1,validate:v=>{
+      if(!exact(v,['project','originalId','results']))return false;
+      const project=calibrations.normalize(v.project);
+      return same(project,v.project)&&(project.photo?objectId(v.originalId):v.originalId===null)&&
+        Array.isArray(v.results)&&v.results.length===project.resultIds.length&&
+        v.results.every((entry,i)=>exact(entry,['alias','target'])&&entry.alias===project.resultIds[i]&&objectId(entry.target));
+    },references:v=>[
+      ...(v.originalId?[strong('original',v.originalId)]:[]),
+      ...v.results.map(entry=>strong('result:'+entry.alias,entry.target))
+    ]});
     const store=core.create(env,{types});
     const historyId=id=>{check(positive(id),'invalid History alias');return 'history:'+id;};
     const observationId=id=>'observation:'+images.validId(id);
@@ -241,6 +252,55 @@
       checkOrigin(origin,{type:RESULT,payload:{record:saved.row.record}});
       return saved.resultId;
     }
+    async function prepareCalibration(project,original){
+      let verified=null;
+      if(project.photo){
+        check(original?.type===ORIGINAL&&same(original.payload.identity,project.photo.identity),
+          'Calibration Project original identity mismatch');
+        verified=await materializeOriginal(original,'calibration_evidence',{title:'Verified original'});
+      }
+      // Reuse the existing checkpoint hydration/validation, replacing only
+      // its original lookup port. This never accesses the old Image Library.
+      return checkpoints.prepare(project,env,{async findOriginal(_db,identity){
+        check(verified&&same(identity,project.photo.identity),'Calibration Project original missing');
+        return {record:verified};
+      }},importer);
+    }
+    async function saveCalibrationProject(input,{expectedRevision=0,originalId=null}={}){
+      check(calibrations&&checkpoints,'Calibration Project adapters unavailable');
+      const project=calibrations.normalize(input);
+      check(project.photo?objectId(originalId):originalId===null,'Calibration Project photo mapping required');
+      const original=originalId?await store.get(originalId):null;
+      await prepareCalibration(project,original);
+      const references=[];
+      for(const alias of project.resultIds){
+        const result=await readCalibrationResult(alias);
+        check(result,'Calibration Project result missing: '+alias);
+        references.push({alias,target:result.resultId});
+      }
+      const id=store.newObjectId();
+      const document=await store.writeDocument({documentId:'calibration:'+project.id,kind:'calibration',
+        expectedRevision,metadata:{id:project.id},references:[strong('project',id)],
+        resources:[{id,type:CALIBRATION,version:1,payload:{project,originalId,results:references}}]});
+      return {projectId:id,managedRevision:document.revision};
+    }
+    async function readCalibrationProject(id){
+      check(calibrations&&checkpoints,'Calibration Project adapters unavailable');
+      const graph=await store.readDocumentGraph('calibration:'+calibrations.id(id));
+      if(!graph)return null;
+      check(graph.document.kind==='calibration'&&graph.document.references.length===1,'invalid Calibration Project root');
+      const resource=pick(graph,'project',CALIBRATION),v=resource.payload;
+      check(v.project.id===id&&graph.document.metadata.id===id,'Calibration Project alias mismatch');
+      for(const entry of v.results){
+        const result=graph.resources.find(r=>r.id===entry.target);
+        check(result?.type===RESULT&&result.payload.record.id===entry.alias,'Calibration Project result mismatch');
+        await verifyResultOriginal(graph,result);
+      }
+      const original=v.originalId?graph.resources.find(r=>r.id===v.originalId):null;
+      const prepared=await prepareCalibration(v.project,original);
+      return {...prepared,projectId:resource.id,managedRevision:graph.document.revision,
+        originalId:v.originalId,results:v.results};
+    }
     function animationFields(row){
       check(projects&&animations,'Animation adapters unavailable');
       const normalized=animations.normalize(row);
@@ -286,7 +346,7 @@
         evidence:v.evidence,observations:v.observations,referenceImages};
     }
     return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation,
-      saveCalibrationResult,readCalibrationResult});
+      saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject});
   }
-  return Object.freeze({create,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT});
+  return Object.freeze({create,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION,RESULT,CALIBRATION});
 }));

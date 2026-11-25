@@ -636,6 +636,14 @@ class ModernBrowserSmoke(unittest.TestCase):
                 name:'Calibrated',description:'',thumbnail:null,experiment};
             const snap=await adapter.saveHistory(history);
             ok((await adapter.store.get(saved.resultId)).refCount===2,'snapshot did not retain archive');
+            const projectApi=CurvatureModernCalibrationProject;
+            const calibration=projectApi.fresh({id:projectApi.createId(crypto),title:'Calibration owner',now:44,
+                photo:{identity:archived.payload.photo,aliasId:record.id,source:{kind:'library',key:record.id}},
+                resultIds:[archived.id]});
+            const project=await adapter.saveCalibrationProject(calibration,{originalId:photo.originalId});
+            ok((await adapter.store.get(saved.resultId)).refCount===3,'Calibration Project did not retain result');
+            ok(JSON.stringify((await adapter.readCalibrationProject(calibration.id)).project)===JSON.stringify(calibration),
+                'Calibration Project changed');
             const corrupt=structuredClone(history);corrupt.id=72;
             corrupt.experiment.calibrationOrigin.historicalFit.rmsPx=123;
             await rejects(()=>adapter.saveHistory(corrupt),/calibration origin evidence mismatch/);
@@ -646,6 +654,11 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'snapshot lost fit evidence');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'snapshot lost photo evidence');
             ok((await adapter.readHistory(71)).evidence.result===saved.resultId,'snapshot cannot reopen evidence');
+            const reopenedProject=await adapter.readCalibrationProject(calibration.id);
+            ok(reopenedProject.project.resultIds[0]===archived.id&&reopenedProject.results[0].target===saved.resultId,
+                'Calibration Project lost result after gallery removal');
+            ok(reopenedProject.originalId===photo.originalId&&reopenedProject.projectId===project.projectId,
+                'Calibration Project lost original ownership');
             await rejects(()=>adapter.saveHistory({...history,id:73}),/calibration result missing/);
             const standalone=await adapter.saveHistory({...history,id:74},{standalone:true});
             ok((await adapter.readHistory(74)).evidence==='standalone','standalone provenance misrepresented');
