@@ -817,17 +817,36 @@
     var extensions=Object.values(studioExportPreferenceBindings).map(binding=>binding.spec);
     var prior=extensions.map(spec=>spec.name),libraryExtension=studioLibraryPreferenceExtension();
     if(libraryExtension)extensions.push(libraryExtension);
+    var previousExtensionSets=libraryExtension&&prior.length?[prior]:[];
+    var orbitExtension=root.CurvatureModernLandmarkViewer?.orbitPreferenceSpec?.();
+    if(orbitExtension){
+      if(extensions.length)previousExtensionSets.push(extensions.map(spec=>spec.name));
+      extensions.push(orbitExtension);
+    }
     sharedPreferenceOwner=applicationPreferences.createShared({
       registryApi:root.CurvatureModernStateRegistry,managerApi:root.CurvatureModernUiSessionManager,
       store:experimentPreview.ui,storage:preferencesStorage(),
-      extensions,previousExtensionSets:libraryExtension&&prior.length?[prior]:[]});
+      extensions,previousExtensionSets});
     var values=await sharedPreferenceOwner.restore();
     if(experimentPreview.status==='suspended')return;
     applyGlobalPreferences(values);
     applySharedStudioExportPreferences(values);
     applySharedStudioLibraryFilters(values);
+    applySharedLandmarkOrbitPreference(values);
     syncSharedGlobalPreferenceControls();
     sharedPreferencesRestored=true;
+  }
+  function applySharedLandmarkOrbitPreference(values){
+    if(values.landmarkOrbitSensitivity===undefined)return;
+    root.CurvatureModernPhotoCalibrationEditor?.mount(document)?.hydrateOrbitSensitivity(values.landmarkOrbitSensitivity);
+  }
+  function calibrationOrbitPreferenceOwner(){
+    if(!sharedPresentationRequested)return null;
+    return {save:function(value){
+      if(sharedPresentationActive()&&sharedPreferencesRestored&&persistence.ready)
+        observeUiRegistrySave(sharedPreferenceOwner.saveExtension('landmarkOrbitSensitivity',value),
+          'Calibration orbit sensitivity: ');
+    }};
   }
   function syncSharedGlobalPreferenceControls(){
     // All controls are already bound. Hydrate values, not synthetic edits.
@@ -854,6 +873,7 @@
       applyGlobalPreferences(defaults);
       applySharedStudioExportPreferences(sharedPreferenceOwner.values());
       applySharedStudioLibraryFilters(sharedPreferenceOwner.values());
+      applySharedLandmarkOrbitPreference(sharedPreferenceOwner.values());
       syncSharedGlobalPreferenceControls();
       renderSharedAnimationLibrary();
       studioPlaybackFpsMeter.reset();
@@ -11087,6 +11107,7 @@
       return {model:copy,physics:{atmosphere:state.atmosphere,temperatureProfile:Object.assign({},state.temperatureProfile)}};
     },getMode:function(){return state.demosActive?'demos':state.mode;},
     getWorkspaceMode:currentWorkspaceMode,
+    calibrationOrbitPreferenceOwner,
     isSharedImageLibraryPreview:sharedPresentationActive,
     openImageLibraryFromCalibration:function(){
       if(!sharedPresentationActive()||!photoCalibrationWorkspaceOpen)return Promise.resolve(false);

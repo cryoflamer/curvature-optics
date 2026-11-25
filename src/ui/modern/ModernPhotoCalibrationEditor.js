@@ -592,7 +592,7 @@
       pairCancel=$('ModernCalibrationCancelEdit'),pairDelete=$('ModernCalibrationDeleteSelected'),
       pairUndo=$('ModernCalibrationUndo'),pairRedo=$('ModernCalibrationRedo'),pairPanel=$('ModernCalibrationPairToolbar');
     pairAdd.onclick=beginSharedAdd;pairEdit.onclick=()=>beginPairEdit(workflow.activePair);
-    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onRedo:redo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial,onGesture:a=>viewportGesture(a,'model'),onMoveEndpoint:moveInlineEndpoint});
+    const inlineViewer=env.CurvatureModernLandmarkViewer.mount(inlineHost,saveInline,selectPair,{inline:true,onFastVertex:chooseInlineVertex,onDeleteCorrespondence:deletePair,onUndo:undo,onRedo:redo,onInspectOwner:selectInlineOwner,onCancelPair:cancelPairDraft,onConfirmMaterial:confirmInlineMaterial,onGesture:a=>viewportGesture(a,'model'),onMoveEndpoint:moveInlineEndpoint,orbitPreference:env.CurvatureModernApp?.calibrationOrbitPreferenceOwner?.()||null});
     let inlineSource=null,physicalSource=null,physicalFraming=null,renderingModel=false,disclosureRoute=null;
     const implicitRoute=()=>editingStage()&&!viewBest;
     const contextMenu=createContextMenu(doc,env,workspace);
@@ -2974,6 +2974,7 @@
     }
     mounted={enter,selectPresentationView,restore:restoreDraft,inspectProjectStartup,
       configureSharedSelection,openSharedProject,prepareSharedLeave,
+      hydrateOrbitSensitivity:value=>inlineViewer.hydrateOrbitSensitivity(value),
       isSharedLibraryOnly:()=>!!sharedSelection&&!projectSession?.project(),
       projectStartupStatus:()=>({...projectStartupStatus}),resumeAfterDeletedProject,
       openCalibrationProject,resumeCleanProjectAfterReload,adoptLegacyCalibrationDraft,

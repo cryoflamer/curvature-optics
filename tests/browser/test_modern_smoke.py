@@ -14576,6 +14576,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const ui=CurvatureModernUiSessionStore.create(window);
             const row=await ui.read('global',{});
             delete row.envelope.values['application.studioLibraryFilters'];
+            delete row.envelope.values['application.landmarkOrbitSensitivity'];
             row.envelope.values['application.studioVideoExport'].value={Fps:'25'};
             await ui.write('global',{},row.envelope,row.revision);
             localStorage.setItem('curvature-modern-animation-library-filters-v1',JSON.stringify({query:'Alpha'}));
@@ -14616,6 +14617,45 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(search).to_have_value('Beta',timeout=30000)
         expect(host.get_by_role('button',name='Open saved project · Beta',exact=True)).to_be_visible()
         self.assertEqual(self.page.evaluate(read)['global'],after['global'])
+
+    def test_shared_calibration_orbit_sensitivity_migrates_without_legacy_writes(self):
+        """Append one global preference, preserve legacy bytes and restore without a document write."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        ready="""() => window.CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        old=self.page.evaluate("""async () => {
+            const ui=CurvatureModernUiSessionStore.create(window);
+            const row=await ui.read('global',{});
+            delete row.envelope.values['application.landmarkOrbitSensitivity'];
+            await ui.write('global',{},row.envelope,row.revision);
+            localStorage.setItem('curvature-landmark-viewer-orbit-sensitivity-v1',' 70 ');
+            return await ui.read('global',{});
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        slider=self.page.locator('#ModernCalibrationInlineViewer [data-viewer-sensitivity]')
+        expect(slider).to_have_value('70')
+        expect(slider).to_be_enabled()
+        read="""async () => ({global:await CurvatureModernUiSessionStore.create(window).read('global',{}),
+            doc:CurvatureModernApp.getExperimentSessionPreview().controller.row,
+            legacy:localStorage.getItem('curvature-landmark-viewer-orbit-sensitivity-v1')})"""
+        before=self.page.evaluate(read)
+        self.assertEqual(before['legacy'],' 70 ')
+        self.assertEqual(before['global']['revision'],old['revision']+1)
+        for key,value in old['envelope']['values'].items():
+            self.assertEqual(before['global']['envelope']['values'][key],value)
+        slider.evaluate("""node=>{node.value='85';node.dispatchEvent(new Event('input',{bubbles:true}));}""")
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        after=self.page.evaluate(read)
+        self.assertEqual(after['doc'],before['doc'])
+        self.assertEqual(after['legacy'],before['legacy'])
+        self.assertEqual(after['global']['envelope']['values']['application.landmarkOrbitSensitivity']['value'],85)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(slider).to_have_value('85')
+        self.assertEqual(self.page.evaluate(read),after)
 
 
 if __name__ == '__main__':

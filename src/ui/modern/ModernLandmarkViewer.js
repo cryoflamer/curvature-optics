@@ -792,7 +792,7 @@
     if(row.selected||row.hovered){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(...p,16,0,2*Math.PI);ctx.stroke();ctx.strokeStyle='#142e45';ctx.lineWidth=3;ctx.stroke();}
     ctx.restore();
   }
-  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=true,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onRedo=null,onInspectOwner=null,onCancelPair=null,onConfirmMaterial=null,onGesture=null,onMoveEndpoint=null}={}){
+  function mount(dialog,onSessionChange=()=>{},onSelectCorrespondence=()=>{},{inline=true,onFastVertex=null,onDeleteCorrespondence=null,onUndo=null,onRedo=null,onInspectOwner=null,onCancelPair=null,onConfirmMaterial=null,onGesture=null,onMoveEndpoint=null,orbitPreference=null}={}){
     if(!inline)throw Error('Only the integrated physical viewer is supported');
     let inlineOpen=false;
     const isOpen=()=>inlineOpen;
@@ -1033,15 +1033,23 @@
     pickChoices.onchange=()=>{if(inline&&!draftEditable())return;staged=choices[Number(pickChoices.value)]||null;selectOrbitPoint(staged);syncPoint();updatePickStatus();redrawMarkers();};
     dialog.querySelector('[data-viewer-pick-clear]').onclick=()=>{confirmed=null;clearPick();syncPoint();updatePickStatus();redrawMarkers();};
     const sensitivityInput=dialog.querySelector('[data-viewer-sensitivity]'),sensitivityValue=dialog.querySelector('[data-viewer-sensitivity-value]');
+    const sensitivityReset=dialog.querySelector('[data-viewer-sensitivity-reset]');
     let sensitivity=DEFAULT_SENSITIVITY;
-    try{const saved=env.localStorage.getItem(SENSITIVITY_KEY);if(saved!==null)sensitivity=orbitSensitivity(JSON.parse(saved));}catch(e){/* Optional UI preference. */}
-    function setSensitivity(value){
+    if(!orbitPreference)try{const saved=env.localStorage.getItem(SENSITIVITY_KEY);if(saved!==null)sensitivity=orbitSensitivity(JSON.parse(saved));}catch(e){/* Optional UI preference. */}
+    function hydrateSensitivity(value){
       sensitivity=orbitSensitivity(value);sensitivityInput.value=String(sensitivity);sensitivityValue.textContent=sensitivity+'%';
+    }
+    function setSensitivity(value){
+      hydrateSensitivity(value);
+      if(orbitPreference){orbitPreference.save(sensitivity);return;}
       try{env.localStorage.setItem(SENSITIVITY_KEY,JSON.stringify(sensitivity));}catch(e){/* Optional UI preference. */}
     }
-    setSensitivity(sensitivity);
+    if(orbitPreference){
+      hydrateSensitivity(sensitivity);
+      sensitivityInput.disabled=true;sensitivityReset.disabled=true;
+    }else setSensitivity(sensitivity);
     sensitivityInput.oninput=()=>setSensitivity(Number(sensitivityInput.value));
-    dialog.querySelector('[data-viewer-sensitivity-reset]').onclick=()=>setSensitivity(DEFAULT_SENSITIVITY);
+    sensitivityReset.onclick=()=>setSensitivity(DEFAULT_SENSITIVITY);
     function syncMode(){
       if(ownerStatus)ownerStatus.hidden=!ownerMode();
       if(ownerList)ownerList.hidden=!ownerMode();
@@ -1275,8 +1283,8 @@
       pendingVertex=next;if(isOpen())redrawMarkers();
     },discardPairDraft(){
       if(stagedMode==='fast-vertex'){clearPick();syncPoint();if(isOpen())redrawMarkers();}
-    },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,
+    },setInspectedOwner(owner,label,primitives){setInspectedOwner(owner,label,primitives);if(isOpen())redrawMarkers();},hydrateOrbitSensitivity(value){hydrateSensitivity(value);sensitivityInput.disabled=false;sensitivityReset.disabled=false;},clearLocalPoint(){confirmed=null;clearPick();syncPoint();if(isOpen())redrawMarkers();},close,setCorrespondences,correspondences:()=>JSON.parse(JSON.stringify(correspondenceState)),isOpen,
       snapshot:()=>isOpen()&&geometry?{mode:'free',region:{...geometry.region},view:JSON.parse(JSON.stringify(state)),count:geometry.items.length,pivot:worldPoint(geometry.frame,state.orbitPivot?.point||[0,0,0]),pivotError:geometry.pivotError,pickMode:pickMode.value,staged:staged?JSON.parse(JSON.stringify(staged)):null,confirmed:confirmed?JSON.parse(JSON.stringify(confirmed)):null}:null};
   }
-  return Object.freeze({automaticPick,cssPickFrame,frameBackgroundEmpty,resetPhysicalPivot,physicalGeometry,initialPhysicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalGeometry,reframePoint,rasterSize,mount});
+  return Object.freeze({automaticPick,cssPickFrame,frameBackgroundEmpty,resetPhysicalPivot,physicalGeometry,initialPhysicalGeometry,physicalView,localGeometry,visibleItems,bounds,reset,standardView,orbit,orbitSensitivity,orbitPreferenceSpec:()=>({name:'landmarkOrbitSensitivity',legacyKey:SENSITIVITY_KEY,defaultValue:DEFAULT_SENSITIVITY,validate:value=>typeof value==='number'&&Number.isFinite(value)&&orbitSensitivity(value)===value,decodeLegacy:raw=>JSON.parse(raw)}),pan,zoom,camera,draw,regionSeed,regionPivot,regionGeometry,regionCamera,rebaseRegionPivot,indexedTriangles,preparePick,rayTriangle,surfaceHits,edgeHit,pickRegion,regionPaths,pickFrame,framePick,containsFill,adjustPoint,worldPoint,markerVisibility,restoreView,restorePoint,opticalCamera,opticalEntry,opticalPrimitivePick,opticalFrame,opticalFramePick,opticalMarker,ownerAtFrame,correspondenceHits,correspondenceAt,drawRegion,opticalGeometry,reframePoint,rasterSize,mount});
 }));
