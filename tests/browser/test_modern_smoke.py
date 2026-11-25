@@ -2761,9 +2761,13 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok((await animation.read()).digest===animationRow.digest,'stale physical source changed Animation');
             animationRow=await animation.stageKeyframeEdit(animationRow,physicalIntent);
             const physicalJournal=await adapter.readAnimationWorkingCollection();
-            ok(physicalJournal.evidence[0].target===saved.resultId&&
-                JSON.stringify(physicalJournal.row.keyframeEdit.session.workspace)===JSON.stringify(surrounding.experiment),
-                'temporary journal lost surrounding physical calibration');
+            ok(physicalJournal.evidence.length===1&&physicalJournal.evidence[0].alias===archived.id&&
+                physicalJournal.evidence[0].target===saved.resultId,
+                'temporary journal lost exact surrounding calibration resource');
+            const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?
+                Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
+            ok(canonical(physicalJournal.row.keyframeEdit.session.workspace)===canonical(surrounding.experiment),
+                'temporary journal changed surrounding physical experiment');
             animationRow=await animation.cancelKeyframeEdit(animationRow,animationRow.keyframeEdit);
             ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'cancelled journal kept durable evidence');
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'journal cancel lost physical owner');
