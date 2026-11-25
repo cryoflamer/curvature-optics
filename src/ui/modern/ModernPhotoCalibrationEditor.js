@@ -530,6 +530,9 @@
   }
   let mounted=null;
   function mount(doc,sharedSelection=null){
+    const projectStorage=()=>sharedSelection?.storage||env.CurvatureModernCalibrationProjectStore;
+    const referenceStorage=()=>sharedSelection?.referenceImages||env.CurvatureModernReferenceImageLibrary;
+    const animationStorage=()=>sharedSelection?.animationLibrary||env.CurvatureModernAnimationLibrary;
     const $=id=>doc.getElementById(id),workspace=$('ModernPhotoCalibration');
     if(!workspace)return null;
     if(mounted){
@@ -813,7 +816,8 @@
     // Keep their last captured editor input separate from the shared writer.
     let ordinaryProjectInput=null;
     function coordinateLegacyIDB(operation){
-      const storage=env.CurvatureModernCalibrationProjectStore;
+      const storage=projectStorage();
+      if(storage?.storageKind==='managed')return Promise.reject(Error('Legacy Calibration storage is disabled on managed route'));
       if(storage?.coordinateIDB)return storage.coordinateIDB(operation);
       if(env.navigator?.locks)return Promise.reject(Error('Calibration write barrier unavailable'));
       return operation();
@@ -852,6 +856,7 @@
       });
     }
     async function inspectProjectStartup(){
+      if(projectStorage()?.storageKind==='managed')return {status:'managed'};
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!migration)return {status:'unavailable'};
       if(restoring)throw Error('Calibration draft restoration is unfinished');
@@ -889,14 +894,18 @@
       if(!helper)throw Error('Calibration Project checkpoint helper unavailable');
       // Explicit opt-in: this stages a verified image in the independent
       // Library but never changes the active draft or creates a project.
-      return helper.captureVerified(captureDraftState(),captureInlineState(),env);
+      const storage=projectStorage();
+      return storage.storageKind==='managed'?
+        storage.captureVerified(env.indexedDB,captureDraftState(),captureInlineState(),projectSession?.project()||null):
+        helper.captureVerified(captureDraftState(),captureInlineState(),env);
     }
     async function prepareProjectCheckpoint(project){
       const helper=env.CurvatureModernCalibrationProjectCheckpoint;
       if(!helper)throw Error('Calibration Project checkpoint helper unavailable');
       // Validation/decode only; project activation and its generations
       // belong to 8F.7p.5. Never replace current editor on failed prepare.
-      return helper.prepare(project,env);
+      const storage=projectStorage();
+      return storage.storageKind==='managed'?storage.prepare(env.indexedDB,project.id):helper.prepare(project,env);
     }
     // Project cards begin with compact metadata. Verified preview images are
     // resolved lazily from the independent Reference Image Library, not from
@@ -1026,7 +1035,7 @@
       return figure;
     }
     async function fetchProjectPreviews(token){
-      const library=env.CurvatureModernReferenceImageLibrary,
+      const library=referenceStorage(),
         importer=env.CurvatureModernReferenceImageImport;
       if(!library?.findOriginal||!importer?.verifyOriginal)return;
       // Resolve each content identity only once; no original bytes enter
@@ -1043,8 +1052,12 @@
           const [key,identity]=pending[cursor++];
           let preview=null;
         try{
-          const found=await library.findOriginal(env.indexedDB,identity,env.crypto,
-            original=>importer.verifyOriginal(original,env));
+          const storage=projectStorage();
+          const owner=storage.storageKind==='managed'?
+            await storage.prepare(env.indexedDB,projectRows.find(row=>photoPreviewKey(row.photo)===key).id):null;
+          const found=storage.storageKind==='managed'?(owner?.photo?{record:owner.photo}:null):
+            await library.findOriginal(env.indexedDB,identity,env.crypto,
+              original=>importer.verifyOriginal(original,env));
           if(found){
             if(found.record.thumbnail){
               await importer.verify(found.record,env);
@@ -1248,14 +1261,14 @@
       projectsControls();
     }
     async function refreshProjectList(){
-      const token=++projectListToken,storage=env.CurvatureModernCalibrationProjectStore,
+      const token=++projectListToken,storage=projectStorage(),
         migration=env.CurvatureModernCalibrationProjectMigration;
       if(!storage||!migration){projectsMessage('Calibration Projects storage unavailable.',true);return;}
       projectsMessage('Reading saved project metadata…');
       projectsRefresh.disabled=true;
       try{
         const [rows,inspection]=await Promise.all([
-          storage.list(env.indexedDB),migration.inspect(env)
+          storage.list(env.indexedDB),storage.storageKind==='managed'?{status:'managed'}:migration.inspect(env)
         ]);
         if(token!==projectListToken||projectsPanel.hidden)return;
         projectRows=rows;
@@ -1331,7 +1344,7 @@
     }
     function projectActions(){
       const actions=env.CurvatureModernCalibrationProjectActions;
-      const storage=env.CurvatureModernCalibrationProjectStore;
+      const storage=projectStorage();
       if(!actions||!storage)throw Error('Calibration Project actions unavailable');
       return {actions,storage};
     }
@@ -1345,10 +1358,10 @@
       projectListBusy=true;renderProjects();
       projectsMessage('Creating a new Calibration Project from the current Scene…');
       try{
-        const {actions}=projectActions();
+        const {actions,storage}=projectActions();
         const snapshot=env.CurvatureModernApp.getPhotoCalibrationScene();
         prepareScene(snapshot); // Explicit Globe / supported-atmosphere preflight.
-        const created=await actions.createNew(env,snapshot,{title:title.trim()});
+        const created=await actions.createNew(env,snapshot,{title:title.trim(),storage});
         try{
           const previous=projectSession?.state()?.projectId;
           const opened=await openCalibrationProject(created.id);
@@ -1379,8 +1392,8 @@
         // Capture synchronously, before asynchronous photo/storage operations.
         const source=captureDraftState(),inline=captureInlineState();
         const capturedMutation=editorMutation;
-        const {actions}=projectActions();
-        const created=await actions.saveDraftAsNew(env,source,inline,{title:title.trim()});
+        const {actions,storage}=projectActions();
+        const created=await actions.saveDraftAsNew(env,source,inline,{title:title.trim(),storage});
         // Never replace the source editor; Open is a separate guarded action.
         projectSelectedId=created.id;
         projectListBusy=false;
@@ -1459,8 +1472,8 @@
       projectListBusy=true;renderProjects();
       projectsMessage('Verifying original photograph and duplicating the saved checkpoint…');
       try{
-        const {actions}=projectActions();
-        const created=await actions.duplicate(env,entry.id,entry.revision);
+        const {actions,storage}=projectActions();
+        const created=await actions.duplicate(env,entry.id,entry.revision,{storage});
         projectListBusy=false;await refreshProjectList();
         projectsMessage('Created '+created.title+'. Open it to edit independently.');
       }catch(error){projectActionMessage(error,'Duplicate failed');}
@@ -1546,9 +1559,9 @@
         const data=validateExperiment(JSON.parse(await file.text()),env.CurvatureModernReferenceImage.validate);
         // Verification and IndexedDB create must finish before listing the new
         // project; no import into the active editor is performed.
-        const {actions}=projectActions();
+        const {actions,storage}=projectActions();
         const created=await actions.importAsNew(env,data,{
-          title:(data.referenceImage.title||'Imported calibration').slice(0,160)});
+          storage,title:(data.referenceImage.title||'Imported calibration').slice(0,160)});
         // Imported as New is selected in the library, not activated in the editor.
         projectSelectedId=created.id;
         projectListBusy=false;await refreshProjectList();
@@ -1603,7 +1616,7 @@
       if(!projectSession){
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
-        projectSession=helper.create(env,{sharedSelection,onChange:()=>{
+        projectSession=helper.create(env,{storage:projectStorage(),sharedSelection,onChange:()=>{
           // Bind/save/failure acknowledgments maintain the tab-scoped durable
           // identity. No auto-resume token is kept for unresolved edits.
           if(!leavingPage)rememberCleanProjectState(projectSession?.state());
@@ -1797,11 +1810,11 @@
     // in 8F.7p.6 will invoke this explicit operation; startup never does.
     async function openCalibrationProject(id,{cleanReload=false}={}){
       if(sharedSelection){
-        const saved=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,id);
+        const saved=await projectStorage().get(env.indexedDB,id);
         if(!saved)throw Error('Calibration Project missing');
         return openSharedProject(env.CurvatureModernCalibrationProjectPersistence.projectReference(saved),false);
       }
-      const storage=env.CurvatureModernCalibrationProjectStore;
+      const storage=projectStorage();
       const migration=env.CurvatureModernCalibrationProjectMigration;
       if(!storage||!migration)throw Error('Calibration Projects are unavailable');
       if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
@@ -1928,14 +1941,14 @@
         await writeQueue;observed=editorMutation;requireGuard();
         const prepared=await session.prepareSelected(reference,guard);requireGuard();
         const incoming=await prepareVisualProject(prepared);requireGuard();
-        const saved=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,reference.id);
+        const saved=await projectStorage().get(env.indexedDB,reference.id);
         requireGuard();
         if(!saved||JSON.stringify(saved)!==JSON.stringify(prepared.project))
           throw Error('Calibration Project changed during visual preparation');
         if(restore)await sharedSelection.verify(reference);
         else await sharedSelection.select(reference);
         pointerCommitted=true;requireGuard();
-        const confirmed=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,reference.id);
+        const confirmed=await projectStorage().get(env.indexedDB,reference.id);
         requireGuard();
         if(!confirmed||JSON.stringify(confirmed)!==JSON.stringify(prepared.project))
           throw Error('Calibration Project changed after shared selection');
@@ -2010,7 +2023,7 @@
       try{env.sessionStorage?.removeItem(DELETED_PROJECT_HANDOFF_KEY);}catch(_ignored){}
       try{
         if(requested){
-          const existing=await env.CurvatureModernCalibrationProjectStore.get(env.indexedDB,requested);
+          const existing=await projectStorage().get(env.indexedDB,requested);
           if(!existing)throw Error('The next project is no longer available');
           const opened=await openCalibrationProject(requested);
           projectSelectedId=opened.project.id;
@@ -2097,8 +2110,8 @@
       const token=++catalogToken;
       sourceRefresh.disabled=true;sourceStatus.textContent='Loading available photographs…';
       const [library,projects,demos]=await Promise.allSettled([
-        Promise.resolve().then(()=>env.CurvatureModernReferenceImageLibrary.list(env.indexedDB)),
-        Promise.resolve().then(()=>env.CurvatureModernAnimationLibrary.list(env.indexedDB)),
+        Promise.resolve().then(()=>referenceStorage().list(env.indexedDB)),
+        Promise.resolve().then(()=>animationStorage().list(env.indexedDB)),
         Promise.resolve().then(()=>env.CurvatureModernDemoCatalog.load())
       ]);
       if(token!==catalogToken)return;
@@ -2131,7 +2144,7 @@
     async function acceptPhoto(next,source,token){
       if(projectSwitchBusy||applyBusy||restoring)
         throw Error('Finish the pending project switch or Apply before changing the photograph');
-      const library=env.CurvatureModernReferenceImageLibrary;
+      const library=referenceStorage();
       const importer=env.CurvatureModernReferenceImageImport;
       if(!library?.ensureOriginal||!importer?.verifyOriginal)
         throw Error('Verified Reference Image Library unavailable');
@@ -2190,7 +2203,7 @@
       try{
         let next;
         if(choice.source==='library'){
-          const row=await env.CurvatureModernReferenceImageLibrary.get(env.indexedDB,choice.id);
+          const row=await referenceStorage().get(env.indexedDB,choice.id);
           next=row?.record;
         }else{
           next=demoRecords.find(d=>d.id===choice.demoId)?.referenceImages.find(r=>r.id===choice.id);

@@ -2786,6 +2786,71 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.assertTrue(self.page.evaluate('!!window.CurvatureModernApp'))
 
+    def test_managed_preview_mounts_one_storage_authority(self):
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        seed=self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:adapter});
+            await S.read();const row=await S.initialize(experiment);
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=3;
+            const record={id:'managed_preview_photo',version:1,title:'Managed preview original',
+                original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:3}};
+            await adapter.saveObservation({id:record.id,revision:1,record});
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+            return {digest:row.digest};
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load',timeout=30000)
+        ready="""()=> {
+            const a=window.CurvatureModernApp;
+            if(!a)return !!document.getElementById('ModernStorageStartupRefusal');
+            const s=a.getExperimentSessionPreview();
+            return s.status==='failed'||s.status==='clean'&&a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        state=self.page.evaluate("""()=>({
+            status:window.CurvatureModernApp?.getExperimentSessionPreview().status,
+            notice:document.querySelector('#ModernStorageStartupRefusal')?.textContent,
+            row:window.CurvatureModernApp?.getExperimentSessionPreview().controller?.row})""")
+        self.assertEqual(state.get('status'),'clean',state)
+        self.assertEqual(state['row']['digest'],seed['digest'])
+        self.page.locator('#ModernImageLibraryTab').click()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        expect(panel).to_be_visible()
+        expect(panel.locator('[data-image-id="managed_preview_photo"]')).to_be_visible(timeout=15000)
+        self.page.locator('#ModernSceneTab').click()
+        expect(self.page.locator('#ModernWorkspace')).to_be_visible()
+        self.page.locator('#ModernSnapshotSave').click()
+        self.page.wait_for_function("""async()=> (await CurvatureModernApp.getManagedResources().listHistory()).some(v=>v.row.source==='manual')""")
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(self.page.locator('#ModernPhotoCalibration')).to_be_visible()
+        expect(self.page.locator('#ModernCalibrationProjectsPanel')).to_be_visible()
+        self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
+            ['curvature-modern-managed-objects','curvature-modern-ui-sessions'].includes(db.name))"""),
+            self.page.evaluate('async()=>await indexedDB.databases()'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_managed_storage_cutover_writer_fence(self):
         def prepare(page):
             page.route(self.base_url, lambda route: route.fulfill(

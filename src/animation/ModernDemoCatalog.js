@@ -117,17 +117,17 @@
       cover:demo.cover?bundled().covers[demo.cover.asset]:null,
       createdAt:demo.createdAt||1,updatedAt:demo.updatedAt||1}],resolve,Object.assign({},options,{referenceImages:demo.referenceImages}));
   }
-  function copyToLibrary(indexedDB,id,now,crypto){
+  function copyToLibrary(indexedDB,id,now,crypto,{library:targetLibrary=library,assets:targetAssets=assets}={}){
     return Promise.resolve().then(function(){
       var demo=load().find(function(entry){return entry.id===id;});
       if(!demo)throw Error('Unknown built-in demo: '+id);
       var project=projects.validate(Object.assign({},demo.project,{
-        id:library.makeId(crypto,now),name:demo.project.name.slice(0,113)+' (copy)'}));
-      function save(resolved){return library.create(indexedDB,resolved,demo.quality,now,demo.thumbnail,true,
+        id:targetLibrary.makeId(crypto,now),name:demo.project.name.slice(0,113)+' (copy)'}));
+      function save(resolved){return targetLibrary.create(indexedDB,resolved,demo.quality,now,demo.thumbnail,true,
         demo.cover?bundled().covers[demo.cover.asset]:null);}
       if(!demo.referenceImages.length)return save(project);
-      return assets.importAssets(indexedDB,demo.referenceImages,crypto).then(function(mapping){
-        return save(library.remapReferences({project:project},mapping).project);
+      return targetAssets.importAssets(indexedDB,demo.referenceImages,crypto).then(function(mapping){
+        return save(targetLibrary.remapReferences({project:project},mapping).project);
       });
     });
   }

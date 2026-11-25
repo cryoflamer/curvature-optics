@@ -7,19 +7,31 @@
   // Until every production consumer is routed to managed resources, an
   // explicit cutover marker must stop this legacy-wired bootstrap before
   // any session restore, autosave, migration or UI preference is mounted.
-  var startupStorageError=null;
+  var startupStorageError=null,managedResources=null,startupRoute=null;
+  var managedPreviewRequested=new URLSearchParams(root.location?.search||'')
+    .get('document-session')==='managed-preview';
   try{
     var startupStorage=root.localStorage,startupBarrier=root.CurvatureModernBackupWriteBarrier;
     if(startupBarrier&&typeof startupBarrier.readRoute==='function'){
-      var startupRoute=startupBarrier.readRoute(startupStorage);
-      if(startupRoute)startupStorageError='Storage cutover is '+startupRoute.state+
+      startupRoute=startupBarrier.readRoute(startupStorage);
+      if(managedPreviewRequested){
+        const params=new URLSearchParams(root.location.search);
+        if(startupRoute?.state!=='managed'||params.getAll('document-session').length!==1||
+           params.getAll('ui-state-registry').length!==1||params.get('ui-state-registry')!=='preview'||
+           [...params.keys()].some(key=>!['document-session','ui-state-registry'].includes(key)))
+          throw Error('Managed preview requires the explicit managed marker and shared presentation route');
+        managedResources=root.CurvatureModernManagedResources.create(root);
+        if(managedResources.store.coordination!=='participating-writer')
+          throw Error('Managed storage coordination unavailable');
+      }else if(startupRoute)startupStorageError='Storage cutover is '+startupRoute.state+
         '; this application version cannot open the prepared managed route.';
     }else if(startupStorage&&typeof startupStorage.getItem('curvature-modern-storage-route-v1')==='string'){
       startupStorageError='Storage cutover marker exists, but the route validator is unavailable.';
     }
   }catch(error){startupStorageError='Storage route could not be verified: '+error.message;}
-  if(startupStorageError){
-    function showStorageStartupRefusal(){
+  if(managedPreviewRequested&&!managedResources&&!startupStorageError)
+    startupStorageError='Managed storage dependencies unavailable.';
+  function showStorageStartupRefusal(){
       var main=document.createElement('main'),heading=document.createElement('h1'),
         notice=document.createElement('p'),guidance=document.createElement('p');
       main.id='ModernStorageStartupRefusal';
@@ -30,7 +42,8 @@
       guidance.textContent='Preserve the backup file and both stores. Do not clear browser data or retry the old route.';
       main.append(heading,notice,guidance);
       document.body.replaceChildren(main);
-    }
+  }
+  if(startupStorageError){
     if(document.readyState==='loading')
       document.addEventListener('DOMContentLoaded',showStorageStartupRefusal,{once:true});
     else showStorageStartupRefusal();
@@ -85,7 +98,14 @@
   var studioRecoveryApi=root.CurvatureModernAnimationWorkspaceRecovery;
   var studioSwitchApi=root.CurvatureModernAnimationWorkspaceSwitch;
   var studioPersistenceApi=root.CurvatureModernAnimationWorkspacePersistence;
-  var studioLibrary=root.CurvatureModernAnimationLibrary;
+  var studioLibrary=managedResources?root.CurvatureModernAnimationLibrary.createPort({managedResources}):
+    root.CurvatureModernAnimationLibrary;
+  var referenceLibrary=managedResources?root.CurvatureModernReferenceImageLibrary.createPort({managedResources}):
+    root.CurvatureModernReferenceImageLibrary;
+  var calibrationStorage=managedResources?root.CurvatureModernCalibrationProjectStore.createPort({managedResources}):
+    root.CurvatureModernCalibrationProjectStore;
+  var calibrationArchive=managedResources?root.CurvatureModernCalibrationResultArchive.createPort({managedResources}):
+    root.CurvatureModernCalibrationResultArchive;
   var studioDemoCatalog=root.CurvatureModernDemoCatalog;
   var studioActiveDemo=null,studioDemoEntries=null;
   var studioLibraryActionsApi=root.CurvatureModernAnimationLibraryActions;
@@ -634,7 +654,7 @@
   var studioPresentation=null,studioPresentationProject=null,studioPresentationTimes=null,studioReferences=null;
   var studioPlaybackLastPaint=-Infinity,studioPlaybackNextDue=-Infinity;
   var studioPlaybackRenderedAt=null;
-  var studioThumbnailPersistence=thumbnailApi&&thumbnailApi.createKeyframePersistence&&root.indexedDB?
+  var studioThumbnailPersistence=!managedResources&&thumbnailApi&&thumbnailApi.createKeyframePersistence&&root.indexedDB?
     thumbnailApi.createKeyframePersistence(root.indexedDB,function(error){
       if(root.console)root.console.warn('Keyframe thumbnails not persisted:',error);
     }):null;
@@ -732,7 +752,7 @@
   var workspaceViewEditGeneration={animation:0,calibration:0};
   var documentSessionRoute=typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'').get('document-session');
-  var documentSessionPreviewRequested=['shared','preview'].includes(documentSessionRoute);
+  var documentSessionPreviewRequested=['shared','preview','managed-preview'].includes(documentSessionRoute);
   var experimentPreview={status:'disabled',controller:null,ui:null,live:false,error:null,recoveryAction:false,
     migration:null,calibrationContext:null,calibrationEditor:null,calibrationNavigation:false,calibrationBusy:false,
     animationContext:null};
@@ -1797,7 +1817,7 @@
     var scenePanel=newUiEl('ModernCalibrationSceneTransfer');
     if(!scenePanel)return;
     var origin=state.calibrationOrigin,mode=currentWorkspaceMode();
-    var api=root.CurvatureModernCalibrationTransfer,archive=root.CurvatureModernCalibrationResultArchive;
+    var api=root.CurvatureModernCalibrationTransfer,archive=calibrationArchive;
     var sceneVisible=mode==='scene'&&!!origin,compareVisible=mode==='compare'&&!!origin;
     scenePanel.hidden=!sceneVisible;
     var sceneStatus=newUiEl('ModernCalibrationApplicabilityScene');
@@ -2055,16 +2075,19 @@
       lease=ui.captureSharedDocumentLifetime(),
       coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
     var checkpoint=sessionAutosave.openSharedCheckpoint(root.indexedDB,
-      {lease:lease,codec:experiments,crypto:root.crypto,contract:api});
+      {lease:lease,codec:experiments,crypto:root.crypto,contract:api,
+        ...(managedResources?{managedResources}:{})});
     function current(){return experimentPreview.live&&experimentPreview.status!=='suspended';}
     var calibrationApi=root.CurvatureModernCalibrationProjectPersistence;
     var calibrationEnabled=sharedPresentationRequested;
     if(calibrationEnabled&&!calibrationApi)throw Error('Shared Calibration persistence unavailable');
     var animationEnabled=calibrationEnabled&&studioDraftAutosave&&studioPersistenceApi?.createShared;
     if(calibrationEnabled&&!animationEnabled)throw Error('Shared Animation persistence unavailable');
-    function animationStore(){return studioDraftAutosave.openSharedCollection(root.indexedDB,{lease,crypto:root.crypto});}
-    var calibrationReader=calibrationEnabled&&calibrationApi.sharedDocumentReader(root);
-    var owners=calibrationEnabled?[calibrationApi.sharedSelectionRecovery(root,lease,{existingOnly:true}),
+    function animationStore(){return studioDraftAutosave.openSharedCollection(root.indexedDB,
+      {lease,crypto:root.crypto,...(managedResources?{managedResources}:{})});}
+    var calibrationReader=calibrationEnabled&&calibrationApi.sharedDocumentReader(root,{storage:calibrationStorage});
+    var owners=calibrationEnabled?[calibrationApi.sharedSelectionRecovery(root,lease,
+      {existingOnly:true,storage:calibrationStorage}),
       {kind:'animation',
         read:async()=>{var row=await animationStore().read();return row?.receipt??null;},
         retire:async receipt=>{var store=animationStore(),row=await store.read();return store.retire(row,receipt);}
@@ -2078,6 +2101,7 @@
         return {kind,id:ref.id,revision:ref.revision};
       },selectionRecovery:owners}:{}),
       prepare:async function(){
+        if(managedResources)throw Error('Managed physical checkpoint missing; inspect the prepared archive');
         var storage=preferencesStorage(),opts={sessions:sessions,storage:storage,coordinate:coordinate,isCurrent:current};
         var old=await sessions.read(),inventory;
         if(old.envelope&&old.envelope.documents.experiment){
@@ -2118,18 +2142,19 @@
     }
     if(calibrationEnabled)experimentPreview.calibrationContext={
       lease:lease,coordinate:coordinate,
+      ...(managedResources?{storage:calibrationStorage,referenceImages:referenceLibrary,animationLibrary:studioLibrary}:{}),
       verifyCheckpoint:function(){return coordinate(()=>controller.assertCleanCheckpoint());},
       commitApply:async function(ref,before,next,guard,info){
         try{
           var result=await coordinate(async function(){
             lease.check(true);guard();
-            var storage=root.CurvatureModernCalibrationProjectStore;
+            var storage=calibrationStorage;
             if(await storage.readSharedSelectionReceipt(root.indexedDB,lease))
               throw Error('Resolve the interrupted Calibration save before Apply');
             var project=await storage.get(root.indexedDB,ref.id);
             if(!project||'rev:'+project.revision!==ref.revision||!project.resultIds.includes(info.resultId))
               throw Error('Calibration result link or project revision changed before Apply');
-            var archive=await root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,info.resultId);
+            var archive=await calibrationArchive.get(root.indexedDB,info.resultId);
             if(!archive||archive.id!==info.resultId||
                historyFingerprint.exactSignature(root.CurvatureModernCalibrationTransfer.transfer(archive.record,before,info.target))!==
                historyFingerprint.exactSignature(next))
@@ -2155,9 +2180,10 @@
       recover:function(receipt){return coordinate(()=>controller.recoverDocumentSelection(receipt));},
       canAdoptLegacy:function(){
         var s=controller.state();
-        return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy;
+        return !managedResources&&['clean','committed'].includes(s.status)&&!!s.row&&!s.busy;
       },
       adoptLegacy:async function(){
+        if(managedResources)throw Error('Legacy adoption is disabled on the managed route');
         try{
           return await coordinate(()=>root.CurvatureModernCalibrationProjectMigration.migrate(root,{
             lease:lease,verifyBase:()=>controller.assertCleanCheckpoint()}));
@@ -2172,7 +2198,7 @@
           s.row.envelope.documents.calibration?.id!==id;
       },
       renameUnselected:async function(ref,title){
-        var storage=root.CurvatureModernCalibrationProjectStore;
+        var storage=calibrationStorage;
         try{
           return await coordinate(async function(){
             lease.check(true);
@@ -2188,8 +2214,8 @@
           throw error;
         }
       },
-      remove:async function(ref){
-        var detached=false,storage=root.CurvatureModernCalibrationProjectStore;
+      remove:managedResources?null:async function(ref){
+        var detached=false,storage=calibrationStorage;
         try{
           return await coordinate(async function(){
             lease.check(true);
@@ -2572,7 +2598,8 @@
         // Observe the actual durable row without turning a background
         // capture into a new document writer or failing a stale controller.
         var reader=sessionAutosave.openSharedCheckpoint(root.indexedDB,{lease:ctx.lease,
-          codec:experiments,crypto:root.crypto,contract:root.CurvatureModernDocumentSession});
+          codec:experiments,crypto:root.crypto,contract:root.CurvatureModernDocumentSession,
+          ...(managedResources?{managedResources}:{})});
         var durable=await reader.read();
         if(!current())return;
         if(!durable||durable.revision!==revision||durable.draft!==null||
@@ -3349,7 +3376,7 @@
           experiment=>studioKeyframeThumbnails?.get(experiment));
       }else{
         var originals=await studioLibrary.collectReferences(checked,
-          id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+          id=>referenceLibrary.get(root.indexedDB,id));
         for(var original of originals)await root.CurvatureModernReferenceImageImport.verify(original,root);
         json=studioLibrary.exportPortable(checked,experiment=>studioKeyframeThumbnails?.get(experiment),
           {referenceImages:originals});
@@ -3376,7 +3403,7 @@
     ctx.busy=true;ctx.message='Collecting verified recovery originals…';renderSharedAnimationLibrary();
     try{
       var text=await studioDraftAutosave.exportRecovery(evidence,
-        id=>root.CurvatureModernReferenceImageLibrary.inspectOriginal(root.indexedDB,id),
+        id=>referenceLibrary.inspectOriginal(root.indexedDB,id),
         record=>root.CurvatureModernReferenceImageImport.verify(record,root),root.crypto);
       downloadHistoryJson(text,'curvature-animation-recovery-with-originals.json');
       ctx.message='Portable recovery exported with original photographs.';
@@ -3390,7 +3417,9 @@
     ctx.row=await store.read();
     ctx.inventory=null;
     try{
-      ctx.inventory=await studioDraftAutosave.inspectLegacySources(root);ctx.inventoryError=null;
+      ctx.inventory=managedResources?{sources:[],issues:[],variants:[]}:
+        await studioDraftAutosave.inspectLegacySources(root);
+      ctx.inventoryError=null;
       // Only equivalent complete sources are unambiguous. Never infer that a
       // larger collection or a newer timestamp subsumes divergent evidence.
       var sources=ctx.inventory.sources,first=sources[0];
@@ -3430,7 +3459,7 @@
     var originals=reference&&typeof studioLibrary.workingReferences==='function'?
       await studioLibrary.workingReferences(root.indexedDB,reference,project):
       await studioLibrary.collectReferences([{project}],
-        id=>root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id));
+        id=>referenceLibrary.get(root.indexedDB,id));
     for(var record of originals)await root.CurvatureModernReferenceImageImport.verify(record,root);
     ctx.lease.check(true);
   }
@@ -3543,10 +3572,18 @@
       throw Error('Current shared Animation draft is not acknowledged; retry or download it first');
     return true;
   }
+  function initializeSharedAnimation(store,ctx,collection,guard){
+    return managedResources?store.initializeManaged(collection,guard):
+      store.initializeEmpty(ctx.inventory,collection,root.localStorage,guard);
+  }
   async function runSharedAnimationAction(kind,value){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!ctx||ctx.busy||!animationWorkspaceOpen||experimentPreview.calibrationBusy||
        !['clean','committed'].includes(experimentPreview.status))return false;
+    if(managedResources&&['adopt','recover','deleteNamed','deleteDrafts'].includes(kind)){
+      ctx.error=true;ctx.message='Legacy adoption and deletion are disabled in managed preview.';
+      renderSharedAnimationLibrary();return false;
+    }
     if(['adopt','recover'].includes(kind)&&(!root.confirm||!root.confirm(
       'Recover this exact historical Animation source? Confirm a verified local backup (or disposable test profile) and close old Modern tabs. Old records will be retained.')))return false;
     if(kind==='deleteNamed'&&(!root.confirm||!root.confirm(
@@ -3602,7 +3639,8 @@
                 if(!demo)throw Error('Built-in demo not found');
                 for(var original of demo.referenceImages)await root.CurvatureModernReferenceImageImport.verify(original,root);
                 ctx.lease.check(true);
-                openNamed=await studioDemoCatalog.copyToLibrary(root.indexedDB,value,undefined,root.crypto);
+                openNamed=await studioDemoCatalog.copyToLibrary(root.indexedDB,value,undefined,root.crypto,
+                  {library:studioLibrary,assets:referenceLibrary});
               }
               ctx.lease.check(true);
               openNamed=await verifySharedNamedAnimation(openNamed);
@@ -3614,7 +3652,7 @@
               quality:openNamed.quality,prepared:studioApi.inspect(draft).compatible,
               libraryId:openNamed.id,libraryRevision:openNamed.updatedAt,positionMs:0},Date.now());
             ctx.row=row?await store.createLinkedWorkspace(row,cp):
-              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage);
+              await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,cp));
             // The separate domain transaction may already have committed.
             // If the named row changed, retain that exact working copy but
             // do not select it as the current saved project.
@@ -3714,7 +3752,7 @@
               importReferenceImages:async records=>{
                 for(var record of records)await root.CurvatureModernReferenceImageImport.verify(record,root);
                 ctx.lease.check(true);
-                return root.CurvatureModernReferenceImageLibrary.importAssets(root.indexedDB,records,root.crypto);
+                return referenceLibrary.importAssets(root.indexedDB,records,root.crypto);
               },
               importKeyframeThumbnails:importStudioKeyframeThumbnails
             });
@@ -3746,13 +3784,13 @@
               // rows; a later draft failure never deletes committed assets.
               for(var record of referenceImages)await root.CurvatureModernReferenceImageImport.verify(record,root);
               ctx.lease.check(true);
-              var mapping=await root.CurvatureModernReferenceImageLibrary.importAssets(
+              var mapping=await referenceLibrary.importAssets(
                 root.indexedDB,referenceImages,root.crypto);
               ctx.lease.check(true);
               checkpoint=studioDraftAutosave.remapRecoveryReferences(checkpoint,mapping);
             }
             ctx.row=row?await store.createDraft(row,id,checkpoint):
-              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,checkpoint),root.localStorage);
+              await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,checkpoint));
             ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
           }else if(kind==='deleteDrafts'){
             var selected=c.state().row.envelope.documents.animation;
@@ -3772,7 +3810,7 @@
             var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,
               quality:'canvas-direct',prepared:false,positionMs:0},Date.now());
             ctx.row=row?await store.createDraft(row,id,cp):
-              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage);
+              await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,cp));
             openRef=studioDraftAutosave.documentReference(ctx.row,id);
           }else throw Error('Unsupported shared Animation action');
         });
@@ -3833,10 +3871,10 @@
       download:downloadHistoryJson,
       keyframeThumbnail:function(experiment){return studioKeyframeThumbnails&&studioKeyframeThumbnails.get(experiment);},
       importKeyframeThumbnails:importStudioKeyframeThumbnails,
-      getReferenceImage:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);},
+      getReferenceImage:function(id){return referenceLibrary.get(root.indexedDB,id);},
       importReferenceImages:async function(records){
         for(var record of records)await root.CurvatureModernReferenceImageImport.verify(record,root);
-        return root.CurvatureModernReferenceImageLibrary.importAssets(root.indexedDB,records,root.crypto);
+        return referenceLibrary.importAssets(root.indexedDB,records,root.crypto);
       },
       confirm:function(message){return typeof root.confirm!=='function'||root.confirm(message);},
       fail:function(message){studioLibraryMessage=message;studioLibraryError=true;},
@@ -5351,7 +5389,7 @@
           extra.referenceImages=await studioLibrary.collectReferences([{project:plan.project}],function(id){
             if(task.cancelled)throw Error('Cancelled');
             if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
-            return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+            return referenceLibrary.get(root.indexedDB,id);
           });
         }
         if(task.cancelled)return;
@@ -5539,7 +5577,7 @@
           extra.referenceImages=await studioLibrary.collectReferences([{project:project}],function(id){
             if(task.cancelled)throw Error('Cancelled');
             if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
-            return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+            return referenceLibrary.get(root.indexedDB,id);
           });
         }
         if(task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
@@ -5715,7 +5753,7 @@
       get:function(id){
         if(studioActiveDemo){var record=(studioActiveDemo.referenceImages||[]).find(function(r){return r.id===id;});
           return Promise.resolve(record?{record:record,revision:1}:null);}
-        return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+        return referenceLibrary.get(root.indexedDB,id);
       }});
   }
   function syncStudioPresentation(layoutOnly){
@@ -6044,7 +6082,7 @@
         var entry={version:1,id:project.id,project:project,quality:quality,
           createdAt:now,updatedAt:now,cover:record&&record.cover};
         if(studioLibrary.referenceIds([entry]).length)return studioLibrary.collectReferences([entry],function(id){
-          return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);
+          return referenceLibrary.get(root.indexedDB,id);
         }).then(function(assets){
           if(!current())throw Error('Storyboard export cancelled');
           var result=studioLibrary.exportPortable([entry],lookup,{complete:complete,referenceImages:assets});
@@ -7205,8 +7243,8 @@
     },!!studioPrepared,{activeId:studioLibraryActive&&studioLibraryActive.id,
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
-      listReferenceImages:function(){return root.CurvatureModernReferenceImageLibrary.list(root.indexedDB);},
-      getReferenceImage:function(id){return root.CurvatureModernReferenceImageLibrary.get(root.indexedDB,id);},
+      listReferenceImages:function(){return referenceLibrary.list(root.indexedDB);},
+      getReferenceImage:function(id){return referenceLibrary.get(root.indexedDB,id);},
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,
@@ -7798,7 +7836,8 @@
   function bindHistory(protectedRetention=false){
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
-    experimentHistory=historyFactory.create({indexedDB:root.indexedDB,protectedRetention});
+    experimentHistory=historyFactory.create({indexedDB:root.indexedDB,protectedRetention,
+      ...(managedResources?{managedResources}:{})});
     var metadataForm=newUiEl('ModernHistoryMetadataForm');
     var metadataCancel=newUiEl('ModernHistoryMetadataCancel');
     var metadataDialog=newUiEl('ModernHistoryMetadataDialog');
@@ -8135,7 +8174,7 @@
        !photoCalibrationWorkspaceOpen)
       throw Error(archived?'Archived transition requires Scene and explicit Compare A or B':'Calibration Apply requires the active editor and available History storage');
     if(!persistence.ready||!experimentHistory||historyLoadError||
-       !root.CurvatureModernCalibrationApply||!root.CurvatureModernCalibrationResultArchive||!root.indexedDB)
+       !root.CurvatureModernCalibrationApply||!calibrationArchive||!root.indexedDB)
       throw Error('Calibration Apply requires available History storage');
     calibrationApplyBusy=true;updatePresetNavigation();refreshCalibrationApplicability();
     if(shared){experimentPreview.calibrationBusy=true;previewControls();}
@@ -8143,14 +8182,14 @@
       let archivedProjectBinding=null;
       const controller=root.CurvatureModernCalibrationApply.create({
         ...(archived?{
-          loadArchived:id=>root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,id)
+          loadArchived:id=>calibrationArchive.get(root.indexedDB,id)
         }:{
           candidate:editor.candidate,target:editor.target,
           async archive(candidate){
             // Keep the editable original draft durable independently of archive.
             await editor.saveDraft();
             archivedProjectBinding=editor.projectBinding?.()||null;
-            return root.CurvatureModernCalibrationResultArchive.archiveExperiment(
+            return calibrationArchive.archiveExperiment(
               root.indexedDB,candidate,root,
               {projectId:archivedProjectBinding?.projectId??null});
           },
@@ -8175,7 +8214,7 @@
             try{
               var view=await ctx.coordinate(async function(){
                 archiveGuard();await c.assertCleanCheckpoint();
-                var archive=await root.CurvatureModernCalibrationResultArchive.get(root.indexedDB,info.resultId);
+                var archive=await calibrationArchive.get(root.indexedDB,info.resultId);
                 if(!archive||archive.id!==info.resultId||
                    historyFingerprint.exactSignature(root.CurvatureModernCalibrationTransfer.transfer(archive.record,before,info.target))!==
                    historyFingerprint.exactSignature(next))
@@ -10590,7 +10629,7 @@
   async function selectSharedAnimationImageUse(request){
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     var use=request.use,imageId=request.imageId;
-    var graph=root.CurvatureModernImageUsageGraph,images=root.CurvatureModernReferenceImageLibrary;
+    var graph=root.CurvatureModernImageUsageGraph,images=referenceLibrary;
     var importer=root.CurvatureModernReferenceImageImport;
     return ctx.coordinate(async()=>{
       var committed=false;
@@ -10639,7 +10678,7 @@
             await verifySharedAnimationOriginals(named.project,ctx);
             guard();await verifySharedNamedAnimation(named);await verifyImage();
             row=row?await store.createLinkedWorkspace(row,cp,guard):
-              await store.initializeEmpty(ctx.inventory,studioDraftAutosave.collection(id,cp),root.localStorage,guard);
+              await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,cp),guard);
             ctx.row=row;
           }
           ref=studioDraftAutosave.documentReference(row,id);
@@ -11549,9 +11588,27 @@
       },function(error){finishStartup(null,error);});
     }else finishStartup(null,null);
   }
-  if(typeof root.xOnLoad==='function')root.xOnLoad(bind);
-  else root.addEventListener('load',bind);
+  function start(){
+    if(!managedResources){bind();return;}
+    // No application consumer may create a substitute empty graph when
+    // an explicit marker claims an existing prepared storage authority.
+    Promise.resolve().then(async()=>{
+      if(JSON.stringify(startupBarrier.readRoute(root.localStorage))!==JSON.stringify(startupRoute))
+        throw Error('Managed storage marker changed during startup');
+      if(!await managedResources.store.inspectDocumentGraph('working:shared-experiment'))
+        throw Error('Managed physical checkpoint missing; preserve the backup and inspect the target');
+      if(!(await managedResources.store.verifyIntegrity()).valid)
+        throw Error('Managed resource graph failed integrity verification');
+      bind();
+    }).catch(error=>{
+      startupStorageError=error.message;delete root.CurvatureModernApp;
+      showStorageStartupRefusal();
+    });
+  }
+  if(typeof root.xOnLoad==='function')root.xOnLoad(start);
+  else root.addEventListener('load',start);
   root.CurvatureModernApp={getModel:function(){return model;},
+    getManagedResources:()=>managedResources,
     getPhotoCalibrationScene:function(){
       var copy=Object.assign({},model);
       Object.keys(copy).forEach(function(k){if(Array.isArray(copy[k]))copy[k]=copy[k].slice();});
