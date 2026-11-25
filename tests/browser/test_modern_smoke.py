@@ -2771,6 +2771,30 @@ class ModernBrowserSmoke(unittest.TestCase):
             animationRow=await animation.cancelKeyframeEdit(animationRow,animationRow.keyframeEdit);
             ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'cancelled journal kept durable evidence');
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'journal cancel lost physical owner');
+            // Standalone is an explicit provenance state, not a missing
+            // gallery lookup. Preserve it through named rename/open/Save As.
+            const L=CurvatureModernAnimationLibrary;
+            const libraryPort=adapter.createAnimationLibraryPort();
+            const named=P.createV2({version:1,mode:'camera',target:null,
+                referenceExperiment:original},[{experiment:original}],{id:'standalone_named'});
+            await adapter.saveAnimation(L.record(named,'auto',named.id,300,300,null),{standalone:true});
+            const renamed=await libraryPort.rename(indexedDB,named.id,'Standalone renamed',300,301);
+            ok((await adapter.readAnimation(named.id)).evidence==='standalone','rename changed standalone evidence');
+            const namedDraft=Studio.fromProject(renamed.project);
+            const linkedCp=A.normalize({...cp,draft:namedDraft,selectedKey:namedDraft.frames[0].key,
+                libraryId:named.id,libraryRevision:renamed.updatedAt,savedAt:302});
+            animationRow=await animation.createLinkedWorkspace(animationRow,linkedCp);
+            const linkedId=A.projectWorkspaceId(named.id),linkedRef=A.documentReference(animationRow,linkedId);
+            ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===null,
+                'linked standalone was not explicit');
+            const copy=P.validate({...renamed.project,id:'standalone_copy'});
+            await libraryPort.createFromWorking(indexedDB,copy,'auto',303,null,null,linkedRef,()=>{});
+            ok((await adapter.readAnimation(copy.id)).evidence==='standalone','Save As changed standalone evidence');
+            // The exact surrounding verified physical checkpoint conflicts
+            // with the same alias retained as standalone in another workspace.
+            const conflict={...physicalIntent,reference:A.documentReference(animationRow,id)};
+            await rejects(()=>animation.stageKeyframeEdit(animationRow,conflict),/Conflicting temporary keyframe physical calibration evidence/);
+            ok((await animation.read()).digest===animationRow.digest,'conflicting journal changed standalone collection');
             ok(!(await adapter.listObservations()).length&&!(await adapter.listCalibrationResults()).length,
                 'handoff recreated removed gallery records');
             return {valid:(await adapter.store.verifyIntegrity()).valid,history:(await historyPort.list()).length};

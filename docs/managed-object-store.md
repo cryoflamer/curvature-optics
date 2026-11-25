@@ -698,3 +698,11 @@ for exact origins, and a conflicting retained mapping refuses staging rather
 than substituting evidence. Later journal edits and recovery use the existing
 owned mapping; cancelling the journal releases its durable edge when it is
 not otherwise needed by the collection.
+
+Named Animation saves preserve explicit standalone origins from the exact
+preceding named revision or acknowledged working source. Linked workspaces
+transfer standalone status as an explicit null mapping, not as an unresolved
+lookup that may accidentally become verified. The collection refuses conflicting
+verified/standalone mappings for one alias. The existing named-project schema
+supports wholly standalone or wholly verified evidence; a mixed named save
+is refused rather than dropping any verified evidence.

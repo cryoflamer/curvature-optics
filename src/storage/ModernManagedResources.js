@@ -1272,13 +1272,22 @@
         }else{
           const mapped=new Map();
           for(const origin of origins){
-            let target=retainedEvidence.get(origin.resultId)??journal?.evidence.find(v=>v.alias===origin.resultId)?.target;
-            if(target)checkOrigin(origin,await store.get(target));
-            else target=await resolveOrigin(origin);
+            let target=retainedEvidence.get(origin.resultId);
+            if(previous?.evidence==='standalone'&&calibrationOrigins(previous.row.project).some(old=>same(old,origin)))
+              target=null;
+            const staged=journal?.evidence.find(v=>v.alias===origin.resultId);
+            if(staged){
+              check(target===undefined||target===staged.target,'Conflicting named Animation calibration evidence');
+              target=staged.target;
+            }
+            if(target===undefined)target=await resolveOrigin(origin);
+            if(target!==null)checkOrigin(origin,await store.get(target));
             if(mapped.has(origin.resultId))check(mapped.get(origin.resultId)===target,'calibration evidence changed');
             mapped.set(origin.resultId,target);
           }
-          evidence=[...mapped].sort(([a],[b])=>a.localeCompare(b)).map(([alias,target])=>({alias,target}));
+          const verified=[...mapped.values()].filter(target=>target!==null).length;
+          check(verified===0||verified===mapped.size,'Mixed verified and standalone named Animation evidence is unsupported');
+          evidence=verified?[...mapped].sort(([a],[b])=>a.localeCompare(b)).map(([alias,target])=>({alias,target})):'standalone';
         }
       }
       const observations=[];
@@ -1881,18 +1890,24 @@
         const relevant=link=>(!changedOnly||link.changed)&&(kind==='observations'?
           link.photos.has(alias):link.origins.some(origin=>origin.resultId===alias));
         if(!linked.some(relevant))return null;
-        const matches=new Set();
+        const matches=new Set(),standaloneOrigins=[];
         for(const {source,link} of await linkedSources()){
           if(!relevant(link))continue;
-          if(kind==='evidence'&&!link.origins.filter(origin=>origin.resultId===alias).some(origin=>
-            calibrationOrigins(source.row.project).some(v=>same(v,origin))))continue;
+          if(kind==='evidence'){
+            const exactOrigins=link.origins.filter(origin=>origin.resultId===alias&&
+              calibrationOrigins(source.row.project).some(v=>same(v,origin)));
+            if(!exactOrigins.length)continue;
+            if(source.evidence==='standalone'){
+              matches.add(null);standaloneOrigins.push(...exactOrigins);continue;
+            }
+          }
           const entries=source[kind];
           if(!Array.isArray(entries))continue;
           const target=entries.find(v=>v.alias===alias)?.target;
           if(target)matches.add(target);
         }
         check(matches.size<=1,'ambiguous named Animation resource: '+alias);
-        return matches.values().next().value??null;
+        return matches.size?{target:matches.values().next().value,standaloneOrigins}:null;
       }
       // The collection currently maps each alias to one immutable resource.
       // Opening another exact named revision must never silently substitute
@@ -1901,7 +1916,7 @@
       const importedAliases=new Set(assetPlan?.mapping.values()??[]);
       for(const alias of inventory.photos){
         let target=oldPhotos.get(alias);
-        const retained=await retainedFromAnimation(alias,'observations',!!target);
+        const retained=(await retainedFromAnimation(alias,'observations',!!target))?.target;
         check(!target||!retained||target===retained,
           'Conflicting retained Animation observation: '+alias+'; retire the conflicting working copy and retry');
         if(!target)target=retained;
@@ -1930,37 +1945,42 @@
       for(const alias of inventory.results){
         const origins=inventory.origins.filter(o=>o.resultId===alias);
         let target=oldResults.get(alias);
-        const retainedTarget=await retainedFromAnimation(alias,'evidence',!!target);
-        check(!target||!retainedTarget||target===retainedTarget,
-          'Conflicting retained Animation calibration evidence: '+alias+'; retire the conflicting working copy and retry');
-        if(!target)target=retainedTarget;
+        const retained=await retainedFromAnimation(alias,'evidence',oldResults.has(alias));
+        if(retained){
+          check(target===undefined||target===retained.target,
+            'Conflicting retained Animation calibration evidence: '+alias+'; retire the conflicting working copy and retry');
+          target=retained.target;
+        }
         const live=editorEvidence?.results.get(alias);
-        check(!target||!live||target===live,'Conflicting live Animation calibration evidence: '+alias);
-        if(live)target=live;
+        if(live){
+          check(target===undefined||target===live,'Conflicting live Animation calibration evidence: '+alias);
+          target=live;
+        }
+        const liveStandalone=origins.filter(origin=>editorEvidence?.standalone.some(old=>same(old,origin)));
+        if(liveStandalone.length){
+          check(target===undefined||target===null,'Conflicting live Animation calibration evidence: '+alias);
+          target=null;
+        }
         const physical=journalSource?.origin.resultId===alias?journalSource:null;
         if(physical){
-          check((!oldResults.has(alias)||oldResults.get(alias)===physical.target)&&
-            (!target||target===physical.target),
+          check(target===undefined||target===physical.target,
             'Conflicting temporary keyframe physical calibration evidence: '+alias);
           target=physical.target;
         }
-        if(!target&&!physical){
+        if(target===undefined){
           const saved=await readCalibrationResult(alias);
           target=saved?.resultId??null;
         }
-        if(target){
+        if(target!==null){
           const result=await store.get(target);
           for(const origin of origins)checkOrigin(origin,result);
         }else{
-          const retained=oldResults.has(alias)&&oldResults.get(alias)===null&&
-            origins.every(origin=>oldInventory.origins.some(old=>same(origin,old)));
-          const liveStandalone=editorEvidence&&origins.every(origin=>
-            editorEvidence.standalone.some(old=>same(old,origin))||
-            oldResults.has(alias)&&oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
-          const physicalStandalone=physical&&physical.target===null&&origins.every(origin=>
-            same(origin,physical.origin)||editorEvidence?.standalone.some(old=>same(old,origin))||
-            oldResults.has(alias)&&oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
-          check(standalone===true||allowedStandalone.has(alias)||retained||liveStandalone||physicalStandalone,
+          const known=origins.every(origin=>
+            retained?.standaloneOrigins.some(old=>same(old,origin))||
+            liveStandalone.some(old=>same(old,origin))||
+            physical?.target===null&&same(physical.origin,origin)||
+            oldResults.get(alias)===null&&oldInventory.origins.some(old=>same(old,origin)));
+          check(standalone===true||allowedStandalone.has(alias)||known,
             'working calibration result missing; standalone recovery must be explicit');
         }
         evidence.push({alias,target});
