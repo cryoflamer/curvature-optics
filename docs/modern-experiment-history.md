@@ -613,8 +613,27 @@ The mounted editor hydrates only after durable acknowledgement. A stale writer
 must not overwrite a newer revision. History and the checkpoint are separate
 stores: a recovery record may survive a failed Restore; it is not rolled back.
 
-Shared History browsing and export do not grant permission to manage or delete
-records. Pin/unpin, editing metadata, import, bulk cleanup and automatic History
-capture remain deferred in the shared route. Legacy History migration markers
-are not yet retired. Manual Opera acceptance and wider regression verification
-remain separate from targeted automated verification.
+Shared History supports metadata edits, pin/unpin, bulk pinning and portable
+import. Management compares the exact displayed record(s) inside the same
+History transaction as the write. A stale bulk selection fails as a unit.
+Recovery records remain pinned; unpinning a previously pinned automatic
+record promotes its retention class to manual. Physical snapshots and their
+identities remain unchanged by metadata operations. Deletion, bulk deletion
+and clear-all/clear-automatic remain disabled in the shared route pending
+complete provenance coverage.
+
+Automatic History is triggered by an acknowledged physical checkpoint, not
+merely by rendering. After the existing idle interval, the shared coordinator
+re-reads the durable checkpoint and verifies revision, payload and generation
+before recording. Camera-only changes and hydration do not create automatic
+snapshots. The History and working stores remain independent: the capture is
+observational, not a second physical writer or an atomic cross-database
+transaction. Shared manual, recovery and automatic captures do not prune
+existing records. At the automatic retention limit (200 unpinned automatic
+records by default), new automatic captures are skipped; manual saves remain
+available. This does not change the ordinary legacy route's retention policy.
+
+The old named History Library migration marker remains in Web Storage. Its
+non-destructive migration and broader provenance inventory must precede
+retirement of legacy storage. Manual Opera acceptance and wider regression
+verification remain separate from targeted automated verification.

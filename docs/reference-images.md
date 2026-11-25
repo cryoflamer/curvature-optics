@@ -749,7 +749,20 @@ ordinary saved project. Missing shared storage is not initialized by inspection;
 corruption and read failures mark the scan incomplete. Legacy workspace and
 recovery sources remain in the inventory rather than being silently discarded.
 
-Shared checkpoint and pending-save usage rows are informational at this stage:
-no direct owner navigation is offered until exact-revision opening is wired to
-the shared document selection guards. None of these reads authorizes deletion
-of an original, or writes to the Animation collection.
+In the shared route, a saved Animation use or exact shared checkpoint may
+open its referenced keyframe through the shared document selection coordinator.
+Recheck the selected original revision and decoded original, owner revision,
+frame index/key and photograph reference before selecting. A shared checkpoint
+also requires the exact normalized draft content. Opening a named use creates
+a separate linked working copy only if none exists; an existing divergent
+working copy is never overwritten or silently substituted. Instead inspect
+and open that exact shared checkpoint from its own usage relation. Selection
+of the referenced frame uses the existing acknowledged Studio checkpoint and
+presentation mechanisms.
+
+Pending-save intents, historical legacy recovery variants and archived results
+are informational until their own recovery/viewer contracts support exact
+navigation. None of these reads authorizes deletion of an original. The
+inventory still excludes inaccessible tabs and external backups; old
+single-draft and standalone Calibration evidence require further migration
+coverage.
