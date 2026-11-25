@@ -973,7 +973,7 @@ test('Apply caller forwards its guarded project identity and result linker to Mo
     '../src/ui/modern/ModernPhotoCalibrationEditor.js'),'utf8');
   const app=fs.readFileSync(path.join(__dirname,
     '../src/ui/modern/ModernApp.js'),'utf8');
-  assert.match(editor,/applyCalibrationToTarget\(\{[\s\S]*?saveDraft:\(\)=>persist\(!!sharedSelection\),\s*projectBinding,linkArchivedResult\s*\},info\.target\)/);
+  assert.match(editor,/applyCalibrationToTarget\(\{[\s\S]*?saveDraft:\(\)=>persist\(true\),\s*projectBinding,linkArchivedResult\s*\},info\.target\)/);
   assert.match(app,/archivedProjectBinding=editor\.projectBinding\?\.\(\)\|\|null/);
   assert.match(app,/await editor\.linkArchivedResult\(saved\.row\.id,archivedProjectBinding\)/);
 });
@@ -986,7 +986,7 @@ test('Apply click never schedules a racing workspace autosave beside the awaited
     editor.indexOf('syncFitControls();syncPairToolbar();',editor.indexOf("for(const event of ['click','change','input','pointerup','pointercancel','wheel'])")));
   assert.match(listener,/path\.includes\(applyButton\)/);
   assert.match(listener,/ModernCalibrationApplyScene/);
-  assert.match(editor,/revision:\(\)=>applyRevision\+':'\+loadToken,saveDraft:\(\)=>persist\(!!sharedSelection\)/);
+  assert.match(editor,/revision:\(\)=>applyRevision\+':'\+loadToken,saveDraft:\(\)=>persist\(true\)/);
 });
 
 test('Project card photographs resolve lazily by SHA-256 without saving raster bytes into project records',()=>{
