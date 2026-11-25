@@ -12243,6 +12243,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(maintenance).not_to_have_attribute('open','')
         recover=self.page.get_by_role('button',name=re.compile(r'^Recover Historical conflict'))
         expect(recover).to_be_hidden()
+        expect(maintenance.locator('summary')).to_be_visible()
         maintenance.locator('summary').click()
         recover.click()
         recovered=self.page.locator('[data-shared-animation-id^="draft_recovered_"]')
@@ -12290,6 +12291,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationTab').click()
         draft=self.page.locator('[data-shared-animation-id="draft_equivalent"]')
         expect(draft).to_be_visible(timeout=30000)
+        adopted=self.page.evaluate("""async()=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+        }""")
+        self.assertEqual(adopted['collection']['activeId'],'draft_equivalent')
+        self.assertEqual(len(adopted['collection']['workspaces']),1)
+        self.assertEqual(adopted['revision'],1)
         expect(self.page.get_by_role('button',name=re.compile(r'^Adopt '))).to_have_count(0)
         expect(self.page.locator('.modern-shared-animation-recovery')).not_to_have_attribute('open','')
         draft.click()
@@ -12475,7 +12485,13 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='scene'")
         self.page.locator('#ModernAnimationTab').click()
         expect(button).to_have_attribute('aria-label','Open saved project · New saved revision')
-        expect(self.page.locator('.modern-animation-library-card[data-animation-id="'+saved['id']+'"] .modern-animation-library-card-title')).to_have_text('New saved revision')
+        card=self.page.locator('.modern-animation-library-card[data-animation-id="'+saved['id']+'"]')
+        expect(card.locator('.modern-animation-library-card-title')).to_have_text('New saved revision')
+        expect(card.locator('.modern-animation-library-visual')).to_be_visible()
+        self.page.set_viewport_size({'width':480,'height':800})
+        expect(button).to_be_visible()
+        expect(button).to_be_enabled()
+        self.page.set_viewport_size({'width':1280,'height':900})
         button.click()
         self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
         cp=self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft()')
