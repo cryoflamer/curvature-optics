@@ -1833,6 +1833,33 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'Recovery import lost exact remapped evidence or changed active workspace');
             await rejects(()=>adapter.importAnimationRecovery(indexedDB,lease,imported,recoveryText),/identity is already used/);
             ok((await adapter.readAnimationWorkingCollection()).row.digest===imported.digest,'duplicate Recovery changed collection');
+            const live=adapter.createAnimationEditorRetention();
+            await live.bind(A.documentReference(imported,portableRecovery.id));
+            const editor=A.openSharedCollection(indexedDB,{lease,crypto,managedResources:live});
+            let edited=await editor.read(),ref=A.documentReference(edited,portableRecovery.id);
+            // Remove the only reference from the independent draft. After
+            // acknowledgement, the old observation is solely live-retained
+            // (apart from its gallery root).
+            const unlinked=A.normalize({...importedCp,savedAt:importedCp.savedAt+1,
+                draft:{...importedCp.draft,frames:importedCp.draft.frames.map(frame=>({...frame,referenceImageIds:[]}))}});
+            edited=await editor.saveSelected(edited,ref,unlinked,base);
+            edited=await editor.retire(edited,edited.receipt);
+            await rejects(()=>store.removeDocument({documentId:'observation:'+alias,expectedRevision:1}),/close the corresponding editor/);
+            // Another tab may revise attribution; Undo must still attach the
+            // observation captured at the start of the editor generation.
+            const changed=await adapter.saveObservation({id:alias,revision:2,
+                record:{...importedPhoto.row.record,title:'Edited after unlink'}},
+                {expectedRevision:1,originalId:importedPhoto.originalId});
+            ok(changed.observationId!==importedPhoto.observationId,'attribution did not create a new resource');
+            await rejects(()=>store.collectGarbage(importedPhoto.observationId),/close the corresponding editor/);
+            ref=A.documentReference(edited,portableRecovery.id);
+            const undo=A.normalize({...importedCp,savedAt:unlinked.savedAt+1});
+            edited=await editor.saveSelected(edited,ref,undo,base);
+            edited=await editor.retire(edited,edited.receipt);
+            const restoredOwner=await adapter.readAnimationWorkingCollection();
+            ok(restoredOwner.observations.some(v=>v.alias===alias&&v.target===importedPhoto.observationId),
+                'Undo substituted current gallery observation');
+            await live.reset();
             ok((await indexedDB.databases()).length===1,'managed backend opened legacy storage');
             return {valid:(await store.verifyIntegrity()).valid,revision:row.revision,pendingArchive,pendingExpected};
         }""")
@@ -2990,6 +3017,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(panel.locator('img')).to_be_visible(timeout=30000)
         expect(panel.locator('img')).to_have_attribute('alt','Retained animation original')
         original=panel.locator('img').get_attribute('src')
+        # The mounted editor must hold the immutable original observation,
+        # even when that observation has no gallery root.
+        self.assertTrue(self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            const {observations}=await adapter.readAnimationWorkingCollection();
+            const id=observations.find(v=>v.alias==='managed_retained_photo').target;
+            try{await adapter.store.collectGarbage(id);return false;}
+            catch(error){return /close the corresponding editor/.test(error.message);}
+        }"""))
         with self.page.expect_download(timeout=30000) as download:
             self.page.locator('#ModernAnimationStoryboard').get_by_role(
                 'button',name='Export without thumbnails',exact=True).click()

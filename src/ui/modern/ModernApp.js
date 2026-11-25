@@ -2084,8 +2084,9 @@
     if(calibrationEnabled&&!calibrationApi)throw Error('Shared Calibration persistence unavailable');
     var animationEnabled=calibrationEnabled&&studioDraftAutosave&&studioPersistenceApi?.createShared;
     if(calibrationEnabled&&!animationEnabled)throw Error('Shared Animation persistence unavailable');
-    function animationStore(){return studioDraftAutosave.openSharedCollection(root.indexedDB,
-      {lease,crypto:root.crypto,...(managedResources?{managedResources}:{})});}
+    var animationRetention=managedResources?managedResources.createAnimationEditorRetention():null;
+    function animationStore(retention=null){return studioDraftAutosave.openSharedCollection(root.indexedDB,
+      {lease,crypto:root.crypto,...(managedResources?{managedResources:retention||managedResources}:{})});}
     var calibrationReader=calibrationEnabled&&calibrationApi.sharedDocumentReader(root,{storage:calibrationStorage});
     var owners=calibrationEnabled?[calibrationApi.sharedSelectionRecovery(root,lease,
       {existingOnly:true,storage:calibrationStorage}),
@@ -2132,13 +2133,13 @@
     experimentPreview.ui=ui;
     experimentPreview.controller=controller;
     if(animationEnabled){
-      var sharedWriter=studioPersistenceApi.createShared({autosave:studioDraftAutosave,storage:animationStore(),
+      var sharedWriter=studioPersistenceApi.createShared({autosave:studioDraftAutosave,storage:animationStore(animationRetention),
         selection:{coordinate,check:()=>{lease.check(true);if(!current())throw Error('Animation lifetime ended');},
           captureBase:ref=>controller.captureSelectionBase('animation',ref),
           acknowledge:receipt=>controller.acknowledgeDocumentRevision('animation',receipt)},
         onChange:function(){syncPreviewUnloadWarning();syncStudioOpenedProject();}
       });
-      experimentPreview.animationContext={lease,coordinate,makeStore:animationStore,writer:sharedWriter,
+      experimentPreview.animationContext={lease,coordinate,makeStore:animationStore,writer:sharedWriter,retention:animationRetention,
         row:null,inventory:null,inventoryError:null,named:null,namedError:null,busy:false,message:'',error:false};
     }
     if(calibrationEnabled)experimentPreview.calibrationContext={
@@ -3501,6 +3502,7 @@
       experimentPreview.status=selected.status;
     }
     try{
+      if(ctx.retention)await ctx.retention.bind(ref);
       var cp=await ctx.writer.bind(ref);
       if(experimentPreview.status==='suspended')throw Error('Animation lifetime ended');
       ctx.row=ctx.writer.acknowledgedRow();studioWorkspaces=ctx.row.collection;
@@ -3536,6 +3538,7 @@
       if(showEditor)setStudioView('editor',true);
       else setStudioView('library',false,null,true);
     }else{
+      if(ctx.retention)await ctx.retention.reset();
       studioActiveDemo=null;studioWorkspaceReady=false;studioWorkspaceId=null;
       studioDraft=studioApi.blank();studioSelectedKey=null;studioPrepared=null;
       studioLibraryActive=null;studioLibraryPending=null;
@@ -7047,6 +7050,7 @@
         if(host.__studioHistoryAction)host.__studioHistoryAction(direction);
       });
     }
+    var retentionWorkspace=studioWorkspaceId;
     var studioEditing=studioEditingApi.create({
       studio:studioApi,
       readOnly:function(){return !!studioActiveDemo;},
@@ -7282,7 +7286,10 @@
       selectedKey:studioSelectedKey,diagnosticTransition:studioDiagnosticTransition,entries:entries,
       resolveFrame:function(frame){return resolveStudioKeyframe(frame,entries);},
       listReferenceImages:function(){return referenceLibrary.list(root.indexedDB);},
-      getReferenceImage:function(id){return referenceLibrary.get(root.indexedDB,id);},
+      getReferenceImage:function(id){
+        var retention=experimentPreview.animationContext?.retention;
+        return retention&&!studioActiveDemo?retention.photograph(id,retentionWorkspace):referenceLibrary.get(root.indexedDB,id);
+      },
       sequences:studioApi.findSequences(studioDraft),activeFrames:studioApi.activeFrames(studioDraft),
       canUndo:!!studioEditHistory&&studioEditHistory.past.length>0,
       canRedo:!!studioEditHistory&&studioEditHistory.future.length>0,

@@ -615,3 +615,15 @@ proof that an application editor has enumerated all of its dependencies;
 callers must protect the resource before publishing it into live state and
 keep current, Undo/Redo, and recovery resources until no longer needed.
 Destructive application routes remain disabled pending that integration.
+
+
+The managed Animation editor binds a transient retention scope to the exact
+acknowledged workspace revision before publishing its live draft. The scope
+retains immutable observation versions across autosave and unlink/Undo/Redo;
+new picker originals are acquired and verified before attachment. The writer
+uses the captured mapping when an alias reappears after unlink, never silently
+substituting a newer gallery version. The scope conservatively retains all
+observations seen during the workspace generation until a different workspace
+is bound or the tab terminates; exact Undo eviction/pruning and Calibration
+result/physical provenance retention are not yet integrated. Named roots and
+working journals remain durable owners. Production deletion remains disabled.

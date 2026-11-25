@@ -1673,7 +1673,7 @@
       return value;
     }
     async function saveAnimationWorkingCollection(input,{expectedRevision=0,standalone=false,standaloneResultIds=[],
-      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null}={}){
+      expectedRow=undefined,guard=()=>{},lease=null,animationHandoff=false,assetPlan=null,editorPhotos=null}={}){
       draftContracts();
       const allowedStandalone=explicitStandaloneIds(standaloneResultIds);
       const row=await drafts.verifySharedRow(input,env.crypto);
@@ -1746,6 +1746,13 @@
         check(!supplied||!target||supplied===target,
           'Conflicting retained Animation observation: '+alias+'; retire the conflicting working copy and retry');
         if(!target)target=supplied;
+        const live=editorPhotos?.get(alias);
+        if(live){
+          check(!target||target===live,'Conflicting retained Animation observation: '+alias);
+          const observation=await store.get(live);
+          check(observation?.type===OBSERVATION&&observation.payload.id===alias,'live editor observation mismatch');
+          target=live;
+        }
         if(!target){
           const graph=await store.readDocumentGraph(observationId(alias));
           check(graph&&graph.document.kind==='observation','required working observation missing: '+alias);
@@ -1793,7 +1800,7 @@
       const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }
-    function createAnimationWorkingPort(db,lease,assetPlan=null){
+    function createAnimationWorkingPort(db,lease,assetPlan=null,editorPhotos=null){
       draftContracts();
       check(db===env.indexedDB,'Animation working database context mismatch');
       check(lease?.sessionId==='shared'&&typeof lease.check==='function'&&typeof lease.track==='function'&&
@@ -1811,9 +1818,60 @@
           check(same(previous?.row??null,before),'Shared Animation collection CAS conflict; evidence retained');
           check(previous||row.revision===1,'initial Animation working revision must be one');
           await saveAnimationWorkingCollection(row,{expectedRevision:previous?.managedRevision??0,
-            expectedRow:before,guard,lease,animationHandoff:true,assetPlan});
+            expectedRow:before,guard,lease,animationHandoff:true,assetPlan,
+            editorPhotos:editorPhotos?.()??null});
         }
       });
+    }
+    // Retain exact observations used by the live Animation editor, including
+    // ones removed from the durable draft but still reachable via Undo/Redo.
+    // A generation ends on switching to another workspace, not on autosave.
+    function createAnimationEditorRetention(){
+      const scope=store.createRetentionScope();
+      let owner=null,photos=new Map(),tail=Promise.resolve();
+      function serialize(operation){
+        const next=tail.then(operation);tail=next.catch(()=>{});return next;
+      }
+      function bind(ref){
+        return serialize(()=>store.withDocumentRetained(draftsId,async graph=>{
+          const value=await loadAnimationWorkingCollection(async()=>graph,false);
+          check(value&&same(drafts.documentReference(value.row,ref.id),ref),
+            'Animation selection changed before live resource retention');
+          const cp=drafts.getWorkspace(value.row.collection,ref.id);
+          const ids=new Set(cp.draft.frames.flatMap(frame=>frame.referenceImageIds||[]));
+          const next=owner===ref.id?new Map(photos):new Map();
+          for(const alias of ids){
+            const target=value.observations.find(entry=>entry.alias===alias)?.target;
+            check(target&&(!next.has(alias)||next.get(alias)===target),
+              'Conflicting retained Animation observation: '+alias);
+            next.set(alias,target);
+          }
+          await scope.replace([...next.values()]);photos=next;owner=ref.id;
+        }));
+      }
+      function photograph(alias,workspace){
+        return serialize(async()=>{
+          check(owner&&owner===workspace,'Animation editor changed before photo retention');
+          if(photos.has(alias)){
+            const observation=await store.get(photos.get(alias));
+            check(observation?.type===OBSERVATION&&observation.payload.id===alias,'live editor observation missing');
+            const original=await store.get(observation.payload.originalId);
+            const record=await materializeObservation({resources:[observation,original]},observation);
+            return {id:alias,record};
+          }
+          return store.withDocumentRetained(observationId(alias),async graph=>{
+            const value=await loadObservation(graph,alias);
+            const next=new Map(photos);next.set(alias,value.observationId);
+            await scope.replace([...next.values()]);photos=next;
+            return value.row;
+          });
+        });
+      }
+      function reset(){
+        return serialize(async()=>{await scope.replace([]);photos=new Map();owner=null;});
+      }
+      return Object.freeze({bind,photograph,reset,
+        createAnimationWorkingPort:(db,lease)=>createAnimationWorkingPort(db,lease,null,()=>new Map(photos))});
     }
     // One-shot Recovery import reuses the shared collection transition engine.
     // Its staged assets exist only in this operation, never as a second writer.
@@ -1943,7 +2001,7 @@
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
     return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,
-      saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,importAnimationRecovery,
+      saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,createAnimationEditorRetention,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createAnimationLibraryPort,
