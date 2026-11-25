@@ -817,3 +817,51 @@ test('History provenance inspection never opens absent or unsupported databases'
   await assert.rejects(history.inspectProvenance(db),/Unsupported History database version/);
   assert.equal(opens,0);
 });
+
+test('History coordinates schema opening and all writes with the shared backup barrier',async()=>{
+  const db=indexedDB(),requests=[];
+  const locks={request(name,options,action){
+    requests.push(options.mode);
+    return action({name,mode:options.mode});
+  }};
+  const store=history.create({indexedDB:db,lockManager:locks});
+  assert.equal(store.coordination,'participating-writer');
+  await store.open();
+  const saved=await store.record(experiment(),'manual',null);
+  await store.list();
+  await store.updateMetadataExact(saved.entry,'Renamed','');
+  await store.clearAll();
+  assert.deepEqual(requests,['shared','shared','shared','shared']);
+  assert.equal(history.create({indexedDB:db,lockManager:null}).coordination,'uncoordinated');
+  assert.throws(()=>history.create({indexedDB:db,lockManager:{}}),/Web Locks unavailable/);
+});
+
+test('History retains its writer lock between request error and transaction abort',async()=>{
+  let held=false,tx;
+  const locks={async request(name,options,action){
+    held=true;
+    try{return await action({name,mode:options.mode});}finally{held=false;}
+  }};
+  const db={open(){
+    const req={};
+    queueMicrotask(()=>{
+      req.result={close(){},transaction(){
+        tx={objectStore(){return {getAll(){return {};}};}};
+        return tx;
+      }};
+      req.onsuccess();
+    });
+    return req;
+  }};
+  const store=history.create({indexedDB:db,lockManager:locks});
+  const pending=store.clearAll();
+  const failed=assert.rejects(pending,/History transaction failed/);
+  while(!tx)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(held,true);
+  tx.onerror();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(held,true,'request error is not durable abort acknowledgement');
+  tx.onabort();
+  await failed;
+  assert.equal(held,false);
+});

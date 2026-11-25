@@ -13,10 +13,10 @@
   if(!thumbnail&&typeof module==='object'&&module.exports)thumbnail=require('./ModernExperimentThumbnail');
   var naming=root.CurvatureModernSemanticNaming;
   if(!naming&&typeof module==='object'&&module.exports)naming=require('./ModernSemanticNaming');
-  var api=factory(state,fp,thumbnail,naming);
+  var api=factory(root,state,fp,thumbnail,naming);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernExperimentHistory=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi,naming){
+}(typeof globalThis!=='undefined'?globalThis:this,function(root,state,fp,thumbnailApi,naming){
   'use strict';
   var DATABASE='curvature-modern-experiment-history',DB_VERSION=2,VERSION=1,STORE='snapshots';
   var CONTROL='migration',LEGACY_RECEIPT='legacy-named-library-v1';
@@ -135,8 +135,16 @@
     var factory=options.indexedDB,now=options.now||Date.now;
     var maxAuto=options.maxAutoEntries===undefined?MAX_AUTO:options.maxAutoEntries;
     if(!Number.isInteger(maxAuto)||maxAuto<1||maxAuto>10000)throw RangeError('Invalid auto-history limit');
+    // Resolve the barrier at construction time, after the browser scripts
+    // have loaded. No lock means ordinary compatibility mode, not a proof
+    // that a cross-store snapshot or deletion can safely proceed.
+    const locks=Object.hasOwn(options,'lockManager')?options.lockManager:root.navigator?.locks;
+    const barrier=locks?(typeof module==='object'&&module.exports?
+      require('../../storage/ModernBackupWriteBarrier'):root.CurvatureModernBackupWriteBarrier):null;
+    if(locks&&!barrier)throw Error('History write barrier unavailable');
+    const writer=locks?barrier.create(locks).registerWriter('experiment.history'):null;
     var connection=null,opening=null,chain=Promise.resolve();
-    function open(){
+    function openRaw(){
       if(connection)return Promise.resolve(connection);
       if(opening)return opening;
       if(!factory||typeof factory.open!=='function')return Promise.reject(Error('IndexedDB unavailable'));
@@ -164,21 +172,34 @@
       }).catch(function(error){opening=null;throw error;});
       return opening;
     }
+    function open(){
+      // Opening can create or upgrade the schema; hold the writer lock
+      // until the versionchange transaction has completed.
+      return connection?Promise.resolve(connection):writer?writer.commit(openRaw):openRaw();
+    }
     function serialize(operation){
       var next=chain.then(operation);
       chain=next.catch(function(){});
       return next;
     }
     function transact(mode,work,withControl=false){
-      return open().then(function(db){return new Promise(function(resolve,reject){
+      function perform(){return openRaw().then(function(db){return new Promise(function(resolve,reject){
         var tx;
         try{tx=db.transaction(withControl?[STORE,CONTROL]:STORE,mode);}catch(error){reject(error);return;}
-        var store=tx.objectStore(STORE),result;
-        tx.oncomplete=function(){resolve(result);};
-        tx.onerror=function(){reject(tx.error||Error('History transaction failed'));};
-        tx.onabort=function(){reject(tx.error||Error('History transaction aborted'));};
-        try{work(store,function(value){result=value;},tx);}catch(error){tx.abort();reject(error);}
-      });});
+        var store=tx.objectStore(STORE),result,failure=null;
+        tx.oncomplete=function(){if(failure)reject(failure);else resolve(result);};
+        // A request error bubbles before the transaction's actual abort.
+        // Releasing the barrier on that event would expose a partial write.
+        tx.onerror=function(){failure=failure||tx.error||Error('History transaction failed');};
+        tx.onabort=function(){reject(failure||tx.error||Error('History transaction aborted'));};
+        try{work(store,function(value){result=value;},tx);}
+        catch(error){failure=error;try{tx.abort();}catch(abortError){reject(failure);}}
+      });});}
+      if(mode==='readwrite')return writer?writer.commit(perform):perform();
+      // Already-open reads do not acquire the writer lock. Observational
+      // reads under an exclusive barrier must use inspectProvenance instead
+      // of this potentially schema-creating API.
+      return open().then(perform);
     }
     function all(){return transact('readonly',function(store,set){
       var request=store.getAll();
@@ -432,7 +453,7 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,migrationReceipt,migrateLegacy,updateMetadata:updateMetadata,updateMetadataExact,setPinnedExact,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
+    return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',open:open,list:list,get:get,record:record,importEntries:importEntries,migrationReceipt,migrateLegacy,updateMetadata:updateMetadata,updateMetadataExact,setPinnedExact,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
   return Object.freeze({DATABASE:DATABASE,DB_VERSION,VERSION:VERSION,STORE:STORE,CONTROL,LEGACY_RECEIPT,
     MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,

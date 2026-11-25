@@ -14105,6 +14105,43 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate(read)['doc'],restored['doc'])
         self.assertEqual(self.page.url,url)
 
+    def test_history_writer_waits_for_exclusive_backup_barrier(self):
+        """A real History mutation waits for the origin-wide exclusive lock."""
+        self.open_modern()
+        self.page.evaluate("""async()=>{
+            const history=CurvatureModernApp.getHistoryStore();
+            await history.list();
+            if(history.coordination!=='participating-writer')throw Error('History writer not coordinated');
+            window.__historyBefore=await history.list();
+            const gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            window.__historyEntered=false;
+            window.__historyTask=gate.snapshot(async()=>{
+                window.__historyEntered=true;
+                await new Promise(resolve=>window.__historyRelease=resolve);
+                return 'released';
+            });
+        }""")
+        self.page.wait_for_function('window.__historyEntered===true')
+        # The observer in this tab holds the exclusive lock. A separate
+        # History adapter has to queue a genuine shared writer request.
+        self.page.evaluate("""()=>{
+            const store=CurvatureModernExperimentHistory.create({indexedDB});
+            const snapshot=CurvatureModernDemoCatalog.load()[0].project.baseExperiment;
+            window.__historySettled=false;
+            window.__historyWrite=store.importEntries([{experiment:snapshot,name:'Coordinated import'}])
+                .then(result=>{window.__historySettled=true;return result;});
+        }""")
+        self.page.wait_for_function("""async()=> (await navigator.locks.query()).pending.some(
+            lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME&&lock.mode==='shared')""")
+        self.assertFalse(self.page.evaluate('window.__historySettled'))
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getHistoryStore().list()'),
+            self.page.evaluate('window.__historyBefore'))
+        self.page.evaluate("window.__historyRelease()")
+        self.assertEqual(self.page.evaluate('window.__historyWrite')['created'],1)
+        self.assertEqual(self.page.evaluate('window.__historyTask')['value'],'released')
+        self.assertTrue(self.page.evaluate("""async()=> (await CurvatureModernApp.getHistoryStore().list())
+            .some(row=>row.name==='Coordinated import')"""))
+
     def test_shared_history_exact_management_and_import(self):
         """Shared History metadata/pinning/import are independent of physical session; stale edits fail."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
