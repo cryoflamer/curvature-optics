@@ -560,3 +560,14 @@ adoption remain disabled. The route is a protected integration rehearsal,
 not automatic production migration or approval to change the marker. Foreign
 standalone provenance, remaining export/recovery paths, retention and manual
 acceptance still require qualification.
+
+
+### Managed working presentation originals
+
+Interactive Preview, presentation PNG and Video, and working Storyboard JSON
+use the same acknowledged working-Animation reference resolver. It verifies
+the selected workspace revision and its retained evidence, waits for a pending
+working save where necessary, and refuses if the working document changes.
+Gallery lookup is not a fallback on the managed route. Detached demos retain
+their shipped asset source and the existing non-managed route is unchanged.
+The existing portable asset completeness and size checks still apply.

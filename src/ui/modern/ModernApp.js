@@ -5114,6 +5114,39 @@
   function studioExportProject(id){
     return studioPrepared&&(studioPlayback&&studioPlayback.project||studioPrepared)||studioApi.build(studioDraft,id);
   }
+  // Managed presentation consumers resolve the acknowledged working owner,
+  // never the mutable gallery alias. Keep the existing portable asset checks.
+  async function collectStudioReferenceImages(project,cancelled=()=>false){
+    var entries=[{project}],ids=studioLibrary.referenceIds(entries);
+    if(!ids.length)return [];
+    var demo=studioActiveDemo,draft=studioDraft,workspaceId=studioWorkspaceId;
+    function check(){
+      if(cancelled()||studioActiveDemo!==demo||studioDraft!==draft||studioWorkspaceId!==workspaceId)
+        throw Error('Reference collection cancelled; Animation changed');
+    }
+    if(managedResources&&!demo){
+      var ctx=experimentPreview.animationContext,status=ctx?.writer.state();
+      if(!status?.reference||status.error||!studioWorkspaceReady)
+        throw Error('An acknowledged working Animation is required for original photographs');
+      if((status.unsaved||status.busy)&&!await persistStudioWorkspace({requireDurable:true}))
+        throw Error('Working Animation is not acknowledged; retry the save');
+      check();
+      var reference=ctx.writer.state().reference;
+      if(!reference||reference.id!==workspaceId)
+        throw Error('Working Animation selection changed; reopen it');
+      var records=await studioLibrary.workingReferences(root.indexedDB,reference,project);
+      check();
+      var byId=new Map(records.map(record=>[record.id,record]));
+      return studioLibrary.collectReferences(entries,id=>{
+        check();var record=byId.get(id);return record?{record}:null;
+      });
+    }
+    return studioLibrary.collectReferences(entries,function(id){
+      if(cancelled())throw Error('Cancelled');
+      if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
+      return referenceLibrary.get(root.indexedDB,id);
+    });
+  }
   // Browser-local export preferences, independent of project and job state.
   function bindStudioExportPreferences(kind){
     var prefix='ModernAnimation'+kind+'Export',key='curvature.animation.export.'+kind.toLowerCase()+'.v1';
@@ -5386,12 +5419,8 @@
           plan.sides.length+' view(s) · '+exportRendererLabel(plan.renderMethod)+'.');
         var extra=selection.extra||{},cameraHud=!!(newUiEl('ModernAnimationVideoExportCameraHud')||{}).checked,appearance=studioHudAppearance(),includeTarget=!!(newUiEl('ModernAnimationVideoExportTarget')||{}).checked,selectedTarget=targetIndicatorSelection;
         if(extra.presentation&&extra.presentation.referenceLayout!=='hidden'){
-          var demo=studioActiveDemo;message('Collecting original reference photographs…');
-          extra.referenceImages=await studioLibrary.collectReferences([{project:plan.project}],function(id){
-            if(task.cancelled)throw Error('Cancelled');
-            if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
-            return referenceLibrary.get(root.indexedDB,id);
-          });
+          message('Collecting original reference photographs…');
+          extra.referenceImages=await collectStudioReferenceImages(plan.project,()=>task.cancelled);
         }
         if(task.cancelled)return;
         var result=await controller.start({project:plan.project,fps:plan.fps,...extra,
@@ -5573,13 +5602,8 @@
           if(task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
         }
         if(full&&extra.presentation.referenceLayout!=='hidden'){
-          var demo=studioActiveDemo;
           message('Collecting original reference photographs…');
-          extra.referenceImages=await studioLibrary.collectReferences([{project:project}],function(id){
-            if(task.cancelled)throw Error('Cancelled');
-            if(demo){var record=(demo.referenceImages||[]).find(function(r){return r.id===id;});return Promise.resolve(record?{record:record}:null);}
-            return referenceLibrary.get(root.indexedDB,id);
-          });
+          extra.referenceImages=await collectStudioReferenceImages(project,()=>task.cancelled);
         }
         if(task.cancelled){message('PNG export cancelled; no ZIP committed.','warning');return;}
         var plan=studioFrameExportApi.plan(project,{fps:fps,width:size[0],height:size[1],streaming:streaming,...extra});
@@ -5754,6 +5778,14 @@
       get:function(id){
         if(studioActiveDemo){var record=(studioActiveDemo.referenceImages||[]).find(function(r){return r.id===id;});
           return Promise.resolve(record?{record:record,revision:1}:null);}
+        if(managedResources){
+          var project=studioPrepared;
+          if(!project)return Promise.resolve(null);
+          return collectStudioReferenceImages(project,()=>studioPrepared!==project).then(function(records){
+            var record=records.find(function(r){return r.id===id;});
+            return record?{record:record}:null;
+          });
+        }
         return referenceLibrary.get(root.indexedDB,id);
       }});
   }
@@ -6082,9 +6114,7 @@
         var now=Date.now();
         var entry={version:1,id:project.id,project:project,quality:quality,
           createdAt:now,updatedAt:now,cover:record&&record.cover};
-        if(studioLibrary.referenceIds([entry]).length)return studioLibrary.collectReferences([entry],function(id){
-          return referenceLibrary.get(root.indexedDB,id);
-        }).then(function(assets){
+        if(studioLibrary.referenceIds([entry]).length)return collectStudioReferenceImages(project,()=>!current()).then(function(assets){
           if(!current())throw Error('Storyboard export cancelled');
           var result=studioLibrary.exportPortable([entry],lookup,{complete:complete,referenceImages:assets});
           downloadHistoryJson(result,studioLibraryActionsApi.exportFilename(result));

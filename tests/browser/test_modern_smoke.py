@@ -2818,6 +2818,16 @@ class ModernBrowserSmoke(unittest.TestCase):
             const record={id:'managed_preview_photo',version:1,title:'Managed preview original',
                 original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:3}};
             await adapter.saveObservation({id:record.id,revision:1,record});
+            const retained={...record,id:'managed_retained_photo',title:'Retained animation original'};
+            await adapter.saveObservation({id:retained.id,revision:1,record:retained});
+            const P=CurvatureModernAnimationProject,L=CurvatureModernAnimationLibrary;
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=P.createV2(contract,[{experiment},{experiment}],{
+                id:'managed_retained_animation',name:'Managed retained Animation'});
+            const linked=P.validate({...project,keyframes:project.keyframes.map(f=>({
+                ...f,referenceImageIds:[retained.id]}))});
+            await adapter.saveAnimation(L.record(linked,'auto',linked.id,100,100,null));
+            await adapter.store.removeDocument({documentId:'observation:'+retained.id,expectedRevision:1});
             const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
             localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
             return {digest:row.digest};
@@ -2878,6 +2888,22 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),animation_id)
         expect(self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)).to_have_value(
             'Managed working animation',timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        self.page.locator('[data-shared-named-animation-id="managed_retained_animation"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
+        self.page.locator('#ModernAnimationViewPreview').click()
+        expect(self.page.locator('#ModernAnimationPreviewView')).to_be_visible()
+        self.page.locator('#ModernAnimationReferenceLayout').select_option('side')
+        panel=self.page.locator('#ModernAnimationReferencePanel')
+        expect(panel.locator('img')).to_be_visible(timeout=30000)
+        expect(panel.locator('img')).to_have_attribute('alt','Retained animation original')
+        original=panel.locator('img').get_attribute('src')
+        with self.page.expect_download(timeout=30000) as download:
+            self.page.locator('#ModernAnimationStoryboard').get_by_role(
+                'button',name='Export without thumbnails',exact=True).click()
+        exported=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(exported['referenceImages'][0]['original']['dataUrl'],original)
+        self.assertEqual(exported['referenceImages'][0]['title'],'Retained animation original')
         self.assertTrue(self.page.evaluate("""async()=> (await indexedDB.databases()).every(db=>
             [CurvatureModernManagedObjectStore.DATABASE,CurvatureModernUiSessionStore.DATABASE].includes(db.name))"""),
             self.page.evaluate('async()=>await indexedDB.databases()'))
