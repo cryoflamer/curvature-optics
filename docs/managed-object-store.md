@@ -360,3 +360,25 @@ collapsed onto the same remapped observation. Whole-collection CAS guards
 both mutations and no-op reimports; quotas and all planned writes commit
 together. This is a portable merge, not a complete-profile restore or
 automatic production migration.
+
+### Image Library application port
+
+`ModernReferenceImageLibrary.createPort({managedResources})` exposes the
+existing db-first library contract backed by the managed adapter, with
+classification already supported. It is bound to the injected IndexedDB
+factory; a mismatched context or missing dependency is an error, not a
+legacy fallback. Calibration lookup chooses a deterministic current alias
+after verified identity and matching bytes, and ingestion returns the
+incoming attribution separately. Existing caller decoder callbacks are
+honored. Metadata-only updates retain classification, and revisioned
+classification and portable backup operations retain their existing shapes.
+Deletion still refuses.
+
+`inspectDocumentGraph` is an explicitly observational, existing-database-only
+read. It never creates/upgrades storage or requests the shared writer lock,
+so a coordinated read-only usage/backup snapshot can invoke it while holding
+the exclusive barrier. It validates the same revision-consistent closure as
+the normal read; an absent database returns null, an unsupported version or
+concurrent failed open refuses. The Image Library port uses it for
+`inspectOriginal`. This does not migrate the old Where used? scan to the
+managed graph or authorize deletion. No default route has changed.

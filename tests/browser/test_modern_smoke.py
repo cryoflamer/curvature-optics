@@ -623,6 +623,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/animation/ModernAnimationContract.js',
             'src/animation/ModernAnimationProject.js',
             'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
         ]:
@@ -634,6 +635,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
                 throw Error('Expected refusal: '+pattern);
             };
+            const libraryPort=CurvatureModernReferenceImageLibrary.createPort({managedResources:adapter});
+            await rejects(async()=>CurvatureModernReferenceImageLibrary.createPort(),/explicit managed Image Library/i);
+            ok(await libraryPort.inspectOriginal(indexedDB,'absent')===null&&
+                !(await indexedDB.databases()).length,'observational read created database');
             const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
                 CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
                 showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
@@ -836,6 +841,28 @@ class ModernBrowserSmoke(unittest.TestCase):
             const exported=await adapter.exportObservationBackup();
             ok(exported.observations.find(v=>v.id==='second_asset').record.original.dataUrl===otherOriginal.dataUrl,
                 'portable export altered exact original');
+            const verify=r=>CurvatureModernReferenceImageImport.verifyOriginal(r,window);
+            ok((await libraryPort.annotationStatus(indexedDB)).enabled,'managed classification unavailable');
+            const current=await libraryPort.get(indexedDB,'second_asset');
+            const metadataOnly=await libraryPort.update(indexedDB,current.id,current.revision,{title:'Port edit'});
+            ok(metadataOnly.revision===current.revision+1&&
+                (await libraryPort.get(indexedDB,current.id)).kind==='diagram','port edit lost classification');
+            const identity=await CurvatureModernReferenceImageImport.identify(record,window);
+            const found=await libraryPort.findOriginal(indexedDB,identity,crypto,verify);
+            ok(found.id==='independent_photo'&&found.record.original.dataUrl===original.dataUrl,'deterministic original lookup failed');
+            const ensured=await libraryPort.ensureOriginal(indexedDB,{...record,id:'separate_source'},crypto,verify);
+            ok(ensured.reused&&ensured.row.id===found.id&&ensured.source.id==='separate_source','ingestion port shape failed');
+            const fromPort=await libraryPort.exportBackup(indexedDB);
+            const merged=await libraryPort.restoreBackup(indexedDB,fromPort,crypto,verify);
+            ok(merged.created===0&&merged.annotationsAdded===0,'backup port was not idempotent');
+            const mapping=await libraryPort.importAssets(indexedDB,[{...record,id:'independent_photo',title:'Independent attribution'}],crypto);
+            ok(mapping.get('independent_photo')==='independent_photo','portable image port mapping changed');
+            await rejects(()=>libraryPort.get({},'photo_b'),/context mismatch/);
+            await rejects(()=>libraryPort.remove(indexedDB,'photo_b'),/deletion is disabled/);
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspected=await barrier.snapshot(()=>libraryPort.inspectOriginal(indexedDB,'photo_b'));
+            ok(inspected.value.record.original.dataUrl===original.dataUrl&&
+                libraryPort.coordination==='participating-writer','exclusive observational read failed');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};

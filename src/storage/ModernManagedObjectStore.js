@@ -21,14 +21,14 @@
       req.onerror=()=>reject(req.error||Error('IndexedDB request failed'));
     });
   }
-  function open(indexedDB){
+  function open(indexedDB,existingOnly=false){
     return new Promise((resolve,reject)=>{
       const req=indexedDB.open(DATABASE,VERSION);
       let blocked=false;
       req.onblocked=()=>{blocked=true;reject(Error('Managed Object Store: database upgrade blocked; close other tabs and retry'));};
       req.onerror=()=>reject(req.error);
       req.onupgradeneeded=event=>{
-        if(event.oldVersion!==0){req.transaction.abort();return;}
+        if(existingOnly||event.oldVersion!==0){req.transaction.abort();return;}
         const db=req.result;
         db.createObjectStore('documents',{keyPath:'id'});
         db.createObjectStore('objects',{keyPath:'id'});
@@ -45,8 +45,8 @@
       };
     });
   }
-  async function transaction(indexedDB,mode,work){
-    const db=await open(indexedDB);
+  async function transaction(indexedDB,mode,work,existingOnly=false){
+    const db=await open(indexedDB,existingOnly);
     try{
       const tx=db.transaction(STORES,mode);
       const done=new Promise((resolve,reject)=>{
@@ -377,8 +377,21 @@
     // Read a document and its entire strong closure from one IDB snapshot.
     // Separate getDocument()/get() calls cannot provide revision consistency.
     async function readDocumentGraph(id){
+      return readGraph(id,work=>run('readonly',work));
+    }
+    // Observational reads inside an exclusive backup/usage barrier must
+    // not request the shared writer lock or create a database.
+    async function inspectDocumentGraph(id){
       token(id,'document ID');
-      return run('readonly',async stores=>{
+      check(typeof env.indexedDB.databases==='function','database inventory unavailable');
+      const existing=(await env.indexedDB.databases()).find(db=>db.name===DATABASE);
+      if(!existing)return null;
+      check(existing.version===VERSION,'unsupported managed database version');
+      return readGraph(id,work=>transaction(env.indexedDB,'readonly',work,true));
+    }
+    async function readGraph(id,read){
+      token(id,'document ID');
+      return read(async stores=>{
         const g=await graph(stores);inspect(g,types);
         const doc=g.docs.get(id);
         if(!doc||doc.deleted)return null;
@@ -651,7 +664,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectUsage,
+      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

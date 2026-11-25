@@ -439,6 +439,12 @@
       function(b){return b.toString(16).padStart(2,'0');}).join('');
     return images.validId('reference_'+token);
   }
-  return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,
+  // Explicit injection only; startup must coordinate all owners.
+  function createPort({managedResources}={}){
+    if(typeof managedResources?.createImageLibraryPort!=='function')
+      throw Error('Explicit managed Image Library port required');
+    return managedResources.createImageLibraryPort();
+  }
+  return Object.freeze({DATABASE:DATABASE,STORE:STORE,ANNOTATIONS:ANNOTATIONS,VERSION_ANNOTATED:VERSION_ANNOTATED,KINDS:KINDS.slice(),MAX_ITEMS:MAX_ITEMS,MAX_CHARS:MAX_CHARS,createPort,
     list:list,get:get,inspectOriginal,create:create,importAssets:importAssets,findOriginal:findOriginal,ensureOriginal:ensureOriginal,update:update,remove:remove,edited:edited,makeId:makeId,quota:quota,annotationQuota:annotationQuota,annotation:annotation,annotationStatus:annotationStatus,enableAnnotations:enableAnnotations,exportBackup:exportBackup,setAnnotation:setAnnotation,updateDetails:updateDetails,validateBackup:validateBackup,restoreBackup:restoreBackup});
 }));

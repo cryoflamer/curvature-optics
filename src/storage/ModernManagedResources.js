@@ -597,7 +597,12 @@
       return materializeOriginal(original,v.id,v.attribution,v.thumbnail,cache);
     }
     async function readObservation(id){
-      const graph=await store.readDocumentGraph(observationId(id));
+      return loadObservation(await store.readDocumentGraph(observationId(id)),id);
+    }
+    async function inspectObservation(id){
+      return loadObservation(await store.inspectDocumentGraph(observationId(id)),id);
+    }
+    async function loadObservation(graph,id){
       if(!graph)return null;
       check(graph.document.kind==='observation'&&graph.document.references.length===1,'invalid observation root');
       const observation=pick(graph,'observation',OBSERVATION),v=observation.payload;
@@ -607,6 +612,82 @@
       const metadata=graph.document.metadata;
       return {row:{id,revision:metadata.revision,record,...classification(metadata)},
         observationId:observation.id,originalId:original.id,managedRevision:graph.document.revision};
+    }
+    // Gallery lookup, not a search of retired or private archived evidence.
+    async function findObservationOriginal(identity){
+      const wanted=images.validateIdentity(identity),existing=await observationInventory();
+      let first=null,firstBlob=null;
+      for(const value of existing){
+        const original=await store.get(value.originalId);
+        check(original?.type===ORIGINAL,'observation original unavailable');
+        if(original.payload.identity.sha256!==wanted.sha256)continue;
+        check(same(original.payload.identity,wanted),'reference photo identity collision or inconsistent raster');
+        if(firstBlob)check(await bytesEqual(firstBlob,original.payload.blob),'reference photo identity collision');
+        else{first=value;firstBlob=original.payload.blob;}
+      }
+      const after=await store.listDocuments('observation');
+      const expected=observationExpected(existing).documents;
+      const order=rows=>rows.map(v=>[v.id,v.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
+      check(same(order(after),order(expected)),'observation inventory changed; reload and retry');
+      return first;
+    }
+    // Existing consumers keep db-first signatures. Never open a legacy DB.
+    function createImageLibraryPort(){
+      function bound(db){check(db===env.indexedDB,'Image Library database context mismatch');}
+      function originalRow(row){return {id:row.id,revision:row.revision,record:row.record};}
+      function annotationRow(row){return {kind:row.kind,tags:row.tags,collections:row.collections,
+        annotationRevision:row.annotationRevision};}
+      async function get(db,id){
+        bound(db);const value=await readObservation(id);return value?.row??null;
+      }
+      async function inspectOriginal(db,id){
+        bound(db);const value=await inspectObservation(id);return value?.row??null;
+      }
+      function decoder(verify){check(typeof verify==='function','Original decoder required');return verify;}
+      return Object.freeze({
+        storageKind:'managed',coordination:store.coordination,
+        KINDS:library.KINDS,MAX_ITEMS:library.MAX_ITEMS,MAX_CHARS:library.MAX_CHARS,
+        makeId:library.makeId,validateBackup:library.validateBackup,annotation:library.annotation,
+        edited:library.edited,quota:library.quota,annotationQuota:library.annotationQuota,
+        list:async db=>{bound(db);return (await listObservations()).map(v=>v.row);},
+        get,inspectOriginal,
+        create:async(db,record)=>{bound(db);return originalRow((await createObservation(record)).row);},
+        importAssets:async(db,records)=>{bound(db);return importObservationAssets(records);},
+        findOriginal:async(db,identity,_crypto,verify)=>{
+          bound(db);decoder(verify);
+          const found=await findObservationOriginal(identity);
+          if(!found)return null;
+          await verify(found.row.record);return originalRow(found.row);
+        },
+        ensureOriginal:async(db,record,_crypto,verify)=>{
+          bound(db);await decoder(verify)(record);
+          const {identity,row,source,reused}=await ensureObservationOriginal(record);
+          return {identity,row:originalRow(row),source,reused};
+        },
+        update:async(db,id,expected,metadata)=>{
+          bound(db);const row=await get(db,id);
+          check(row&&row.revision===expected,'Observation changed or was removed; reload before editing');
+          const {kind,tags,collections}=row;
+          return originalRow((await updateObservationDetails(id,expected,row.annotationRevision,metadata,
+            {kind,tags,collections})).row);
+        },
+        updateDetails:async(db,id,rev,ann,metadata,values)=>{
+          bound(db);return (await updateObservationDetails(id,rev,ann,metadata,values)).row;
+        },
+        setAnnotation:async(db,id,rev,values)=>{
+          bound(db);return annotationRow((await setObservationAnnotation(id,rev,values)).row);
+        },
+        annotationStatus:async db=>{bound(db);return {enabled:true,version:library.VERSION_ANNOTATED};},
+        enableAnnotations:async db=>{bound(db);return {enabled:true,version:library.VERSION_ANNOTATED};},
+        exportBackup:async db=>{bound(db);return exportObservationBackup();},
+        restoreBackup:async(db,backup,_crypto,verify)=>{
+          bound(db);decoder(verify);
+          const {rows}=library.validateBackup(backup);
+          for(const row of rows)await verify(row.record);
+          return restoreObservationBackup(backup);
+        },
+        remove:async()=>{throw Error('Managed Image Library deletion is disabled until coordinated cutover');}
+      });
     }
     function resultDocumentId(id){
       check(typeof id==='string'&&/^calibration-result-v1-[0-9a-f]{64}$/.test(id),'invalid calibration result ID');
@@ -1080,7 +1161,7 @@
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
       createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
-      importObservationAssets,exportObservationBackup,restoreObservationBackup,
+      importObservationAssets,exportObservationBackup,restoreObservationBackup,createImageLibraryPort,findObservationOriginal,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});
   }
   // One-way rehearsal from a verified portable archive into a disposable,
