@@ -2664,7 +2664,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>animationLive.retainDraft(stale,id),/History changed/);
             await animationLive.retainDraft(inserted,id);
             ok(!animationLive.needsEvidence(inserted),'History evidence not retained before edit');
-            const withFrame=A.checkpoint({...cp,draft:inserted,selectedKey:inserted.frames[0].key},201);
+            const withFrame=A.normalize({...cp,savedAt:201,draft:inserted,selectedKey:inserted.frames[0].key});
             const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
             animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),withFrame,base);
             animationRow=await animation.retire(animationRow,animationRow.receipt);
