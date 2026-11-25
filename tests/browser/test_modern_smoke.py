@@ -14300,6 +14300,60 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment'),before['bound']['experiment'])
         self.assertEqual(self.page.evaluate("""id=>CurvatureModernAnimationLibrary.get(indexedDB,id)""",latest['id']),latest)
 
+    def test_shared_image_usage_includes_retained_standalone_recovery(self):
+        """Old single Animation draft and original-bearing Calibration draft are informational."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function("""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        data=self.soundly_calibration_experiment()
+        before=self.page.evaluate("""async data=>{
+            const S=CurvatureModernCalibrationProjectStore,A=CurvatureModernAnimationDraftAutosave;
+            const source=await CurvatureModernCalibrationProjectActions.importAsNew(window,data);
+            const prepared=await CurvatureModernCalibrationProjectCheckpoint.prepare(source,window);
+            const original=prepared.draft.record;
+            const photos=await CurvatureModernReferenceImageLibrary.list(indexedDB);
+            const id=photos[0].id;
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(S.DATABASE,S.VERSION);
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction(S.LEGACY,'readwrite');
+                    tx.objectStore(S.LEGACY).put(prepared.draft,'active');
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};
+                };
+            });
+            await S.remove(indexedDB,source.id,source.revision);
+            const draft=CurvatureModernAnimationStudio.fromProject(CurvatureModernDemoCatalog.load()[0].project);
+            draft.name='Standalone legacy Animation';
+            draft.frames[0].referenceImageIds=[id];
+            const cp=A.checkpoint({draft,selectedKey:draft.frames[0].key,quality:'auto',prepared:false,positionMs:0},100);
+            await A.write(indexedDB,cp);
+            localStorage.setItem(A.STORAGE_KEY,JSON.stringify(cp));
+            return {id,legacy:await S.legacy(indexedDB),animation:(await A.inspectLegacySources(window)).evidence,
+                row:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }""",data)
+        self.page.locator('#ModernImageLibraryTab').click()
+        gallery=self.page.locator('#ModernReferenceImageLibrary')
+        expect(gallery).to_be_visible(timeout=30000)
+        gallery.locator('[data-image-id="'+before['id']+'"]').click()
+        where=gallery.locator('.modern-image-usage')
+        expect(where.get_by_text('Legacy Calibration recovery (1)',exact=True)).to_be_visible(timeout=30000)
+        expect(where.get_by_text('Recoverable Storyboards (2)',exact=True)).to_be_visible(timeout=30000)
+        expect(where.get_by_role('button',name='Open use')).to_have_count(0)
+        after=self.page.evaluate("""async()=>{
+            const S=CurvatureModernCalibrationProjectStore,A=CurvatureModernAnimationDraftAutosave;
+            return {legacy:await S.legacy(indexedDB),animation:(await A.inspectLegacySources(window)).evidence,
+                row:CurvatureModernApp.getExperimentSessionPreview().controller.row};
+        }""")
+        self.assertEqual(after,{k:v for k,v in before.items() if k!='id'})
+        self.page.evaluate("localStorage.setItem(CurvatureModernAnimationDraftAutosave.STORAGE_KEY,'{broken')")
+        where.get_by_role('button',name='Refresh uses').click()
+        expect(where.locator('.modern-image-usage-status')).to_contain_text('incomplete discovery',timeout=30000)
+        expect(where.get_by_text('Recoverable Storyboards (1)',exact=True)).to_be_visible()
+        self.assertEqual(self.page.evaluate('localStorage.getItem(CurvatureModernAnimationDraftAutosave.STORAGE_KEY)'),'{broken')
+
 
 if __name__ == '__main__':
     unittest.main()

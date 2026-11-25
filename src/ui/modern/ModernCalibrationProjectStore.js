@@ -142,6 +142,24 @@
       });
     });
   }
+  // Inventory actual projects, not only their compact list projection.
+  // Include the original standalone draft even after explicit adoption.
+  function inspectUsage(db){
+    return openTransaction(db,[PROJECTS,SUMMARIES,LEGACY],'readonly',(tx,read,finish)=>{
+      read(tx.objectStore(PROJECTS).getAll(),records=>{
+        read(tx.objectStore(SUMMARIES).getAll(),summaries=>{
+          if(records.length!==summaries.length)throw Error('Calibration project inventory differs from summaries');
+          const byId=new Map(summaries.map(row=>[row.id,row]));
+          const projects=records.map(raw=>{
+            const project=model.normalize(raw);
+            match(project,byId.get(project.id));
+            return model.summary(project);
+          });
+          read(tx.objectStore(LEGACY).get('active'),legacy=>finish({projects,legacy:legacy??null}));
+        });
+      });
+    });
+  }
   // One durable receipt in the existing control store, committed in the
   // same transaction as the project and summary. No schema upgrade or
   // duplicate document/photo payload is required.
@@ -421,7 +439,7 @@
   }
   return Object.freeze({DATABASE,VERSION,LEGACY,PROJECTS,SUMMARIES,CONTROL,
     MAX_PROJECTS,MAX_TOTAL_CHARS,MAX_ROW_CHARS,MIGRATION_KEY,metadata,quota,
-    create,get,list,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
+    create,get,list,inspectUsage,update,saveOrFork,rename,renameSharedUnselected,remove,removeShared,legacy,migrationMarker,adoptLegacy,
     SHARED_SELECTION_KEY,saveOrForkWithSelectionReceipt,readSharedSelectionReceipt,
     readExistingSharedSelectionReceipt,retireSharedSelectionReceipt});
 }));

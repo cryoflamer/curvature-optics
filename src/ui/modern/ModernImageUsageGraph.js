@@ -99,6 +99,10 @@
           title:'Calibration result '+row.id.slice(-12),revision:null,source:'archived'});
       });
     }
+    if(target&&identityKey(sources.legacyCalibration?.identity)===target)
+      add({type:'calibration-recovery',ownerId:'legacy-calibration-active',
+        title:sources.legacyCalibration.title||'Standalone Calibration draft',
+        revision:null,source:'legacy standalone recovery'});
     if(sources.currentCalibration&&sources.currentCalibration.referenceImageId===selectedId)
       add({type:'calibration-draft',ownerId:sources.currentCalibration.projectId||'current',
         title:'Current Calibration working session',revision:null,source:'current'});
@@ -110,7 +114,7 @@
         'current').forEach(function(use){use.draftContent=draftContent;add(use);});
     }
     uses.sort(function(a,b){
-      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft'];
+      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });
@@ -148,48 +152,59 @@
     var db=env.indexedDB;
     await Promise.all([
       read('Animation Library',function(){return env.CurvatureModernAnimationLibrary.list(db);},v=>{sources.animations=v;}),
-      read('Calibration Projects',function(){return env.CurvatureModernCalibrationProjectStore.list(db);},v=>{sources.calibrations=v;}),
+      read('Calibration Projects and legacy draft',function(){return env.CurvatureModernCalibrationProjectStore.inspectUsage(db);},
+        v=>{sources.calibrations=v.projects;sources.rawLegacyCalibration=v.legacy;}),
       read('Calibration result archive',function(){return env.CurvatureModernCalibrationResultArchive.list(db);},v=>{sources.archives=v;}),
       read('Shared Animation recovery',function(){
         return env.CurvatureModernAnimationDraftAutosave.inspectSharedCollection(db,env.crypto);
       },v=>{sources.sharedAnimation=v;}),
-      read('Recoverable Storyboards',function(){return env.CurvatureModernAnimationDraftAutosave.readCollection(db);},
-        v=>{sources.drafts=v?v.workspaces.map(function(w){return {...w,source:'recoverable'};}):[];})
-    ]);
-    try{
-      var autosave=env.CurvatureModernAnimationDraftAutosave,storage=env.localStorage;
-      if(autosave){
-        if(!storage||typeof storage.getItem!=='function'||typeof storage.key!=='function')
-          throw Error('Browser localStorage unavailable; session backups cannot be inspected');
-        var local=autosave.readCollectionLocal(storage);
-        // Recovery helpers intentionally skip corrupt backups so the app can
-        // load. The usage inspector must not turn skipped records into a
-        // misleading statement of complete coverage.
-        if(storage.getItem(autosave.COLLECTION_KEY)!==null&&!local)
-          failures.push('Local workspace recovery: unreadable collection backup');
-        var sessions=autosave.readSessionLocals(storage),slots=0;
-        if(!Number.isSafeInteger(storage.length))throw Error('Cannot enumerate local recovery backups');
-        for(var si=0;si<storage.length;si++){
-          var backupKey=storage.key(si);
-          if(typeof backupKey==='string'&&
-             backupKey.startsWith(autosave.SESSION_LOCAL_PREFIX))slots++;
-        }
-        if(slots>sessions.length)
-          failures.push('Local workspace recovery: '+(slots-sessions.length)+
-            ' unreadable session backup'+(slots-sessions.length===1?'':'s'));
-        var all=[...sources.drafts];
-        [local,...sessions].filter(Boolean).forEach(function(collection){
-          collection.workspaces.forEach(function(item){
-            // A second same-ID checkpoint is not necessarily identical; count
-            // both if the draft content differs instead of silently dropping it.
-            if(!all.some(function(existing){return existing.id===item.id&&
-              JSON.stringify(existing.checkpoint.draft)===JSON.stringify(item.checkpoint.draft);}))
-              all.push({...item,source:'recoverable local backup'});
+      read('Legacy Animation recovery',function(){
+        return env.CurvatureModernAnimationDraftAutosave.inspectLegacySources(env);
+      },inventory=>{
+        inventory.issues.forEach(issue=>failures.push('Legacy Animation '+issue.source+': '+issue.message));
+        var all=[];
+        // Keep the established collection navigation contract, but never
+        // treat a V1 standalone checkpoint as a loaded workspace.
+        inventory.sources.forEach(source=>{
+          var collection=source.kind==='collection';
+          var remote=source.source.startsWith('idb:');
+          var items=collection?source.value.workspaces:
+            [{id:'legacy-single:'+source.source,checkpoint:source.value}];
+          items.forEach(item=>{
+            if(!all.some(existing=>existing.id===item.id&&
+              JSON.stringify(existing.checkpoint.draft)===JSON.stringify(item.checkpoint.draft)))
+              all.push({...item,source:collection?(remote?'recoverable':'recoverable local backup'):'legacy single draft'});
           });
         });
         sources.drafts=all;
-      }else failures.push('Local workspace recovery: backup reader unavailable');
-    }catch(error){failures.push('Local workspace recovery: '+error.message);}
+      })
+    ]);
+    // Standalone Calibration owns its own original bytes, not the Library
+    // alias alone. Keep reporting it after adoption; check retained inline
+    // evidence separately and never interpret it as a new editable project.
+    if(sources.rawLegacyCalibration){
+      await read('Legacy Calibration original',async()=>{
+        var raw=sources.rawLegacyCalibration;
+        if(!raw.record)return null;
+        return {identity:await env.CurvatureModernReferenceImageImport.identify(raw.record,env),
+          title:raw.record.title||'Standalone Calibration draft'};
+      },v=>{sources.legacyCalibration=v;});
+      await read('Legacy Calibration recovery',async()=>{
+        var migration=env.CurvatureModernCalibrationProjectMigration;
+        var draft=migration.normalizeLegacy(sources.rawLegacyCalibration);
+        migration.matchingInline(env.localStorage,draft);
+        return true;
+      },()=>{});
+    }
+    await read('Legacy Calibration inline evidence',async()=>{
+      var key='curvature-calibration-inline-v2',raw=env.localStorage.getItem(key);
+      if(raw===null)return;
+      var inline=JSON.parse(raw),draft=sources.rawLegacyCalibration;
+      if(!inline||typeof inline!=='object'||Array.isArray(inline)||
+         !draft||inline.id!==(draft.physicalSessionId??draft.magnifierSessionId)||
+         inline.photo!==(draft.record?.id||null))
+        throw Error('Unbound legacy inline evidence; raw recovery retained');
+    },()=>{});
     try{
       sources.currentStudio=env.CurvatureModernApp?.getAnimationStudioDraft?.()||null;
       sources.currentStudioWorkspaceId=env.CurvatureModernApp?.getAnimationStudioWorkspaceId?.()||null;

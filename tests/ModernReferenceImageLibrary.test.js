@@ -519,12 +519,12 @@ test('Where used reports an unreadable calibration archive rather than asserting
   const env={
     indexedDB:{},localStorage:{},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>{
       throw Error('Result store blocked in another tab');
     }},
     CurvatureModernAnimationDraftAutosave:{
-      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,inspectLegacySources:async()=>({sources:[],issues:[]})
     },
     CurvatureModernReferenceImageImport:{identify:async()=>identity}
   };
@@ -624,19 +624,24 @@ test('Where used flags corrupt or inaccessible local recovery backups as incompl
     getItem:key=>keys.has(key)?keys.get(key):null};
   const env={indexedDB:{},localStorage:storage,
     CurvatureModernAnimationLibrary:{list:async()=>[]},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
-      COLLECTION_KEY:'curvature-modern-animation-workspaces-v2',
-      SESSION_LOCAL_PREFIX:'curvature-modern-animation-workspaces-v2-session-',
-      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,inspectLegacySources:async env=>{
+        const A=require('../src/animation/ModernAnimationDraftAutosave');
+        const local=Array.from({length:env.localStorage.length},(_,i)=>env.localStorage.key(i))
+          .filter(Boolean).map(key=>({key,raw:env.localStorage.getItem(key)}));
+        // Force access even if enumeration is unavailable.
+        env.localStorage.getItem(A.COLLECTION_KEY);
+        return A.planLegacySources({current:null,workspaces:null},local);
+      }
     },
     CurvatureModernReferenceImageImport:{identify:async()=>identity}};
   const found=await usageGraph.discover(env,{id:imgId,record:{}});
   assert.equal(found.count,0);
   assert.equal(found.complete,false);
-  assert.match(found.unavailable.join('; '),/unreadable collection backup/);
-  assert.match(found.unavailable.join('; '),/1 unreadable session backup/);
+  assert.match(found.unavailable.join('; '),/Legacy Animation local:curvature-modern-animation-workspaces-v2:/);
+  assert.match(found.unavailable.join('; '),/Legacy Animation local:curvature-modern-animation-workspaces-v2-session-tab_broken:/);
   const inaccessible={...env,localStorage:{
     getItem(){throw Error('Storage access denied');},key(){return null;},length:1
   }};
@@ -652,11 +657,11 @@ test('Stage 5 deletion review fails closed with zero local uses and preserves by
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:{get:async (idb,id)=>{reads++;return library.get(idb,id);}},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,inspectLegacySources:async()=>({sources:[],issues:[]})
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'a'.repeat(64),width:1,height:1})}
@@ -692,11 +697,11 @@ test('Stage 5 stale original revision rejects review even when no local owner is
   const env={indexedDB:db,localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernReferenceImageLibrary:library,
     CurvatureModernAnimationLibrary:{list:async()=>[]},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,inspectLegacySources:async()=>({sources:[],issues:[]})
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'a'.repeat(64),width:1,height:1})}
@@ -722,11 +727,11 @@ test('Stage 5 concurrent metadata edit during ownership scan cannot authorize de
       }
       return [];
     }},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      inspectSharedCollection:async()=>null,readCollection:async()=>null,readCollectionLocal:()=>null,readSessionLocals:()=>[]
+      inspectSharedCollection:async()=>null,inspectLegacySources:async()=>({sources:[],issues:[]})
     },
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'b'.repeat(64),width:1,height:1})}
@@ -749,12 +754,11 @@ test('Where used includes verified shared workspace revisions and both pending n
     revisions:[{id:'workspace',revision:9}],namedSave:{plan:{before:named(10),after:named(11)}}};
   const env={indexedDB:{},localStorage:{length:0,key:()=>null,getItem:()=>null},
     CurvatureModernAnimationLibrary:{list:async()=>[]},
-    CurvatureModernCalibrationProjectStore:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{list:async()=>[],async inspectUsage(){return {projects:await this.list(),legacy:null};}},
     CurvatureModernCalibrationResultArchive:{list:async()=>[]},
     CurvatureModernAnimationDraftAutosave:{
       COLLECTION_KEY:'unused',SESSION_LOCAL_PREFIX:'session-',
-      inspectSharedCollection:async()=>shared,readCollection:async()=>null,
-      readCollectionLocal:()=>null,readSessionLocals:()=>[]},
+      inspectSharedCollection:async()=>shared,inspectLegacySources:async()=>({sources:[],issues:[]})},
     CurvatureModernReferenceImageImport:{identify:async()=>({
       version:1,sha256:'a'.repeat(64),width:1,height:1})}
   };
@@ -783,4 +787,30 @@ test('Shared draft image use requires the exact revision, draft and referenced f
     assert.throws(()=>usageGraph.resolveSharedDraft(row,{...use,...altered},photo),/changed/);
   assert.throws(()=>usageGraph.resolveSharedDraft(row,use,'other'),/changed/);
   assert.throws(()=>usageGraph.resolveSharedDraft({...row,keyframeEdit:{}},use,photo),/recovery/);
+});
+
+test('Where used inventories old standalone sources independently and matches calibration by original identity',async()=>{
+  const id='photo',identity={version:1,sha256:'a'.repeat(64),width:1,height:1};
+  const cp={savedAt:2,draft:{name:'Single recovery',frames:[{key:'kf',referenceImageIds:[id]}]}};
+  const raw={version:2,physicalSessionId:'legacy',record:{id:'different_alias',title:'Old calibration'}};
+  const env={indexedDB:{},localStorage:{getItem:()=>null},
+    CurvatureModernAnimationLibrary:{list:async()=>[]},
+    CurvatureModernCalibrationProjectStore:{inspectUsage:async()=>({projects:[],legacy:raw})},
+    CurvatureModernCalibrationProjectMigration:{normalizeLegacy:v=>v,matchingInline:()=>null},
+    CurvatureModernCalibrationResultArchive:{list:async()=>[]},
+    CurvatureModernAnimationDraftAutosave:{inspectSharedCollection:async()=>null,
+      inspectLegacySources:async()=>({issues:[],sources:[
+        {kind:'checkpoint',source:'idb:current',value:cp},
+        {kind:'checkpoint',source:'local:old',value:{...cp,draft:{...cp.draft,name:'Other recovery'}}}
+      ]})},
+    CurvatureModernReferenceImageImport:{identify:async()=>identity}};
+  const result=await usageGraph.discover(env,{id,record:{}});
+  assert.equal(result.complete,true);
+  assert.deepEqual(result.uses.filter(u=>u.type==='draft').map(u=>u.source),['legacy single draft','legacy single draft']);
+  assert.equal(result.uses.filter(u=>u.type==='calibration-recovery').length,1);
+  env.CurvatureModernCalibrationProjectMigration.normalizeLegacy=()=>{throw Error('unsupported draft');};
+  const incomplete=await usageGraph.discover(env,{id,record:{}});
+  assert.equal(incomplete.count,3);
+  assert.equal(incomplete.complete,false);
+  assert.match(incomplete.unavailable.join('; '),/unsupported draft/);
 });
