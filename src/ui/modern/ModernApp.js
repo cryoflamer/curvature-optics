@@ -3593,7 +3593,9 @@
         studioDraftSavedAt=studioDraftAutosave.getWorkspace(ctx.row.collection,saved.reference.id).savedAt;
         experimentPreview.status=experimentPreview.controller.state().status;
         studioDraftStatus('Shared working draft saved in IndexedDB',false);
-        ctx.error=false;ctx.message='';syncStudioOpenedProject();return true;
+        ctx.error=false;ctx.message='';syncStudioOpenedProject();
+        if(studioView==='library')renderStudioLibrary();
+        return true;
       }).catch(function(error){
         ctx.error=true;ctx.message='Shared Animation save not acknowledged: '+error.message;
         studioDraftStatus(ctx.message,true);renderStudioLibrary();return false;

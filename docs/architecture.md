@@ -841,7 +841,10 @@ retirement; explicit retry of a known receipt never writes the document
 again. A lost retirement acknowledgement can be accepted only by exact
 successor readback and revalidation of the shared selection. A stale
 collection or unknown domain-write outcome blocks rebasing, retaining the
-latest in-memory checkpoint for explicit recovery/export. Additional historical variants can be explicitly recovered as independent
+latest in-memory checkpoint for explicit recovery/export. The mounted
+Library displays the acknowledged working drafts and exports recovery
+evidence as JSON; a stale writer cannot select a different workspace or
+silently replay the rejected edit. Additional historical variants can be explicitly recovered as independent
 unlinked drafts. A stable digest of the original workspace identity and
 normalized checkpoint prevents repeated recovery of the same variant
 across different source slots; no existing workspace or shared selection

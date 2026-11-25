@@ -12005,6 +12005,184 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()'),ref['id'])
         self.assertEqual(self.page.url,url)
 
+    def test_shared_animation_mounted_legacy_adoption_and_variant(self):
+        """Explicit migration retains source bytes and never merges divergent drafts."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        evidence=self.page.evaluate("""async()=>{
+            const A=CurvatureModernAnimationDraftAutosave,S=CurvatureModernAnimationStudio;
+            const cp=A.checkpoint({draft:S.edit(S.blank(),'name','Historical original'),
+                selectedKey:null,quality:'auto',prepared:false,positionMs:0},100);
+            const one=A.collection('draft_historical',cp,100),other=structuredClone(one);
+            other.workspaces[0].checkpoint.draft.name='Historical conflict';
+            await A.writeCollection(indexedDB,one);
+            localStorage.setItem(A.COLLECTION_KEY,JSON.stringify(other));
+            return (await A.inspectLegacySources(window)).evidence;
+        }""")
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.on('dialog',lambda dialog:dialog.accept())
+        self.page.get_by_role('button',name=re.compile(r'^Adopt idb:workspaces')).click()
+        self.page.locator('[data-shared-animation-id="draft_historical"]').wait_for()
+        pointer=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope')
+        self.assertEqual(pointer['workspace'],'scene')
+        self.assertIsNone(pointer['documents']['animation'])
+        self.page.get_by_role('button',name=re.compile(r'^Recover Historical conflict')).click()
+        recovered=self.page.locator('[data-shared-animation-id^="draft_recovered_"]')
+        expect(recovered).to_have_count(1)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row.envelope'),pointer)
+        with self.page.expect_download() as download:
+            self.page.get_by_role('button',name='Download legacy evidence',exact=True).click()
+        exported=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+        self.assertEqual(exported['evidence'],evidence)
+        self.assertEqual(exported['issues'],[])
+        recovered_id=recovered.get_attribute('data-shared-animation-id')
+        recovered.click()
+        self.page.wait_for_function("""id=>CurvatureModernApp.getAnimationStudioWorkspaceId()===id&&
+            CurvatureModernApp.getAnimationStudioView()==='editor'""",arg=recovered_id)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),'Historical conflict')
+        after=self.page.evaluate("""async()=> {
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave;
+            return {legacy:(await A.inspectLegacySources(window)).evidence,
+                row:await A.openSharedCollection(indexedDB,{lease:U.captureSharedDocumentLifetime(),crypto}).read()};
+        }""")
+        self.assertEqual(after['legacy'],evidence)
+        self.assertEqual(len(after['row']['collection']['workspaces']),2)
+        self.assertEqual(after['row']['collection']['activeId'],'draft_historical')
+        self.assertIsNone(after['row']['receipt'])
+        self.assertEqual(self.page.url,url)
+
+    def test_shared_animation_cross_tab_stale_edit_is_exportable(self):
+        """A stale editor cannot overwrite the newer globally acknowledged draft."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        second=self.context.new_page()
+        try:
+            second.goto(url,wait_until='load')
+            second.wait_for_function(ready,timeout=30000)
+            expect(second.locator('#ModernAnimationWorkspace')).to_be_visible()
+            first=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+            first.fill('Acknowledged by first tab')
+            first.press('Tab')
+            expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+                'Shared working draft saved in IndexedDB',timeout=30000)
+            expected=self.page.evaluate("""async()=>{
+                const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+                U.sharedDocumentSessions(D);
+                return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            }""")
+            field=second.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+            field.fill('Unsent second tab edit')
+            field.press('Tab')
+            expect(second.locator('#ModernAnimationDraftStatus')).to_contain_text(
+                'Shared Animation save not acknowledged',timeout=30000)
+            self.assertEqual(second.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                             'Unsent second tab edit')
+            second.locator('#ModernAnimationViewLibrary').click()
+            with second.expect_download() as download:
+                second.get_by_role('button',name='Download unsaved draft',exact=True).click()
+            exported=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+            self.assertEqual(exported['format'],'curvature-shared-animation-recovery')
+            self.assertEqual(exported['recovery']['checkpoint']['draft']['name'],'Unsent second tab edit')
+            observed=self.page.evaluate("""async()=>{
+                const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+                U.sharedDocumentSessions(D);
+                return CurvatureModernAnimationDraftAutosave.openSharedCollection(indexedDB,
+                    {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            }""")
+            self.assertEqual(observed,expected)
+            self.page.locator('#ModernCompareTab').click()
+            self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().controller
+                .row.envelope.workspace==='compare'""",timeout=30000)
+            second.on('dialog',lambda dialog:dialog.accept())
+            second.reload(wait_until='load')
+            second.wait_for_function(ready,timeout=30000)
+            self.assertEqual(second.evaluate('CurvatureModernApp.getWorkspaceMode()'),'compare')
+            self.assertEqual(second.url,url)
+        finally:
+            second.close()
+
+    def test_shared_animation_mounted_receipt_recovers_after_reload(self):
+        """Both interrupted pointer states recover exactly without a second domain save."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'")
+        for committed in [False,True]:
+            with self.subTest(committed=committed):
+                seeded=self.page.evaluate("""async committed=>{
+                    const A=CurvatureModernAnimationDraftAutosave,D=CurvatureModernDocumentSession,
+                        U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
+                    const lease=U.captureSharedDocumentLifetime();
+                    const make=()=>CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                        lease,codec:CurvatureModernExperimentState,crypto,contract:D});
+                    const domain=()=>A.openSharedCollection(indexedDB,{lease,crypto});
+                    const c=D.createAtomicExperimentController({lease,checkpoint:make(),isCurrent:()=>true,
+                        prepare:()=>{throw Error('Unexpected migration');},
+                        readDocument:async(kind,id)=>{
+                            const row=await domain().read(),ref=A.documentReference(row,id);
+                            return {kind,id:ref.id,revision:ref.revision};
+                        }});
+                    await c.open();
+                    const ref=c.state().row.envelope.documents.animation;
+                    const base=await c.captureSelectionBase('animation',ref);
+                    const store=domain(),row=await store.read(),cp=A.getWorkspace(row.collection,ref.id);
+                    const next={...cp,savedAt:cp.savedAt+1,draft:{...cp.draft,name:'Interrupted '+committed}};
+                    const saved=await store.saveSelected(row,ref,next,base);
+                    if(committed)await c.acknowledgeDocumentRevision('animation',saved.receipt);
+                    return {saved,session:await make().read()};
+                }""",committed)
+                self.page.reload(wait_until='load')
+                self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().status
+                    ==='recovering-selection'""",timeout=30000)
+                expect(self.page.locator('#ModernDocumentSessionRestoreDraft')).to_have_text('Complete Animation save')
+                with self.page.expect_navigation(wait_until='load',timeout=30000):
+                    self.page.locator('#ModernDocumentSessionRestoreDraft').click()
+                self.page.wait_for_function("""()=>CurvatureModernApp.getExperimentSessionPreview().status==='failed'||
+                    CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+                    CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+                after=self.page.evaluate("""async()=>{
+                    const A=CurvatureModernAnimationDraftAutosave,D=CurvatureModernDocumentSession,
+                        U=CurvatureModernUiSessionStore.create(window);
+                    U.sharedDocumentSessions(D);
+                    const lease=U.captureSharedDocumentLifetime();
+                    return {preview:CurvatureModernApp.getExperimentSessionPreview(),
+                        mode:CurvatureModernApp.getWorkspaceMode(),
+                        row:await A.openSharedCollection(indexedDB,{lease,crypto}).read(),
+                        session:await CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                            lease,codec:CurvatureModernExperimentState,crypto,contract:D}).read()};
+                }""")
+                self.assertEqual(after['preview']['status'],'clean',after['preview'])
+                self.assertEqual(after['mode'],'animation')
+                self.assertIsNone(after['row']['receipt'])
+                self.assertEqual(after['row']['collection'],seeded['saved']['collection'])
+                self.assertEqual(after['row']['revisions'],seeded['saved']['revisions'])
+                self.assertEqual(after['row']['revision'],seeded['saved']['revision']+1)
+                self.assertEqual(after['session']['revision'],seeded['session']['revision']+(0 if committed else 1))
+                self.assertEqual(after['session']['envelope']['documents']['animation'],seeded['saved']['receipt']['current'])
+                self.assertEqual(after['session']['experiment'],seeded['session']['experiment'])
+                self.assertEqual(self.page.evaluate('CurvatureModernApp.getAnimationStudioDraft().draft.name'),
+                                 'Interrupted '+str(committed).lower())
+
+
     def test_shared_calibration_durable_receipt_recovers_after_reload(self):
         """A fresh page exposes recovery and proves both pointer states without a domain rewrite."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
