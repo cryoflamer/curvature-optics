@@ -809,6 +809,9 @@
     // No project owns the live editor until an explicit, fully qualified open.
     let projectSession=null,projectSwitchBusy=false,projectSwitchEpoch=0;
     let editorMutation=0,switchInterference=false,sharedInput=null,sharedWrite=null,sharedPresentationHydrating=false;
+    // Ordinary named projects also receive redundant presentation callbacks.
+    // Keep their last captured editor input separate from the shared writer.
+    let ordinaryProjectInput=null;
     function coordinateLegacyIDB(operation){
       const storage=env.CurvatureModernCalibrationProjectStore;
       if(storage?.coordinateIDB)return storage.coordinateIDB(operation);
@@ -1611,7 +1614,7 @@
       return projectSession;
     }
     function persist(forSwitch=false,changes=null){
-      if(restoring||!scene||sharedSelection&&(sharedPresentationHydrating||!projectSession?.project()||leavingPage||workspace.hidden))return;
+      if(restoring||!scene||sharedPresentationHydrating||sharedSelection&&(!projectSession?.project()||leavingPage||workspace.hidden))return;
       if(projectSwitchBusy&&!forSwitch){
         // A programmatic event during a switch invalidates the pending
         // activation. Never silently drop its mutated editor state.
@@ -1629,7 +1632,11 @@
         // yielding to any earlier async write. Queuing mark() itself would
         // allow a late callback to accidentally mark a newly opened project.
         try{
-          const fingerprint=sharedSelection?sharedInputFingerprint(data,inline):null;
+          const fingerprint=sharedInputFingerprint(data,inline);
+          // Ordinary autosave is change-driven too: a repeated UI event is not
+          // a new revision. Explicit switch/Apply barriers retain their existing
+          // save and conflict checks, even for identical editor input.
+          if(!sharedSelection&&!forSwitch&&!changes&&fingerprint===ordinaryProjectInput)return;
           if(sharedSelection&&!changes&&fingerprint===sharedInput){
             if(forSwitch&&(session.state().unsaved||session.state().pending||session.state().error))
               return sharedWrite||Promise.reject(Error('Resolve unsaved Calibration work first'));
@@ -1648,6 +1655,7 @@
             return result;
           });
           if(sharedSelection){sharedInput=fingerprint;sharedWrite=saved;}
+          else ordinaryProjectInput=fingerprint;
         }catch(error){saved=Promise.reject(error);}
       }else{
         saved=writeQueue.catch(()=>{}).then(async()=>{
@@ -1862,6 +1870,14 @@
         try{
           activateVisualProject(incoming);
           session.bind(prepared.project);
+          // Restore the saved viewer after visual activation, without allowing
+          // its synchronous sessionChanged callback to enqueue a new revision.
+          sharedPresentationHydrating=true;
+          try{
+            if(editingStage()&&inlineViewer.isOpen()&&inlineRole&&inlineSource)
+              restoreInlineRole(inlineRole,inlineSource);
+            ordinaryProjectInput=sharedInputFingerprint(captureDraftState(),captureInlineState());
+          }finally{sharedPresentationHydrating=false;}
           activated=true;
           projectStartupStatus={status:'active',projectId:prepared.project.id};
           $('ModernCalibrationStorage').textContent='Calibration Project opened and verified.';
@@ -2410,15 +2426,18 @@
     }
     new env.MutationObserver(()=>{
       if(workspace.hidden){contextMenu.close();photoGestures.cancel();resultGestures.cancel();inlineViewer.cancelGesture();captureInline();}
-      else if(sharedSelection){
+      else if(sharedSelection||projectSession?.project()){
         // Visibility changes are hydration, not edits. Opening the inline
         // viewer can emit onSessionChange even though no user changed it.
         sharedPresentationHydrating=true;
         try{
           meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}
           const state=projectSession?.state();
-          if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&!state.selectionPending)
-            sharedInput=sharedInputFingerprint(captureDraftState(),captureInlineState());
+          if(state?.projectId&&!state.pending&&!state.unsaved&&!state.error&&!state.selectionPending){
+            const fingerprint=sharedInputFingerprint(captureDraftState(),captureInlineState());
+            if(sharedSelection)sharedInput=fingerprint;
+            else ordinaryProjectInput=fingerprint;
+          }
         }finally{sharedPresentationHydrating=false;}
       }else{meshDraw();if(editingStage()&&inlineViewer.isOpen()){inlineViewer.refresh();refreshPhysicalCorrespondences();}}
     }).observe(workspace,{attributes:true,attributeFilter:['hidden']});

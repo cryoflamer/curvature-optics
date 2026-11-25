@@ -7273,6 +7273,19 @@ class ModernBrowserSmoke(unittest.TestCase):
                          'F5 must not create a no-op Project revision')
         self.assertEqual(after_reload,before_reload,
                          'IndexedDB rows must remain byte-logically unchanged by F5')
+        # The editor's catch-all input listener receives events even when the
+        # checkpoint did not change. Exercise that path deterministically:
+        # a clean project must not enqueue a write for an unchanged snapshot.
+        status=self.page.evaluate("""() => {
+            const editor=CurvatureModernPhotoCalibrationEditor.mount(document);
+            const host=document.getElementById('ModernPhotoCalibration');
+            host.dispatchEvent(new Event('change',{bubbles:true}));
+            return editor.projectPersistenceStatus();
+        }""")
+        self.assertEqual(status['pending'],0,'unchanged UI notification must not enqueue a save')
+        self.assertFalse(status['unsaved'])
+        self.assertEqual(stored(),before_reload)
+
         for project,expected in [(b,state_b),(a,state_a)]:
             open_project(project)
             live=live_state()
