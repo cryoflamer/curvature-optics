@@ -637,13 +637,36 @@ class ModernBrowserSmoke(unittest.TestCase):
             const snap=await adapter.saveHistory(history);
             ok((await adapter.store.get(saved.resultId)).refCount===2,'snapshot did not retain archive');
             const projectApi=CurvatureModernCalibrationProject;
+            const draft={version:2,scene:{model:m,physics},record,activeSource:{source:'local',links:[]},
+                rows:observations,pending:[330,151],pendingModel:structuredClone(observations[0].landmark),
+                activePair:observations[0].landmark.id,editing:observations[0].landmark.id,explicitAdd:false,
+                view:{scale:.8,x:8,y:14},physicalSessionId:'physical-session-1',
+                undoStack:[{rows:structuredClone(observations.slice(0,4)),activePair:observations[0].landmark.id}],
+                redoStack:[{rows:structuredClone(observations),activePair:observations[0].landmark.id}],
+                selectedOwner:{bank:0,objectType:8},weight:'2',freeParameters,
+                fitBest:null,fitStatus:'Not yet fitted',viewBest:false,stage:'correspondences',
+                resultCamera:'initial',resultViews:{initial:{scale:1,x:10,y:20},best:null},residualMode:'off'};
+            const inline={id:draft.physicalSessionId,photo:record.id,
+                sessions:{initial:{source:JSON.stringify({bank:0}),session:{zoom:1.2,pivot:[1,2,3]}}}};
+            const parts=await CurvatureModernCalibrationProjectCheckpoint.captureVerified(draft,inline,window,{
+                async ensureOriginal(_db,value,_crypto,verify){await verify(value);
+                    return {identity:archived.payload.photo,row:{record:value},reused:true};}
+            },CurvatureModernReferenceImageImport);
             const calibration=projectApi.fresh({id:projectApi.createId(crypto),title:'Calibration owner',now:44,
-                photo:{identity:archived.payload.photo,aliasId:record.id,source:{kind:'library',key:record.id}},
-                resultIds:[archived.id]});
+                ...parts,resultIds:[archived.id]});
             const project=await adapter.saveCalibrationProject(calibration,{originalId:photo.originalId});
             ok((await adapter.store.get(saved.resultId)).refCount===3,'Calibration Project did not retain result');
-            ok(JSON.stringify((await adapter.readCalibrationProject(calibration.id)).project)===JSON.stringify(calibration),
-                'Calibration Project changed');
+            const prepared=await adapter.readCalibrationProject(calibration.id);
+            ok(JSON.stringify(prepared.project)===JSON.stringify(calibration),'Calibration Project changed');
+            ok(JSON.stringify(prepared.draft.undoStack)===JSON.stringify(draft.undoStack)&&
+                JSON.stringify(prepared.draft.redoStack)===JSON.stringify(draft.redoStack)&&
+                JSON.stringify(prepared.inline)===JSON.stringify(inline),'Calibration recovery state changed');
+            const animationProject=CurvatureModernAnimationProject.create([
+                {id:71,experiment},{id:71,experiment}
+            ],{id:'calibrated_animation',name:'Calibrated Animation',mode:'camera'});
+            const animation=await adapter.saveAnimation({id:animationProject.id,version:1,project:animationProject,
+                createdAt:45,updatedAt:45,quality:'accurate',thumbnail:null});
+            ok((await adapter.store.get(saved.resultId)).refCount===4,'calibrated Animation did not retain archive');
             const corrupt=structuredClone(history);corrupt.id=72;
             corrupt.experiment.calibrationOrigin.historicalFit.rmsPx=123;
             await rejects(()=>adapter.saveHistory(corrupt),/calibration origin evidence mismatch/);
@@ -659,6 +682,10 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'Calibration Project lost result after gallery removal');
             ok(reopenedProject.originalId===photo.originalId&&reopenedProject.projectId===project.projectId,
                 'Calibration Project lost original ownership');
+            ok(reopenedProject.photo.original.dataUrl===record.original.dataUrl,'checkpoint original lost');
+            const reopenedAnimation=await adapter.readAnimation(animationProject.id);
+            ok(reopenedAnimation.projectId===animation.projectId&&reopenedAnimation.evidence[0].target===saved.resultId,
+                'calibrated Animation lost result after archive removal');
             await rejects(()=>adapter.saveHistory({...history,id:73}),/calibration result missing/);
             const standalone=await adapter.saveHistory({...history,id:74},{standalone:true});
             ok((await adapter.readHistory(74)).evidence==='standalone','standalone provenance misrepresented');

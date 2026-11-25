@@ -46,9 +46,18 @@
     function aliases(project){
       return [...new Set(project.keyframes.flatMap(frame=>frame.referenceImageIds||[]))].sort();
     }
-    function hasCalibration(project){
-      return !!project.baseExperiment.calibrationOrigin||
-        (project.mode==='experimental'&&project.keyframes.some(frame=>frame.value.calibrationOrigin));
+    function calibrationOrigins(project){
+      return [project.baseExperiment,...(project.mode==='experimental'?project.keyframes.map(frame=>frame.value):[])]
+        .map(experiment=>experiment.calibrationOrigin).filter(Boolean);
+    }
+    function calibrationAliases(project){
+      return [...new Set(calibrationOrigins(project).map(origin=>origin.resultId))].sort();
+    }
+    function validAnimationEvidence(project,evidence){
+      const ids=calibrationAliases(project);
+      return !ids.length?evidence==='none':evidence==='standalone'||
+        (Array.isArray(evidence)&&evidence.length===ids.length&&evidence.every((entry,i)=>
+          exact(entry,['alias','target'])&&entry.alias===ids[i]&&objectId(entry.target)));
     }
     if(projects&&animations)types.push({type:ANIMATION,version:1,validate:v=>{
       if(!exact(v,['project','observations','evidence']))return false;
@@ -57,8 +66,11 @@
       return same(project,v.project)&&Array.isArray(v.observations)&&
         v.observations.length===ids.length&&v.observations.every((entry,i)=>
           exact(entry,['alias','target'])&&entry.alias===ids[i]&&objectId(entry.target))&&
-        v.evidence===(hasCalibration(project)?'standalone':'none');
-    },references:v=>v.observations.map(entry=>strong('photo:'+entry.alias,entry.target))});
+        validAnimationEvidence(project,v.evidence);
+    },references:v=>[
+      ...v.observations.map(entry=>strong('photo:'+entry.alias,entry.target)),
+      ...(Array.isArray(v.evidence)?v.evidence.map(entry=>strong('result:'+entry.alias,entry.target)):[])
+    ]});
     if(results)types.push({type:RESULT,version:1,validate:v=>exact(v,['record','originalId'])&&
       same(results.validate(v.record),v.record)&&objectId(v.originalId),
       references:v=>[strong('original',v.originalId)]});
@@ -310,8 +322,20 @@
     }
     async function saveAnimation(row,{expectedRevision=0,standalone=false}={}){
       const {project,metadata}=animationFields(row);
-      check(!hasCalibration(project)||standalone===true,
-        'calibrated local Animation requires evidence mapping; standalone import must be explicit');
+      const origins=calibrationOrigins(project);
+      let evidence='none';
+      if(origins.length){
+        if(standalone===true)evidence='standalone';
+        else{
+          const mapped=new Map();
+          for(const origin of origins){
+            const target=await resolveOrigin(origin);
+            if(mapped.has(origin.resultId))check(mapped.get(origin.resultId)===target,'calibration evidence changed');
+            mapped.set(origin.resultId,target);
+          }
+          evidence=[...mapped].sort(([a],[b])=>a.localeCompare(b)).map(([alias,target])=>({alias,target}));
+        }
+      }
       const observations=[];
       for(const alias of aliases(project)){
         const graph=await store.readDocumentGraph(observationId(alias));
@@ -321,7 +345,7 @@
         await materializeObservation(graph,value);
         observations.push({alias,target:value.id});
       }
-      const payload={project,observations,evidence:hasCalibration(project)?'standalone':'none'};
+      const payload={project,observations,evidence};
       const id=store.newObjectId();
       const document=await store.writeDocument({documentId:'animation:'+project.id,kind:'animation',
         expectedRevision,metadata,references:[strong('project',id)],
@@ -341,6 +365,14 @@
         const image=graph.resources.find(r=>r.id===entry.target);
         check(image?.type===OBSERVATION&&image.payload.id===entry.alias,'Animation observation mismatch');
         referenceImages.push(await materializeObservation(graph,image));
+      }
+      if(Array.isArray(v.evidence)){
+        for(const entry of v.evidence){
+          const result=graph.resources.find(r=>r.id===entry.target);
+          for(const origin of calibrationOrigins(row.project).filter(origin=>origin.resultId===entry.alias))
+            checkOrigin(origin,result);
+          await verifyResultOriginal(graph,result);
+        }
       }
       return {row,projectId:resource.id,managedRevision:graph.document.revision,
         evidence:v.evidence,observations:v.observations,referenceImages};
