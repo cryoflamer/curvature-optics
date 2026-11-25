@@ -40,7 +40,7 @@
   function collect(selectedId,selectedIdentity,sources){
     if(typeof selectedId!=='string'||!selectedId)throw TypeError('Selected original ID required');
     sources=sources||{};
-    var uses=[],seen=new Map();
+    var uses=[],seen=new Map(),target=identityKey(selectedIdentity);
     function add(use){
       // Distinct snapshots can share an ID AND timestamp across tabs.
       // The dedup key identifies a relation; the draft contents distinguish
@@ -51,10 +51,35 @@
       var variants=seen.get(key),content=use.draftContent||'';
       if(!variants.has(content)){variants.add(content);uses.push(use);}
     }
+    // A calibration origin is historical evidence, not an attached image ID.
+    // Report it separately, even if the same frame also attaches this image.
+    function origin(experiment,ownerId,title,revision,source,frame,index,content){
+      if(!target||identityKey(experiment?.calibrationOrigin?.photo)!==target)return;
+      add({type:'experiment-provenance',ownerId,title,revision,source,
+        frameIndex:index===undefined?null:index+1,
+        frameKey:frame?.key||null,frameName:frame?.name||null,
+        draftContent:content||''});
+    }
+    function projectOrigins(project,id,revision,source){
+      var title=project.name||id;
+      origin(project.baseExperiment,id,title,revision,source+' · base experiment');
+      (project.keyframes||[]).forEach((frame,index)=>{
+        // Only Experimental values contain full portable experiments.
+        if(project.mode==='experimental')
+          origin(frame.value,id,title,revision,source+' · frame provenance',frame,index);
+      });
+    }
+    function draftOrigins(draft,id,revision,source){
+      var content=JSON.stringify(draft);
+      (draft.frames||[]).forEach((frame,index)=>{
+        origin(frame.experiment,id,draft.name||id,revision,source+' · frame provenance',frame,index,content);
+      });
+    }
     (sources.animations||[]).forEach(function(row){
       if(!row||!row.project)return;
       imagesFromFrames(row.project.keyframes,selectedId,'animation',row.id,
         row.project.name||row.id,row.updatedAt,'saved').forEach(add);
+      projectOrigins(row.project,row.id,row.updatedAt,'saved Animation');
     });
     (sources.drafts||[]).forEach(function(row){
       if(!row||!row.checkpoint||!row.checkpoint.draft)return;
@@ -63,6 +88,7 @@
       imagesFromFrames(draft.frames,selectedId,'draft',row.id,
         draft.name||row.id,row.checkpoint.savedAt,row.source||'recoverable')
         .forEach(function(use){use.draftContent=content;add(use);});
+      draftOrigins(draft,row.id,row.checkpoint.savedAt,row.source||'recoverable');
     });
     // The verified shared row is independent of the old recovery collection.
     // Its durable revision is not a legacy savedAt timestamp or a navigation
@@ -74,6 +100,7 @@
         imagesFromFrames(draft.frames,selectedId,'draft',row.id,
           draft.name||row.id,'rev:'+shared.revisions[index].revision,'shared checkpoint')
           .forEach(function(use){use.draftContent=JSON.stringify(draft);add(use);});
+        draftOrigins(draft,row.id,'rev:'+shared.revisions[index].revision,'shared checkpoint');
       });
       // An interrupted named save owns both exact versions until it is
       // resolved; neither can be inferred solely from the current Library.
@@ -83,10 +110,24 @@
           imagesFromFrames(row.project.keyframes,selectedId,'animation-intent',row.id,
             row.project.name||row.id,row.updatedAt,'pending Save Changes · '+side)
             .forEach(add);
+          projectOrigins(row.project,row.id,row.updatedAt,'pending Save Changes · '+side);
         });
       }
+      if(shared.keyframeEdit){
+        var edit=shared.keyframeEdit,session=edit.session;
+        var owner=session.projectId,revision=edit.reference.revision;
+        var title='Temporary keyframe edit '+session.frameKey;
+        ['original','workspace','candidate'].forEach(side=>{
+          origin(session[side],owner,title,revision,'temporary edit · '+side);
+        });
+        ['past','future'].forEach(side=>{
+          session[side].forEach((snapshot,index)=>{
+            origin(snapshot,owner,title,revision,'temporary edit · '+side+' '+(index+1));
+          });
+        });
+        if(edit.history)origin(edit.history.experiment,owner,title,revision,'temporary edit · pending History');
+      }
     }
-    var target=identityKey(selectedIdentity);
     if(target){
       (sources.calibrations||[]).forEach(function(row){
         if(row&&identityKey(row.photo)===target)add({type:'calibration',ownerId:row.id,
@@ -112,9 +153,10 @@
         sources.currentStudioWorkspaceId,
         sources.currentStudio.draft.name||'Current Storyboard',sources.currentStudio.savedAt,
         'current').forEach(function(use){use.draftContent=draftContent;add(use);});
+      draftOrigins(sources.currentStudio.draft,sources.currentStudioWorkspaceId,sources.currentStudio.savedAt,'current');
     }
     uses.sort(function(a,b){
-      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery'];
+      var groups=['animation','animation-intent','calibration','archive','draft','calibration-draft','calibration-recovery','experiment-provenance'];
       return groups.indexOf(a.type)-groups.indexOf(b.type)||
         a.title.localeCompare(b.title)||a.frameIndex-b.frameIndex;
     });

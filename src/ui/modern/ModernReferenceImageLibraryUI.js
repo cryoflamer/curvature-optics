@@ -245,7 +245,8 @@
           ['animation','Saved animations'],['calibration','Calibration projects'],
           ['archive','Archived results'],['draft','Recoverable Storyboards'],
           ['animation-intent','Interrupted Animation saves'],
-          ['calibration-draft','Current Calibration'],['calibration-recovery','Legacy Calibration recovery']
+          ['calibration-draft','Current Calibration'],['calibration-recovery','Legacy Calibration recovery'],
+          ['experiment-provenance','Historical experiment provenance']
         ];
         groups.forEach(function(group){
           var found=report.uses.filter(function(use){return use.type===group[0];});
@@ -254,6 +255,8 @@
           el('h3',group[1]+' ('+found.length+')',section);
           if(group[0]==='archive')
             el('p','Immutable historical evidence. No direct result viewer; opening a different project is not equivalent.',section);
+          if(group[0]==='experiment-provenance')
+            el('p','Historical calibration identity, not an attached image or proof of current fit. Read-only evidence.',section);
           found.forEach(function(use){
             var item=el('div',undefined,section);item.className='modern-image-usage-item';
             var detail=el('span',use.title+

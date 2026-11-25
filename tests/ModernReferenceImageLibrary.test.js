@@ -814,3 +814,34 @@ test('Where used inventories old standalone sources independently and matches ca
   assert.equal(incomplete.complete,false);
   assert.match(incomplete.unavailable.join('; '),/unsupported draft/);
 });
+
+test('Where used distinguishes historical calibration provenance from attached aliases',()=>{
+  const photo={version:1,sha256:'a'.repeat(64),width:20,height:10};
+  const experiment={calibrationOrigin:{photo}};
+  const other={calibrationOrigin:{photo:{...photo,width:21}}};
+  const frame={key:'kf',name:'Observed',experiment,referenceImageIds:['alias']};
+  const draft={name:'Draft',frames:[frame,{...frame,key:'other',experiment:other,referenceImageIds:[]}]};
+  const project={name:'Saved',mode:'experimental',baseExperiment:experiment,
+    keyframes:[{name:'Observed',value:experiment},{name:'Different',value:other}]};
+  const row={id:'named',updatedAt:1,project};
+  const shared={collection:{workspaces:[{id:'shared',checkpoint:{draft}}]},
+    revisions:[{id:'shared',revision:2}],
+    namedSave:{plan:{before:row,after:{...row,updatedAt:3}}}};
+  const editing={...shared,namedSave:undefined,keyframeEdit:{reference:{revision:'rev:2'},session:{projectId:'shared',frameKey:'kf',
+      original:experiment,workspace:other,candidate:other,past:[experiment],future:[other]},
+      history:{experiment}}};
+  const sources={animations:[row],drafts:[{id:'legacy',checkpoint:{savedAt:4,draft}}],
+    sharedAnimation:shared,currentStudio:{savedAt:5,draft},currentStudioWorkspaceId:'live'};
+  const report=usageGraph.report('alias',photo,sources);
+  const editReport=usageGraph.report('alias',photo,{sharedAnimation:editing});
+  const uses=report.uses.filter(use=>use.type==='experiment-provenance');
+  assert.equal(uses.length,9);
+  assert.equal(uses.filter(use=>use.source.includes('base experiment')).length,3);
+  assert.equal(editReport.uses.filter(use=>use.type==='experiment-provenance'&&use.source.startsWith('temporary edit')).length,3);
+  assert.equal(uses.filter(use=>use.ownerId==='legacy').length,1);
+  assert.equal(report.uses.filter(use=>use.type==='draft').length,3);
+  assert.equal(usageGraph.report('alias',{...photo,sha256:'b'.repeat(64)},sources)
+    .uses.filter(use=>use.type==='experiment-provenance').length,0);
+  assert.equal(usageGraph.report('different-alias',photo,sources)
+    .uses.filter(use=>use.type==='experiment-provenance').length,9);
+});
