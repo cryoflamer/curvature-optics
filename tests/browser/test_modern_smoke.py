@@ -626,6 +626,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/storage/ModernBackupWriteBarrier.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
+            'src/ui/modern/ModernImageUsageGraph.js',
         ]:
             self.page.add_script_tag(url='/'+script)
         result=self.page.evaluate("""async()=>{
@@ -688,6 +689,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(JSON.stringify(reopened.row.project)===JSON.stringify(project),'Animation state changed');
             ok(reopened.observations.length===2,'Animation photo references missing');
             ok((await adapter.store.get(first.snapshotId)).refCount===2,'source History alias became a strong dependency');
+            const usageGraph=CurvatureModernImageUsageGraph;
+            const usage=await usageGraph.discover(window,out.row,{libraryPort});
+            ok(usage.complete&&usage.coordinated&&usage.count===2,'managed usage discovery incomplete');
+            const projectUse=usage.uses.find(v=>v.ownerId==='animation:'+project.id);
+            const siblingUse=usage.uses.find(v=>v.ownerId==='observation:photo_b');
+            ok(projectUse?.relation==='selected observation'&&projectUse.path.length===2&&
+                projectUse.path[1].target===photo.observationId,'exact observation owner path missing');
+            ok(siblingUse?.relation==='shared original bytes'&&siblingUse.path.length===2&&
+                siblingUse.path[1].target===photo.originalId,'sibling original owner path missing');
+            const staleReport=await usageGraph.discover(window,{...out.row,revision:3},{libraryPort});
+            ok(!staleReport.complete&&staleReport.unavailable.length===1,'stale usage reported as complete');
+            const deletion=await usageGraph.deletionReview(window,out.row,{libraryPort});
+            ok(!deletion.safe&&deletion.localScanComplete&&deletion.knownUses===2,
+                'managed usage incorrectly authorized deletion');
             await adapter.store.removeDocument({documentId:'observation:photo_a',expectedRevision:1});
             ok(!(await adapter.store.collectGarbage(photo.observationId)).collected,'Animation observation reclaimed');
             const retainedAnimation=await adapter.readAnimation(project.id);

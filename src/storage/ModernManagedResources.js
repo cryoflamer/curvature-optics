@@ -684,6 +684,15 @@
         edited:library.edited,quota:library.quota,annotationQuota:library.annotationQuota,
         list:async db=>{bound(db);return (await listObservations()).map(v=>v.row);},
         get,inspectOriginal,
+        inspectUsage:async(db,id,expectedRevision)=>{
+          bound(db);
+          const value=await store.inspectDocumentUsage(observationId(id),['observation','original']);
+          check(value&&value.document.kind==='observation'&&value.document.metadata.id===id&&
+            value.document.metadata.revision===expectedRevision,'Observation changed or was removed; refresh Where used?');
+          check(value.targets[0].object.type===OBSERVATION&&value.targets[1].object.type===ORIGINAL,
+            'invalid managed image usage resource chain');
+          return value;
+        },
         create:async(db,record)=>{bound(db);return originalRow((await createObservation(record)).row);},
         importAssets:async(db,records)=>{bound(db);return importObservationAssets(records);},
         findOriginal:async(db,identity,_crypto,verify)=>{

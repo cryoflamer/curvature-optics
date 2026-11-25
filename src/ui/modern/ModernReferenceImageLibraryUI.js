@@ -3,7 +3,7 @@
   var api=factory(root.CurvatureModernReferenceImageLibrary,root.CurvatureModernReferenceImageImport,root);
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.CurvatureModernReferenceImageLibraryUI=api;
-}(typeof globalThis!=='undefined'?globalThis:this,function(library,importer,env){
+}(typeof globalThis!=='undefined'?globalThis:this,function(legacyLibrary,importer,env){
   'use strict';
   var textFields=[['title','Title',200],['description','Description',4000],['author','Author',300],
     ['sourceUrl','Source URL',4096],['license','License',4000],['notes','Notes',4000]];
@@ -23,7 +23,8 @@
       if(numeric&&uncertainty.trim())fact.uncertainty=Number(uncertainty);
     }return fact;
   }
-  function mount(host,db){
+  function mount(host,db,{managedResources=null}={}){
+    var library=managedResources?legacyLibrary.createPort({managedResources}):legacyLibrary;
     var doc=host.ownerDocument,busy=false,loaded=false,selected=null,dirty=false,
       entries=[],demoEntries=[],activeChoice=null,classificationReady=false,backupReady=false;
     function el(tag,text,parent){var node=doc.createElement(tag);if(text!==undefined)node.textContent=text;if(parent)parent.appendChild(node);return node;}
@@ -239,12 +240,13 @@
       if(!graph){usageStatus.textContent='Usage graph unavailable';return;}
       usageStatus.textContent='Checking saved projects and recoverable drafts…';
       try{
-        var report=await graph.discover(env,row);
+        var report=await graph.discover(env,row,{libraryPort:library});
         if(token!==usageEpoch||!selected||selected.id!==row.id)return;
         usageStatus.textContent=report.count+' known local use'+(report.count===1?'':'s')+
           (report.complete?' · accessible stores inspected':' · incomplete discovery')+
           (report.coordinated===true?' · coordinated local scan':' · uncoordinated local scan');
         var groups=[
+          ['managed-owner','Managed durable owners'],['managed-weak','Non-retaining links'],
           ['animation','Saved animations'],['calibration','Calibration projects'],
           ['archive','Archived results'],['draft','Recoverable Storyboards'],
           ['animation-intent','Interrupted Animation saves'],
@@ -335,7 +337,7 @@
         var inspectedId=selected.id,revision=selected.revision;
         var graph=env.CurvatureModernImageUsageGraph;
         if(!graph?.deletionReview)throw Error('Deletion inspection is unavailable');
-        var outcome=await graph.deletionReview(env,selected);
+        var outcome=await graph.deletionReview(env,selected,{libraryPort:library});
         if(!selected||selected.id!==inspectedId||selected.revision!==revision)
           throw Error('Image selection changed during deletion inspection; refresh Library');
         deletionStatus.textContent=(outcome.knownUses===null?

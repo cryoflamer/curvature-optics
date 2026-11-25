@@ -515,6 +515,54 @@
         return {object:g.objects.get(id)||null,references:[...g.refs.values()].filter(e=>e.target===id)};
       });
     }
+    // Resolve a selected root's resource chain and all durable strong
+    // owners in a single existing-only transaction. One representative path
+    // per root is enough to explain retention without enumerating every DAG path.
+    async function inspectDocumentUsage(id,path){
+      token(id,'document ID');
+      check(Array.isArray(path)&&path.length>0,'resource slot path required');
+      path.forEach(slot=>token(slot,'slot'));
+      if(!await existingDatabase())return null;
+      return transaction(env.indexedDB,'readonly',async stores=>{
+        const g=await graph(stores);inspect(g,types);
+        const doc=g.docs.get(id);
+        if(!doc||doc.deleted)return null;
+        await verifyPayloads(g,stores,types);
+        const incoming=new Map();
+        for(const edge of g.refs.values()){
+          if(!incoming.has(edge.target))incoming.set(edge.target,[]);
+          incoming.get(edge.target).push(edge);
+        }
+        function targetUsage(target){
+          const queue=[target],paths=new Map([[target,[]]]),owners=new Map();
+          for(let i=0;i<queue.length;i++){
+            const child=queue[i];
+            for(const edge of incoming.get(child)||[]){
+              if(edge.strength!=='strong')continue;
+              const route=[edge,...paths.get(child)];
+              if(edge.ownerKind==='document'){
+                if(!owners.has(edge.ownerId))owners.set(edge.ownerId,
+                  {document:g.docs.get(edge.ownerId),path:route});
+              }else if(!paths.has(edge.ownerId)){
+                paths.set(edge.ownerId,route);queue.push(edge.ownerId);
+              }
+            }
+          }
+          return {object:g.objects.get(target),owners:[...owners.values()].sort((a,b)=>
+            a.document.id.localeCompare(b.document.id)),
+            references:incoming.get(target)||[]};
+        }
+        let ownerKind='document',ownerId=id;
+        const targets=[];
+        for(const slot of path){
+          const edge=g.refs.get(edgeId({ownerKind,ownerId,slot}));
+          check(edge&&edge.strength==='strong','selected resource slot missing or not strong');
+          targets.push(targetUsage(edge.target));
+          ownerKind='object';ownerId=edge.target;
+        }
+        return {document:doc,targets};
+      },true);
+    }
     async function verifyIntegrity(){
       return run('readonly',async stores=>{
         const g=await graph(stores),{counts,mismatches}=inspect(g,types,true);
@@ -686,7 +734,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,
+      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,inspectDocumentUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

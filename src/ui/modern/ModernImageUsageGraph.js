@@ -360,7 +360,39 @@
       return {...result.value,coordinated:true};
     }catch(error){return {...failure(error),coordinated:false};}
   }
-  async function discover(env,row){
+  // The managed report describes canonical durable ownership, not the old
+  // alias scan. Do not synthesize frame navigation from an object-graph path.
+  const managedNote='Managed strong references in this browser only. One path per durable owner; shared original bytes are distinct from the selected observation. Direct weak references do not retain objects. Live unsaved edits and external exports are not covered; this report is not deletion permission.';
+  async function discoverManagedRaw(env,row,source){
+    if(typeof source.inspectUsage!=='function')throw Error('Managed usage graph unavailable');
+    const value=await source.inspectUsage(env.indexedDB,row.id,row.revision),uses=[],seen=new Set();
+    for(const [index,target] of value.targets.entries()){
+      const relation=index===0?'selected observation':'shared original bytes';
+      for(const owner of target.owners){
+        const doc=owner.document;
+        if(doc.id===value.document.id||seen.has(doc.id))continue;
+        seen.add(doc.id);
+        uses.push({type:'managed-owner',ownerId:doc.id,title:doc.metadata.title||doc.metadata.name||doc.id,
+          revision:doc.revision,source:doc.kind+' · '+relation,relation,path:owner.path});
+      }
+    }
+    const weak=new Set();
+    for(const target of value.targets)for(const edge of target.references){
+      if(edge.strength!=='weak')continue;
+      const key=JSON.stringify([edge.ownerKind,edge.ownerId,edge.slot,edge.target]);
+      if(weak.has(key))continue;
+      weak.add(key);uses.push({type:'managed-weak',ownerId:edge.ownerId,title:edge.ownerId,
+        revision:null,source:edge.ownerKind+' · '+edge.slot+' · non-retaining link',path:[edge]});
+    }
+    return {uses,count:uses.length,complete:true,unavailable:[],note:managedNote};
+  }
+  function managedFailure(error){
+    return {uses:[],count:0,complete:false,unavailable:['Managed image usage inspection failed: '+String(error.message||error)],
+      note:managedNote};
+  }
+  async function discover(env,row,{libraryPort=null}={}){
+    if(libraryPort?.storageKind==='managed')
+      return coordinated(env,()=>discoverManagedRaw(env,row,libraryPort),managedFailure);
     return coordinated(env,()=>discoverRaw(env,row),error=>
       report(row.id,null,{},['Image usage inspection failed: '+String(error.message||error)]));
   }
@@ -368,10 +400,10 @@
   // IDB databases, foreign tabs' Undo buffers and portable exports cannot
   // participate in the Image Library transaction. Even a second zero-use
   // scan can never issue a physical-delete authorization.
-  async function deletionReviewRaw(env,selected){
+  async function deletionReviewRaw(env,selected,libraryPort=null){
     if(!selected||typeof selected.id!=='string'||!selected.id)
       throw TypeError('Select an original photograph before checking deletion');
-    var source=env.CurvatureModernReferenceImageLibrary,issues=[],report=null,
+    var source=libraryPort||env.CurvatureModernReferenceImageLibrary,issues=[],report=null,
       before=null,after=null;
     if(!source||typeof source.inspectOriginal!=='function')
       issues.push('Original store unavailable for revision recheck');
@@ -380,7 +412,7 @@
       catch(error){issues.push('Original read failed: '+(error.message||error));}
       if(!before)issues.push('Original missing or inaccessible; refresh Image Library');
       else{
-        try{report=await discoverRaw(env,before);}
+        try{report=source.storageKind==='managed'?await discoverManagedRaw(env,before,source):await discoverRaw(env,before);}
         catch(error){issues.push('Usage scan failed: '+(error.message||error));}
         try{after=await source.inspectOriginal(env.indexedDB,selected.id);}
         catch(error){issues.push('Original recheck failed: '+(error.message||error));}
@@ -395,16 +427,18 @@
       if(!report.complete)issues.push('Some sources could not be checked: '+
         report.unavailable.join('; '));
     }
-    issues.push('Deletion is disabled: cross-database writes, unsaved Undo/recovery in other tabs and external backups cannot be atomically excluded');
+    issues.push(source?.storageKind==='managed'?
+      'Managed deletion is disabled until coordinated cutover and live editor retention are accepted':
+      'Deletion is disabled: cross-database writes, unsaved Undo/recovery in other tabs and external backups cannot be atomically excluded');
     return {safe:false,knownUses:report?report.count:null,
       localScanComplete:!!report&&report.complete&&!!before&&!!after&&
         before.revision===selected.revision&&after.revision===before.revision,
       reasons:issues,unavailable:report?report.unavailable.slice():[]};
   }
-  async function deletionReview(env,selected){
+  async function deletionReview(env,selected,{libraryPort=null}={}){
     if(!selected||typeof selected.id!=='string'||!selected.id)
       throw TypeError('Select an original photograph before checking deletion');
-    return coordinated(env,()=>deletionReviewRaw(env,selected),error=>({
+    return coordinated(env,()=>deletionReviewRaw(env,selected,libraryPort),error=>({
       safe:false,knownUses:null,localScanComplete:false,
       reasons:['Coordinated inspection failed: '+String(error.message||error),'Deletion is disabled'],
       unavailable:[String(error.message||error)]
