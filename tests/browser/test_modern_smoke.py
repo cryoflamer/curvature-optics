@@ -2655,9 +2655,9 @@ class ModernBrowserSmoke(unittest.TestCase):
             const animation=A.openSharedCollection(indexedDB,{lease,crypto,managedResources:animationLive});
             const id='draft_history_evidence',blank=Studio.blank();
             const cp=A.checkpoint({draft:blank,selectedKey:null,quality:'auto',prepared:false,positionMs:0},200);
-            let row=await animation.read();
-            row=await animation.initializeManaged(A.collection(id,cp,200));
-            await animationLive.bind(A.documentReference(row,id));
+            let animationRow=await animation.read();
+            animationRow=await animation.initializeManaged(A.collection(id,cp,200));
+            await animationLive.bind(A.documentReference(animationRow,id));
             const inserted=Studio.insertSnapshots(blank,[recorded.entry.id],[recorded.entry],0);
             ok(animationLive.needsEvidence(inserted),'new calibrated frame was treated as retained');
             const stale=structuredClone(inserted);stale.frames[0].experiment.scene.camera.Height+=5;
@@ -2666,14 +2666,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(!animationLive.needsEvidence(inserted),'History evidence not retained before edit');
             const withFrame=A.checkpoint({...cp,draft:inserted,selectedKey:inserted.frames[0].key},201);
             const base={revision:1,digest:'sha256:'+'a'.repeat(64)};
-            row=await animation.saveSelected(row,A.documentReference(row,id),withFrame,base);
-            row=await animation.retire(row,row.receipt);
-            row=await animation.saveSelected(row,A.documentReference(row,id),A.normalize({...cp,savedAt:202}),base);
-            row=await animation.retire(row,row.receipt);
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),withFrame,base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),A.normalize({...cp,savedAt:202}),base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
             ok(!(await adapter.readAnimationWorkingCollection()).evidence.length,'unlinked calibration still durable');
             await rejects(()=>adapter.store.collectGarbage(saved.resultId),/close the corresponding editor/);
-            row=await animation.saveSelected(row,A.documentReference(row,id),A.normalize({...withFrame,savedAt:203}),base);
-            row=await animation.retire(row,row.receipt);
+            animationRow=await animation.saveSelected(animationRow,A.documentReference(animationRow,id),A.normalize({...withFrame,savedAt:203}),base);
+            animationRow=await animation.retire(animationRow,animationRow.receipt);
             ok((await adapter.readAnimationWorkingCollection()).evidence[0].target===saved.resultId,
                 'Animation Undo lost retained fit');
             await animationLive.reset();
