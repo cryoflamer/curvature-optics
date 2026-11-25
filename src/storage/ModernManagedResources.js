@@ -5,7 +5,7 @@
   root.CurvatureModernManagedResources=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation';
+  const SNAPSHOT='experiment-snapshot',ORIGINAL='original-image',OBSERVATION='reference-observation',ANIMATION='animation-project';
   const check=(ok,message)=>{if(!ok)throw Error('Managed Resources: '+message);};
   const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
   const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&
@@ -21,7 +21,8 @@
     const core=deps.CurvatureModernManagedObjectStore,state=deps.CurvatureModernExperimentState,
       history=deps.CurvatureModernExperimentHistory,fp=deps.CurvatureModernExperimentFingerprint,
       images=deps.CurvatureModernReferenceImage,importer=deps.CurvatureModernReferenceImageImport,
-      library=deps.CurvatureModernReferenceImageLibrary;
+      library=deps.CurvatureModernReferenceImageLibrary,
+      projects=deps.CurvatureModernAnimationProject,animations=deps.CurvatureModernAnimationLibrary;
     check(core&&state&&history&&fp&&images&&importer&&library,'domain dependencies required');
     const types=[
       {type:SNAPSHOT,version:1,validate:v=>{
@@ -39,6 +40,22 @@
         (v.thumbnail===null||exact(v.thumbnail,['dataUrl','width','height'])),
         references:v=>[strong('original',v.originalId)]}
     ];
+    function aliases(project){
+      return [...new Set(project.keyframes.flatMap(frame=>frame.referenceImageIds||[]))].sort();
+    }
+    function hasCalibration(project){
+      return !!project.baseExperiment.calibrationOrigin||
+        (project.mode==='experimental'&&project.keyframes.some(frame=>frame.value.calibrationOrigin));
+    }
+    if(projects&&animations)types.push({type:ANIMATION,version:1,validate:v=>{
+      if(!exact(v,['project','observations','evidence']))return false;
+      const project=projects.validate(v.project);
+      const ids=aliases(project);
+      return same(project,v.project)&&Array.isArray(v.observations)&&
+        v.observations.length===ids.length&&v.observations.every((entry,i)=>
+          exact(entry,['alias','target'])&&entry.alias===ids[i]&&objectId(entry.target))&&
+        v.evidence===(hasCalibration(project)?'standalone':'none');
+    },references:v=>v.observations.map(entry=>strong('photo:'+entry.alias,entry.target))});
     const store=core.create(env,{types});
     const historyId=id=>{check(positive(id),'invalid History alias');return 'history:'+id;};
     const observationId=id=>'observation:'+images.validId(id);
@@ -148,7 +165,51 @@
       return {row:{id,revision:metadata.revision,record,...classification(metadata)},
         observationId:observation.id,originalId:original.id,managedRevision:graph.document.revision};
     }
-    return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation});
+    function animationFields(row){
+      check(projects&&animations,'Animation adapters unavailable');
+      const normalized=animations.normalize(row);
+      check(!row.thumbnail||normalized.thumbnail,'invalid Animation thumbnail');
+      const {project,...metadata}=normalized;
+      return {project,metadata};
+    }
+    async function saveAnimation(row,{expectedRevision=0,standalone=false}={}){
+      const {project,metadata}=animationFields(row);
+      check(!hasCalibration(project)||standalone===true,
+        'calibrated local Animation requires evidence mapping; standalone import must be explicit');
+      const observations=[];
+      for(const alias of aliases(project)){
+        const graph=await store.readDocumentGraph(observationId(alias));
+        check(graph&&graph.document.kind==='observation','required observation missing: '+alias);
+        const value=pick(graph,'observation',OBSERVATION);
+        check(value.payload.id===alias,'observation alias mismatch');
+        observations.push({alias,target:value.id});
+      }
+      const payload={project,observations,evidence:hasCalibration(project)?'standalone':'none'};
+      const id=store.newObjectId();
+      const document=await store.writeDocument({documentId:'animation:'+project.id,kind:'animation',
+        expectedRevision,metadata,references:[strong('project',id)],
+        resources:[{id,type:ANIMATION,version:1,payload}]});
+      return {projectId:id,managedRevision:document.revision};
+    }
+    async function readAnimation(id){
+      check(projects&&animations,'Animation adapters unavailable');
+      const graph=await store.readDocumentGraph('animation:'+images.validId(id));
+      if(!graph)return null;
+      check(graph.document.kind==='animation'&&graph.document.references.length===1,'invalid Animation root');
+      const resource=pick(graph,'project',ANIMATION),v=resource.payload;
+      const row=animations.normalize({...graph.document.metadata,project:v.project});
+      check(row.id===id,'Animation alias mismatch');
+      for(const entry of v.observations){
+        const image=graph.resources.find(r=>r.id===entry.target);
+        check(image?.type===OBSERVATION&&image.payload.id===entry.alias,'Animation observation mismatch');
+        const original=graph.resources.find(r=>r.id===image.payload.originalId);
+        check(original?.type===ORIGINAL&&same(original.payload.identity,image.payload.identity),
+          'Animation original evidence mismatch');
+      }
+      return {row,projectId:resource.id,managedRevision:graph.document.revision,
+        evidence:v.evidence,observations:v.observations};
+    }
+    return Object.freeze({store,saveHistory,readHistory,saveObservation,readObservation,saveAnimation,readAnimation});
   }
-  return Object.freeze({create,SNAPSHOT,ORIGINAL,OBSERVATION});
+  return Object.freeze({create,SNAPSHOT,ORIGINAL,OBSERVATION,ANIMATION});
 }));

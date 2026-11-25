@@ -491,6 +491,14 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/animation/ModernReferenceImage.js',
             'src/animation/ModernReferenceImageLibrary.js',
             'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
         ]:
@@ -540,8 +548,24 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(out.row.revision===4&&out.row.annotationRevision===2&&out.row.tags[0]==='tower','metadata lost');
             ok(photo.observationId!==photo2.observationId&&photo.originalId===photo2.originalId,'identity split incorrect');
             ok((await adapter.store.get(photo.originalId)).refCount===2,'original not retained by both observations');
+            const project=CurvatureModernAnimationProject.create([
+                {id:17,experiment,referenceImageIds:['photo_a']},
+                {id:18,experiment,referenceImageIds:['photo_a','photo_b']}
+            ],{id:'saved_animation',name:'Saved Animation',mode:'camera'});
+            const animationRow={version:1,id:project.id,createdAt:100,updatedAt:100,
+                quality:'accurate',project,thumbnail:null};
+            const animation=await adapter.saveAnimation(animationRow);
+            const reopened=await adapter.readAnimation(project.id);
+            ok(JSON.stringify(reopened.row.project)===JSON.stringify(project),'Animation state changed');
+            ok(reopened.observations.length===2,'Animation photo references missing');
+            ok((await adapter.store.get(first.snapshotId)).refCount===2,'source History alias became a strong dependency');
             await adapter.store.removeDocument({documentId:'observation:photo_a',expectedRevision:1});
-            await adapter.store.collectGarbage(photo.observationId);
+            ok(!(await adapter.store.collectGarbage(photo.observationId)).collected,'Animation observation reclaimed');
+            ok((await adapter.readAnimation(project.id)).observations[0].target===photo.observationId,
+                'Animation lost observation after gallery removal');
+            await adapter.store.removeDocument({documentId:'animation:'+project.id,expectedRevision:1});
+            ok((await adapter.store.collectGarbage(animation.projectId)).collected,'unused Animation not reclaimed');
+            ok((await adapter.store.collectGarbage(photo.observationId)).collected,'unused observation not reclaimed');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'shared original reclaimed');
             ok((await adapter.readObservation('photo_b')).row.record.original.dataUrl===original.dataUrl,'other observation lost');
             const names=(await indexedDB.databases()).map(db=>db.name);
