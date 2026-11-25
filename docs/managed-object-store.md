@@ -439,3 +439,16 @@ shared writer lock. The controller's pending-pointer and already-committed
 receipt recovery protocols remain unchanged; the managed domain port can
 be tested against the existing shared checkpoint implementation before
 the latter is routed to managed storage.
+
+### Managed Animation Library application port
+
+The explicit library port preserves named-save timestamp and exact-row CAS,
+semantic duplicate detection, portable entry import and idempotent planned
+update. A matching pending Named Save journal supplies retained observations
+and Calibration evidence when gallery roots have disappeared; the journal
+inventory is checked in the same transaction as the named update. Export
+consumers can obtain original reference records from the immutable named
+owner. Existing-only usage reads do not acquire the writer lock. Deletion
+and production routing remain disabled. Portable entry import requires
+available verified evidence; asset bundle orchestration and foreign standalone
+calibration provenance need additional integration before cutover.

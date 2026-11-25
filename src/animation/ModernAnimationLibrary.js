@@ -506,7 +506,12 @@
         store.delete(id);finish(true);};
     });
   }
-  return Object.freeze({VERSION:VERSION,DATABASE:DATABASE,STORE:STORE,
+  function createPort({managedResources}={}){
+    if(typeof managedResources?.createAnimationLibraryPort!=='function')
+      throw Error('Explicit managed Animation Library port required');
+    return managedResources.createAnimationLibraryPort();
+  }
+  return Object.freeze({VERSION:VERSION,DATABASE:DATABASE,STORE:STORE,createPort,duplicateError,nextRecord,
     normalize:normalize,makeId:makeId,record:record,
     fingerprint:fingerprint,findDuplicates:findDuplicates,
     thumbnailMatchesFirstFrame:thumbnailMatchesFirstFrame,sameFirstFrame:sameFirstFrame,

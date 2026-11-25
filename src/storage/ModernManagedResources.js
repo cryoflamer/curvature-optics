@@ -1096,6 +1096,12 @@
       const previous=expectedRevision===0?null:await readAnimation(project.id);
       check(expectedRevision===0||previous?.managedRevision===expectedRevision,
         'Animation revision conflict');
+      const next=await planAnimation(row,previous,expectedRevision,standalone);
+      const document=await store.writeDocument(next.plan);
+      return {projectId:next.projectId,managedRevision:document.revision};
+    }
+    async function planAnimation(row,previous,expectedRevision,standalone=false,journal=null){
+      const {project,metadata}=animationFields(row);
       const retainedEvidence=new Map(Array.isArray(previous?.evidence)?
         previous.evidence.map(entry=>[entry.alias,entry.target]):[]);
       const retainedObservations=new Map((previous?.observations||[]).map(entry=>[entry.alias,entry.target]));
@@ -1109,7 +1115,7 @@
         }else{
           const mapped=new Map();
           for(const origin of origins){
-            let target=retainedEvidence.get(origin.resultId);
+            let target=retainedEvidence.get(origin.resultId)??journal?.evidence.find(v=>v.alias===origin.resultId)?.target;
             if(target)checkOrigin(origin,await store.get(target));
             else target=await resolveOrigin(origin);
             if(mapped.has(origin.resultId))check(mapped.get(origin.resultId)===target,'calibration evidence changed');
@@ -1124,6 +1130,8 @@
           observations.push({alias,target:retainedObservations.get(alias)});
           continue;
         }
+        const retained=journal?.observations.find(v=>v.alias===alias);
+        if(retained){observations.push(retained);continue;}
         const graph=await store.readDocumentGraph(observationId(alias));
         check(graph&&graph.document.kind==='observation','required observation missing: '+alias);
         const value=pick(graph,'observation',OBSERVATION);
@@ -1133,14 +1141,18 @@
       }
       const payload={project,observations,evidence};
       const id=store.newObjectId();
-      const document=await store.writeDocument({documentId:'animation:'+project.id,kind:'animation',
+      return {projectId:id,plan:{documentId:'animation:'+project.id,kind:'animation',
         expectedRevision,metadata,references:[strong('project',id)],
-        resources:[{id,type:ANIMATION,version:1,payload}]});
-      return {projectId:id,managedRevision:document.revision};
+        resources:[{id,type:ANIMATION,version:1,payload}]}};
     }
     async function readAnimation(id){
       check(projects&&animations,'Animation adapters unavailable');
-      const graph=await store.readDocumentGraph('animation:'+images.validId(id));
+      return loadAnimation(await store.readDocumentGraph('animation:'+images.validId(id)),id);
+    }
+    async function inspectAnimation(id){
+      return loadAnimation(await store.inspectDocumentGraph('animation:'+images.validId(id)),id);
+    }
+    async function loadAnimation(graph,id){
       if(!graph)return null;
       check(graph.document.kind==='animation'&&graph.document.references.length===1,'invalid Animation root');
       const resource=pick(graph,'project',ANIMATION),v=resource.payload;
@@ -1162,6 +1174,108 @@
       }
       return {row,projectId:resource.id,managedRevision:graph.document.revision,
         evidence:v.evidence,observations:v.observations,referenceImages};
+    }
+    async function animationInventory(){
+      return (await listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),v=>v,
+        (a,b)=>byTime('updatedAt')(a.row,b.row))).map(v=>v.row);
+    }
+    function animationExpected(existing){
+      return {kind:'animation',documents:existing.map(v=>({id:'animation:'+v.row.id,revision:v.managedRevision}))};
+    }
+    async function createApplicationAnimation(project,optics,now,thumbnail,allowDuplicate,cover){
+      const time=now||Date.now(),row=animations.record(project,optics,project.id,time,time,thumbnail,cover);
+      const existing=await animationInventory();
+      check(!existing.some(v=>v.row.id===row.id),'Animation Library project already exists');
+      if(!allowDuplicate){
+        const match=existing.find(v=>animations.fingerprint(v.row.project)===animations.fingerprint(row.project));
+        if(match)throw animations.duplicateError(match.row);
+      }
+      const next=await planAnimation(row,null,0);
+      await store.writeDocuments([next.plan],{expectedInventory:animationExpected(existing)});
+      return row;
+    }
+    async function changeApplicationAnimation(id,expected,build,{guard=()=>{},exactRow=null,planned=null}={}){
+      const existing=await animationInventory(),current=existing.find(v=>v.row.id===id);
+      check(current,'Saved Animation was deleted; update plan retained');
+      const inventory=[animationExpected(existing)];
+      if(planned&&same(current.row,planned.after)){
+        await store.writeDocuments([],{expectedInventory:inventory,guard});
+        return planned.after;
+      }
+      check(current.row.updatedAt===expected&&(!exactRow||same(current.row,exactRow)),
+        'Animation Library project changed in another tab; reopen it or use Save As');
+      const row=animations.normalize(build(current.row));
+      let journal=null;
+      if(planned&&drafts){
+        const candidate=await readAnimationWorkingCollection();
+        if(candidate?.row.namedSave&&same(candidate.row.namedSave.plan,planned)){
+          journal=candidate;
+          inventory.push({kind:DRAFTS,documents:[{id:draftsId,revision:candidate.managedRevision}]});
+        }
+      }
+      const next=await planAnimation(row,current,current.managedRevision,false,journal);
+      await store.writeDocuments([next.plan],{expectedInventory:inventory,guard});
+      return row;
+    }
+    async function importApplicationAnimations(items,now,crypto){
+      const incoming=animations.parseBundle(JSON.stringify({format:animations.PORTABLE_FORMAT,version:1,animations:items})).animations;
+      const existing=await animationInventory(),seen=new Map(),ids=new Set();
+      for(const doc of await store.listDocuments('animation',{includeDeleted:true}))ids.add(doc.id.slice('animation:'.length));
+      for(const v of existing){const key=animations.fingerprint(v.row.project);if(!seen.has(key))seen.set(key,v.row.id);}
+      const time=now||Date.now(),createdIds=[],reusedIds=[],plans=[];
+      for(const item of incoming){
+        const key=animations.fingerprint(item.project);
+        if(seen.has(key)){reusedIds.push(seen.get(key));continue;}
+        let id,attempt=0;
+        do{check(++attempt<=100,'Cannot allocate a unique animation ID');id=animations.makeId(crypto,time+attempt);}while(ids.has(id));
+        ids.add(id);seen.set(key,id);
+        const project=projects.validate({...item.project,id,keyframes:item.project.keyframes.map(f=>({...f,sourceSnapshotId:null}))});
+        // A foreign calibration origin without an archive cannot silently
+        // become verified evidence. Refuse mixed/unavailable evidence here.
+        const row=animations.record(project,item.quality,id,item.createdAt??time,item.updatedAt??time,item.thumbnail,item.cover);
+        plans.push((await planAnimation(row,null,0)).plan);createdIds.push(id);
+      }
+      await store.writeDocuments(plans,{expectedInventory:animationExpected(existing)});
+      return {created:createdIds.length,reused:reusedIds.length,createdIds,reusedIds};
+    }
+    function createAnimationLibraryPort(){
+      check(projects&&animations,'Animation adapters unavailable');
+      function bound(db){check(db===env.indexedDB,'Animation Library database context mismatch');}
+      const rejectDelete=async()=>{throw Error('Managed Animation deletion is disabled until coordinated cutover');};
+      return Object.freeze({...animations,storageKind:'managed',coordination:store.coordination,
+        list:async db=>{bound(db);return (await listAnimations()).map(v=>v.row);},
+        get:async(db,id)=>{bound(db);return (await readAnimation(id))?.row??null;},
+        inspectUsage:async db=>{
+          bound(db);return (await listVerified('animation',inspectAnimation,id=>'animation:'+images.validId(id),
+            v=>v.row,byTime('updatedAt'),store.inspectDocuments)).map(v=>v.row);
+        },
+        create:async(db,...args)=>{bound(db);return createApplicationAnimation(...args);},
+        update:async(db,project,optics,expected,now,thumbnail)=>{
+          bound(db);return changeApplicationAnimation(project.id,expected,old=>animations.nextRecord(old,project,optics,now,thumbnail));
+        },
+        updateExact:async(db,project,optics,expected,now,thumbnail)=>{
+          bound(db);const plan=animations.planExactUpdate(project,optics,expected,now,thumbnail);
+          return changeApplicationAnimation(plan.before.id,plan.before.updatedAt,()=>plan.after,{exactRow:plan.before});
+        },
+        commitPlannedUpdate:async(db,input,guard=()=>{})=>{
+          bound(db);guard();const plan=animations.validateUpdatePlan(input);
+          return changeApplicationAnimation(plan.before.id,plan.before.updatedAt,()=>plan.after,{guard,exactRow:plan.before,planned:plan});
+        },
+        rename:async(db,id,name,expected,now)=>{
+          bound(db);return changeApplicationAnimation(id,expected,old=>animations.record({...old.project,name},old.quality,id,
+            old.createdAt,Math.max(now||Date.now(),old.updatedAt+1),old.thumbnail,old.cover));
+        },
+        setCover:async(db,id,image,expected,now)=>{
+          bound(db);return changeApplicationAnimation(id,expected,old=>animations.record(old.project,old.quality,id,
+            old.createdAt,Math.max(now||Date.now(),old.updatedAt+1),old.thumbnail,image));
+        },
+        importEntries:async(db,items,now,crypto)=>{bound(db);return importApplicationAnimations(items,now,crypto);},
+        // Export from the immutable owner, not from a mutable gallery alias.
+        retainedReferences:async(db,id)=>{
+          bound(db);const value=await readAnimation(id);check(value,'Saved Animation missing');return value.referenceImages;
+        },
+        remove:rejectDelete,removeExact:rejectDelete
+      });
     }
     const workingId='working:shared-experiment';
     function workingContracts(){
@@ -1442,7 +1556,7 @@
       saveAnimationWorkingCollection,readAnimationWorkingCollection,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
-      createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,
+      createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createAnimationLibraryPort,
       createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
       importObservationAssets,exportObservationBackup,restoreObservationBackup,createImageLibraryPort,findObservationOriginal,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});

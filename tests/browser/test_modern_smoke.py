@@ -1436,6 +1436,120 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertGreaterEqual(result['eligible'],1)
         print("MANAGED_AUTOSAVE_PROFILE_SCOPED "+__import__('json').dumps(result,sort_keys=True),flush=True)
 
+    def test_managed_animation_library_application_port(self):
+        self.page.route(self.base_url, lambda route: route.fulfill(
+            status=200, content_type='text/html', body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        for script in [
+            'src/ui/modern/ModernExperimentState.js',
+            'src/ui/modern/ModernCompareState.js',
+            'src/ui/modern/ModernExperimentFingerprint.js',
+            'src/ui/modern/ModernExperimentThumbnail.js',
+            'src/ui/modern/ModernSemanticNaming.js',
+            'src/ui/modern/ModernExperimentHistory.js',
+            'src/animation/ModernReferenceImage.js',
+            'src/animation/ModernReferenceImageLibrary.js',
+            'src/ui/modern/ModernReferenceImageImport.js',
+            'src/ui/modern/ModernCameraHud.js',
+            'src/app/CurvaturePhysicalCamera.js',
+            'src/camera/ModernCameraTelemetry.js',
+            'src/camera/ModernCameraInterpolator.js',
+            'src/animation/ModernAnimationCompatibility.js',
+            'src/animation/ModernAnimationContract.js',
+            'src/animation/ModernAnimationProject.js',
+            'src/animation/ModernAnimationLibrary.js',
+            'src/storage/ModernBackupWriteBarrier.js',
+            'src/animation/ModernAnimationStudio.js',
+            'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernManagedObjectStore.js',
+            'src/storage/ModernManagedResources.js',
+        ]:
+            self.page.add_script_tag(url='/'+script)
+        result=self.page.evaluate("""async()=>{
+            const api=CurvatureModernManagedResources,adapter=api.create(window);
+            const ok=(value,msg)=>{if(!value)throw Error(msg);};
+            const rejects=async(action,pattern)=>{
+                try{await action();}catch(e){ok(pattern.test(e.message),e.message);return;}
+                throw Error('Expected refusal: '+pattern);
+            };
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'compare',eyeLevel:false,horizon:true,selected:'B'});
+            const A=CurvatureModernAnimationDraftAutosave,L=CurvatureModernAnimationLibrary,
+                P=CurvatureModernAnimationProject;
+            const store=adapter.store,photos=[];
+            for(const [id,color] of [['before_photo','#123456'],['after_photo','#654321']]){
+                const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;
+                const ctx=canvas.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,3,2);
+                const record={id,version:1,title:id,original:{dataUrl:canvas.toDataURL('image/png'),width:3,height:2}};
+                photos.push({record,...await adapter.saveObservation({id,revision:1,record})});
+            }
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=P.createV2(contract,[{experiment},{experiment}],
+                {id:'journal_animation',name:'Working project'});
+            const draft=CurvatureModernAnimationStudio.fromProject(project);
+            const cp=A.checkpoint({draft,selectedKey:draft.frames[0].key,quality:'auto',
+                prepared:false,positionMs:0,libraryId:project.id,libraryRevision:100},100);
+            const id=A.projectWorkspaceId(project.id);
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const legacy=A.openSharedCollection(indexedDB,{lease,crypto});
+            await legacy.read();
+            let row=await legacy.initializeEmpty(await A.inspectLegacySources(window),
+                A.collection(id,cp,100),localStorage);
+            let saved=await adapter.saveAnimationWorkingCollection(row);
+            const withPhoto=(alias)=>({...project,keyframes:project.keyframes.map((f,i)=>
+                i?f:{...f,referenceImageIds:[alias]})});
+            const before=L.normalize({version:1,id:project.id,createdAt:100,updatedAt:100,
+                quality:'accurate',project:withPhoto(photos[0].record.id),thumbnail:null});
+            const after=L.normalize({...before,updatedAt:101,project:withPhoto(photos[1].record.id)});
+            const plan={version:1,before,after};
+            const port=L.createPort({managedResources:adapter});
+            await port.create(indexedDB,before.project,before.quality,100,null,false);
+            await rejects(()=>port.create(indexedDB,{...before.project,id:'duplicate'},'accurate',100,null,false),/Identical animation/);
+            row=await legacy.stageNamedSave(row,A.documentReference(row,id),plan);
+            const staged=await adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision});
+            const reopened=await api.create(window).readAnimationWorkingCollection();
+            ok(reopened.row.digest===row.digest&&JSON.stringify(reopened.row.namedSave.plan)===JSON.stringify(plan),
+                'named save journal changed');
+            ok(reopened.referenceImages.length===2,'both sides of named save must retain photos');
+            for(const photo of photos){
+                await store.removeDocument({documentId:'observation:'+photo.record.id,expectedRevision:1});
+                ok(!(await store.collectGarbage(photo.observationId)).collected,'pending named save lost photo');
+                ok(!(await store.collectGarbage(photo.originalId)).collected,'pending named save lost original');
+                const found=reopened.referenceImages.find(r=>r.id===photo.record.id);
+                ok(found.original.dataUrl===photo.record.original.dataUrl,'pending original bytes changed');
+            }
+            await rejects(()=>adapter.saveAnimationWorkingCollection(row,{expectedRevision:saved.managedRevision}),
+                /revision conflict/);
+            const committed=await port.commitPlannedUpdate(indexedDB,plan);
+            ok(JSON.stringify(committed)===JSON.stringify(after),'planned save changed target bytes');
+            ok(JSON.stringify(await port.commitPlannedUpdate(indexedDB,plan))===JSON.stringify(after),'planned retry changed revision');
+            const owned=await port.retainedReferences(indexedDB,project.id);
+            ok(owned.length===1&&owned[0].original.dataUrl===photos[1].record.original.dataUrl,'named save lost journal evidence');
+            const renamed=await port.rename(indexedDB,project.id,'Renamed',101,102);
+            ok(renamed.project.name==='Renamed'&&renamed.updatedAt===102,'rename failed');
+            await rejects(()=>port.commitPlannedUpdate(indexedDB,plan),/changed in another tab/);
+            const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+            const inspection=await barrier.snapshot(()=>port.inspectUsage(indexedDB));
+            ok(inspection.value.length===1&&inspection.value[0].updatedAt===102,'existing-only usage failed');
+            await rejects(()=>port.removeExact(indexedDB,renamed),/deletion is disabled/);
+            const item={project,quality:'auto'};
+            const imported=await port.importEntries(indexedDB,[item,item],103,crypto);
+            ok(imported.created===1&&imported.reused===1,'portable import dedup failed');
+            const again=await port.importEntries(indexedDB,[item],104,crypto);
+            ok(again.created===0&&again.reused===1,'portable reimport failed');
+            return {valid:(await store.verifyIntegrity()).valid,count:(await port.list(indexedDB)).length};
+        }""")
+        self.assertEqual(result, {'valid': True, 'count': 2})
+
+
     def test_managed_animation_pending_journals_retain_resources(self):
         self.page.route(self.base_url, lambda route: route.fulfill(
             status=200, content_type='text/html', body='<html><body></body></html>'))
