@@ -10320,6 +10320,10 @@
     getAnimationStudioDraft:function(){return studioDraftAutosave&&studioDraft?
       studioDraftAutosave.checkpoint({draft:studioDraft,selectedKey:studioSelectedKey,
         quality:studioPlaybackQuality,prepared:!!studioPrepared,
+        libraryId:studioLibraryActive?studioLibraryActive.id:
+          studioLibraryPending?studioLibraryPending.id:null,
+        libraryRevision:studioLibraryActive?studioLibraryActive.updatedAt:
+          studioLibraryPending?studioLibraryPending.revision:null,
         positionMs:studioPlayback?studioPlayback.status().positionMs:0},
         Math.max(1,studioDraftSavedAt||Date.now())):null;},
     getAnimationStudioProject:function(){return studioPrepared&&studioProjects?

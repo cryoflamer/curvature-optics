@@ -12151,6 +12151,16 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(cp['libraryId'],latest['id'])
         self.assertEqual(cp['libraryRevision'],latest['updatedAt'])
         self.assertEqual(cp['draft']['name'],'New saved revision')
+        durable=self.page.evaluate("""async id=>{
+            const D=CurvatureModernDocumentSession,U=CurvatureModernUiSessionStore.create(window);
+            U.sharedDocumentSessions(D);
+            const A=CurvatureModernAnimationDraftAutosave,row=await A.openSharedCollection(indexedDB,
+                {lease:U.captureSharedDocumentLifetime(),crypto}).read();
+            return A.getWorkspace(row.collection,'project_'+id);
+        }""",latest['id'])
+        self.assertEqual(durable['libraryId'],latest['id'])
+        self.assertEqual(durable['libraryRevision'],latest['updatedAt'])
+        self.assertEqual(durable['draft']['name'],'New saved revision')
         field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
         field.fill('Working copy edits only')
         field.press('Tab')
