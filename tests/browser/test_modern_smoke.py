@@ -2821,8 +2821,30 @@ class ModernBrowserSmoke(unittest.TestCase):
             await adapter.store.collectGarbage(duplicated.projectId);
             await rejects(()=>projectPort.saveOrForkWithSelectionReceipt(indexedDB),/shared lifetime/);
             await rejects(()=>projectPort.remove(indexedDB,calibration.id,2),/deletion is disabled/);
+            // A stale editor keeps exact evidence through a conflict fork.
+            const live=adapter.createCalibrationEditorRetention();
+            await live.bind(revised);
+            const remote=await projectPort.update(indexedDB,revised.id,2,{title:'Remote edit'},49);
+            await rejects(()=>adapter.store.removeDocument({documentId:'calibration:'+revised.id,expectedRevision:3}),/close the corresponding editor/);
+            await rejects(()=>adapter.store.collectGarbage(revisedRead.projectId),/close the corresponding editor/);
+            const liveParts=await live.storage.captureVerified(indexedDB,revisedRead.draft,revisedRead.inline,revised);
+            ok(JSON.stringify(liveParts.photo)===JSON.stringify(revised.photo)&&!(await adapter.listObservations()).length,
+                'live capture substituted or recreated gallery evidence');
+            const fork=await live.storage.saveOrFork(indexedDB,revised.id,2,{title:'Live fork',...liveParts,
+                resultIds:revised.resultIds},projectApi.createId(crypto),50);
+            ok(fork.status==='forked','stale live Calibration did not fork');
+            await live.adopt(fork.project);
+            const forkRead=await adapter.readCalibrationProject(fork.project.id);
+            ok(forkRead.originalId===photo.originalId&&forkRead.results[0].target===saved.resultId,
+                'live fork lost exact original or archive evidence');
+            await rejects(()=>adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:1}),/close the corresponding editor/);
+            await live.reset();
+            await adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:1});
+            await adapter.store.collectGarbage(forkRead.projectId);
+            ok((await adapter.store.collectGarbage(revisedRead.projectId)).collected,'closed editor retained old revision');
+            const currentCalibration=await adapter.readCalibrationProject(remote.id);
             const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));
-            ok(usage.value.projects.length===1&&usage.value.projects[0].revision===2&&usage.value.legacy===null,
+            ok(usage.value.projects.length===1&&usage.value.projects[0].revision===3&&usage.value.legacy===null,
                 'project usage inspection did not use managed inventory');
             const reopenedAnimation=await adapter.readAnimation(animationProject.id);
             ok(reopenedAnimation.projectId===animation.projectId&&reopenedAnimation.evidence[0].target===saved.resultId,
@@ -2840,8 +2862,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             const archive=(await CurvatureModernPortableBackup.captureCoordinated(window)).archive;
             return {valid:(await adapter.store.verifyIntegrity()).valid,fit:read.row.record.payload.fit.result.evaluation.rmsPx,
                 snapshot:snap.snapshotId!==standalone.snapshotId,archive,expected:{
-                    calibration:revisedRead.project,inline:revisedRead.inline,
-                    undo:revisedRead.draft.undoStack,redo:revisedRead.draft.redoStack,
+                    calibration:currentCalibration.project,inline:currentCalibration.inline,
+                    undo:currentCalibration.draft.undoStack,redo:currentCalibration.draft.redoStack,
                     original:record.original.dataUrl,result:archived,resultId:saved.resultId,
                     originalId:photo.originalId,experiment,animation:editedRead.row.project,
                     workingDigest:emptyRow.digest}};
@@ -2913,7 +2935,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
                 return {listsExact:lists.calibration.length===1&&
                     equal(lists.calibration[0].row,CurvatureModernCalibrationProject.summary(expected.calibration))&&
-                    lists.calibration[0].managedRevision===2&&lists.history.map(v=>v.row.id).join(',')==='74,71'&&
+                    lists.calibration[0].managedRevision===3&&lists.history.map(v=>v.row.id).join(',')==='74,71'&&
                     lists.animations.length===1&&equal(lists.animations[0].row.project,expected.animation)&&
                     lists.photos.length===0&&lists.results.length===0,qualified:report.qualification.integrity.valid,
                     owners:report.qualification.owners,originals:report.qualification.originalsVerified,
@@ -3040,6 +3062,12 @@ class ModernBrowserSmoke(unittest.TestCase):
             .projectPersistenceStatus().projectId""",timeout=30000)
         calibration_id=self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
             .projectPersistenceStatus().projectId""")
+        self.assertTrue(self.page.evaluate("""async id=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            const project=await adapter.readCalibrationProject(id);
+            try{await adapter.store.removeDocument({documentId:'calibration:'+id,expectedRevision:project.managedRevision});return false;}
+            catch(error){return /close the corresponding editor/.test(error.message);}
+        }""",calibration_id))
         self.page.reload(wait_until='load')
         self.page.wait_for_function(ready,timeout=30000)
         self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')

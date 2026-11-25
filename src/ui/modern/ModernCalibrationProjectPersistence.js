@@ -139,6 +139,8 @@
       // The domain transaction already committed. Retrying this step must
       // never save/fork the project a second time or infer a new CAS base.
       if(!receipt.acknowledged){
+        if(sharedSelection.retention)await sharedSelection.retention.adopt(receipt.project);
+        checkLifetime();
         await sharedSelection.acknowledge(Object.freeze({
           previous:projectReference(receipt.previous),current:projectReference(receipt.project),
           status:receipt.status,generation:owner.generation,

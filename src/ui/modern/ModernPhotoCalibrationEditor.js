@@ -1616,7 +1616,7 @@
       if(!projectSession){
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
-        projectSession=helper.create(env,{storage:projectStorage(),sharedSelection,onChange:()=>{
+        projectSession=helper.create(env,{storage:sharedSelection?.retention?.storage||projectStorage(),sharedSelection,onChange:()=>{
           // Bind/save/failure acknowledgments maintain the tab-scoped durable
           // identity. No auto-resume token is kept for unresolved edits.
           if(!leavingPage)rememberCleanProjectState(projectSession?.state());
@@ -1952,6 +1952,8 @@
         requireGuard();
         if(!confirmed||JSON.stringify(confirmed)!==JSON.stringify(prepared.project))
           throw Error('Calibration Project changed after shared selection');
+        if(sharedSelection.retention)await sharedSelection.retention.bind(prepared.project);
+        requireGuard();
         activateVisualProject(incoming);
         session.bind(prepared.project);
         delete workspace.dataset.sharedLibraryOnly;
@@ -2150,8 +2152,9 @@
         throw Error('Verified Reference Image Library unavailable');
       // Reuse the original by SHA-256; a failed read/decode/quota/write
       // must never replace the current correspondences or photo.
-      const durable=await library.ensureOriginal(env.indexedDB,next,env.crypto,
-        candidate=>importer.verifyOriginal(candidate,env));
+      const durable=sharedSelection?.retention?await sharedSelection.retention.retainPhoto(next):
+        await library.ensureOriginal(env.indexedDB,next,env.crypto,
+          candidate=>importer.verifyOriginal(candidate,env));
       if(token!==loadToken)return false;
       const decoded=new env.Image();decoded.src=next.original.dataUrl;await decoded.decode();
       if(token!==loadToken)return false;
@@ -2741,6 +2744,8 @@
       if(token!==loadToken)throw Error('Import superseded');
       if(decoded.naturalWidth!==width||decoded.naturalHeight!==height)throw Error('Embedded photo dimensions mismatch');
       if((record||workflow.rows.length)&&!env.confirm('Replace the current calibration draft with this experiment?'))return false;
+      if(sharedSelection?.retention)await sharedSelection.retention.retainPhoto(data.referenceImage);
+      if(token!==loadToken)throw Error('Import superseded');
       invalidateFit('Importing calibration experiment…');
       photoGestures.cancel();photoGhost=null;
       record=data.referenceImage;image=decoded;workflow.replaceAll(data.observations);
@@ -2948,6 +2953,7 @@
       const selected=session.state();
       if(selected.projectId!==binding.projectId||selected.generation!==binding.generation)
         throw Error('Calibration Project changed during archive; result link was not redirected');
+      if(sharedSelection?.retention)await sharedSelection.retention.retainResult(resultId);
       const outcome=await session.linkResult(resultId,captureDraftState(),
         captureInlineState(),binding);
       $('ModernCalibrationStorage').textContent=

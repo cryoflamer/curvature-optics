@@ -887,7 +887,7 @@
       const document=await store.writeDocument(plan);
       return {projectId,managedRevision:document.revision};
     }
-    async function planCalibrationProject(project,previous,expectedRevision,originalId){
+    async function planCalibrationProject(project,previous,expectedRevision,originalId,editorResults=null){
       // Editing an owner does not require its archived evidence to remain
       // listed in the gallery. Preserve exact existing resource mappings.
       if(previous&&originalId===null&&project.photo&&
@@ -898,6 +898,13 @@
       const retained=new Map((previous?.results||[]).map(entry=>[entry.alias,entry.target]));
       const references=[];
       for(const alias of project.resultIds){
+        if(editorResults){
+          const live=editorResults.get(alias);
+          check(live,'Calibration editor result was not retained: '+alias);
+          const result=await store.get(live);
+          check(result?.type===RESULT&&result.payload.record.id===alias,'Calibration editor result mismatch');
+          references.push({alias,target:live});continue;
+        }
         const target=retained.get(alias);
         if(target){references.push({alias,target});continue;}
         const result=await readCalibrationResult(alias);
@@ -943,18 +950,21 @@
     // The ordinary project port preserves domain revisions and conflict-fork
     // behavior, independently of the managed root revision. Quota and
     // source-photo resolution are guarded by their exact kind inventories.
-    async function planApplicationCalibration(project,existing,previous,expectedRevision){
+    async function planApplicationCalibration(project,existing,previous,expectedRevision,editor=null){
       projectStore.quota(existing.map(v=>calibrations.summary(v.project)),project,
         expectedRevision>0?project.id:null);
       const inventories=[calibrationProjectExpected(existing)];
       let originalId=null;
-      if(project.photo&&!(previous&&same(project.photo.identity,previous.project.photo?.identity))){
+      if(project.photo&&editor){
+        originalId=editor.originals.get(project.photo.identity.sha256);
+        check(originalId,'Calibration editor original was not retained');
+      }else if(project.photo&&!(previous&&same(project.photo.identity,previous.project.photo?.identity))){
         const observations=await observationInventory();
         const photo=await matchObservationIdentity(project.photo.identity,observations);
         check(photo,'Calibration Project verified original unavailable');
         originalId=photo.originalId;inventories.push(observationExpected(observations));
       }
-      return {...await planCalibrationProject(project,previous,expectedRevision,originalId),inventories};
+      return {...await planCalibrationProject(project,previous,expectedRevision,originalId,editor?.results??null),inventories};
     }
     async function createApplicationCalibration(input,{guard=()=>{}}={}){
       const project=calibrations.normalize(input),existing=await calibrationProjectInventory();
@@ -1010,7 +1020,7 @@
       const graph=await (existingOnly?store.inspectDocumentGraph(calibrationReceiptId):store.readDocumentGraph(calibrationReceiptId));
       return loadCalibrationReceipt(graph,existingOnly);
     }
-    async function changeApplicationCalibration(id,expected,changes,now,forkId=null,{guard=()=>{},lease=null,base=null,requireNoReceipt=false}={}){
+    async function changeApplicationCalibration(id,expected,changes,now,forkId=null,{guard=()=>{},lease=null,base=null,requireNoReceipt=false,editor=null}={}){
       calibrations.id(id);check(positive(expected),'invalid expected project revision');
       if(lease!==null)projectStore.requireSharedLease(lease);
       if(base!==null||requireNoReceipt)projectStore.requireSharedLease(lease);
@@ -1031,7 +1041,7 @@
         project=calibrations.revise(current.project,changes,now);
         status='updated';expectedRevision=current.managedRevision;
       }
-      const next=await planApplicationCalibration(project,existing,current,expectedRevision);
+      const next=await planApplicationCalibration(project,existing,current,expectedRevision,editor);
       const plans=[next.plan],inventories=[...next.inventories,receiptInventory(pending)];
       let selectionReceipt;
       if(base!==null){
@@ -1061,10 +1071,14 @@
     // A retained photo can be captured again without recreating a deleted
     // gallery entry. A newly selected photo follows the explicit ingestion
     // path; the later project write rechecks the actual owner.
-    async function captureApplicationCalibration(draft,inline,boundProject){
+    async function captureApplicationCalibration(draft,inline,boundProject,editor=null){
       const captured=structuredClone(draft),capturedInline=structuredClone(inline);
       checkpoints.validateDraft(captured,capturedInline);
       if(!captured.record)return checkpoints.extract(captured,capturedInline,null);
+      if(editor){
+        const retained=await editor.retainPhoto(captured.record);
+        return checkpoints.extract(captured,capturedInline,retained.identity);
+      }
       const original=await originalFrom(images.validate(captured.record));
       const current=boundProject?await readCalibrationProject(calibrations.normalize(boundProject).id):null;
       if(current?.project.photo&&same(current.project.photo.identity,original.identity)){
@@ -1076,7 +1090,7 @@
       const saved=await ensureObservationOriginal(captured.record);
       return checkpoints.extract(captured,capturedInline,saved.identity);
     }
-    function createCalibrationProjectPort(){
+    function createCalibrationProjectPort(editor=null){
       check(projectStore&&calibrations&&checkpoints,'Calibration Project application adapter unavailable');
       function bound(db){check(db===env.indexedDB,'Calibration Project database context mismatch');}
       async function readReceipt(db,lease=null,existingOnly=false){
@@ -1097,7 +1111,7 @@
         MAX_ROW_CHARS:projectStore.MAX_ROW_CHARS,metadata:projectStore.metadata,quota:projectStore.quota,
         get:async(db,id)=>{bound(db);return (await readCalibrationProject(id))?.project??null;},
         prepare:async(db,id)=>{bound(db);return readCalibrationProject(id);},
-        captureVerified:async(db,draft,inline,project)=>{bound(db);return captureApplicationCalibration(draft,inline,project);},
+        captureVerified:async(db,draft,inline,project)=>{bound(db);return captureApplicationCalibration(draft,inline,project,editor);},
         list:async db=>{bound(db);return (await listCalibrationProjects()).map(v=>v.row);},
         inspectUsage:async db=>{
           bound(db);
@@ -1115,11 +1129,11 @@
         },
         saveOrFork:async(db,id,expected,changes,forkId,now=Date.now(),lease=null)=>{
           bound(db);
-          return changeApplicationCalibration(id,expected,changes,now,forkId,{lease});
+          return changeApplicationCalibration(id,expected,changes,now,forkId,{lease,editor:editor?.inventory()??null});
         },
         saveOrForkWithSelectionReceipt:async(db,id,expected,changes,forkId,now,base,lease)=>{
           bound(db);projectStore.requireSharedLease(lease);
-          return changeApplicationCalibration(id,expected,changes,now,forkId,{base,lease});
+          return changeApplicationCalibration(id,expected,changes,now,forkId,{base,lease,editor:editor?.inventory()??null});
         },
         readSharedSelectionReceipt:readReceipt,
         readExistingSharedSelectionReceipt:(db,lease)=>readReceipt(db,lease,true),
@@ -1131,6 +1145,72 @@
         removeShared:deletionUnavailable,remove:deletionUnavailable,
         legacy:legacyUnavailable,migrationMarker:legacyUnavailable,adoptLegacy:legacyUnavailable
       });
+    }
+    // Keep the exact editor evidence independently of mutable gallery roots.
+    // Retain the whole generation: queued saves may still need old photos.
+    function createCalibrationEditorRetention(){
+      const documents=store.createDocumentRetentionScope(),resources=store.createRetentionScope();
+      let owner=null,originals=new Map(),linked=new Map(),tail=Promise.resolve();
+      function serialize(operation){
+        const next=tail.then(operation);tail=next.catch(()=>{});return next;
+      }
+      function bind(input,preserve=false){
+        const project=calibrations.normalize(input),id='calibration:'+project.id;
+        return serialize(()=>store.withDocumentRetained(id,async graph=>{
+          const value=await loadCalibrationProject(graph,project.id);
+          check(value&&same(value.project,project),'Calibration editor selection changed before retention');
+          const nextOriginals=preserve?new Map(originals):new Map();
+          const nextResults=preserve?new Map(linked):new Map();
+          if(value.originalId)nextOriginals.set(project.photo.identity.sha256,value.originalId);
+          for(const {alias,target} of value.results){
+            check(!nextResults.has(alias)||nextResults.get(alias)===target,'Conflicting retained Calibration result');
+            nextResults.set(alias,target);
+          }
+          // Acquire both incoming protections before releasing outgoing ones.
+          // On failure an extra logical lock is safe.
+          await documents.replace([...documents.ids(),id]);
+          await resources.replace([...nextOriginals.values(),...nextResults.values()]);
+          originals=nextOriginals;linked=nextResults;owner=project.id;
+          if(!preserve)await documents.replace([id]);
+        }));
+      }
+      function retainPhoto(record){
+        return serialize(async()=>{
+          check(owner,'No bound Calibration editor');
+          const original=await originalFrom(images.validate(record));
+          const key=original.identity.sha256;
+          if(originals.has(key)){
+            const retained=await store.get(originals.get(key));
+            check(retained?.type===ORIGINAL&&same(retained.payload.identity,original.identity)&&
+              await bytesEqual(retained.payload.blob,original.blob),'Calibration editor retained original mismatch');
+          }else{
+            const saved=await ensureObservationOriginal(record);
+            const next=new Map(originals);next.set(key,saved.originalId);
+            await resources.replace([...next.values(),...linked.values()]);originals=next;
+          }
+          return {identity:original.identity};
+        });
+      }
+      function retainResult(alias){
+        return serialize(async()=>{
+          check(owner,'No bound Calibration editor');
+          if(linked.has(alias))return;
+          await store.withDocumentRetained(resultDocumentId(alias),async graph=>{
+            const value=await loadCalibrationResult(graph,alias);
+            const next=new Map(linked);next.set(alias,value.resultId);
+            await resources.replace([...originals.values(),...next.values()]);linked=next;
+          });
+        });
+      }
+      function reset(){
+        return serialize(async()=>{
+          await resources.replace([]);await documents.replace([]);
+          originals=new Map();linked=new Map();owner=null;
+        });
+      }
+      const editor={bind:project=>bind(project),adopt:project=>bind(project,true),retainPhoto,retainResult,reset,
+        inventory:()=>({originals:new Map(originals),results:new Map(linked)})};
+      return Object.freeze({...editor,storage:createCalibrationProjectPort(editor)});
     }
     function animationFields(row){
       check(projects&&animations,'Animation adapters unavailable');
@@ -2050,7 +2130,7 @@
       saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,createAnimationEditorRetention,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,
-      createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createAnimationLibraryPort,
+      createCalibrationArchivePort,archiveCalibrationExperiment,saveArchivedCalibration,createCalibrationProjectPort,createCalibrationEditorRetention,createAnimationLibraryPort,
       createObservation,ensureObservationOriginal,updateObservationDetails,setObservationAnnotation,
       importObservationAssets,exportObservationBackup,restoreObservationBackup,createImageLibraryPort,findObservationOriginal,
       listHistory,listObservations,listAnimations,listCalibrationResults,listCalibrationProjects,suggestHistoryId});

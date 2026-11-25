@@ -646,3 +646,11 @@ logical-document lock and the strong closure of its opened revision. A
 concurrent CAS edit remains legal; removing the logical document is refused
 even after that edit replaces the direct strong target. Switching scopes
 acquires new documents before releasing old ones.
+
+The managed Calibration editor retains its logical project and the exact
+original and archived results before activation, photo replacement, or result
+linking. The editor-scoped save port uses immutable mappings instead of
+resolving a mutable gallery at save/fork time. A committed conflict fork is
+adopted before shared selection acknowledgement and receipt retirement.
+To preserve queued captured drafts, the Calibration scope keeps all evidence
+acquired in one generation until a verified replacement or tab termination.

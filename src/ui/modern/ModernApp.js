@@ -2144,7 +2144,8 @@
     }
     if(calibrationEnabled)experimentPreview.calibrationContext={
       lease:lease,coordinate:coordinate,
-      ...(managedResources?{storage:calibrationStorage,referenceImages:referenceLibrary,animationLibrary:studioLibrary}:{}),
+      ...(managedResources?{storage:calibrationStorage,referenceImages:referenceLibrary,animationLibrary:studioLibrary,
+        retention:managedResources.createCalibrationEditorRetention()}:{}),
       verifyCheckpoint:function(){return coordinate(()=>controller.assertCleanCheckpoint());},
       commitApply:async function(ref,before,next,guard,info){
         try{
