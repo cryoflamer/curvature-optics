@@ -22,8 +22,8 @@ function experiment(mode='scene'){
 // Deterministic IndexedDB surface used by the History Core: request callbacks,
 // read/write transactions, auto-increment keys and aborts. No external package.
 function indexedDB(){
-  const records=new Map(), api={failAdd:false,nextId:1}, db={
-    objectStoreNames:{contains:name=>name==='snapshots'},
+  const records=new Map(),control=new Map(),api={failAdd:false,nextId:1}, db={
+    objectStoreNames:{contains:name=>['snapshots','migration'].includes(name)},
     createObjectStore(){return {createIndex(){}};},
     close(){},
     transaction(_name,mode){
@@ -31,7 +31,8 @@ function indexedDB(){
       const tx={error:null,oncomplete:null,onerror:null,onabort:null,
         abort(){if(done)return;done=true;tx.error=Error('transaction aborted');
           setImmediate(()=>tx.onabort&&tx.onabort());},
-        objectStore(){
+        objectStore(name){
+          const data=name==='migration'?control:records;
           const request=action=>{
             const req={result:undefined,error:null,onsuccess:null,onerror:null};
             pending++;
@@ -48,17 +49,18 @@ function indexedDB(){
             return req;
           };
           const copy=v=>v===undefined?v:JSON.parse(JSON.stringify(v));
-          return {getAll(){return request(()=>[...records.values()].map(copy));},
-            get(id){return request(()=>copy(records.get(id)));},
+          return {getAll(){return request(()=>[...data.values()].map(copy));},
+            get(id){return request(()=>copy(data.get(id)));},
             put(entry){return request(()=>{
               if(mode!=='readwrite')throw Error('Read-only');
-              records.set(entry.id,copy(entry));return entry.id;
+              data.set(entry.id,copy(entry));return entry.id;
             });},
-            add(entry){return request(()=>{
+            add(entry,key){return request(()=>{
               if(mode!=='readwrite'||api.failAdd)throw Error('Quota exceeded');
-              const id=api.nextId++;records.set(id,copy({...entry,id}));return id;
+              if(name==='migration'){data.set(key,copy(entry));return key;}
+              const id=api.nextId++;data.set(id,copy({...entry,id}));return id;
             });},
-            delete(id){return request(()=>{if(mode!=='readwrite')throw Error('Read-only');records.delete(id);});}
+            delete(id){return request(()=>{if(mode!=='readwrite')throw Error('Read-only');data.delete(id);});}
           };
         }
       };return tx;
@@ -784,4 +786,25 @@ test('Shared automatic History stops at its limit without pruning linked evidenc
   await assert.rejects(h.record(edit,'recovery',null,{retainAuto:true,
     guard:()=>{throw Error('stale generation');}}),/stale generation/);
   assert.equal((await h.list()).length,2);
+});
+
+test('History migration imports once and durable receipt prevents resurrection of renamed records',async()=>{
+  const db=indexedDB(),h=history.create({indexedDB:db});
+  const plan={sourceDigest:'sha256:'+'a'.repeat(64),status:'imported'};
+  const items=[{experiment:experiment(),name:'Old name'}];
+  await assert.rejects(h.migrateLegacy(items,plan,()=>{throw Error('source changed');}),/source changed/);
+  assert.equal(await h.migrationReceipt(),null);
+  assert.deepEqual(await h.list(),[]);
+  db.failAdd=true;
+  await assert.rejects(h.migrateLegacy(items,plan),/Quota exceeded/);
+  assert.equal(await h.migrationReceipt(),null);
+  db.failAdd=false;
+  const imported=await h.migrateLegacy(items,plan);
+  assert.equal(imported.created,1);
+  assert.deepEqual(await h.migrationReceipt(),imported.receipt);
+  const [entry]=await h.list();
+  await h.updateMetadata(entry.id,'Renamed','User notes');
+  assert.equal((await h.migrateLegacy(items,plan)).skipped,true);
+  assert.equal((await h.list()).length,1);
+  assert.equal((await h.get(entry.id)).name,'Renamed');
 });

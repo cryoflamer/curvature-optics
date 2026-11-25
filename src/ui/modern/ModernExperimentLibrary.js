@@ -57,23 +57,29 @@
     if(filtered.length===entries.length)throw RangeError('Experiment not found');
     return write(storage,filtered);
   }
-  function migrate(storage,history){
-    if(!history||typeof history.importEntries!=='function')
-      return Promise.reject(Error('History storage unavailable'));
-    try{
-      if(!storage)throw Error('Browser storage unavailable');
-      if(storage.getItem(MIGRATION_KEY)==='done')return Promise.resolve({skipped:true});
-      var entries=read(storage);
-      if(!entries.length){storage.setItem(MIGRATION_KEY,'done');return Promise.resolve({created:0,reused:0});}
-      return history.importEntries(entries.map(function(entry){
-        return {experiment:entry.experiment,name:entry.name,description:'',pinned:false};
-      })).then(function(result){
-        // Mark only after the whole IndexedDB transaction committed. The old
-        // localStorage record remains intact for rollback or backup.
-        storage.setItem(MIGRATION_KEY,'done');
-        return result;
-      });
-    }catch(error){return Promise.reject(error);}
+  async function migrate(storage,history,crypto=globalThis.crypto){
+    if(!history||typeof history.migrateLegacy!=='function'||typeof history.migrationReceipt!=='function')
+      throw Error('Durable History migration storage unavailable');
+    var previous=await history.migrationReceipt();
+    if(previous)return {skipped:true,receipt:previous};
+    if(!storage||typeof storage.getItem!=='function')throw Error('Browser storage unavailable');
+    var raw=storage.getItem(KEY),marker=storage.getItem(MIGRATION_KEY);
+    if(marker!==null&&marker!=='done')throw Error('Unknown legacy Library migration marker');
+    // An old done marker is evidence of prior import, not proof that its
+    // records have survived subsequent deliberate user edits/deletions.
+    var entries=marker==='done'||raw===null?[]:clean(JSON.parse(raw));
+    if(!crypto?.subtle)throw Error('History migration source hashing unavailable');
+    var bytes=new TextEncoder().encode(JSON.stringify([raw,marker]));
+    var hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),
+      b=>b.toString(16).padStart(2,'0')).join('');
+    function guard(){
+      if(storage.getItem(KEY)!==raw||storage.getItem(MIGRATION_KEY)!==marker)
+        throw Error('Old Library source changed during migration; original evidence retained');
+    }
+    guard();
+    return history.migrateLegacy(entries.map(entry=>({
+      experiment:entry.experiment,name:entry.name,description:'',pinned:false
+    })),{sourceDigest:'sha256:'+hash,status:marker==='done'?'historical-marker':'imported'},guard);
   }
   function importJson(text){
     if(typeof text!=='string'||text.length>MAX_JSON)throw RangeError('JSON file too large');

@@ -18,7 +18,8 @@
   root.CurvatureModernExperimentHistory=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(state,fp,thumbnailApi,naming){
   'use strict';
-  var DATABASE='curvature-modern-experiment-history',VERSION=1,STORE='snapshots';
+  var DATABASE='curvature-modern-experiment-history',DB_VERSION=2,VERSION=1,STORE='snapshots';
+  var CONTROL='migration',LEGACY_RECEIPT='legacy-named-library-v1';
   var MAX_AUTO=200,MAX_NAME=120,MAX_DESCRIPTION=1000;
   var PORTABLE_FORMAT='curvature-modern-history',PORTABLE_VERSION=1;
   var MAX_PORTABLE_ITEMS=1000,MAX_PORTABLE_LENGTH=200000000;
@@ -89,22 +90,26 @@
       if(opening)return opening;
       if(!factory||typeof factory.open!=='function')return Promise.reject(Error('IndexedDB unavailable'));
       opening=new Promise(function(resolve,reject){
-        var request;
-        try{request=factory.open(DATABASE,VERSION);}catch(error){reject(error);return;}
+        var request,settled=false;
+        try{request=factory.open(DATABASE,DB_VERSION);}catch(error){reject(error);return;}
         request.onupgradeneeded=function(){
+          if(settled){request.transaction.abort();return;}
           var db=request.result;
           if(!db.objectStoreNames.contains(STORE)){
             var store=db.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});
             store.createIndex('createdAt','createdAt',{unique:false});
           }
+          if(!db.objectStoreNames.contains(CONTROL))db.createObjectStore(CONTROL);
         };
         request.onsuccess=function(){
+          if(settled){request.result.close();return;}
+          settled=true;
           connection=request.result;
           connection.onversionchange=function(){connection.close();connection=null;opening=null;};
           resolve(connection);
         };
-        request.onerror=function(){reject(request.error||Error('IndexedDB open failed'));};
-        request.onblocked=function(){reject(Error('IndexedDB upgrade blocked by another tab'));};
+        request.onerror=function(){settled=true;reject(request.error||Error('IndexedDB open failed'));};
+        request.onblocked=function(){settled=true;reject(Error('IndexedDB upgrade blocked by another tab'));};
       }).catch(function(error){opening=null;throw error;});
       return opening;
     }
@@ -113,10 +118,10 @@
       chain=next.catch(function(){});
       return next;
     }
-    function transact(mode,work){
+    function transact(mode,work,withControl=false){
       return open().then(function(db){return new Promise(function(resolve,reject){
         var tx;
-        try{tx=db.transaction(STORE,mode);}catch(error){reject(error);return;}
+        try{tx=db.transaction(withControl?[STORE,CONTROL]:STORE,mode);}catch(error){reject(error);return;}
         var store=tx.objectStore(STORE),result;
         tx.oncomplete=function(){resolve(result);};
         tx.onerror=function(){reject(tx.error||Error('History transaction failed'));};
@@ -190,45 +195,93 @@
     // manual Save, differently named records with identical physics remain
     // separate so old Library bookmarks do not silently lose their names.
     // Re-importing the same (full state + name + notes) is idempotent.
-    function importEntries(items,guard=()=>{}){
-      if(!Array.isArray(items)||!items.length||items.length>MAX_PORTABLE_ITEMS)
+    function prepareImport(items,allowEmpty=false){
+      if(!Array.isArray(items)||!allowEmpty&&!items.length||items.length>MAX_PORTABLE_ITEMS)
         throw RangeError('Invalid History import list');
-      var prepared=items.map(function(raw){
+      return items.map(function(raw){
         var item=portableItem(raw);
         item.signature=fp.exactSignature(item.experiment);
         item.physicalSignature=fp.physicalSignature(item.experiment);
         item.features=fp.features(item.experiment);
         return item;
       });
-      return serialize(function(){return transact('readwrite',function(store,set){
-        var allRecords=store.getAll();
-        allRecords.onsuccess=function(){
+    }
+    function importPrepared(store,records,prepared){
+      var created=0,reused=0;
+      prepared.forEach(function(item){
+        var match=records.find(function(entry){return entry.signature===item.signature&&
+          (entry.name||'')===item.name&&(entry.description||'')===item.description;});
+        if(match){
+          reused++;
+          var changed=false;
+          if(match.source==='auto'){match.source='manual';changed=true;}
+          if(item.pinned&&!match.pinned){match.pinned=true;changed=true;}
+          if(item.thumbnail&&!match.thumbnail){match.thumbnail=item.thumbnail;changed=true;}
+          if(changed)store.put(match);
+          return;
+        }
+        var record={version:VERSION,createdAt:item.createdAt===undefined?now():item.createdAt,
+          source:'manual',pinned:item.pinned,name:item.name,description:item.description,
+          experiment:item.experiment,signature:item.signature,
+          physicalSignature:item.physicalSignature,features:item.features,
+          thumbnail:item.thumbnail};
+        // Add the prepared record to the transaction and to the local
+        // deduplication index before processing the next imported item.
+        store.add(record);records.push(record);created++;
+      });
+      return {created,reused};
+    }
+    function importEntries(items,guard=()=>{}){
+      var prepared=prepareImport(items);
+      return serialize(()=>transact('readwrite',(store,set)=>{
+        var request=store.getAll();
+        request.onsuccess=()=>{
           try{guard();}catch(error){set({failure:error});return;}
-          var records=allRecords.result||[],created=0,reused=0;
-          prepared.forEach(function(item){
-            var match=records.find(function(entry){return entry.signature===item.signature&&
-              (entry.name||'')===item.name&&(entry.description||'')===item.description;});
-            if(match){
-              reused++;
-              var changed=false;
-              if(match.source==='auto'){match.source='manual';changed=true;}
-              if(item.pinned&&!match.pinned){match.pinned=true;changed=true;}
-              if(item.thumbnail&&!match.thumbnail){match.thumbnail=item.thumbnail;changed=true;}
-              if(changed)store.put(match);
-              return;
-            }
-            var record={version:VERSION,createdAt:item.createdAt===undefined?now():item.createdAt,
-              source:'manual',pinned:item.pinned,name:item.name,description:item.description,
-              experiment:item.experiment,signature:item.signature,
-              physicalSignature:item.physicalSignature,features:item.features,
-              thumbnail:item.thumbnail};
-            // Add the prepared record to the transaction and to the local
-            // deduplication index before processing the next imported item.
-            store.add(record);records.push(record);created++;
-          });
-          set({created:created,reused:reused});
+          set(importPrepared(store,request.result||[],prepared));
         };
-      });}).then(function(result){if(result.failure)throw result.failure;return result;});
+      })).then(result=>{if(result.failure)throw result.failure;return result;});
+    }
+    function validateMigrationReceipt(value){
+      if(!value||typeof value!=='object'||Array.isArray(value)||
+         Object.keys(value).sort().join(',')!=='created,reused,sourceDigest,status,version'||
+         value.version!==1||!['imported','historical-marker'].includes(value.status)||
+         typeof value.sourceDigest!=='string'||!/^sha256:[0-9a-f]{64}$/.test(value.sourceDigest)||
+         ![value.created,value.reused].every(n=>Number.isSafeInteger(n)&&n>=0)||
+         value.status==='historical-marker'&&(value.created!==0||value.reused!==0))
+        throw Error('Invalid History migration receipt; original evidence retained');
+      return value;
+    }
+    function migrationReceipt(){
+      return serialize(()=>transact('readonly',(_store,set,tx)=>{
+        var request=tx.objectStore(CONTROL).get(LEGACY_RECEIPT);
+        request.onsuccess=()=>set(request.result===undefined?null:request.result);
+      },true)).then(value=>value===null?null:validateMigrationReceipt(value));
+    }
+    // Snapshot rows and the completion receipt commit in one transaction.
+    // A lost acknowledgement cannot replay renamed or deleted imports.
+    function migrateLegacy(items,{sourceDigest,status},guard=()=>{}){
+      var prepared=prepareImport(items,true);
+      var plan=validateMigrationReceipt({version:1,sourceDigest,status,created:0,reused:0});
+      if(status==='historical-marker'&&prepared.length)
+        throw Error('Historical migration marker cannot import new records');
+      return serialize(()=>transact('readwrite',(store,set,tx)=>{
+        var control=tx.objectStore(CONTROL),request=control.get(LEGACY_RECEIPT);
+        request.onsuccess=()=>{
+          if(request.result!==undefined){
+            try{set({skipped:true,receipt:validateMigrationReceipt(request.result)});}
+            catch(error){set({failure:error});}
+            return;
+          }
+          var all=store.getAll();
+          all.onsuccess=()=>{
+            try{guard();}catch(error){set({failure:error});return;}
+            var counts=importPrepared(store,all.result||[],prepared);
+            var receipt={...plan,...counts};
+            control.add(receipt,LEGACY_RECEIPT);
+            set({...counts,receipt});
+          };
+        };
+      },true)).then(result=>{if(result.failure)throw result.failure;return result;});
     }
     // Edit user annotations only. Keep the validated experiment and its stable
     // signature, thumbnail, pin, timestamps and history identity untouched.
@@ -328,9 +381,9 @@
         set(removed);
       };
     });});}
-    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,updateMetadata:updateMetadata,updateMetadataExact,setPinnedExact,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
+    return Object.freeze({open:open,list:list,get:get,record:record,importEntries:importEntries,migrationReceipt,migrateLegacy,updateMetadata:updateMetadata,updateMetadataExact,setPinnedExact,remove:remove,pin:pin,clearAuto:clearAuto,clearAll:clearAll});
   }
-  return Object.freeze({DATABASE:DATABASE,VERSION:VERSION,STORE:STORE,
+  return Object.freeze({DATABASE:DATABASE,DB_VERSION,VERSION:VERSION,STORE:STORE,CONTROL,LEGACY_RECEIPT,
     MAX_AUTO:MAX_AUTO,MAX_NAME:MAX_NAME,MAX_DESCRIPTION:MAX_DESCRIPTION,
     PORTABLE_FORMAT:PORTABLE_FORMAT,MAX_PORTABLE_ITEMS:MAX_PORTABLE_ITEMS,
     MAX_PORTABLE_LENGTH:MAX_PORTABLE_LENGTH,parsePortable:parsePortable,

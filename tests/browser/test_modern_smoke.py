@@ -14400,6 +14400,68 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.assertEqual(self.page.locator('#ModernAnimationFrameExportFps').input_value(),'30')
         self.assertEqual(self.page.evaluate(read),saved)
 
+    def test_shared_history_migration_receipt_upgrades_v1_and_preserves_renamed_import(self):
+        """History v2 adds a receipt store; existing v1 snapshot IDs and old Web Storage survive."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        ready="""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernSnapshotSave').click()
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text('Already in History',timeout=30000)
+        snapshot=self.page.evaluate("""async () => (await CurvatureModernApp.getHistoryStore().list())[0]""")
+        # Leave the app before replacing the disposable test origin's History.
+        self.page.goto(self.base_url.replace('CurvatureModern.html','README.md'),wait_until='load')
+        self.page.evaluate("""async snapshot=>{
+            const name='curvature-modern-experiment-history';
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.deleteDatabase(name);
+                req.onsuccess=resolve;req.onerror=()=>reject(req.error);req.onblocked=()=>reject(Error('blocked'));
+            });
+            await new Promise((resolve,reject)=>{
+                const req=indexedDB.open(name,1);
+                req.onupgradeneeded=()=>req.result.createObjectStore('snapshots',{keyPath:'id',autoIncrement:true})
+                    .createIndex('createdAt','createdAt',{unique:false});
+                req.onerror=()=>reject(req.error);
+                req.onsuccess=()=>{
+                    const db=req.result,tx=db.transaction('snapshots','readwrite');
+                    tx.objectStore('snapshots').add(snapshot);
+                    tx.oncomplete=()=>{db.close();resolve();};
+                    tx.onerror=()=>reject(tx.error);
+                };
+            });
+            localStorage.setItem('curvature-modern-library-v1',JSON.stringify([{name:'Legacy named experiment',experiment:snapshot.experiment}]));
+            localStorage.removeItem('curvature-modern-library-migrated-v1');
+        }""",snapshot)
+        self.page.goto(url,wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernHistoryToggle').click()
+        gallery=self.page.locator('#ModernHistoryGallery')
+        expect(gallery.locator('.modern-history-card')).to_have_count(2,timeout=30000)
+        read="""async () => {
+            const h=CurvatureModernApp.getHistoryStore();
+            return {rows:await h.list(),receipt:await h.migrationReceipt(),
+                db:(await indexedDB.databases()).find(x=>x.name===CurvatureModernExperimentHistory.DATABASE),
+                raw:localStorage.getItem(CurvatureModernExperimentLibrary.KEY),
+                marker:localStorage.getItem(CurvatureModernExperimentLibrary.MIGRATION_KEY)};
+        }"""
+        migrated=self.page.evaluate(read)
+        self.assertEqual(migrated['db']['version'],2)
+        self.assertEqual(migrated['receipt']['created'],1)
+        self.assertIsNone(migrated['marker'])
+        self.assertEqual(next(x for x in migrated['rows'] if x['id']==snapshot['id']),snapshot)
+        self.page.evaluate("""async()=>{
+            const h=CurvatureModernApp.getHistoryStore();
+            const row=(await h.list()).find(x=>x.name==='Legacy named experiment');
+            await h.updateMetadataExact(row,'Renamed imported experiment','User note');
+        }""")
+        renamed=self.page.evaluate(read)
+        self.page.wait_for_function("() => !CurvatureModernApp.getWorkspaceUiRegistryPreview().unacknowledged",timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        expect(gallery.locator('.modern-history-card')).to_have_count(2,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),renamed)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -49,3 +49,24 @@ test('134.1: no implicit writes to the autosaved Modern experiment key',()=>{
   const s=storage();library.save(s,'Demo',experiment());
   assert.equal(s.getItem(codec.STORAGE_KEY),null);
 });
+
+test('Old Library migration honors historical marker and never writes Web Storage',async()=>{
+  const crypto=require('node:crypto').webcrypto;
+  for(const oldDone of [false,true]){
+    const s=storage(),e=experiment();
+    library.save(s,'Legacy example',e);
+    if(oldDone)s.setItem(library.MIGRATION_KEY,'done');
+    const raw=s.getItem(library.KEY),marker=s.getItem(library.MIGRATION_KEY);
+    let receipt=null;
+    const h={async migrationReceipt(){return receipt;},async migrateLegacy(items,plan,guard){
+      guard();assert.equal(items.length,oldDone?0:1);
+      assert.equal(plan.status,oldDone?'historical-marker':'imported');
+      receipt={version:1,...plan,created:items.length,reused:0};
+      return {created:items.length,receipt};
+    }};
+    await library.migrate(s,h,crypto);
+    assert.equal(s.getItem(library.KEY),raw);
+    assert.equal(s.getItem(library.MIGRATION_KEY),marker);
+    assert.equal((await library.migrate({getItem(){throw Error('must not read');}},h,crypto)).skipped,true);
+  }
+});
