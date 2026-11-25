@@ -896,6 +896,13 @@ the historical sessionStorage recovery key. Temporary disclosure changes
 are not written to the shared UI registry. Duplicate and Edit first commits
 the independent duplicate through the normal working-draft writer; cancelling
 its temporary editor does not delete that acknowledged frame.
+The headless History-link protocol seals a mutually exclusive intent inside
+the existing temporary journal before any History write. The intent fixes
+the canonical embedded frame, blocks further candidate edits and plain
+Apply, and requires a pinned History readback with the same full experiment
+(ignoring only the A/B editor selection, as History's exact signature does).
+The final domain transaction replaces the frame and attaches the History ID
+as provenance in one CAS. Discard never deletes external History evidence.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation

@@ -757,7 +757,9 @@
   // Temporary physical editing owns only a bounded recovery journal. The
   // acknowledged Scene/Compare checkpoint and Animation draft remain separate.
   function validateKeyframeEdit(value,row){
-    if(!exact(value,['version','reference','base','returnView','compareSelected','session'])||
+    const fields=['version','reference','base','returnView','compareSelected','session'];
+    if(object(value)&&Object.hasOwn(value,'history'))fields.push('history');
+    if(!exact(value,fields)||
        value.version!==1||!['library','editor','preview'].includes(value.returnView)||
        !['A','B'].includes(value.compareSelected))
       throw Error('Invalid shared keyframe edit intent');
@@ -783,8 +785,21 @@
     const session={version:1,projectId:ref.id,frameKey:frame.key,mode:s.mode,original,
       workspace:experiment.validate(s.workspace),candidate:candidate(s.candidate),
       past:s.past.map(candidate),future:s.future.map(candidate)};
-    return {version:1,reference:ref,base,returnView:value.returnView,
+    const result={version:1,reference:ref,base,returnView:value.returnView,
       compareSelected:value.compareSelected,session};
+    if(Object.hasOwn(value,'history')){
+      const history=value.history;
+      if(!exact(history,['version','experiment'])||history.version!==1)
+        throw Error('Invalid temporary keyframe History intent');
+      const studio=getStudio();
+      if(!studio)throw Error('Animation Studio replacement validator unavailable');
+      const draft=studio.replaceFrameExperiment(cp.draft,session.frameKey,session.candidate);
+      const snapshot=draft.frames.find(item=>item.key===session.frameKey).experiment;
+      if(!equal(snapshot,experiment.validate(history.experiment)))
+        throw Error('History intent does not match canonical keyframe');
+      result.history={version:1,experiment:snapshot};
+    }
+    return result;
   }
   function normalizeSharedRow(raw){
     const keys=['version','revision','collection','revisions','receipt','digest'];
@@ -1099,6 +1114,7 @@
     function updateKeyframeEdit(expected,intent,session,compareSelected,guard){
       return commit(expected,row=>{
         const revision=pendingKeyframeRevision(row,intent);
+        if(intent.history)throw Error('Resolve pending keyframe History intent before editing');
         const keyframeEdit=validateKeyframeEdit({...intent,session,compareSelected},row);
         const before=intent.session,after=keyframeEdit.session;
         if(before.frameKey!==after.frameKey||!equal(before.original,after.original)||
@@ -1112,18 +1128,53 @@
       return commit(expected,row=>({version:1,revision:pendingKeyframeRevision(row,intent),
         collection:row.collection,revisions:row.revisions,receipt:null}),guard);
     }
+    // Stage the exact canonical frame before a separate History transaction.
+    // Once staged it cannot be edited or applied without the requested link.
+    function stageKeyframeHistory(expected,intent,base,guard){
+      const bound=selectionBase(base);
+      return commit(expected,row=>{
+        const revision=pendingKeyframeRevision(row,intent);
+        if(intent.history||!equal(bound,intent.base))
+          throw Error('Cannot stage History for a changed temporary keyframe or session');
+        const cp=getWorkspace(row.collection,intent.reference.id),s=intent.session,studio=getStudio();
+        if(!studio)throw Error('Animation Studio replacement validator unavailable');
+        const draft=studio.replaceFrameExperiment(cp.draft,s.frameKey,s.candidate);
+        const snapshot=draft.frames.find(item=>item.key===s.frameKey).experiment;
+        const keyframeEdit=validateKeyframeEdit({...intent,history:{version:1,experiment:snapshot}},row);
+        return {version:1,revision,collection:row.collection,revisions:row.revisions,receipt:null,keyframeEdit};
+      },guard);
+    }
+    function historyMatch(a,b){
+      // History's established exact signature ignores only the A/B editor
+      // selection. Both physical models and every authored field must agree.
+      const left=experiment.validate(a),right=experiment.validate(b);
+      left.compare.selected='A';right.compare.selected='A';
+      return equal(left,right);
+    }
     // Applying a temporary edit and removing its journal are one domain CAS.
     // Only the existing canonical Studio replacement may generate frame bytes.
     // The original shared session checkpoint must still be the captured base.
     function applyKeyframeEdit(expected,intent,base,guard){
+      return applyKeyframe(expected,intent,base,null,guard);
+    }
+    function applyKeyframeEditWithHistory(expected,intent,base,confirmed,guard){
+      if(!confirmed||!Number.isSafeInteger(confirmed.id)||confirmed.id<1||confirmed.pinned!==true||
+         !intent?.history||!historyMatch(confirmed.experiment,intent.history.experiment))
+        throw Error('Exact pinned History readback required for temporary keyframe');
+      return applyKeyframe(expected,intent,base,confirmed.id,guard);
+    }
+    function applyKeyframe(expected,intent,base,historyId,guard){
       const bound=selectionBase(base);
       return commit(expected,row=>{
         const revision=pendingKeyframeRevision(row,intent);
         if(!equal(bound,intent.base))throw Error('Shared session changed during keyframe edit');
+        if(!!intent.history!==(historyId!==null))
+          throw Error('Resolve pending keyframe History intent before Apply');
         const previous=intent.reference,prior=getWorkspace(row.collection,previous.id),s=intent.session;
         const studio=getStudio();
         if(!studio)throw Error('Animation Studio replacement validator unavailable');
-        const draft=studio.replaceFrameExperiment(prior.draft,s.frameKey,s.candidate);
+        let draft=studio.replaceFrameExperiment(prior.draft,s.frameKey,s.candidate);
+        if(historyId!==null)draft=studio.attachFrameHistory(draft,s.frameKey,historyId,intent.history.experiment);
         const value=normalize({...prior,draft,savedAt:prior.savedAt+1,
           selectedKey:s.frameKey,prepared:false,positionMs:0});
         if(equal(value.draft,prior.draft))
@@ -1173,7 +1224,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,applyKeyframeEdit,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

@@ -1219,3 +1219,45 @@ test('unchanged temporary keyframe Apply clears only the journal and emits no se
   assert.deepEqual(cleared.collection,h.row.collection);
   assert.deepEqual(cleared.revisions,h.row.revisions);
 });
+
+
+test('keyframe History intent freezes exact canonical target and commits frame provenance atomically',async()=>{
+  const h=await keyframeJournalFixture(),staged=await h.a.stageKeyframeEdit(h.row,h.intent);
+  const candidate=structuredClone(h.intent.session.candidate);candidate.scene.camera.Height=42;
+  const updated=await h.a.updateKeyframeEdit(staged,staged.keyframeEdit,{...h.intent.session,candidate},'B');
+  await assert.rejects(h.a.stageKeyframeHistory(updated,updated.keyframeEdit,{...h.base,revision:h.base.revision+1}),/changed temporary keyframe or session/);
+  await h.a.read();
+  const pending=await h.a.stageKeyframeHistory(updated,updated.keyframeEdit,h.base);
+  assert.deepEqual(pending.collection,updated.collection);
+  assert.deepEqual(pending.revisions,updated.revisions);
+  const target=pending.keyframeEdit.history.experiment;
+  assert.deepEqual(target,studio.replaceFrameExperiment(h.cp.draft,h.intent.session.frameKey,candidate).frames[0].experiment);
+  const reopened=h.open();assert.deepEqual(await reopened.read(),pending);
+  await assert.rejects(reopened.updateKeyframeEdit(pending,pending.keyframeEdit,pending.keyframeEdit.session,'A'),/pending keyframe History/);
+  await reopened.read();
+  await assert.rejects(reopened.applyKeyframeEdit(pending,pending.keyframeEdit,h.base),/pending keyframe History/);
+  await reopened.read();
+  const proof={id:123,pinned:true,experiment:structuredClone(target)};
+  proof.experiment.compare.selected='B';
+  for(const bad of [{...proof,pinned:false},{...proof,id:0},
+    {...proof,experiment:h.intent.session.original}]){
+    await assert.rejects(async()=>reopened.applyKeyframeEditWithHistory(pending,pending.keyframeEdit,h.base,bad),/Exact pinned History/);
+  }
+  const saved=await reopened.applyKeyframeEditWithHistory(pending,pending.keyframeEdit,h.base,proof);
+  assert.equal(Object.hasOwn(saved,'keyframeEdit'),false);
+  assert.deepEqual(saved.receipt.previous,h.ref);
+  const cp=autosave.getWorkspace(saved.collection,h.ref.id);
+  assert.deepEqual(cp.draft.frames[0].experiment,target);
+  assert.equal(cp.draft.frames[0].sourceSnapshotId,123);
+  assert.deepEqual(cp.draft.frames[1],h.cp.draft.frames[1]);
+  assert.deepEqual(await h.open().read(),saved);
+});
+test('pending keyframe History intent can be explicitly discarded without changing working frames',async()=>{
+  const h=await keyframeJournalFixture(),staged=await h.a.stageKeyframeEdit(h.row,h.intent);
+  const pending=await h.a.stageKeyframeHistory(staged,staged.keyframeEdit,h.base);
+  const cleared=await h.a.cancelKeyframeEdit(pending,pending.keyframeEdit);
+  assert.deepEqual(cleared.collection,h.row.collection);
+  assert.deepEqual(cleared.revisions,h.row.revisions);
+  assert.equal(cleared.receipt,null);
+  assert.equal(Object.hasOwn(cleared,'keyframeEdit'),false);
+});
