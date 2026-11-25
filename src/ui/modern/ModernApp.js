@@ -1861,7 +1861,9 @@
         savedAt:Number.isSafeInteger(savedAt)&&savedAt>0?savedAt:null};
     }catch(error){return null;}
   }
+  var sharedResetExperiment=null;
   function previewModeAllowed(mode){return mode==='scene'||mode==='compare'||
+    mode==='demos'&&sharedPresentationActive()||
     ['calibration','images'].includes(mode)&&sharedPresentationActive()&&!!experimentPreview.calibrationContext||
     mode==='animation'&&sharedPresentationActive()&&!!experimentPreview.animationContext;}
   var previewUnloadAttached=false,sharedLayoutResetPending=false;
@@ -1902,7 +1904,9 @@
       var tab=newUiEl(workspaceTabs[mode])||el(workspaceTabs[mode]);
       if(tab)tab.disabled=!usable||!presentationReady||experimentPreview.calibrationBusy||animationBusy||!previewModeAllowed(mode);
     });
-    var resetExperiment=newUiEl('ModernResetExperiment');if(resetExperiment)resetExperiment.disabled=true;
+    var resetExperiment=newUiEl('ModernResetExperiment');
+    if(resetExperiment)resetExperiment.disabled=!sharedResetExperiment||!sharedHistoryPhysicalReady()||
+      historyRestoreBusy||presetSwitchBusy||calibrationApplyBusy||animationBusy;
     var historyToggle=newUiEl('ModernHistoryToggle');
     if(historyToggle)historyToggle.disabled=!sharedHistoryAvailable()||experimentPreview.calibrationBusy||animationBusy;
     if(sharedPresentationActive()){
@@ -7533,7 +7537,7 @@
   }
   // Both manual save and Restore use the already acknowledged physical
   // checkpoint, not a temporary editor, preview, or stale tab's live model.
-  async function runSharedPhysicalHistory(id){
+  async function runSharedPhysicalHistory(id,resetTarget=null){
     if(!sharedHistoryPhysicalReady()||historyRestoreBusy||!experimentHistory)
       throw Error('Finish saving the current shared Scene or Compare first');
     var c=experimentPreview.controller,ctx=experimentPreview.calibrationContext;
@@ -7551,7 +7555,7 @@
         await c.assertCleanCheckpoint();
         if(!guard()||!sameHistoryExperiment(c.state().bound.experiment,before))
           throw Error('Live experiment differs from the acknowledged shared checkpoint');
-        if(id===null){
+        if(id===null&&!resetTarget){
           var saved=await experimentHistory.record(before,'manual',thumbnail,
             {retainAuto:true,guard:()=>{ctx.lease.check(true);if(!guard())throw Error('History save generation changed');}});
           var verified=await experimentHistory.get(saved.entry.id);
@@ -7559,16 +7563,16 @@
             throw Error('Manual History snapshot readback failed');
           return {entry:verified};
         }
-        var entry=await experimentHistory.get(id);
-        if(!entry)throw Error('History snapshot not found');
-        var target=experiments.validate(entry.experiment);
+        var entry=resetTarget?null:await experimentHistory.get(id);
+        if(!resetTarget&&!entry)throw Error('History snapshot not found');
+        var target=experiments.validate(resetTarget||entry.experiment);
         if(sameHistoryExperiment(before,target))return {entry,unchanged:true};
         var backup=await experimentHistory.record(before,'recovery',thumbnail,
           {retainAuto:true,guard:()=>{ctx.lease.check(true);if(!guard())throw Error('History restore generation changed');}});
         var recovery=await experimentHistory.get(backup.entry.id);
-        var selected=await experimentHistory.get(id);
+        var selected=resetTarget?null:await experimentHistory.get(id);
         if(!recovery?.pinned||historyFingerprint.exactSignature(recovery.experiment)!==historyFingerprint.exactSignature(before)||
-           !selected||!sameHistoryExperiment(selected.experiment,target))
+           (!resetTarget&&(!selected||!sameHistoryExperiment(selected.experiment,target))))
           throw Error('History changed before Restore; current experiment kept');
         if(!guard())throw Error('History restore generation changed');
         var view=await c.replaceFromHistory(before,target,guard);
@@ -8259,7 +8263,15 @@
     }catch(error){persistenceStatus('Cannot share experiment: '+error.message,true);}
   }
   function resetExperiment(){
-    if(experimentPreview.live){persistenceStatus('Reset is unavailable in document session preview',true);return;}
+    if(experimentPreview.live){
+      if(!sharedResetExperiment||!sharedHistoryPhysicalReady()||presetSwitchBusy||calibrationApplyBusy||historyRestoreBusy){
+        persistenceStatus('Finish saving the shared Scene or Compare before reset',true);return;
+      }
+      return runSharedPhysicalHistory(null,sharedResetExperiment).then(result=>{
+        persistenceStatus(result.unchanged?'Already at the default experiment':'Document session saved');
+        return refreshHistoryList();
+      }).catch(error=>persistenceStatus('Reset failed: '+error.message,true));
+    }
     if(calibrationApplyBusy){persistenceStatus('Finish calibration Apply before resetting the session',true);return;}
     cancelEdits();cancelPending();
     persistence.dirty=false;
@@ -10420,6 +10432,7 @@
     syncWorkspaceTabs();
     if(remember!==false)rememberWorkspaceMode(mode);
     refreshCalibrationApplicability(true);
+    if(experimentPreview.live)previewControls();
     return true;
   }
   async function restoreSharedCalibration(reference){
@@ -10510,6 +10523,10 @@
   }
   async function requestPreviewWorkspace(mode,{reference,animationUse}={}){
     if(experimentPreview.live&&(keyframeEditSession||experimentPreview.animationContext?.busy))return false;
+    if(experimentPreview.live&&mode==='demos'&&
+       (persistence.dirty||!['clean','committed'].includes(experimentPreview.status))){
+      persistenceStatus('Finish saving the current document before opening Demos.',true);return false;
+    }
     if(!experimentPreview.live||!['calibration','images','animation'].includes(mode)&&
        !photoCalibrationWorkspaceOpen&&!imageLibraryWorkspaceOpen&&!animationWorkspaceOpen){
       return setMode(mode);
@@ -11365,6 +11382,7 @@
       // If history state cannot be written, fail closed instead of enabling
       // a route that could silently change meaning on the next reload.
       Promise.resolve().then(function(){
+        if(sharedPresentationRequested)sharedResetExperiment=experiments.validate(experimentSnapshot());
         rememberWorkingPreviewEntry();
         return openExperimentPreview();
       }).then(async function(preview){

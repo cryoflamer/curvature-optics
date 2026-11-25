@@ -12358,6 +12358,42 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.locator('#ModernAnimationViewLibrary').click()
         expect(card).to_have_count(2)
 
+    def test_shared_physical_reset_preserves_history_and_demos_are_detached(self):
+        """Reset commits the default physical document and Legacy Demos do not save it."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(height+7))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text(
+            'Document session saved',timeout=30000)
+        before=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row')
+        self.page.locator('#ModernDemosTab').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getWorkspaceMode()==='demos'")
+        expect(self.page.locator('#ModernDemosPanel')).to_be_visible()
+        expect(self.page.locator('#ModernResetExperiment')).to_be_disabled()
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.row'),before)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getWorkspaceMode()'),'scene')
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),height+7)
+        reset=self.page.locator('#ModernResetExperiment')
+        expect(reset).to_be_enabled()
+        reset.click()
+        self.page.wait_for_function("""h=>CurvatureModernApp.getModel().Height===h&&
+            ['clean','committed'].includes(CurvatureModernApp.getExperimentSessionPreview().status)""",
+            arg=height,timeout=30000)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getModel().Height'),height)
+        self.assertTrue(self.page.evaluate("""async h=>{
+            const history=await CurvatureModernApp.getHistoryStore().list();
+            return history.some(row=>row.pinned&&row.experiment.scene.camera.Height===h);
+        }""",height+7))
+
     def test_shared_animation_readonly_demo_never_replaces_user_draft(self):
         """Shipped demos are detached presentation, even with no user draft."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'
