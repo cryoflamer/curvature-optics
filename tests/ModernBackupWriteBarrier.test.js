@@ -114,3 +114,32 @@ test('writer callback must be callable and a failed snapshot releases for subseq
   assert.equal(await writer.commit(async()=> 'committed'),'committed');
   assert.deepEqual(locks.issued,['exclusive','shared']);
 });
+
+test('route fence drains preceding writes and checks queued writers at lock grant',async()=>{
+  const locks=lockManager(),values=new Map();
+  const storage={getItem:key=>values.get(key)??null};
+  const a=barrier.create(locks,{routeStorage:storage}),b=barrier.create(locks,{routeStorage:storage});
+  const legacy=a.registerWriter('working.session'),managed=b.registerWriter('managed.objects');
+  const ui=b.registerWriter('ui.registry'),unknown=b.registerWriter('future.writer');
+  const entered=deferred(),release=deferred(),events=[];
+  const first=legacy.commit(async()=>{entered.resolve();await release.promise;events.push('ack');});
+  await entered.promise;
+  const marker={format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)};
+  const cut=a.snapshot(()=>{events.push('fence');values.set(barrier.ROUTE_KEY,JSON.stringify(marker));});
+  const queued=legacy.commit(()=>{events.push('stale');});
+  const refused=assert.rejects(queued,/writer fenced by preparing/);
+  release.resolve();
+  await Promise.all([first,cut,refused]);
+  assert.deepEqual(events,['ack','fence']);
+  assert.deepEqual(barrier.readRoute(storage),marker);
+  assert.equal(await managed.commit(()=>42),42);
+  await assert.rejects(ui.commit(()=>0),/writer fenced/);
+  await a.snapshot(()=>values.set(barrier.ROUTE_KEY,JSON.stringify({...marker,state:'managed'})));
+  assert.equal(await ui.commit(()=>43),43);
+  await assert.rejects(legacy.commit(()=>0),/writer fenced by managed/);
+  await assert.rejects(unknown.commit(()=>0),/writer fenced by managed/);
+  await a.snapshot(()=>values.set(barrier.ROUTE_KEY,'broken'));
+  await assert.rejects(managed.commit(()=>0),/invalid storage route/);
+  await a.snapshot(()=>values.delete(barrier.ROUTE_KEY));
+  assert.equal(await legacy.commit(()=>44),44);
+});

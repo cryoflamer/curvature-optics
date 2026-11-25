@@ -495,3 +495,23 @@ The working root revision is checked atomically. Low-level explicit import
 semantics and standalone provenance policy remain separate. No removed
 gallery root is recreated; no broad automatic resource reclamation is
 introduced. This does not yet establish all Animation/Calibration handoffs.
+
+
+### Cooperative cutover writer fence
+
+The backup barrier checks the origin-wide `curvature-modern-storage-route-v1`
+localStorage marker inside each granted shared writer lock. An absent marker
+preserves the existing opt-in behavior. A validated marker (format
+`curvature-modern-storage-route`, version 1, state `preparing` or `managed`,
+and the external backup SHA-256) permits only the managed object writer
+during preparation; the managed route also permits the UI registry writer.
+All other registered owners refuse, including unknown future owners.
+Malformed markers fail closed. Observational exclusive snapshots remain
+available for qualification and diagnostics. A transition must hold the
+exclusive barrier so acknowledged preceding writes drain before the marker
+changes and queued writes check the new state.
+
+This is a cooperative fence, not a complete startup migration protocol.
+Older code and unregistered localStorage writers are not fenced; they must
+not run during cutover. No production caller creates the marker yet, and
+no migration, default route switch or deletion is authorized by this API.

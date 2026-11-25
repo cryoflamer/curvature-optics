@@ -2740,6 +2740,70 @@ class ModernBrowserSmoke(unittest.TestCase):
         finally:
             context.close()
 
+    def test_managed_storage_cutover_writer_fence(self):
+        def prepare(page):
+            page.route(self.base_url, lambda route: route.fulfill(
+                status=200, content_type='text/html', body='<html><body></body></html>'))
+            page.goto(self.base_url)
+            for script in ['ModernBackupWriteBarrier','ModernManagedObjectStore']:
+                page.add_script_tag(url='/src/storage/'+script+'.js')
+            page.evaluate("""()=>{
+                window.gate=CurvatureModernBackupWriteBarrier.create(navigator.locks);
+                window.legacy=gate.registerWriter('working.session');
+                window.ui=gate.registerWriter('ui.registry');
+                window.store=CurvatureModernManagedObjectStore.create(window,{types:[]});
+            }""")
+        prepare(self.page)
+        second=self.context.new_page()
+        try:
+            prepare(second)
+            self.page.evaluate("""()=>{
+                window.entered=false;
+                window.hold=gate.snapshot(async()=>{
+                    await new Promise(resolve=>{window.release=resolve;window.entered=true;});
+                    localStorage.setItem(CurvatureModernBackupWriteBarrier.ROUTE_KEY,JSON.stringify({
+                        format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}));
+                });
+            }""")
+            self.page.wait_for_function('window.entered===true')
+            second.evaluate("""()=>{
+                window.executed=false;
+                window.pending=legacy.commit(()=>{window.executed=true;}).then(
+                    ()=>({ok:true}),error=>({ok:false,message:error.message}));
+            }""")
+            second.wait_for_function("""async()=>{
+                const locks=await navigator.locks.query();
+                return locks.pending.some(lock=>lock.name===CurvatureModernBackupWriteBarrier.LOCK_NAME);
+            }""")
+            self.page.evaluate('async()=>{window.release();await window.hold;}')
+            result=second.evaluate('async()=>await window.pending')
+            self.assertFalse(result['ok'])
+            self.assertIn('writer fenced by preparing',result['message'])
+            self.assertFalse(second.evaluate('window.executed'))
+            result=second.evaluate("""async()=>{
+                const doc=await store.writeDocument({documentId:'prepared',kind:'test',
+                    expectedRevision:0,metadata:{},references:[]});
+                const refused=await ui.commit(()=>true).then(()=>false,()=>true);
+                return {revision:doc.revision,refused};
+            }""")
+            self.assertEqual(result,{'revision':1,'refused':True})
+            self.page.evaluate("""async()=>gate.snapshot(()=>{
+                const api=CurvatureModernBackupWriteBarrier;
+                localStorage.setItem(api.ROUTE_KEY,JSON.stringify({...api.readRoute(localStorage),state:'managed'}));
+            })""")
+            self.assertTrue(second.evaluate('async()=>await ui.commit(()=>true)'))
+            self.assertTrue(second.evaluate('async()=>await legacy.commit(()=>false).catch(()=>true)'))
+            self.page.evaluate("""async()=>gate.snapshot(()=>{
+                localStorage.setItem(CurvatureModernBackupWriteBarrier.ROUTE_KEY,'invalid');
+            })""")
+            self.assertTrue(second.evaluate("""async()=>await store.writeDocument({
+                documentId:'rejected',kind:'test',expectedRevision:0,metadata:{},references:[]
+            }).then(()=>false,err=>err.message.includes('invalid storage route'))"""))
+            self.assertIsNone(second.evaluate("async()=>await store.inspectDocumentGraph('rejected')"))
+        finally:
+            self.page.evaluate("localStorage.removeItem(CurvatureModernBackupWriteBarrier.ROUTE_KEY)")
+            second.close()
+
     def test_managed_object_store_coordinated_backup_roundtrip(self):
         # Use the existing portable codec and empty-profile restore, with a
         # real managed graph containing binary resources and compound keys.
