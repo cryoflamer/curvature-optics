@@ -833,8 +833,13 @@ retirement; explicit retry of a known receipt never writes the document
 again. A lost retirement acknowledgement can be accepted only by exact
 successor readback and revalidation of the shared selection. A stale
 collection or unknown domain-write outcome blocks rebasing, retaining the
-latest in-memory checkpoint for explicit recovery/export. Other legacy
-source adoption, conflict recovery, keyframe editing and UI remain pending.
+latest in-memory checkpoint for explicit recovery/export. Additional historical variants can be explicitly recovered as independent
+unlinked drafts. A stable digest of the original workspace identity and
+normalized checkpoint prevents repeated recovery of the same variant
+across different source slots; no existing workspace or shared selection
+is overwritten. Creating a new independent draft also leaves selection
+unchanged until a separate acknowledged navigation. Conflict recovery for
+live edits, keyframe editing and UI remain pending.
 
 The headless Calibration Apply checkpoint adapter supports a single CAS
 from an acknowledged Calibration selection to a new physical experiment.

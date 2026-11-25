@@ -969,3 +969,57 @@ test('shared Animation adoption rechecks key presence even if stored null looks 
   assert.equal(f.db.records.get('workspaces'),null);
   assert.equal(await a.read(),null);
 });
+
+test('shared Animation recovers an explicitly selected divergent legacy variant once, without changing selection or original',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();
+  await autosave.writeCollection(f.db,f.collection);
+  const divergent=structuredClone(f.collection);
+  divergent.workspaces[0].checkpoint.draft.name='Conflicting historical branch';
+  f.local.setItem(autosave.COLLECTION_KEY,JSON.stringify(divergent));
+  f.local.setItem(autosave.SESSION_LOCAL_PREFIX+'other',JSON.stringify(divergent));
+  const plan=await f.inspect();await a.read();
+  const original=await a.initializeFromLegacy(plan,'idb:workspaces',f.local);
+  const candidate=plan.variants.find(item=>item.checkpoint.draft.name==='Conflicting historical branch');
+  const choice={id:candidate.id,checkpoint:candidate.checkpoint,source:candidate.sources[0]};
+  const adopted=await a.adoptLegacyVariant(original,plan,choice,f.local);
+  assert.equal(adopted.revision,2);assert.equal(adopted.collection.activeId,original.collection.activeId);
+  assert.equal(adopted.receipt,null);
+  const recovered=adopted.collection.workspaces.find(item=>item.id.startsWith('draft_recovered_'));
+  assert.ok(recovered);
+  assert.equal(recovered.checkpoint.draft.name,choice.checkpoint.draft.name);
+  assert.equal(recovered.checkpoint.libraryId,null);
+  assert.deepEqual(autosave.documentReference(adopted,f.id),autosave.documentReference(original,f.id));
+  assert.deepEqual(autosave.getWorkspace(adopted.collection,f.id),f.cp);
+  await assert.rejects(a.adoptLegacyVariant(adopted,plan,{...choice,source:candidate.sources[1]},f.local),/already recovered/);
+  assert.deepEqual(await a.read(),adopted);
+  assert.deepEqual(await autosave.readCollection(f.db),f.collection);
+  assert.equal(f.local.getItem(autosave.COLLECTION_KEY),JSON.stringify(divergent));
+});
+test('shared Animation variant adoption refuses changed choice, changed evidence and stale row',async()=>{
+  const f=sharedAnimationFixture(),a=f.open(),b=f.open();
+  await autosave.writeCollection(f.db,f.collection);
+  const divergent=structuredClone(f.collection);divergent.workspaces[0].checkpoint.draft.name='Other';
+  f.local.setItem(autosave.COLLECTION_KEY,JSON.stringify(divergent));
+  const plan=await f.inspect();await a.read();
+  const row=await a.initializeFromLegacy(plan,'idb:workspaces',f.local);await b.read();
+  const candidate=plan.variants.find(item=>item.checkpoint.draft.name==='Other');
+  const choice={id:candidate.id,checkpoint:candidate.checkpoint,source:candidate.sources[0]};
+  await assert.rejects(a.adoptLegacyVariant(row,plan,{...choice,source:'missing'},f.local),/variant changed or missing/);
+  f.local.setItem(autosave.COLLECTION_KEY,'changed');
+  await assert.rejects(a.adoptLegacyVariant(row,plan,choice,f.local),/local evidence changed/);
+  f.local.setItem(autosave.COLLECTION_KEY,JSON.stringify(divergent));
+  const updated=await b.createDraft(row,'draft_new',f.cp);
+  await assert.rejects(a.adoptLegacyVariant(row,plan,choice,f.local),/CAS conflict/);
+  assert.deepEqual(await a.read(),updated);
+});
+test('shared Animation can create independent drafts without reselecting or revising other workspaces',async()=>{
+  const f=sharedAnimationFixture(),a=f.open();await a.read();
+  const row=await a.initializeEmpty(await f.inspect(),f.collection,f.local);
+  const added=await a.createDraft(row,'draft_new',f.cp);
+  assert.equal(added.collection.activeId,row.collection.activeId);
+  assert.equal(added.receipt,null);assert.equal(added.revision,2);
+  assert.deepEqual(autosave.documentReference(added,f.id),autosave.documentReference(row,f.id));
+  assert.equal(autosave.documentReference(added,'draft_new').revision,'rev:2');
+  await assert.rejects(a.createDraft(added,'draft_new',f.cp),/identity is already used/);
+  assert.deepEqual(await a.read(),added);
+});

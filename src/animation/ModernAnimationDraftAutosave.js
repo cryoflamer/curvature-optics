@@ -854,7 +854,8 @@
     }
     function adoption(plan,storage){
       if(!plan?.evidence)throw Error('Explicit Animation source inventory required');
-      const {remote,local}=plan.evidence;
+      // Capture the evidence at invocation, not a mutable caller-owned plan.
+      const {remote,local}=structuredClone(plan.evidence);
       if(!exact(remote,['current','workspaces','present'])||!exact(remote.present,['current','workspaces'])||
          typeof remote.present.current!=='boolean'||typeof remote.present.workspaces!=='boolean')
         throw Error('Exact Animation legacy record presence required');
@@ -880,6 +881,52 @@
       if(!row||row.revision>=Number.MAX_SAFE_INTEGER)throw Error('Shared Animation revision exhausted');
       if(row.receipt)throw Error('Resolve pending Animation selection receipt before writing');
       return row.revision+1;
+    }
+    // An explicitly chosen alternative becomes an independent working
+    // draft. Its stable ID makes the same historical variant non-repeatable,
+    // even after editing or removing the recovered document.
+    async function adoptLegacyVariant(expected,plan,choice,storage,guard){
+      if(!choice||!exact(choice,['id','checkpoint','source'])||typeof choice.source!=='string')
+        throw Error('Select an exact Animation legacy variant');
+      const {checked,legacy}=adoption(plan,storage);
+      const wanted=normalize(choice.checkpoint);
+      const candidate=checked.variants.find(item=>item.id===choice.id&&
+        item.sources.includes(choice.source)&&equal(item.checkpoint,wanted));
+      if(!candidate)throw Error('Animation legacy variant changed or missing');
+      const identity=await seal({id:candidate.id,checkpoint:candidate.checkpoint},crypto);
+      const id=workspaceId('draft_recovered_'+identity.digest.slice(7));
+      const cp=normalize({...candidate.checkpoint,libraryId:null,libraryRevision:null});
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        if(row.collection.workspaces.some(item=>item.id===id)||
+           (row.collection.removed||[]).some(item=>item.id===id))
+          throw Error('Animation legacy variant was already recovered; no duplicate created');
+        if(candidate.id!==null&&row.collection.workspaces.some(item=>
+            item.id===candidate.id&&equal(item.checkpoint,candidate.checkpoint)))
+          throw Error('Animation legacy variant is already represented by the original workspace');
+        const next=withWorkspace(row.collection,id,cp);
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
+      },guard,legacy);
+    }
+    function createDraft(expected,id,checkpoint,guard){
+      workspaceId(id);
+      const cp=normalize(checkpoint);
+      if(!id.startsWith('draft_')||cp.libraryId!==null)
+        throw Error('New Animation draft must be independent');
+      return commit(expected,row=>{
+        const revision=nextRevision(row);
+        if(row.collection.workspaces.some(item=>item.id===id)||
+           (row.collection.removed||[]).some(item=>item.id===id))
+          throw Error('Animation draft identity is already used');
+        const next=withWorkspace(row.collection,id,cp);
+        const collection=normalizeCollection({...next,activeId:row.collection.activeId});
+        return {version:1,revision,collection,revisions:collection.workspaces.map(item=>
+          ({id:item.id,revision:item.id===id?revision:
+            row.revisions.find(x=>x.id===item.id).revision})),receipt:null};
+      },guard);
     }
     function saveSelected(expected,ref,checkpoint,base,guard){
       const previous=validateReference(ref),bound=selectionBase(base),value=normalize(checkpoint);
@@ -917,7 +964,7 @@
         throw Error('Animation workspace revision changed; activation blocked');
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
-    return Object.freeze({read,initializeFromLegacy,initializeEmpty,saveSelected,retire,prepareReference});
+    return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,saveSelected,retire,prepareReference});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}
