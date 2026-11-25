@@ -14157,6 +14157,53 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(card).to_have_count(2,timeout=30000)
         self.assertEqual(self.page.evaluate(read),before)
 
+    def test_shared_automatic_history_requires_acknowledged_physical_revision(self):
+        """Automatic capture waits for durable physical acknowledgement, not just a render."""
+        url=self.base_url+'?document-session=shared&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""() => CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        history='() => CurvatureModernApp.getHistoryStore().list()'
+        self.assertEqual(self.page.evaluate(history),[])
+        self.page.evaluate("""() => {
+            const timer=window.setTimeout.bind(window);window.restoreAutoTimer=timer;
+            window.setTimeout=(fn,ms,...args)=>timer(fn,ms===550?60000:ms,...args);
+        }""")
+        self.page.locator('#ModernSettingsAtmosphere').click()
+        control=self.page.locator('#ModernAtmosphere')
+        wanted='vacuum' if control.input_value()!='vacuum' else 'standard'
+        control.select_option(wanted)
+        self.page.wait_for_function("""() => {
+            const c=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return c.status==='dirty'&&c.checkpoint==='durable';
+        }""",timeout=30000)
+        self.page.wait_for_timeout(1800)
+        self.assertEqual(self.page.evaluate(history),[])
+        self.page.evaluate('window.setTimeout=window.restoreAutoTimer')
+        self.page.locator('#ModernSettingsCamera').click()
+        height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(height+2))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Document session saved',timeout=30000)
+        self.page.wait_for_function("""async () => {
+            const entries=await CurvatureModernApp.getHistoryStore().list();
+            return entries.length===1&&entries[0].source==='auto';
+        }""",timeout=30000)
+        entries=self.page.evaluate(history)
+        bound=self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().controller.bound.experiment')
+        self.assertEqual(entries[0]['experiment'],bound)
+        self.assertFalse(entries[0]['pinned'])
+        self.page.locator('#ModernHeight').fill(str(height+3))
+        self.page.locator('#ModernHeight').press('Tab')
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Document session saved',timeout=30000)
+        self.page.wait_for_timeout(1800)
+        self.assertEqual(self.page.evaluate(history),entries)
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.wait_for_timeout(1800)
+        self.assertEqual(self.page.evaluate(history),entries)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -769,3 +769,19 @@ test('Unpinning shared automatic History retains the snapshot outside automatic 
   assert.equal(await h.clearAuto(),1);
   assert.deepEqual(await h.get(auto.id),unpinned);
 });
+
+test('Shared automatic History stops at its limit without pruning linked evidence',async()=>{
+  const db=indexedDB(),h=history.create({indexedDB:db,maxAutoEntries:1});
+  const a=(await h.record(experiment(),'auto',null,{retainAuto:true})).entry;
+  const b=experiment('compare');
+  const result=await h.record(b,'auto',null,{retainAuto:true});
+  assert.deepEqual(result,{created:false,entry:null,skipped:'capacity'});
+  assert.deepEqual(await h.list(),[a]);
+  const manual=(await h.record(b,'manual',null,{retainAuto:true})).entry;
+  assert.equal(manual.pinned,true);
+  assert.deepEqual(await h.get(a.id),a);
+  const edit=experiment();edit.scene.objects.ObjDist[0]+=10;
+  await assert.rejects(h.record(edit,'recovery',null,{retainAuto:true,
+    guard:()=>{throw Error('stale generation');}}),/stale generation/);
+  assert.equal((await h.list()).length,2);
+});

@@ -134,7 +134,9 @@
       var request=store.get(Number(id));
       request.onsuccess=function(){set(request.result||null);};
     });});}
-    function record(experiment,source,thumbnail){
+    function record(experiment,source,thumbnail,{retainAuto=false,guard=()=>{}}={}){
+      // Shared provenance coverage is not yet complete. Append/protect only;
+      // never prune existing records on the shared route.
       if(!['manual','auto','recovery'].includes(source))throw RangeError('Invalid history source');
       // Validate synchronously before any database mutation. Persist copies,
       // never references to the mutable live Compare/Scene model.
@@ -145,6 +147,7 @@
       return serialize(function(){return transact('readwrite',function(store,set){
         var getAll=store.getAll();
         getAll.onsuccess=function(){
+          try{guard();}catch(error){set({failure:error});return;}
           var existing=ordered(getAll.result||[]),latest=existing[0];
           // A deliberate manual save and a recovery checkpoint reuse ANY
           // identical full experiment, even if newer entries exist. Automatic
@@ -163,6 +166,10 @@
             if(changed)store.put(match);
             set({created:false,entry:match});return;
           }
+          var auto=existing.filter(function(item){return item.source==='auto'&&!item.pinned;});
+          if(retainAuto&&source==='auto'&&auto.length>=maxAuto){
+            set({created:false,entry:null,skipped:'capacity'});return;
+          }
           var entry={version:VERSION,createdAt:now(),source:source,pinned:source!=='auto',
             name:naming.snapshot(snapshot),description:'',experiment:snapshot,signature:signature,physicalSignature:physical,
             features:metadata,thumbnail:image};
@@ -172,11 +179,12 @@
           };
           // Only auto records are garbage-collected, oldest first. Manual
           // and pre-restore recovery points must never be silently purged.
-          var auto=existing.filter(function(item){return item.source==='auto'&&!item.pinned;});
-          var overflow=auto.length+(source==='auto'?1:0)-maxAuto;
-          for(var i=auto.length-1;i>=0&&overflow>0;i--,overflow--)store.delete(auto[i].id);
+          if(!retainAuto){
+            var overflow=auto.length+(source==='auto'?1:0)-maxAuto;
+            for(var i=auto.length-1;i>=0&&overflow>0;i--,overflow--)store.delete(auto[i].id);
+          }
         };
-      });});
+      });}).then(function(result){if(result.failure)throw result.failure;return result;});
     }
     // Import a whole archive atomically in one IndexedDB transaction. Unlike
     // manual Save, differently named records with identical physics remain
