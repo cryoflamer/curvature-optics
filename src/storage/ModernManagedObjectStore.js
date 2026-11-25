@@ -645,7 +645,7 @@
     // working state change. Acquire all additions before releasing anything.
     // Failed acquisition leaves the preceding set intact. This is transient
     // Web Lock ownership, not another persisted document or restore identity.
-    function createRetentionScope(){
+    function createRetentionScopeFor(retain){
       const held=new Map();
       let closed=false,tail=Promise.resolve();
       function serialize(operation){
@@ -657,7 +657,7 @@
         let release,ready,failed;
         const acquired=new Promise((resolve,reject)=>{ready=resolve;failed=reject;});
         const wait=new Promise(resolve=>{release=resolve;});
-        const task=withRetained(id,()=>{
+        const task=retain(id,()=>{
           ready({release,task});
           return wait;
         });
@@ -700,6 +700,11 @@
       }
       return Object.freeze({replace,close,ids:()=>[...held.keys()].sort()});
     }
+    function createRetentionScope(){return createRetentionScopeFor(withRetained);}
+    // A mutable document identity must remain protected even after a sibling
+    // tab replaces its immutable root. Both scopes share the same acquisition
+    // and rollback algorithm; a document scope also retains its opened closure.
+    function createDocumentRetentionScope(){return createRetentionScopeFor(withDocumentRetained);}
     // Explicit single-object collection; later calls collect newly eligible
     // children. No implicit collection, and no destructive domain integration.
     // Metadata-only candidate discovery. This is a hint, not authorization
@@ -794,7 +799,7 @@
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
       newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,inspectDocumentUsage,
-      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,createRetentionScope,listGarbageCandidates,collectGarbage,collectGarbageBatch});
+      readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,createRetentionScope,createDocumentRetentionScope,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});
 }));

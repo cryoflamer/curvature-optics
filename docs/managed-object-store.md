@@ -639,3 +639,10 @@ Undo. Materialization is serialized with scope replacement and reset. A live
 scope missing a required alias refuses export rather than using current gallery
 attribution. Recovery without a matching live editor continues through the
 acknowledged managed collection and pending-receipt evidence path.
+
+A live logical document can use `createDocumentRetentionScope()`, which
+shares the resource scope replacement algorithm but holds both a shared
+logical-document lock and the strong closure of its opened revision. A
+concurrent CAS edit remains legal; removing the logical document is refused
+even after that edit replaces the direct strong target. Switching scopes
+acquires new documents before releasing old ones.

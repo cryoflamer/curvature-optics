@@ -396,6 +396,36 @@ class ModernBrowserSmoke(unittest.TestCase):
                 await store.removeDocument({documentId:'scope_b',expectedRevision:1});
                 return (await store.collectGarbage(b)).collected;
             }""",scoped))
+            # The same replaceable scope algorithm must protect logical
+            # document identity across concurrent immutable revisions.
+            logical=self.page.evaluate("""async()=>{
+                const row=await store.createAndAttach({documentId:'logical_scope',kind:'test',
+                    expectedRevision:0,metadata:{},slot:'value',type:'test',version:1,payload:'old'});
+                window.logicalScope=store.createDocumentRetentionScope();
+                await logicalScope.replace(['logical_scope']);
+                return row.id;
+            }""")
+            latest=second.evaluate("""async old=>{
+                const row=await store.createAndAttach({documentId:'logical_scope',kind:'test',
+                    expectedRevision:1,metadata:{},slot:'value',type:'test',version:1,payload:'new'});
+                for(const operation of [()=>store.collectGarbage(old),
+                    ()=>store.removeDocument({documentId:'logical_scope',expectedRevision:2})]){
+                    try{await operation();throw Error('logical lock bypassed');}
+                    catch(e){if(!/in use/.test(e.message))throw e;}
+                }
+                return row.id;
+            }""",logical)
+            self.assertTrue(self.page.evaluate("""async()=>{
+                try{await logicalScope.replace(['missing-document']);return false;}
+                catch(e){if(!/document missing/.test(e.message))throw e;}
+                return logicalScope.ids().join()==='logical_scope';
+            }"""))
+            self.page.evaluate('()=>logicalScope.replace([])')
+            self.assertTrue(second.evaluate("""async ({old,latest})=>{
+                return (await store.collectGarbage(old)).collected&&
+                    (await store.removeDocument({documentId:'logical_scope',expectedRevision:2})).removed&&
+                    (await store.collectGarbage(latest)).collected;
+            }""",{'old':logical,'latest':latest}))
             # Verify the user's actual recovery path: close the holding tab,
             # not an application-specific release or synchronization message.
             abandoned=self.page.evaluate("""async()=>{
