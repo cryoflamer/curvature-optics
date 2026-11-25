@@ -194,3 +194,71 @@ test('strict keyframe guard blocks remote drift without adopting a competing bas
   assert.equal(h.get().workspaceId,'project_alpha');
   assert.equal(h.actions.some(x=>x[0]==='local backup'),false);
 });
+
+
+function sharedKeyframeHarness(){
+  const clone=v=>JSON.parse(JSON.stringify(v)),ref={id:'draft_keyframe',revision:'rev:1',recovery:null};
+  const base={revision:7,digest:'sha256:'+'a'.repeat(64)};
+  let active=true,liveBase=clone(base),writes=[],next=null;
+  let row={revision:2,collection:{label:'unchanged'},revisions:[{id:ref.id,revision:1}],receipt:null,
+    keyframeEdit:{version:1,reference:ref,base,returnView:'editor',compareSelected:'A',
+      session:{projectId:ref.id,frameKey:'frame',candidate:10,past:[],future:[]}}};
+  const storage={read:async()=>clone(row),async updateKeyframeEdit(expected,intent,session,compareSelected){
+    assert.deepEqual(expected,row);assert.deepEqual(intent,row.keyframeEdit);
+    const job={...row,revision:row.revision+1,keyframeEdit:{...intent,session,compareSelected}};
+    writes.push(clone(job));
+    if(next){const hook=next;next=null;await hook(job);}
+    row=clone(job);return clone(row);
+  }};
+  const selection={coordinate:action=>action(),captureBase:async()=>clone(liveBase),
+    check:()=>{if(!active)throw Error('lifetime ended');}};
+  const writer=persistence.createSharedKeyframe({storage,selection});
+  writer.bind(row);
+  return {writer,writes,get:()=>clone(row),mark:(candidate,side='A')=>
+    writer.mark({...row.keyframeEdit.session,candidate},side),
+    hook:fn=>{next=fn;},commit:job=>{row=clone(job);},
+    changeBase:()=>{liveBase={...base,revision:base.revision+1};},end:()=>{active=false;}};
+}
+test('shared temporary keyframe pump ignores hydration and drains newer snapshots in order',async()=>{
+  const h=sharedKeyframeHarness(),w=h.writer;
+  h.mark(10);await w.save();assert.equal(h.writes.length,0);
+  const hold=deferred();h.hook(()=>hold.promise);h.mark(20);
+  const first=w.save();await tick();assert.equal(h.writes.length,1);
+  h.mark(30,'B');const joined=w.save();
+  hold.resolve();await first;await joined;
+  assert.equal(h.writes.length,2);assert.equal(h.writes[0].keyframeEdit.session.candidate,20);
+  assert.equal(h.get().keyframeEdit.session.candidate,30);
+  assert.equal(h.get().keyframeEdit.compareSelected,'B');
+  assert.deepEqual(w.acknowledgedRow(),h.get());assert.equal(w.state().unsaved,false);
+});
+test('shared temporary keyframe retry accepts exact lost acknowledgement without rewriting',async()=>{
+  const h=sharedKeyframeHarness(),w=h.writer;
+  h.hook(job=>{h.commit(job);throw Error('lost acknowledgement');});
+  h.mark(20);await assert.rejects(w.save(),/lost acknowledgement/);
+  assert.equal(w.state().unsaved,true);assert.equal(w.recovery().attempt.session.candidate,20);
+  h.mark(30);
+  await assert.rejects(w.save(),/Explicit temporary keyframe retry/);
+  await w.retry();
+  assert.equal(h.writes.length,2);
+  assert.equal(h.writes[1].keyframeEdit.session.candidate,30);
+  assert.equal(h.get().revision,4);assert.equal(w.state().unsaved,false);
+});
+test('shared temporary keyframe retry refuses a foreign journal and preserves latest evidence',async()=>{
+  const h=sharedKeyframeHarness(),w=h.writer;
+  h.hook(job=>{h.commit({...job,keyframeEdit:{...job.keyframeEdit,
+    session:{...job.keyframeEdit.session,candidate:99}}});throw Error('unknown outcome');});
+  h.mark(20);await assert.rejects(w.save(),/unknown outcome/);
+  h.mark(30);
+  await assert.rejects(w.retry(),/journal changed/);
+  assert.equal(h.writes.length,1);
+  assert.equal(h.get().keyframeEdit.session.candidate,99);
+  assert.equal(w.recovery().latest.session.candidate,30);
+});
+test('shared temporary keyframe pump blocks changed session base and ended lifetime',async()=>{
+  const h=sharedKeyframeHarness(),w=h.writer;
+  h.mark(20);h.changeBase();
+  await assert.rejects(w.save(),/Shared session changed/);
+  assert.equal(h.writes.length,0);assert.equal(w.recovery().latest.session.candidate,20);
+  h.end();await assert.rejects(w.retry(),/lifetime ended/);
+  assert.equal(h.writes.length,0);
+});

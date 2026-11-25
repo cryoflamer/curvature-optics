@@ -199,5 +199,94 @@
     return Object.freeze({bind,mark,save:()=>save(false),retry:()=>save(true),state,recovery,
       acknowledgedRow:()=>owner&&!owner.receipt?copy(owner.row):null});
   }
-  return Object.freeze({create:create,createShared:createShared});
+  // Temporary-keyframe writes change only the sealed recovery journal. The
+  // host owns entry/exit and the final Apply/Cancel transaction; this pump
+  // never rebases onto a different shared selection or working draft.
+  function createSharedKeyframe({storage,selection,onChange=null}={}){
+    if(!storage||!selection||!['read','updateKeyframeEdit'].every(k=>typeof storage[k]==='function')||
+       !['coordinate','captureBase','check'].every(k=>typeof selection[k]==='function'))
+      throw TypeError('Shared keyframe persistence dependencies required');
+    const copy=v=>JSON.parse(JSON.stringify(v));
+    function canonical(v){
+      if(Array.isArray(v))return v.map(canonical);
+      if(v&&typeof v==='object')
+        return Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])]));
+      return v;
+    }
+    const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+    let owner=null,running=null,sequence=0;
+    function state(){
+      return copy({reference:owner?.row.keyframeEdit.reference??null,
+        pending:!!running,unsaved:!!owner?.latest,error:owner?.error??null});
+    }
+    function notify(){if(onChange)try{onChange(state());}catch(ignore){}}
+    function current(active){
+      selection.check();
+      if(owner!==active)throw Error('Stale shared keyframe editor');
+    }
+    function bind(row){
+      selection.check();
+      if(running||owner&&(owner.latest||owner.attempt||owner.error))
+        throw Error('Resolve pending temporary keyframe edits before binding');
+      if(!row?.keyframeEdit||row.receipt||row.namedSave)
+        throw Error('Verified temporary keyframe journal required');
+      owner={row:copy(row),latest:null,attempt:null,error:null};
+      notify();return state();
+    }
+    function content(intent){return {session:intent.session,compareSelected:intent.compareSelected};}
+    function mark(session,compareSelected){
+      selection.check();
+      if(!owner)throw Error('No verified temporary keyframe journal');
+      const value=copy({session,compareSelected});
+      if(same(value,owner.latest?.value||content(owner.row.keyframeEdit)))return state();
+      owner.latest={sequence:++sequence,value};notify();return state();
+    }
+    async function write(active){
+      current(active);
+      const original=active.row.keyframeEdit;
+      const base=await selection.captureBase(original.reference);current(active);
+      if(!same(base,original.base))throw Error('Shared session changed during keyframe edit');
+      const durable=await storage.read();current(active);
+      const job=active.attempt||active.latest;
+      if(!job)return;
+      // Keep the captured input even if the IDB write or its readback fails.
+      // A retry may accept only the exact immediate successor of that input.
+      active.attempt=job;
+      const expected={...original,...job.value};
+      if(same(durable,active.row)){
+        active.row=await storage.updateKeyframeEdit(durable,original,
+          job.value.session,job.value.compareSelected);current(active);
+      }else if(durable&&durable.revision===active.row.revision+1&&
+        durable.receipt===null&&!durable.namedSave&&same(durable.collection,active.row.collection)&&
+        same(durable.revisions,active.row.revisions)&&same(durable.keyframeEdit,expected)){
+        active.row=durable;
+      }else throw Error('Temporary keyframe journal changed; reload or download unsaved recovery');
+      if(active.latest?.sequence===job.sequence)active.latest=null;
+      active.attempt=null;active.error=null;
+    }
+    function save(retry=false){
+      if(!owner)return Promise.reject(Error('No verified temporary keyframe journal'));
+      if(running)return running.then(state);
+      if(owner.error&&!retry)return Promise.reject(Error('Explicit temporary keyframe retry required'));
+      if(!owner.latest&&!owner.attempt)return Promise.resolve(state());
+      const active=owner;
+      running=Promise.resolve().then(async()=>{
+        try{
+          while(active.latest||active.attempt){
+            await selection.coordinate(()=>write(active));current(active);
+          }
+          active.error=null;
+        }catch(error){active.error=String(error.message||error);throw error;}
+      }).finally(()=>{running=null;notify();});
+      notify();return running.then(state);
+    }
+    function recovery(){
+      if(!owner)return null;
+      return copy({version:1,acknowledged:owner.row.keyframeEdit,
+        latest:owner.latest?.value??null,attempt:owner.attempt?.value??null,error:owner.error});
+    }
+    return Object.freeze({bind,mark,save:()=>save(false),retry:()=>save(true),state,recovery,
+      acknowledgedRow:()=>owner?copy(owner.row):null});
+  }
+  return Object.freeze({create:create,createShared:createShared,createSharedKeyframe});
 }));

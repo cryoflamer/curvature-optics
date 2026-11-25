@@ -880,7 +880,12 @@ receipt for a changed frame and no receipt for an unchanged one. A different
 shared session base blocks Apply. The host must verify its live shared
 session base and physical workspace before entering/recovering the editor;
 a stale temporary editor cannot restore its old physical workspace over a
-new one. The headless protocol does not mount the editor or write Web Storage.
+new one. A dedicated temporary journal writer serializes captured snapshots under
+the shared operation lock, keeps later edits in memory, and ignores
+unchanged hydration. Explicit retry accepts only the original row or an
+exact immediate successor of the captured attempt, never a foreign
+journal. Unacknowledged edits and attempted snapshots remain exportable.
+The headless protocol does not mount the editor or write Web Storage.
 A transient library visit without a selected
 document does not change the physical session. Migration and creation use
 the existing Library host, explicit source choices and the shared operation
