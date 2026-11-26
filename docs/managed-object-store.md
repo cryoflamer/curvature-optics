@@ -661,9 +661,16 @@ when the origin temporarily disappears from the working checkpoint and its
 archive root is absent. Previously acknowledged standalone origins remain
 explicit and are matched by their complete origin, not just result alias.
 Intermediate physical snapshots are not pinned by the live evidence scope.
-The scope conservatively lasts for the controller lifetime; it is not a
-second checkpoint writer. Missing evidence during acquisition refuses the
-read rather than exposing an unprotected snapshot.
+The scope conservatively lasts for the controller lifetime unless its
+consumer explicitly supplies a complete reachability inventory to
+`prune(readExperiments)`. Null declines maintenance; an empty or invalid
+inventory and unretained evidence refuse release. Exact verified origins
+and standalone origins are checked, and changing reachability during
+validation retains the previous lock set. Durable roots remain independent
+owners. The mounted controller does not yet invoke this pruning primitive:
+its acknowledged editor/recovery boundaries must be qualified separately.
+Missing evidence during acquisition refuses the read rather than exposing
+an unprotected snapshot. This is not a second checkpoint writer.
 
 Animation live retention also owns archived Calibration evidence from the
 bound draft's contract reference and all frames. A newly inserted History

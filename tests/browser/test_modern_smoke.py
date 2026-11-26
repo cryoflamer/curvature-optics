@@ -2641,7 +2641,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             // The archive is absent and no History row matches this edited
             // snapshot. The current physical checkpoint is uncalibrated.
             // Only the live retained exact result can supply its provenance.
-            const recovered=await port.stage(revived,reset.revision);
+            ok(!await live.prune(()=>null),'pending physical editor was pruned');
+            await rejects(()=>live.prune(()=>[]),/complete physical editor inventory/);
+            let inventoryReads=0;
+            ok(!await live.prune(()=>++inventoryReads===1?[uncalibrated,revived]:null),
+                'changing physical inventory was pruned');
+            ok(await live.prune(()=>[uncalibrated,revived]),'reachable physical origin was refused');
+            await rejects(()=>adapter.store.collectGarbage(saved.resultId),/close the corresponding editor/);
+            ok(await live.prune(()=>[uncalibrated]),'unreachable physical origin was not released');
+            const physicalRelease=await adapter.store.collectGarbage(saved.resultId);
+            ok(!physicalRelease.collected&&physicalRelease.reason==='durable-reference',
+                'physical pruning removed independently owned evidence');
+            const rebound=await port.replaceFromHistory(uncalibrated,edited,reset.revision,{isCurrent:()=>true});
+            const resetAgain=await port.replaceFromHistory(edited,uncalibrated,rebound.revision,{isCurrent:()=>true});
+            const recovered=await port.stage(revived,resetAgain.revision);
             const restoredEvidence=await adapter.readWorkingCheckpoint();
             ok(restoredEvidence.snapshots.draft.evidence.result===saved.resultId,
                 'live physical evidence was lost after dropping the origin');

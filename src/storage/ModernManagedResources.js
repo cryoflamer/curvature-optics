@@ -1838,8 +1838,8 @@
       });
     }
     // Live physical state owns verified calibration evidence, not every
-    // intermediate immutable camera snapshot. Retain observed origins for
-    // the lifetime of this controller, including its dirty/recovery state.
+    // intermediate immutable camera snapshot. Keep observed origins until
+    // an explicit, complete editor reachability inventory permits pruning.
     function createPhysicalEditorRetention(){
       const scope=store.createRetentionScope();
       let archived=new Map(),standalone=[],tail=Promise.resolve();
@@ -1867,11 +1867,45 @@
           archived=next;standalone=foreign;return value;
         });
       }
+      // The consumer must inventory every reachable experiment, including
+      // retained undo/recovery state. Null declines maintenance. Validate
+      // complete origins, not just aliases, before releasing any lock.
+      function prune(readExperiments){
+        check(typeof readExperiments==='function','physical editor inventory reader required');
+        function origins(){
+          const reachable=readExperiments();
+          if(reachable===null)return null;
+          check(Array.isArray(reachable)&&reachable.length>0,'complete physical editor inventory required');
+          return reachable.map(experiment=>state.validate(experiment).calibrationOrigin).filter(Boolean);
+        }
+        return serialize(async()=>{
+          const requested=origins();
+          if(requested===null)return false;
+          const next=new Map(),foreign=[];
+          for(const origin of requested){
+            if(archived.has(origin.resultId)){
+              const target=archived.get(origin.resultId);
+              checkOrigin(origin,await store.get(target));
+              next.set(origin.resultId,target);
+            }else{
+              check(standalone.some(old=>same(old,origin)),
+                'physical calibration inventory was not retained: '+origin.resultId);
+              if(!foreign.some(old=>same(old,origin)))foreign.push(origin);
+            }
+          }
+          // Reading immutable evidence above yields. Recheck reachability
+          // before replacing locks; a changing editor retains its old set.
+          if(!same(origins(),requested))return false;
+          await scope.replace([...next.values()]);
+          archived=next;standalone=foreign;
+          return true;
+        });
+      }
       function reset(){
         return serialize(async()=>{await scope.replace([]);archived=new Map();standalone=[];});
       }
       const editor={read,inventory:()=>({results:new Map(archived),standalone:structuredClone(standalone)})};
-      return Object.freeze({reset,createWorkingCheckpointPort:(db,lease)=>createWorkingCheckpointPort(db,lease,editor)});
+      return Object.freeze({prune,reset,createWorkingCheckpointPort:(db,lease)=>createWorkingCheckpointPort(db,lease,editor)});
     }
     const draftsId='animation-working:shared';
     function draftContracts(){
