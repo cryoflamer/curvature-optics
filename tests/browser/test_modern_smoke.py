@@ -513,6 +513,20 @@ class ModernBrowserSmoke(unittest.TestCase):
             const integrity=await s.verifyIntegrity();
             ok(integrity.valid&&integrity.liveObjects===3,'competing writes leaked data');
             ok(integrity.unreachable.length===1&&integrity.unreachable[0]===initial.id,'reachability mismatch');
+            // Removal must compare the control inventory in the same write
+            // transaction, including a root created after preflight.
+            await s.writeDocument({documentId:'control',kind:'control',expectedRevision:0,metadata:{},references:[]});
+            await rejects(()=>s.removeDocument({documentId:'doc',expectedRevision:2},
+                {expectedInventory:{kind:'control',documents:[]}}),/document inventory changed/);
+            await rejects(()=>s.removeDocument({documentId:'doc',expectedRevision:2},
+                {expectedInventory:{kind:'control',documents:[{id:'control',revision:1}]},
+                 guard:()=>{throw Error('stale removal guard');}}),/stale removal guard/);
+            let tracked=0,released=0;
+            const lease={check(){},track(tx,write){ok(write,'removal lease was not a writer');
+                tracked++;tx.abort();return ()=>{released++;};}};
+            await rejects(()=>s.removeDocument({documentId:'doc',expectedRevision:2},{lease}),/abort|inactive|transaction/i);
+            ok(tracked===1&&released===1&&(await s.getDocument('doc')).revision===2,
+                'aborted removal changed owner or escaped lease');
             // Corrupt the stored graph without changing its derived counts.
             // A payload-declared weak edge is still part of its immutable
             // contract; deleting it must block repair and reclamation.
@@ -1747,6 +1761,8 @@ class ModernBrowserSmoke(unittest.TestCase):
             'src/storage/ModernBackupWriteBarrier.js',
             'src/animation/ModernAnimationStudio.js',
             'src/animation/ModernAnimationDraftAutosave.js',
+            'src/storage/ModernDocumentSession.js',
+            'src/ui/modern/ModernSessionAutosave.js',
             'src/storage/ModernManagedObjectStore.js',
             'src/storage/ModernManagedResources.js',
             'src/storage/ModernPortableBackup.js',
@@ -1837,6 +1853,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const secondNamed=P.validate({...named,id:'working_project_other'});
             const secondRow=L.record(secondNamed,'auto',secondNamed.id,202,202,null);
             const secondOwner=await adapter.saveAnimation(secondRow);
+            const maintenance=adapter.createProjectMaintenancePort();
             await store.removeDocument({documentId:'observation:'+retainedRecord.id,expectedRevision:2});
             const namedDraft=CurvatureModernAnimationStudio.fromProject(named);
             const namedCp=A.checkpoint({...cp,draft:namedDraft,selectedKey:namedDraft.frames[0].key,
@@ -1854,7 +1871,19 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(unchanged.row.digest===row.digest&&unchanged.observations.some(v=>v.target===retainedPhoto.observationId)&&
                 !unchanged.observations.some(v=>v.target===secondPhoto.observationId),'conflict substituted historical observation');
             row=await fresh.read();
-            await store.removeDocument({documentId:'animation:'+secondNamed.id,expectedRevision:secondOwner.managedRevision});
+            await rejects(()=>maintenance.remove({kind:'animation',id:named.id,
+                expectedRevision:namedOwner.managedRevision}),/linked working copy retained/);
+            ok((await adapter.readAnimation(named.id)).managedRevision===namedOwner.managedRevision&&
+                (await adapter.readAnimationWorkingCollection()).row.digest===row.digest,'linked removal changed evidence');
+            await rejects(()=>maintenance.remove({kind:'animation',id:secondNamed.id,expectedRevision:999}),/changed or missing/);
+            await store.withDocumentRetained('animation:'+secondNamed.id,async()=>{
+                await rejects(()=>maintenance.remove({kind:'animation',id:secondNamed.id,
+                    expectedRevision:secondOwner.managedRevision}),/close the corresponding editor/);
+            });
+            ok((await maintenance.remove({kind:'animation',id:secondNamed.id,
+                expectedRevision:secondOwner.managedRevision})).removed,'unlinked named removal failed');
+            // Existing lower-level synthetic retirement continues to test
+            // recovery of a linked copy whose named owner is already absent.
             await store.removeDocument({documentId:'animation:'+named.id,expectedRevision:namedOwner.managedRevision});
             ok((await store.collectGarbage(namedOwner.projectId)).collected,'removed named owner still retained');
             const port=L.createPort({managedResources:adapter});
@@ -1879,7 +1908,7 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'working Save As substituted gallery evidence');
             await rejects(()=>port.createFromWorking(indexedDB,{...exported,id:'stale_save_as'},'auto',206,
                 null,null,{...reference,revision:'rev:999'}),/revision changed/);
-            await store.removeDocument({documentId:'animation:'+copy.id,expectedRevision:copied.managedRevision});
+            await maintenance.remove({kind:'animation',id:copy.id,expectedRevision:copied.managedRevision});
             ok(!(await store.collectGarbage(retainedPhoto.observationId)).collected,'linked working copy lost original');
             const galleryBefore=await adapter.listObservations();
             let guards=0;
@@ -2426,12 +2455,21 @@ class ModernBrowserSmoke(unittest.TestCase):
                 {title:'Aborted'},P.createId(crypto),11,base,aborted),/abort|inactive|transaction/i);
             ok(tracked===1&&released===1&&!(await port.readSharedSelectionReceipt(indexedDB))&&
                 (await port.get(indexedDB,project.id)).revision===1,'aborted transaction escaped lease');
+            const maintenance=adapter.createProjectMaintenancePort();
+            const disposable=P.fresh({id:P.createId(crypto),title:'Disposable',now:10});
+            await port.create(indexedDB,disposable);
+            const removable=await adapter.readCalibrationProject(disposable.id);
+            await rejects(()=>maintenance.remove({kind:'calibration',id:project.id,expectedRevision:1}),/is selected/);
+            await rejects(()=>maintenance.remove({kind:'calibration',id:disposable.id,expectedRevision:99}),/changed or missing/);
             const saved=await port.saveOrForkWithSelectionReceipt(indexedDB,project.id,1,
                 {title:'Saved'},P.createId(crypto),12,base,lease);
             ok(saved.status==='updated'&&saved.project.revision===2,'project update failed');
             const reloaded=S.createPort({managedResources:M.create(window)});
             const receipt=await reloaded.readExistingSharedSelectionReceipt(indexedDB,lease);
             ok(JSON.stringify(receipt)===JSON.stringify(saved.selectionReceipt),'receipt not durable');
+            await rejects(()=>maintenance.remove({kind:'calibration',id:disposable.id,
+                expectedRevision:removable.managedRevision}),/receipt unresolved/);
+            ok(await adapter.readCalibrationProject(disposable.id),'pending receipt removal changed unrelated project');
             const barrier=CurvatureModernBackupWriteBarrier.create(navigator.locks);
             const inspection=await barrier.snapshot(()=>reloaded.readExistingSharedSelectionReceipt(indexedDB,lease));
             ok(JSON.stringify(inspection.value)===JSON.stringify(receipt),'receipt inspection deadlocked or changed evidence');
@@ -2452,6 +2490,15 @@ class ModernBrowserSmoke(unittest.TestCase):
                 JSON.stringify(after.experiment)===JSON.stringify(before.experiment),'pending pointer recovery failed');
             ok(await reloaded.readSharedSelectionReceipt(indexedDB)===null&&
                 (await adapter.store.collectGarbage(previous.projectId)).collected,'receipt retirement did not release prior');
+            await rejects(()=>maintenance.remove({kind:'calibration',id:project.id,expectedRevision:2}),/is selected/);
+            await adapter.store.withDocumentRetained('calibration:'+disposable.id,async()=>{
+                await rejects(()=>maintenance.remove({kind:'calibration',id:disposable.id,
+                    expectedRevision:removable.managedRevision}),/close the corresponding editor/);
+            });
+            ok((await maintenance.remove({kind:'calibration',id:disposable.id,
+                expectedRevision:removable.managedRevision},{lease})).removed,'unselected project retirement failed');
+            ok(!(await adapter.readCalibrationProject(disposable.id))&&
+                (await checkpoint().read()).digest===after.digest,'retirement changed shared selection');
             const secondBase=await recovering.captureSelectionBase('calibration',PERSIST.projectReference(saved.project));
             await reloaded.rename(indexedDB,project.id,2,'Remote',14);
             const changes={title:'Conflict',photo:project.photo,checkpoint:project.checkpoint,

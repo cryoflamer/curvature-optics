@@ -803,3 +803,26 @@ automatically. Neither method is connected to production UI, automatic
 History pruning, a timer or startup. Existing protected application ports
 still refuse deletion. Named editable project removal and production
 activation remain separate acceptance work.
+
+### Named project retirement (opt-in qualification)
+
+`createProjectMaintenancePort().remove({kind,id,expectedRevision})` handles
+named Calibration and Animation owners only. It verifies the domain record,
+then reads the shared physical checkpoint and the relevant domain control
+root. Calibration refuses an unresolved selection receipt or a retained
+shared selection (even in another workspace). Animation refuses pending
+selection/save/keyframe journals, the matching selected project workspace,
+and any linked working copy, including inactive copies. No selection,
+working copy or recovery record is implicitly changed. A named owner that
+has no such logical dependency may be retired without removing its
+independently owned original or archive evidence.
+
+The core removal transaction checks the observed kind inventories
+(including absence) and exact project revision under the existing exclusive
+locks, before retiring the root. A changed inventory aborts the whole
+operation. The optional existing transaction lease and synchronous guard
+are forwarded. Mounted callers must also use the existing shared
+auxiliary-operation lock for selection and domain writes, to prevent a
+later stale selection from being published. This port does not provide
+that mounted integration, detach a linked copy, or activate destructive
+UI paths. Those paths remain disabled pending qualification.

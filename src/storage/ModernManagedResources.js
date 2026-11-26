@@ -2730,7 +2730,43 @@
       }
       return Object.freeze({remove,collectStep});
     }
-    return Object.freeze({store,createGalleryMaintenancePort,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,createPhysicalEditorRetention,
+    // Named owners have logical dependencies in the shared session and
+    // working collections in addition to immutable resource edges. This
+    // opt-in port does not change pointers or discard linked drafts. Mounted
+    // callers must also hold the existing shared auxiliary-operation lock.
+    function createProjectMaintenancePort(){
+      check(store.coordination==='participating-writer','coordinated managed storage required for maintenance');
+      const inventory=(kind,id,value)=>({kind,documents:value?[{id,revision:value.managedRevision}]:[]});
+      async function remove({kind,id,expectedRevision},{guard=()=>{},lease=null}={}){
+        check(positive(expectedRevision),'exact managed project revision required');
+        check(kind==='calibration'||kind==='animation','unsupported named project kind');
+        const calibration=kind==='calibration';
+        const documentId=calibration?'calibration:'+calibrations.id(id):'animation:'+images.validId(id);
+        const current=await (calibration?readCalibrationProject(id):readAnimation(id));
+        check(current&&current.managedRevision===expectedRevision,'named project changed or missing; refresh and retry');
+        const physical=await readWorkingCheckpoint();
+        const expectedInventory=[inventory('working-checkpoint',workingId,physical)];
+        const selected=physical?.row.envelope.documents[kind];
+        if(calibration){
+          const pending=await readCalibrationReceipt();
+          check(!pending?.receipt,'Shared Calibration receipt unresolved; recover before deleting');
+          expectedInventory.push(receiptInventory(pending));
+          check(selected?.id!==id,'Calibration project is selected; detach the shared selection before deleting');
+        }else{
+          const working=await readAnimationWorkingCollection();
+          expectedInventory.push(inventory(DRAFTS,draftsId,working));
+          const row=working?.row,workspaceId=drafts.projectWorkspaceId(id);
+          check(!row?.receipt&&!row?.namedSave&&!row?.keyframeEdit,
+            'Shared Animation operation unresolved; recover before deleting');
+          check(selected?.id!==workspaceId,'Animation project is selected; detach the shared selection before deleting');
+          check(!row?.collection.workspaces.some(item=>item.checkpoint.libraryId===id),
+            'Animation linked working copy retained; preserve or resolve it before deleting');
+        }
+        return store.removeDocument({documentId,expectedRevision},{expectedInventory,guard,lease});
+      }
+      return Object.freeze({remove});
+    }
+    return Object.freeze({store,createGalleryMaintenancePort,createProjectMaintenancePort,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,createPhysicalEditorRetention,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,createAnimationEditorRetention,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,

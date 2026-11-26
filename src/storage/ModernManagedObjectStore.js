@@ -273,12 +273,7 @@
     // Bulk edits and imports must acknowledge all root CAS changes together.
     // Resource definitions may be shared between plans but must be supplied
     // once; every new resource must be strongly reachable in the final graph.
-    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{},lease=null}={}){
-      check(typeof guard==='function','invalid write guard');
-      check(lease===null||typeof lease.check==='function'&&typeof lease.track==='function','invalid transaction lease');
-      lease?.check(true);
-      // Gallery deduplication and capacity decisions depend on the entire
-      // live kind inventory, including matches that require no mutation.
+    function prepareInventories(expectedInventory){
       const inventories=(expectedInventory===null?[]:Array.isArray(expectedInventory)?
         expectedInventory:[expectedInventory]).map(({kind,documents})=>{
         token(kind,'inventory kind');
@@ -289,6 +284,22 @@
         return {kind,rows:rows.sort((a,b)=>a[0].localeCompare(b[0]))};
       });
       check(new Set(inventories.map(v=>v.kind)).size===inventories.length,'duplicate expected inventory kind');
+      return inventories;
+    }
+    function checkInventories(g,inventories){
+      for(const inventory of inventories){
+        const actual=[...g.docs.values()].filter(doc=>doc.kind===inventory.kind&&!doc.deleted)
+          .map(doc=>[doc.id,doc.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
+        check(JSON.stringify(actual)===JSON.stringify(inventory.rows),'document inventory changed; reload and retry');
+      }
+    }
+    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{},lease=null}={}){
+      check(typeof guard==='function','invalid write guard');
+      check(lease===null||typeof lease.check==='function'&&typeof lease.track==='function','invalid transaction lease');
+      lease?.check(true);
+      // Gallery deduplication and capacity decisions depend on the entire
+      // live kind inventory, including matches that require no mutation.
+      const inventories=prepareInventories(expectedInventory);
       check(Array.isArray(plans)&&(plans.length>0||inventories.length>0),'nonempty document batch required');
       const batch=plans.map(({documentId,kind,expectedRevision,metadata,references,resources=[]})=>{
         token(documentId,'document ID');token(kind,'document kind');revision(expectedRevision);
@@ -301,11 +312,7 @@
       check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
-        for(const inventory of inventories){
-          const actual=[...g.docs.values()].filter(doc=>doc.kind===inventory.kind&&!doc.deleted)
-            .map(doc=>[doc.id,doc.revision]).sort((a,b)=>a[0].localeCompare(b[0]));
-          check(JSON.stringify(actual)===JSON.stringify(inventory.rows),'document inventory changed; reload and retry');
-        }
+        checkInventories(g,inventories);
         guard();
         if(!batch.length)return [];
         for(const {documentId,kind,expectedRevision} of batch){
@@ -615,15 +622,21 @@
     }
     // Explicit user-facing owner removal is not an editing detach. Refuse
     // without modifying the entry if any of its retained resources is in use.
-    async function removeDocument({documentId,expectedRevision}){
+    async function removeDocument({documentId,expectedRevision},{expectedInventory=null,guard=()=>{},lease=null}={}){
       token(documentId,'document ID');revision(expectedRevision);
+      check(typeof guard==='function','invalid removal guard');
+      check(lease===null||typeof lease.check==='function'&&typeof lease.track==='function','invalid transaction lease');
+      lease?.check(true);
+      const inventories=prepareInventories(expectedInventory);
       return underLock('document',documentId,'exclusive',async()=>{
         const before=await getDocument(documentId);
         check(before&&before.revision===expectedRevision,'stale or missing document');
         return lockTargets(rootTargets(before),'exclusive',()=>run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         const doc=checkedDocument(g,documentId,expectedRevision);check(doc,'document missing');
+        checkInventories(g,inventories);
         await verifyPayloads(g,stores,types);
+        guard();
         for(const edge of [...g.refs.values()]){
           if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
         }
@@ -631,7 +644,7 @@
         const retired=saveDocument(g,stores,{id:documentId,kind:doc.kind,
           revision:doc.revision+1,deleted:true});
         return {removed:true,revision:retired.revision};
-        }));
+        },lease));
       });
     }
     async function withRetained(id,operation){
