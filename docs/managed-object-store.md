@@ -883,3 +883,16 @@ lock refuses deletion. The existing safety review remains observational, not
 permission to delete: another owner may retain the observation and original
 bytes after the gallery entry is retired. The old Image Library port and
 legacy UI still refuse their unqualified destructive methods.
+
+### Inactive independent Animation draft cleanup
+
+Managed preview reuses the existing explicit single/bulk inactive independent
+Animation draft cleanup. The currently selected acknowledged draft must remain
+open and clean; exact displayed draft references and the selected reference
+are checked by the shared collection CAS under the shared operation lease.
+The managed backend replaces the entire working-collection owner atomically,
+including its tombstones and remaining resource edges. No named project,
+physical checkpoint or shared selection is removed or relinked. Cancellation,
+stale references and unresolved journals retain the original collection.
+Resources owned elsewhere remain retained; unowned descendants become GC
+candidates. Linked and selected drafts remain protected.

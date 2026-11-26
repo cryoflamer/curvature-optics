@@ -3638,8 +3638,8 @@
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!ctx||ctx.busy||!animationWorkspaceOpen||experimentPreview.calibrationBusy||
        !['clean','committed'].includes(experimentPreview.status))return false;
-    if(managedResources&&['adopt','recover','deleteDrafts'].includes(kind)){
-      ctx.error=true;ctx.message='Legacy adoption and deletion are disabled in managed preview.';
+    if(managedResources&&['adopt','recover'].includes(kind)){
+      ctx.error=true;ctx.message='Legacy adoption is disabled in managed preview.';
       renderSharedAnimationLibrary();return false;
     }
     if(['adopt','recover'].includes(kind)&&(!root.confirm||!root.confirm(
