@@ -103,10 +103,11 @@
       var deleteTitle=entry.pinned?'Unpin '+displayName(entry)+' before deleting':
         'Delete '+displayName(entry);
       var remove=button(doc,'',deleteTitle,function(){
-        if(actions.remove)actions.remove(entry.id);
+        if(actions.remove)actions.remove(entry.id,entry);
       });
       remove.className='modern-history-delete modern-card-delete';
-      remove.disabled=!!entry.pinned||!!(options&&(options.readOnly||options.protectedManagement));
+      remove.disabled=!!entry.pinned||!!(options&&(options.readOnly||
+        options.protectedManagement&&(!options.managedSingleRemoval||entry.source==='recovery')));
       card.appendChild(remove);
       return card;
     }

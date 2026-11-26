@@ -2720,7 +2720,7 @@
     // protected UI ports disabled until coordinated cutover and acceptance.
     function createGalleryMaintenancePort(){
       check(store.coordination==='participating-writer','coordinated managed storage required for maintenance');
-      async function remove({kind,id,expectedRevision}){
+      async function remove({kind,id,expectedRevision},{guard=()=>{},lease=null}={}){
         check(positive(expectedRevision),'exact managed gallery revision required');
         let current,documentId;
         switch(kind){
@@ -2744,7 +2744,7 @@
         // The core rechecks the exact revision while holding the logical
         // document and direct resource locks. No caller can release another
         // owner's edges; root retirement does not collect payloads.
-        return store.removeDocument({documentId,expectedRevision});
+        return store.removeDocument({documentId,expectedRevision},{guard,lease});
       }
       async function collectStep({limit=core.MAX_GC_BATCH}={}){
         const candidates=await store.listGarbageCandidates({limit});

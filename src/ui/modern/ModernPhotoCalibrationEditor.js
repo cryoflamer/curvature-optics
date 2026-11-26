@@ -1209,8 +1209,11 @@
       deletion.className='modern-animation-library-delete modern-card-delete';
       deletion.dataset.calibrationProjectDelete=entry.id;
       deletion.disabled=projectListBusy;
-      if(sharedSelection&&(active&&(unsaved||state?.pending||state?.error)||!sharedSelection.remove)){
-        deletion.disabled=true;deletion.title='Resolve pending work before deleting this project';
+      if(sharedSelection&&(active&&(unsaved||state?.pending||state?.error)||!sharedSelection.remove||
+          sharedSelection.canRemove&&!sharedSelection.canRemove(entry.id))){
+        deletion.disabled=true;deletion.title=sharedSelection.canRemove?
+          'Resolve pending work or detach the selected project before deletion':
+          'Resolve pending work before deleting this project';
       }
       deletion.setAttribute('aria-label','Delete calibration '+entry.title);
       if(!sharedSelection||!deletion.disabled)deletion.title=active?'Delete the currently opened calibration project':
@@ -1481,6 +1484,9 @@
     }
     async function deleteFromProjects(entry){
       if(projectListBusy||sharedSelection&&!sharedSelection.remove)return;
+      if(sharedSelection?.canRemove&&!sharedSelection.canRemove(entry.id)){
+        projectsMessage('Resolve pending work or detach the selected project before deletion.',true);return;
+      }
       const active=projectSession?.project()?.id===entry.id;
       if(active&&(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
           photoGestures.active||resultGestures.active)){

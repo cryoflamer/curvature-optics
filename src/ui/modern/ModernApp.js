@@ -2246,7 +2246,22 @@
           throw error;
         }
       },
-      remove:managedResources?null:async function(ref){
+      ...(managedResources?{canRemove:function(id){
+        var s=controller.state();
+        return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy&&
+          s.row.envelope.documents.calibration?.id!==id;
+      }}:{}),
+      remove:async function(ref){
+        if(managedResources)return coordinate(async function(){
+          lease.check(true);
+          await controller.assertCleanCheckpoint();
+          var current=await managedResources.readCalibrationProject(ref.id);
+          if(!current||'rev:'+current.project.revision!==ref.revision)
+            throw Error('Calibration Project changed; delete rejected');
+          await managedResources.createProjectMaintenancePort().remove({kind:'calibration',id:ref.id,
+            expectedRevision:current.managedRevision},{lease});
+          return {detached:false};
+        });
         var detached=false,storage=calibrationStorage;
         try{
           return await coordinate(async function(){
@@ -3352,8 +3367,9 @@
         action(rename,'Cancel',()=>{studioLibraryRenamingId='';renderSharedAnimationLibrary();});
         card.appendChild(rename);
       }
-      action(actions,'Delete',()=>void runSharedAnimationAction('deleteNamed',record),false,
-        {'data-shared-delete-animation-id':record.id,'aria-label':'Delete saved project · '+record.project.name});
+      action(actions,'Delete',()=>void runSharedAnimationAction('deleteNamed',record),!!managedResources&&!!existing,
+        {'data-shared-delete-animation-id':record.id,'aria-label':'Delete saved project · '+record.project.name,
+          ...(managedResources&&existing?{title:'Resolve the linked working copy before deleting this project'}:{})});
       card.addEventListener('dblclick',event=>{
         if(!blocked&&!ctx.busy&&!experimentPreview.calibrationBusy&&!event.target.closest('button'))open();
       });
@@ -3622,7 +3638,7 @@
     var ctx=experimentPreview.animationContext,c=experimentPreview.controller;
     if(!ctx||ctx.busy||!animationWorkspaceOpen||experimentPreview.calibrationBusy||
        !['clean','committed'].includes(experimentPreview.status))return false;
-    if(managedResources&&['adopt','recover','deleteNamed','deleteDrafts'].includes(kind)){
+    if(managedResources&&['adopt','recover','deleteDrafts'].includes(kind)){
       ctx.error=true;ctx.message='Legacy adoption and deletion are disabled in managed preview.';
       renderSharedAnimationLibrary();return false;
     }
@@ -3807,7 +3823,13 @@
             ctx.message='Imported '+result.created+' animations; '+result.reused+' already present. Working draft unchanged.'+
               (result.thumbnailWarning?' Thumbnail storage unavailable; images may not survive reload.':'');
           }else if(kind==='deleteNamed'){
-            await studioLibrary.removeExact(root.indexedDB,value);
+            if(managedResources){
+              var current=await managedResources.readAnimation(value.id);
+              if(!current||JSON.stringify(current.row)!==JSON.stringify(value))
+                throw Error('Saved Animation changed since inspection; reload before deleting');
+              await managedResources.createProjectMaintenancePort().remove({kind:'animation',id:value.id,
+                expectedRevision:current.managedRevision},{lease:ctx.lease});
+            }else await studioLibrary.removeExact(root.indexedDB,value);
             ctx.lease.check(true);
             // Independent domain operation: never delete or relink the
             // shared working checkpoint as a side effect of Library deletion.
@@ -3815,7 +3837,8 @@
             if(ctx.named.some(record=>record.id===value.id))
               throw Error('Saved Animation deletion could not be confirmed; reload and inspect');
             ctx.namedError=null;
-            ctx.message='Saved Animation deleted. Any working copy remains available as an independent recovery source.';
+            ctx.message=managedResources?'Saved Animation deleted. Other projects and original photographs retained.':
+              'Saved Animation deleted. Any working copy remains available as an independent recovery source.';
           }else if(kind==='importRecovery'){
             if(managedResources){
               ctx.row=await managedResources.importAnimationRecovery(root.indexedDB,ctx.lease,row,recoveryContents);
@@ -7609,6 +7632,16 @@
     if(!report||!review)return;
     review.disabled=true;report.hidden=false;report.textContent='Reviewing known local History links…';
     try{
+      if(managedResources){
+        var usage=await managedResources.store.inspectDocumentUsage('history:'+id,['snapshot']);
+        if(!usage)throw Error('History snapshot no longer exists');
+        if(generation!==historyUsageReviewGeneration||String(id)!==historySelectedId)return;
+        var owners=usage.targets[0].owners.map(owner=>owner.document.id);
+        report.textContent='Snapshot #'+id+': '+owners.length+' durable resource owner(s) ('+owners.join(', ')+'). '+
+          'Removing this gallery entry retains other strong owners. History provenance links may become unavailable. '+
+          'Live editor conflicts are checked at deletion; bulk deletion remains disabled.';
+        return;
+      }
       var result=await historyFactory.inspectUsage(root,id);
       if(generation!==historyUsageReviewGeneration||String(id)!==historySelectedId)return;
       var sources=Array.from(new Set(result.uses.map(use=>use.source)));
@@ -7618,7 +7651,8 @@
         (result.coordinated?'Participating writers coordinated.':'Inspection uncoordinated.')+' '+
         'Other tabs, older clients and external files are not covered. Permanent deletion remains disabled.';
     }catch(error){
-      if(generation===historyUsageReviewGeneration)report.textContent='Link review failed: '+error.message+'. Permanent deletion remains disabled.';
+      if(generation===historyUsageReviewGeneration)report.textContent='Link review failed: '+error.message+
+        (managedResources?'. Refresh the selected snapshot and retry.':'. Permanent deletion remains disabled.');
     }finally{
       if(generation===historyUsageReviewGeneration)review.disabled=!sharedHistoryAvailable()||!historySelectedId;
     }
@@ -7687,8 +7721,18 @@
       });
     });
   }
-  function deleteHistorySnapshot(id){
-    if(sharedPresentationActive())return Promise.reject(Error('History deletion is disabled in the shared session'));
+  function deleteHistorySnapshot(id,expected){
+    if(sharedPresentationActive()){
+      if(!managedResources)return Promise.reject(Error('History deletion is disabled in the shared session'));
+      if(!expected||expected.id!==id||expected.pinned||expected.source==='recovery')
+        return Promise.reject(Error('Unpin the inspected History snapshot before deletion; Recovery remains protected'));
+      if(!root.confirm||!root.confirm('Delete "'+(expected.name||'this snapshot')+'" from History? Shared resources will be retained.'))
+        return Promise.resolve(false);
+      return runHistoryCardAction(id,()=>runSharedHistoryManagement(guard=>
+        managedResources.createGalleryMaintenancePort().remove({kind:'history',id,
+          expectedRevision:expected.managedRevision},{guard,lease:experimentPreview.calibrationContext.lease}))
+        .then(()=>{delete historyMultiSelection[id];historyStatus('Snapshot deleted.');return refreshHistoryList();}));
+    }
     return runHistoryCardAction(id,function(){
       return experimentHistory.get(id).then(function(entry){
         if(!entry)throw RangeError('History snapshot not found');
@@ -7786,11 +7830,12 @@
           pin:function(id,entry){
             pinHistorySnapshot(id,entry).catch(function(error){historyStatus(error.message,true);});
           },
-          remove:function(id){
-            deleteHistorySnapshot(id).catch(function(error){historyStatus(error.message,true);});
+          remove:function(id,entry){
+            deleteHistorySnapshot(id,entry).catch(function(error){historyStatus(error.message,true);});
           }
         },historyMultiSelection,{pinnedCollapsed:pinnedCollapsedForView,
-          manage:historyManageMode,protectedManagement:sharedPresentationActive(),emptyFiltered:entries.length>0,
+          manage:historyManageMode,protectedManagement:sharedPresentationActive(),
+          managedSingleRemoval:!!managedResources,emptyFiltered:entries.length>0,
           filtersActive:!!(historyFiltersApi&&historyFiltersApi.active(historyFilters)),
           hasPinned:entries.some(function(entry){return !!entry.pinned;})});
         if(focused&&chosen&&gallery.querySelectorAll){

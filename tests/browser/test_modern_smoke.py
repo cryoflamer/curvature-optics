@@ -3594,6 +3594,121 @@ class ModernBrowserSmoke(unittest.TestCase):
             CurvatureModernApp.getManagedResources().readHistory(1)"""))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_managed_preview_guarded_single_owner_removal(self):
+        """Existing UI deletion actions use exact managed roots and preserve other owners."""
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        seed=self.page.evaluate("""async()=>{
+            const a=CurvatureModernManagedResources.create(window),P=CurvatureModernCalibrationProject;
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:a});
+            await S.read();await S.initialize(experiment);
+            const row={id:1,version:1,createdAt:42,source:'manual',pinned:false,
+                name:'Removable History',description:'',thumbnail:null,experiment};
+            const original=await a.saveHistory(row);
+            await a.saveHistory({...row,id:2,pinned:true,name:'Pinned History'},{snapshotId:original.snapshotId});
+            const spare=P.fresh({id:P.createId(crypto),title:'Removable Calibration',now:100});
+            const keep=P.fresh({id:P.createId(crypto),title:'Retained Calibration',now:101});
+            await a.saveCalibrationProject(spare);await a.saveCalibrationProject(keep);
+            const A=CurvatureModernAnimationProject,L=CurvatureModernAnimationLibrary;
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            for(const id of ['managed_remove_animation','managed_keep_animation']){
+                const project=A.createV2(contract,[{experiment},{experiment}],{id,name:id});
+                await a.saveAnimation(L.record(project,'auto',id,100,100,null));
+            }
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+            return {spare:spare.id,keep:keep.id,snapshot:original.snapshotId};
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load',timeout=30000)
+        ready="""()=> {
+            const a=window.CurvatureModernApp;
+            return !!a&&a.getExperimentSessionPreview().status==='clean'&&
+                a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernHistoryToggle').click()
+        card=self.page.locator('#ModernHistoryGallery [data-snapshot-id="1"]')
+        pinned=self.page.locator('#ModernHistoryGallery [data-snapshot-id="2"]')
+        expect(card).to_be_visible(timeout=30000)
+        expect(pinned.locator('.modern-history-delete')).to_be_disabled()
+        card.locator('.modern-history-card-select').click()
+        self.page.locator('#ModernHistoryReviewLinks').click()
+        expect(self.page.locator('#ModernHistoryUsageReport')).to_contain_text('2 durable resource owner(s)',timeout=30000)
+        # A foreign update after the card was rendered must not be deleted.
+        self.page.evaluate("""async()=>{
+            const a=CurvatureModernApp.getManagedResources(),h=a.createHistoryPort(),entry=await h.get(1);
+            await h.updateMetadataExact(entry,'Changed elsewhere','');
+        }""")
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        card.locator('.modern-history-delete').click()
+        expect(self.page.locator('#ModernHistoryStatus')).to_contain_text('changed',timeout=30000)
+        self.page.locator('#ModernHistoryClose').click()
+        self.page.locator('#ModernHistoryToggle').click()
+        expect(card).to_contain_text('Changed elsewhere',timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        card.locator('.modern-history-delete').click()
+        expect(card).to_have_count(0,timeout=30000)
+        expect(pinned).to_be_visible()
+        self.assertTrue(self.page.evaluate("""async id=>!!await
+            CurvatureModernApp.getManagedResources().store.get(id)""",seed['snapshot']))
+        self.page.locator('#ModernHistoryClose').click()
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        panel=self.page.locator('#ModernCalibrationProjectsPanel')
+        expect(panel).to_be_visible(timeout=30000)
+        remove=panel.locator('[data-calibration-project-delete="'+seed['spare']+'"]')
+        expect(remove).to_be_enabled(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        remove.click()
+        expect(remove).to_have_count(0,timeout=30000)
+        panel.locator('[data-calibration-project-open="'+seed['keep']+'"]').click()
+        self.page.wait_for_function("""id=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return e?.projectId===id&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+                document.querySelector('#ModernCalibrationProjectsPanel').hidden;
+        }""",arg=seed['keep'],timeout=30000)
+        self.page.locator('#ModernCalibrationProjectsToggle').click()
+        expect(panel.locator('[data-calibration-project-delete="'+seed['keep']+'"]')).to_be_disabled()
+        self.page.locator('#ModernAnimationTab').click()
+        remove=self.page.locator('[data-shared-delete-animation-id="managed_remove_animation"]')
+        expect(remove).to_be_enabled(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        remove.click()
+        expect(remove).to_have_count(0,timeout=30000)
+        self.page.locator('[data-shared-named-animation-id="managed_keep_animation"]').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(self.page.locator('[data-shared-delete-animation-id="managed_keep_animation"]')).to_be_disabled()
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertTrue(self.page.evaluate("""async seed=>{
+            const a=CurvatureModernApp.getManagedResources();
+            return !await a.readHistory(1)&&!!await a.readHistory(2)&&
+                !await a.readCalibrationProject(seed.spare)&&!!await a.readCalibrationProject(seed.keep)&&
+                !await a.readAnimation('managed_remove_animation')&&!!await a.readAnimation('managed_keep_animation')&&
+                (await a.store.verifyIntegrity()).valid;
+        }""",seed))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_managed_preview_mounts_one_storage_authority(self):
         self.page.route(self.base_url,lambda route:route.fulfill(
             status=200,content_type='text/html',body='<html><body></body></html>'))

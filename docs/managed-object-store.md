@@ -555,8 +555,9 @@ Calibration copy retains the source's exact original and result resources
 under project and inventory CAS; the copy has an independent physical session.
 Animation Save As uses the exact selected working reference, retained photo
 and calibration evidence, and a working-collection inventory CAS rather than
-requiring a current gallery alias. Managed destructive removal and legacy
-adoption remain disabled. The route is a protected integration rehearsal,
+requiring a current gallery alias. Managed preview permits only the qualified
+single-owner removals and automatic History policy described below; legacy
+adoption and other destructive actions remain disabled. The route is a protected integration rehearsal,
 not automatic production migration or approval to change the marker. Foreign
 standalone provenance, remaining export/recovery paths, retention and manual
 acceptance still require qualification.
@@ -853,3 +854,22 @@ existing acknowledged automatic History path; normal absent-marker and
 legacy shared routes do not. A failed GC is displayed as maintenance
 failure, not a failed snapshot. This is a disposable-profile rehearsal,
 not authorization to activate production migration.
+
+### Guarded single-owner removal in managed preview
+
+The explicit managed preview connects the existing History card delete,
+Calibration project delete and named Animation Library delete actions to
+the domain maintenance ports under the shared operation coordinator. History
+uses the exact displayed managed revision; the confirmation does not
+reread and silently substitute a newer row. Its managed link review reports
+durable strong owners from the canonical graph, not a legacy inventory;
+weak provenance and live locks are separately identified. Pinned and
+Recovery History remain protected. Bulk deletion remains disabled.
+
+Calibration allows only a nonselected project after a clean shared
+checkpoint; named Animation allows only a project with no retained linked
+working copy or pending journal. Existing selected project and linked-copy
+controls refuse removal rather than implicitly detach or lose recovery.
+The domain transaction rechecks the revision, dependencies and active locks.
+The old shared/legacy routes are unchanged. This preview does not activate
+migration or permit discarding linked workspaces.
