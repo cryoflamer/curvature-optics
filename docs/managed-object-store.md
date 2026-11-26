@@ -653,6 +653,14 @@ resolving a mutable gallery at save/fork time. A committed conflict fork is
 adopted before shared selection acknowledgement and receipt retirement.
 To preserve queued captured drafts, the Calibration scope keeps all evidence
 acquired in one generation until a verified replacement or tab termination.
+The explicit `prune(readProject)` maintenance operation narrows that set to
+an acknowledged project when the caller guarantees there are no pending
+captures or unpublished changes. It verifies exact retained original and result
+mappings, acquires a fresh logical document scope for the acknowledged revision,
+checks the revision and editor inventory again, then releases the old scope.
+A null or changed inventory declines maintenance. This also releases obsolete
+opened revisions of the same document ID without losing its logical lock.
+The mounted Calibration editor does not yet invoke this operation.
 
 The live shared physical checkpoint port retains verified Calibration result
 objects before returning committed or recovery snapshots to the controller.

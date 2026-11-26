@@ -1175,7 +1175,8 @@
     // Keep the exact editor evidence independently of mutable gallery roots.
     // Retain the whole generation: queued saves may still need old photos.
     function createCalibrationEditorRetention(){
-      const documents=store.createDocumentRetentionScope(),resources=store.createRetentionScope();
+      let documents=store.createDocumentRetentionScope();
+      const resources=store.createRetentionScope();
       let owner=null,originals=new Map(),linked=new Map(),tail=Promise.resolve();
       function serialize(operation){
         const next=tail.then(operation);tail=next.catch(()=>{});return next;
@@ -1234,7 +1235,48 @@
           originals=new Map();linked=new Map();owner=null;
         });
       }
-      const editor={bind:project=>bind(project),adopt:project=>bind(project,true),retainPhoto,retainResult,reset,
+      // Only an acknowledged, quiescent editor can narrow its evidence set.
+      // Refresh the logical scope as well: retaining the same document ID
+      // alone would continue protecting its originally opened revision.
+      function prune(readProject){
+        check(typeof readProject==='function','Calibration editor inventory reader required');
+        return serialize(async()=>{
+          const requested=readProject();
+          if(requested===null)return false;
+          const project=calibrations.normalize(requested),id='calibration:'+project.id;
+          check(owner===project.id,'Calibration editor changed before retention pruning');
+          return store.withDocumentRetained(id,async graph=>{
+            const value=await loadCalibrationProject(graph,project.id);
+            check(value&&same(value.project,project),'Calibration editor revision changed before pruning');
+            const nextOriginals=new Map(),nextResults=new Map();
+            if(value.originalId){
+              const key=project.photo.identity.sha256;
+              check(originals.get(key)===value.originalId,'Calibration editor original was not retained');
+              nextOriginals.set(key,value.originalId);
+            }
+            for(const {alias,target} of value.results){
+              check(linked.get(alias)===target,'Calibration editor result was not retained: '+alias);
+              nextResults.set(alias,target);
+            }
+            const nextDocuments=store.createDocumentRetentionScope();
+            let adopted=false;
+            try{
+              await nextDocuments.replace([id]);
+              const confirmed=await store.getDocument(id);
+              check(confirmed?.revision===graph.document.revision,'Calibration editor revision changed before pruning');
+              if(!same(readProject(),requested))return false;
+              await resources.replace([...nextOriginals.values(),...nextResults.values()]);
+              const prior=documents;
+              documents=nextDocuments;originals=nextOriginals;linked=nextResults;adopted=true;
+              await prior.close();
+              return true;
+            }finally{
+              if(!adopted)await nextDocuments.close();
+            }
+          });
+        });
+      }
+      const editor={bind:project=>bind(project),adopt:project=>bind(project,true),retainPhoto,retainResult,prune,reset,
         inventory:()=>({originals:new Map(originals),results:new Map(linked)})};
       return Object.freeze({...editor,storage:createCalibrationProjectPort(editor)});
     }

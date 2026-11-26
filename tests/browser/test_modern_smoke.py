@@ -3201,10 +3201,35 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(forkRead.originalId===photo.originalId&&forkRead.results[0].target===saved.resultId,
                 'live fork lost exact original or archive evidence');
             await rejects(()=>adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:1}),/close the corresponding editor/);
+            // A queued or changing editor inventory must not release old evidence.
+            ok(await live.prune(()=>null)===false,'pending Calibration inventory pruned');
+            let inventoryReads=0;
+            ok(await live.prune(()=>++inventoryReads===1?fork.project:null)===false,'changing Calibration inventory pruned');
+            await rejects(()=>adapter.store.collectGarbage(revisedRead.projectId),/close the corresponding editor/);
+            const spareCanvas=document.createElement('canvas');spareCanvas.width=13;spareCanvas.height=17;
+            const spare={...record,id:'calibration_unpublished_photo',title:'Unpublished photo',
+                original:{dataUrl:spareCanvas.toDataURL('image/png'),width:13,height:17}};
+            await live.retainPhoto(spare);
+            const sparePhoto=await adapter.readObservation(spare.id);
+            await rejects(()=>adapter.store.collectGarbage(sparePhoto.originalId),/close the corresponding editor/);
+            ok(await live.prune(()=>fork.project),'acknowledged Calibration fork not pruned');
+            ok((await adapter.store.collectGarbage(revisedRead.projectId)).collected,'old Calibration revision remained locked');
+            ok((await adapter.store.collectGarbage(sparePhoto.originalId)).reason==='durable-reference','unpublished original remained locked or gallery ownership was lost');
+            await adapter.store.removeDocument({documentId:'observation:'+spare.id,expectedRevision:sparePhoto.managedRevision});
+            await adapter.store.collectGarbage(sparePhoto.observationId);
+            ok((await adapter.store.collectGarbage(sparePhoto.originalId)).collected,'released spare original was not collectible');
+            // Saving the same logical document must refresh its opened revision too.
+            const refreshed=await live.storage.update(indexedDB,fork.project.id,1,{title:'Refreshed fork'},51);
+            await live.adopt(refreshed);
+            const refreshedRead=await adapter.readCalibrationProject(fork.project.id);
+            await rejects(()=>adapter.store.collectGarbage(forkRead.projectId),/close the corresponding editor/);
+            await rejects(()=>live.prune(()=>fork.project),/revision changed before pruning/);
+            ok(await live.prune(()=>refreshed),'acknowledged same-document revision not pruned');
+            ok((await adapter.store.collectGarbage(forkRead.projectId)).collected,'old same-document revision remained locked');
+            await rejects(()=>adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:2}),/close the corresponding editor/);
             await live.reset();
-            await adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:1});
-            await adapter.store.collectGarbage(forkRead.projectId);
-            ok((await adapter.store.collectGarbage(revisedRead.projectId)).collected,'closed editor retained old revision');
+            await adapter.store.removeDocument({documentId:'calibration:'+fork.project.id,expectedRevision:2});
+            await adapter.store.collectGarbage(refreshedRead.projectId);
             const currentCalibration=await adapter.readCalibrationProject(remote.id);
             const usage=await barrier.snapshot(()=>projectPort.inspectUsage(indexedDB));
             ok(usage.value.projects.length===1&&usage.value.projects[0].revision===3&&usage.value.legacy===null,
