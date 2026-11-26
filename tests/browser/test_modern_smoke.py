@@ -1024,7 +1024,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             ok(replacement.created&&replacement.retired.join(',')==='history:'+oldAuto.row.id&&
                 replacement.garbage.collected.includes(oldAuto.snapshotId),'oldest released auto not reclaimed');
             const recoveryExperiment=structuredClone(experiment);
-            recoveryExperiment.compare.selected='A';
+            recoveryExperiment.scene.camera.Height+=1;
             const recovery=await autoPort.record(recoveryExperiment,'recovery',null);
             ok(recovery.created&&recovery.entry.pinned,'Recovery not protected');
             const beforeFailure=await adapter.listHistory();
