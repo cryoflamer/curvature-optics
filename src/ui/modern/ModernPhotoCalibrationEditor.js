@@ -1509,7 +1509,13 @@
             session===projectSession&&session.project()?.id===entry.id&&current.revision===revision&&
             !current.pending&&!current.unsaved&&!current.error&&!current.selectionPending;
         };
-        if(!guard()||!state.lastAck||!session.matchesAcknowledgedInput(captureDraftState(),captureInlineState()))
+        const draft=captureDraftState(),inline=captureInlineState();
+        // A verified Open binds the durable project without manufacturing a
+        // save acknowledgement. Its hydrated input is a clean baseline until
+        // the first save attempt; all subsequent closes require exact save ack.
+        const acknowledged=state.lastAck?session.matchesAcknowledgedInput(draft,inline):
+          sharedWrite===null&&sharedInput!==null&&sharedInput===sharedInputFingerprint(draft,inline);
+        if(!guard()||!acknowledged)
           throw Error('Calibration has unacknowledged work; save or recover before closing');
         const result=await sharedSelection.detach({id:entry.id,revision:'rev:'+revision,recovery:null},guard);
         if(!result.detached)throw Error('Selected Calibration changed; close rejected');
