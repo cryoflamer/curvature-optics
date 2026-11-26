@@ -2016,7 +2016,7 @@
       if(!state?.projectId)return true; // No document was selected in the library.
       if(state.pending||state.unsaved||state.error||state.selectionPending)
         throw Error('Resolve unsaved Calibration work before leaving');
-      await pruneCalibrationRetention();
+      void pruneCalibrationRetention();
       return true;
     }
     async function resumeCleanProjectAfterReload(){

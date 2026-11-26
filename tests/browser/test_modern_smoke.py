@@ -3459,17 +3459,19 @@ class ModernBrowserSmoke(unittest.TestCase):
         # Replace the original in the actual mounted managed editor. A clean
         # acknowledgement must release the old revision and original, while
         # the current original and logical project remain live-protected.
+        first_revision=self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
+            .projectPersistenceStatus().revision""")
         data=self.soundly_calibration_experiment()
         self.import_calibration_experiment(data)
-        self.page.wait_for_function("""async id=>{
+        self.page.wait_for_function("""({id,revision})=>{
             const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
-            const p=await CurvatureModernApp.getManagedResources().readCalibrationProject(id);
             if(e?.error)throw Error(e.error);
-            return !e.pending&&!e.unsaved&&p.project.photo&&e.revision===p.project.revision;
-        }""",arg=calibration_id,timeout=30000)
+            return e.projectId===id&&e.revision>revision&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+                e.lastAck?.revision===e.revision;
+        }""",arg={'id':calibration_id,'revision':first_revision},timeout=30000)
         old=self.page.evaluate("""async id=>{
             const p=await CurvatureModernApp.getManagedResources().readCalibrationProject(id);
-            return {revision:p.projectId,original:p.originalId,alias:p.project.photo.aliasId};
+            return {revision:p.projectId,number:p.project.revision,original:p.originalId,alias:p.project.photo.aliasId};
         }""",calibration_id)
         replacement=self.page.evaluate("""async data=>{
             const c=document.createElement('canvas');
@@ -3480,23 +3482,31 @@ class ModernBrowserSmoke(unittest.TestCase):
                 new File([blob],'Replacement.png',{type:'image/png'}),'calibration-regression',window)};
         }""",data)
         self.import_calibration_experiment(replacement,replace=True)
-        self.page.wait_for_function("""async ({id,old})=>{
+        self.page.wait_for_function("""({id,old})=>{
             const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
-            const a=CurvatureModernApp.getManagedResources(),p=await a.readCalibrationProject(id);
             if(e.error)throw Error(e.error);
-            if(e.pending||e.unsaved||p.originalId===old.original||e.revision!==p.project.revision)return false;
-            try{
-                // Only synthetic obsolete revision; collection is not enabled
-                // in the application. A live lock must no longer reject it.
-                if(await a.store.get(old.revision))await a.store.collectGarbage(old.revision);
-                const released=await a.store.collectGarbage(old.original);
-                if(released.reason!=='durable-reference')throw Error('Old photo lost its gallery owner');
-                return true;
-            }catch(error){
-                if(/close the corresponding editor/.test(error.message))return false;
-                throw error;
-            }
+            return e.projectId===id&&e.revision>old.number&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+                e.lastAck?.revision===e.revision;
         }""",arg={'id':calibration_id,'old':old},timeout=30000)
+        self.assertTrue(self.page.evaluate("""async ({id,old})=>{
+            const a=CurvatureModernApp.getManagedResources(),p=await a.readCalibrationProject(id);
+            if(p.originalId===old.original)throw Error('Replacement was not committed');
+            const deadline=performance.now()+20000;
+            while(performance.now()<deadline){
+                try{
+                    // Only synthetic obsolete revision; collection is not enabled
+                    // in the application. A live lock must no longer reject it.
+                    if(await a.store.get(old.revision))await a.store.collectGarbage(old.revision);
+                    const released=await a.store.collectGarbage(old.original);
+                    if(released.reason!=='durable-reference')throw Error('Old photo lost its gallery owner');
+                    return true;
+                }catch(error){
+                    if(!/close the corresponding editor/.test(error.message))throw error;
+                    await new Promise(resolve=>setTimeout(resolve,100));
+                }
+            }
+            throw Error('Obsolete Calibration retention was not released');
+        }""",{'id':calibration_id,'old':old}))
         self.assertTrue(self.page.evaluate("""async id=>{
             const a=CurvatureModernApp.getManagedResources(),p=await a.readCalibrationProject(id);
             try{await a.store.collectGarbage(p.originalId);return false;}
