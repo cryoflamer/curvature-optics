@@ -16896,7 +16896,10 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(named).to_be_enabled(timeout=30000)
         named.click()
         self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
-        field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+        studio=self.page.locator('#ModernAnimationStudio')
+        field=studio.get_by_label('Project name',exact=True)
+        if not field.is_visible():
+            studio.get_by_role('button',name='Inspect project settings').click()
         field.fill('Working changes')
         field.press('Tab')
         expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
