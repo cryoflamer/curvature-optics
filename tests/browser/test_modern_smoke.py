@@ -3444,12 +3444,16 @@ class ModernBrowserSmoke(unittest.TestCase):
         expect(self.page.locator('#ModernCalibrationProjectsPanel')).to_be_visible()
         self.page.once('dialog',lambda dialog:dialog.accept('Managed calibration'))
         self.page.locator('#ModernCalibrationProjectsNew').click()
-        self.page.wait_for_function("""async()=> (await CurvatureModernApp.getManagedResources()
-            .listCalibrationProjects()).some(v=>v.row.title==='Managed calibration')""",timeout=30000)
-        self.page.wait_for_function("""()=> !!CurvatureModernPhotoCalibrationEditor.mount(document)
-            .projectPersistenceStatus().projectId""",timeout=30000)
+        self.page.wait_for_function("""()=> {
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return !!e?.projectId&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+                document.querySelector('#ModernCalibrationProjectsPanel').hidden;
+        }""",timeout=30000)
         calibration_id=self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
             .projectPersistenceStatus().projectId""")
+        self.assertEqual(self.page.evaluate("""async id=>
+            (await CurvatureModernApp.getManagedResources().readCalibrationProject(id)).project.title
+        """,calibration_id),'Managed calibration')
         self.assertTrue(self.page.evaluate("""async id=>{
             const adapter=CurvatureModernApp.getManagedResources();
             const project=await adapter.readCalibrationProject(id);
