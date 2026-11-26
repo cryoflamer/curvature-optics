@@ -2692,7 +2692,45 @@
       }
       return {owners,originalsVerified,integrity,countsRecomputed:true};
     }
-    return Object.freeze({store,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,createPhysicalEditorRetention,
+    // Explicit maintenance for named gallery roots only. Keep the existing
+    // protected UI ports disabled until coordinated cutover and acceptance.
+    function createGalleryMaintenancePort(){
+      check(store.coordination==='participating-writer','coordinated managed storage required for maintenance');
+      async function remove({kind,id,expectedRevision}){
+        check(positive(expectedRevision),'exact managed gallery revision required');
+        let current,documentId;
+        switch(kind){
+        case 'history':
+          documentId=historyId(id);
+          current=await readHistory(id);
+          break;
+        case 'observation':
+          documentId=observationId(id);
+          current=await readObservation(id);
+          break;
+        case 'calibration-result':
+          documentId=resultDocumentId(id);
+          current=await readCalibrationResult(id);
+          break;
+        default:throw Error('Managed Resources: unsupported gallery owner kind');
+        }
+        check(current&&current.managedRevision===expectedRevision,'gallery entry changed or missing; refresh and retry');
+        if(kind==='history')
+          check(!current.row.pinned&&current.row.source!=='recovery','Unpin History entry before removal; Recovery remains protected');
+        // The core rechecks the exact revision while holding the logical
+        // document and direct resource locks. No caller can release another
+        // owner's edges; root retirement does not collect payloads.
+        return store.removeDocument({documentId,expectedRevision});
+      }
+      async function collectStep({limit=core.MAX_GC_BATCH}={}){
+        const candidates=await store.listGarbageCandidates({limit});
+        const report=candidates.length?await store.collectGarbageBatch(candidates):
+          {collected:[],blocked:[],retained:[],missing:[]};
+        return {candidates,...report};
+      }
+      return Object.freeze({remove,collectStep});
+    }
+    return Object.freeze({store,createGalleryMaintenancePort,qualifyRestoredArchive,saveWorkingCheckpoint,readWorkingCheckpoint,createWorkingCheckpointPort,createPhysicalEditorRetention,
       saveAnimationWorkingCollection,readAnimationWorkingCollection,createAnimationWorkingPort,createAnimationEditorRetention,importAnimationRecovery,
       saveHistory,readHistory,recordHistory,importHistory,setHistoryPinned,createHistoryPort,saveObservation,readObservation,saveAnimation,readAnimation,
       saveCalibrationResult,readCalibrationResult,saveCalibrationProject,readCalibrationProject,

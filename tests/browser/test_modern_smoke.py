@@ -769,7 +769,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             const deletion=await usageGraph.deletionReview(window,out.row,{libraryPort});
             ok(!deletion.safe&&deletion.localScanComplete&&deletion.knownUses===2,
                 'managed usage incorrectly authorized deletion');
-            await adapter.store.removeDocument({documentId:'observation:photo_a',expectedRevision:1});
+            const maintenance=adapter.createGalleryMaintenancePort();
+            await rejects(()=>maintenance.remove({kind:'observation',id:'photo_a',expectedRevision:2}),/changed or missing/);
+            await rejects(()=>maintenance.remove({kind:'animation',id:project.id,expectedRevision:1}),/unsupported gallery/);
+            await adapter.store.withRetained(photo.observationId,async()=>{
+                await rejects(()=>maintenance.remove({kind:'observation',id:'photo_a',expectedRevision:1}),/close the corresponding editor/);
+                ok((await adapter.readObservation('photo_a')).managedRevision===1,'busy gallery was modified');
+            });
+            ok((await maintenance.remove({kind:'observation',id:'photo_a',expectedRevision:1})).removed,
+                'qualified observation removal failed');
             ok(!(await adapter.store.collectGarbage(photo.observationId)).collected,'Animation observation reclaimed');
             const retainedAnimation=await adapter.readAnimation(project.id);
             ok(retainedAnimation.observations[0].target===photo.observationId,
@@ -801,12 +809,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             await rejects(()=>adapter.setHistoryPinned([{id:18,managedRevision:1},{id:17,managedRevision:1}],false),
                 /revision conflict/);
             ok((await adapter.readHistory(18)).row.pinned,'stale pin batch partially committed');
+            await rejects(()=>maintenance.remove({kind:'history',id:18,expectedRevision:1}),/Unpin History/);
             const pins=await adapter.setHistoryPinned([{id:18,managedRevision:1},{id:17,managedRevision:2}],false);
             ok(pins.every(v=>!v.row.pinned)&&pins[0].managedRevision===2&&pins[1].managedRevision===3,
                 'bulk unpin did not acknowledge both roots');
             ok((await adapter.readHistory(17)).snapshotId===first.snapshotId&&
                 (await adapter.readHistory(18)).snapshotId===first.snapshotId,'pin batch replaced snapshots');
-            await adapter.store.removeDocument({documentId:'history:18',expectedRevision:2});
+            await rejects(()=>maintenance.remove({kind:'history',id:18,expectedRevision:1}),/changed or missing/);
+            await maintenance.remove({kind:'history',id:18,expectedRevision:2});
+            ok((await adapter.store.get(first.snapshotId)).refCount===1,'shared History snapshot lost');
             ok(await adapter.suggestHistoryId()===19,'retired History alias was reused');
             ok((await adapter.listHistory()).length===1,'removed History appeared in inventory');
             const saved=await adapter.recordHistory(experiment,'manual',null);
@@ -944,6 +955,28 @@ class ModernBrowserSmoke(unittest.TestCase):
             const inspected=await barrier.snapshot(()=>libraryPort.inspectOriginal(indexedDB,'photo_b'));
             ok(inspected.value.record.original.dataUrl===original.dataUrl&&
                 libraryPort.coordination==='participating-writer','exclusive observational read failed');
+            ctx.fillStyle='#987654';ctx.fillRect(0,0,3,2);
+            const last=await adapter.createObservation({...record,id:'gc_last_owner',
+                original:{...original,dataUrl:canvas.toDataURL('image/png')}});
+            await maintenance.remove({kind:'observation',id:last.row.id,expectedRevision:last.managedRevision});
+            ok(await adapter.store.get(last.originalId),'root removal implicitly collected bytes');
+            await rejects(()=>maintenance.collectStep({limit:65}),/candidate limit/);
+            await adapter.store.withRetained(last.observationId,async()=>{
+                const report=await maintenance.collectStep();
+                ok(report.candidates.length<=64&&report.blocked.includes(last.observationId),
+                    'GC did not report blocked candidate');
+                ok(await adapter.store.get(last.observationId),'GC deleted a live resource');
+            });
+            const released=await maintenance.collectStep();
+            ok(released.collected.includes(last.observationId),'released observation not collected');
+            ok(await adapter.store.get(last.originalId),'unlisted descendant collected in same step');
+            const cascade=await maintenance.collectStep();
+            ok(cascade.collected.includes(last.originalId)&&!(await adapter.store.get(last.originalId)),
+                'last original was not reclaimed');
+            ok((await adapter.readObservation('photo_b')).row.record.original.dataUrl===original.dataUrl,
+                'GC changed separately retained original');
+            const empty=await maintenance.collectStep();
+            ok(!empty.candidates.length&&!empty.collected.length,'empty GC step not idempotent');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
             return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};
@@ -3135,9 +3168,15 @@ class ModernBrowserSmoke(unittest.TestCase):
             corrupt.experiment.calibrationOrigin.historicalFit.rmsPx=123;
             await rejects(()=>adapter.saveHistory(corrupt),/calibration origin evidence mismatch/);
             // Remove both gallery roots; snapshot still owns result and original.
-            await adapter.store.removeDocument({documentId:'observation:'+record.id,expectedRevision:1});
+            const maintenance=adapter.createGalleryMaintenancePort();
+            await maintenance.remove({kind:'observation',id:record.id,expectedRevision:1});
             await adapter.store.collectGarbage(photo.observationId);
-            await adapter.store.removeDocument({documentId:'result:'+archived.id,expectedRevision:1});
+            await rejects(()=>maintenance.remove({kind:'calibration-result',id:archived.id,expectedRevision:2}),/changed or missing/);
+            await adapter.store.withRetained(saved.resultId,async()=>{
+                await rejects(()=>maintenance.remove({kind:'calibration-result',id:archived.id,expectedRevision:1}),/close the corresponding editor/);
+                ok(await adapter.readCalibrationResult(archived.id),'busy archive was removed');
+            });
+            await maintenance.remove({kind:'calibration-result',id:archived.id,expectedRevision:1});
             ok(!(await adapter.store.collectGarbage(saved.resultId)).collected,'snapshot lost fit evidence');
             ok(!(await adapter.store.collectGarbage(photo.originalId)).collected,'snapshot lost photo evidence');
             ok((await adapter.readHistory(71)).evidence.result===saved.resultId,'snapshot cannot reopen evidence');

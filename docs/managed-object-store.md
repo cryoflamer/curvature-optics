@@ -782,3 +782,24 @@ state. Pending photo loads, Apply, selection changes and unresolved writes
 retain evidence conservatively. Maintenance is retried at operation boundaries;
 failures do not invalidate a durable save. Physical Apply also attempts the
 existing inventory-driven pruning after its transition guard is released.
+
+### Explicit gallery maintenance (opt-in qualification)
+
+`createGalleryMaintenancePort()` requires participating backup-writer
+coordination. Its `remove({kind,id,expectedRevision})` accepts only
+History, observation and Calibration result gallery owners, using the
+verified domain reader and exact managed revision. Pinned History and
+Recovery entries refuse deletion. The core then holds its existing
+nonblocking document/direct-target locks and rechecks the revision and
+graph in the removal transaction. Removing a gallery entry retires only
+that root; it does not collect payloads or detach durable owners such as
+Animation, Calibration projects and working checkpoints.
+
+`collectStep({limit})` explicitly discovers and revalidates at most one
+bounded GC batch and reports candidates, collected, blocked, retained and
+missing IDs. Newly eligible descendants may require another explicit step.
+An empty result performs no collection; blocked candidates are not retried
+automatically. Neither method is connected to production UI, automatic
+History pruning, a timer or startup. Existing protected application ports
+still refuse deletion. Named editable project removal and production
+activation remain separate acceptance work.
