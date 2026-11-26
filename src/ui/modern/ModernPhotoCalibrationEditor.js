@@ -570,7 +570,7 @@
       else applyStatus.textContent=value;
     }
     function beginPhotoLoad(){pendingPhotoLoads++;applyRevision++;syncFitControls();}
-    function endPhotoLoad(){pendingPhotoLoads--;syncFitControls();}
+    function endPhotoLoad(){pendingPhotoLoads--;syncFitControls();void pruneCalibrationRetention();}
     const modelRaster=doc.createElement('canvas'),renderer=env.CurvatureCanvasDirectPreview.create(),
       modelStatus=$('ModernCalibrationModelStatus');
     let packages=new Map(),selectedObjectKey=null;
@@ -1465,7 +1465,7 @@
           'Rename saved as a conflict copy: '+renamed.title+'.':
           'Renamed to '+renamed.title+'.');
       }catch(error){projectActionMessage(error,'Rename failed');}
-      finally{projectListBusy=false;renderProjects();}
+      finally{projectListBusy=false;renderProjects();void pruneCalibrationRetention();}
     }
     async function duplicateFromProjects(entry){
       if(projectListBusy)return;
@@ -1606,22 +1606,49 @@
         projectsMessage('Save failed: '+error.message+'. Your unsaved work is retained.',true);
       }finally{
         projectListBusy=false;
-        renderProjects();
+        renderProjects();void pruneCalibrationRetention();
       }
     }
     projectsSave.onclick=()=>void saveActiveFromProjects();
 
     projectsAdopt.onclick=()=>void adoptFromProjects();
+    // The durable coordinator, not the last attempted autosave or a
+    // presentation hydration, certifies the exact acknowledged editor input.
+    async function pruneCalibrationRetention(){
+      const retention=sharedSelection?.retention,session=projectSession;
+      if(!retention||!session)return;
+      function readProject(){
+        if(projectSession!==session||sharedSelection?.retention!==retention||
+           !sharedSelection.usable()||!scene||leavingPage||restoring||
+           projectSwitchBusy||projectListBusy||sharedPresentationHydrating||
+           pendingPhotoLoads||fitWorker||applyBusy||photoGestures.active||resultGestures.active)
+          return null;
+        const state=session.state();
+        if(!state.lastAck||state.pending||state.unsaved||state.error||state.selectionPending)
+          return null;
+        if(!session.matchesAcknowledgedInput(captureDraftState(),captureInlineState()))return null;
+        return session.project();
+      }
+      try{
+        if(readProject()!==null)await retention.prune(readProject);
+      }catch(error){
+        // Maintenance cannot turn an acknowledged save into a failure.
+        console.warn('Calibration live resource retention was not pruned:',error.message||error);
+      }
+    }
     function persistenceSession(){
       if(!projectSession){
         const helper=env.CurvatureModernCalibrationProjectPersistence;
         if(!helper)throw Error('Calibration Project coordinator unavailable');
-        projectSession=helper.create(env,{storage:sharedSelection?.retention?.storage||projectStorage(),sharedSelection,onChange:()=>{
+        projectSession=helper.create(env,{storage:sharedSelection?.retention?.storage||projectStorage(),sharedSelection,
+          inputFingerprint:sharedSelection?.retention?sharedInputFingerprint:null,onChange:()=>{
           // Bind/save/failure acknowledgments maintain the tab-scoped durable
           // identity. No auto-resume token is kept for unresolved edits.
           if(!leavingPage)rememberCleanProjectState(projectSession?.state());
           if(!projectsPanel.hidden)renderProjects();
           if(sharedSelection)sharedSelection.onChange();
+          // Defer until the caller has finished publishing its synchronous UI state.
+          if(sharedSelection?.retention)void Promise.resolve().then(pruneCalibrationRetention);
         }});
       }
       return projectSession;
@@ -1989,6 +2016,7 @@
       if(!state?.projectId)return true; // No document was selected in the library.
       if(state.pending||state.unsaved||state.error||state.selectionPending)
         throw Error('Resolve unsaved Calibration work before leaving');
+      await pruneCalibrationRetention();
       return true;
     }
     async function resumeCleanProjectAfterReload(){
@@ -2983,7 +3011,7 @@
       }catch(error){
         applyMessage(error.committed?'Applied to '+info.label+', but presentation failed: '+error.message:
           'Apply failed: '+error.message+(error.rollbackError?' · Recovery failed: '+error.rollbackError:''),true);
-      }finally{applyBusy=false;syncFitControls();}
+      }finally{applyBusy=false;syncFitControls();void pruneCalibrationRetention();}
     };
     fitPanel.addEventListener('change',()=>{invalidateFit('Parameter selection changed. Run calibration again.');meshDraw();persist();});
     add.onclick=savePair;pairRedo.onclick=redo;

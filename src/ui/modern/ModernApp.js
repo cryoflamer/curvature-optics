@@ -8497,7 +8497,8 @@
       throw error;
     }finally{
       calibrationApplyBusy=false;updatePresetNavigation();refreshCalibrationApplicability(true);
-      if(shared){experimentPreview.calibrationBusy=false;previewControls();syncPreviewUnloadWarning();}
+      if(shared){experimentPreview.calibrationBusy=false;previewControls();syncPreviewUnloadWarning();
+        void prunePhysicalRetention();}
     }
   }
   // Adding the private preview opt-in to an already issued working URL

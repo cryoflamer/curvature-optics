@@ -69,10 +69,11 @@
       retire:receipt=>storage.retireSharedSelectionReceipt(env.indexedDB,receipt,lease)});
   }
   function create(env,{adapter,decoder,storage=store,clock=()=>Date.now(),onChange=null,
-    sharedSelection=null}={}){
+    sharedSelection=null,inputFingerprint=null}={}){
     if(!env?.indexedDB||!env?.crypto)
       throw Error('Calibration Project persistence requires IndexedDB and crypto');
-    if(typeof clock!=='function'||(onChange!==null&&typeof onChange!=='function'))
+    if(typeof clock!=='function'||(onChange!==null&&typeof onChange!=='function')||
+       (inputFingerprint!==null&&typeof inputFingerprint!=='function'))
       throw TypeError('Invalid Calibration Project persistence callback');
     if(sharedSelection&&(!sharedSelection.lease||sharedSelection.lease.sessionId!=='shared'||
        typeof sharedSelection.lease.check!=='function'||typeof sharedSelection.lease.track!=='function'||
@@ -109,7 +110,7 @@
         throw Error('Unsaved or pending calibration work must be resolved before switching projects');
       const validated=model.normalize(project);
       active={project:validated,generation:++epoch,pending:0,
-        latest:null,error:null,lastAck:null,selectionPending:null,tasks:new Map()};
+        latest:null,error:null,lastAck:null,acknowledgedFingerprint:null,selectionPending:null,tasks:new Map()};
       notify();return state();
     }
     function mark(draft,inline=null,changes={}){
@@ -127,7 +128,7 @@
       model.fresh({id:active.project.id,now:active.project.createdAt,title,resultIds});
       const captured={projectId:active.project.id,generation:active.generation,
         sequence:++sequence,draft:copy(draft),inline:inline===null?null:copy(inline),
-        title,resultIds:copy(resultIds)};
+        title,resultIds:copy(resultIds),fingerprint:inputFingerprint?inputFingerprint(draft,inline):null};
       active.latest=captured;active.error=null;
       notify();return state();
     }
@@ -155,6 +156,7 @@
       if(owner!==active)throw Error('Stale calibration selection generation');
       owner.selectionPending=null;
       owner.lastAck={status:receipt.status,id:receipt.project.id,revision:receipt.project.revision};
+      owner.acknowledgedFingerprint=receipt.fingerprint;
       if(owner.latest?.sequence===receipt.sequence)owner.latest=null;
       owner.error=null;
       return receipt;
@@ -203,10 +205,11 @@
           owner.project=durable;
           if(sharedSelection){
             owner.selectionPending={status:result.status,previous:expected,project:durable,
-              sequence:captured.sequence,durable:result.selectionReceipt??null,acknowledged:false};
+              sequence:captured.sequence,fingerprint:captured.fingerprint,durable:result.selectionReceipt??null,acknowledged:false};
             await finishSelection(owner);
           }else{
             owner.lastAck={status:result.status,id:durable.id,revision:durable.revision};
+            owner.acknowledgedFingerprint=captured.fingerprint;
             if(owner.latest?.sequence===captured.sequence)owner.latest=null;
             owner.error=null;
           }
@@ -292,8 +295,14 @@
         draft:v.draft,inline:v.inline,title:v.title,resultIds:v.resultIds,
         ...(sharedSelection?{selectionPending:state().selectionPending}:{})});
     }
+    function matchesAcknowledgedInput(draft,inline){
+      return !!(inputFingerprint&&active?.lastAck&&active.acknowledgedFingerprint!==null&&
+        !active.pending&&!active.latest&&!active.error&&!active.selectionPending&&
+        active.lastAck.id===active.project.id&&active.lastAck.revision===active.project.revision&&
+        inputFingerprint(draft,inline)===active.acknowledgedFingerprint);
+    }
     function project(){return active?model.normalize(active.project):null;}
-    return Object.freeze({bind,mark,save,retry:()=>save(true),linkResult,prepareOpen,prepareSelected,discard,recovery,project,state});
+    return Object.freeze({bind,mark,save,retry:()=>save(true),linkResult,prepareOpen,prepareSelected,discard,recovery,project,state,matchesAcknowledgedInput});
   }
   return Object.freeze({create,projectReference,prepareSharedSelection,sharedDocumentReader,sharedSelectionRecovery});
 }));

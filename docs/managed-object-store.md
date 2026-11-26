@@ -775,3 +775,10 @@ named evidence may be reused with inventory CAS; conflicting mappings refuse
 the import. New private result/original resources and any frame observations
 are staged atomically with the independent working draft, without fabricating
 Calibration Gallery roots. V1/V2 Recovery compatibility is unchanged.
+
+The mounted Calibration editor narrows its live retention only when its current
+input matches the exact acknowledged persistence snapshot, including inline
+state. Pending photo loads, Apply, selection changes and unresolved writes
+retain evidence conservatively. Maintenance is retried at operation boundaries;
+failures do not invalidate a durable save. Physical Apply also attempts the
+existing inventory-driven pruning after its transition guard is released.
