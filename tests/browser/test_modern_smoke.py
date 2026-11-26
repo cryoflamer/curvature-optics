@@ -991,11 +991,74 @@ class ModernBrowserSmoke(unittest.TestCase):
                 'GC changed separately retained original');
             const empty=await maintenance.collectStep();
             ok(!empty.candidates.length&&!empty.collected.length,'empty GC step not idempotent');
+            const autoPort=adapter.createHistoryPort({maxAutoEntries:2,automaticMaintenance:true,now:()=>300});
+            const oldAuto=await adapter.readHistory(automatic.entry.id);
+            const later=await autoPort.record(capacityExperiment,'auto',null);
+            ok(later.created&&!later.retired.length,'auto save below capacity failed');
+            const newer=await adapter.readHistory(later.entry.id);
+            const nextAuto=structuredClone(capacityExperiment);nextAuto.display.horizon=!nextAuto.display.horizon;
+            await adapter.store.withRetained(oldAuto.snapshotId,async()=>{
+                const replaced=await autoPort.record(nextAuto,'auto',null);
+                ok(replaced.created&&replaced.retired.join(',')==='history:'+later.entry.id,
+                    'busy oldest History did not select next candidate');
+                ok(await adapter.readHistory(oldAuto.row.id)&&!(await adapter.readHistory(later.entry.id)),
+                    'wrong History owner retired');
+                ok(replaced.garbage.collected.includes(newer.snapshotId),'unused snapshot not collected');
+                const newest=await adapter.readHistory(replaced.entry.id);
+                await adapter.store.withRetained(newest.snapshotId,async()=>{
+                    const full=await autoPort.record(capacityExperiment,'auto',null);
+                    ok(full.skipped==='capacity'&&!full.entry,'all busy owners did not refuse capacity');
+                });
+            });
+            const beforePrune=await adapter.listHistory();
+            const add=IDBObjectStore.prototype.add;
+            IDBObjectStore.prototype.add=function(...args){
+                if(this.name==='payloads')throw new DOMException('Injected replacement failure','QuotaExceededError');
+                return add.apply(this,args);
+            };
+            try{
+                await rejects(()=>autoPort.record(capacityExperiment,'auto',null),/Injected replacement/);
+            }finally{IDBObjectStore.prototype.add=add;}
+            ok(JSON.stringify(await adapter.listHistory())===JSON.stringify(beforePrune),'failed replacement evicted History');
+            const replacement=await autoPort.record(capacityExperiment,'auto',null);
+            ok(replacement.created&&replacement.retired.join(',')==='history:'+oldAuto.row.id&&
+                replacement.garbage.collected.includes(oldAuto.snapshotId),'oldest released auto not reclaimed');
+            const recoveryExperiment=structuredClone(experiment);
+            recoveryExperiment.compare.selected='A';
+            const recovery=await autoPort.record(recoveryExperiment,'recovery',null);
+            ok(recovery.created&&recovery.entry.pinned,'Recovery not protected');
+            const beforeFailure=await adapter.listHistory();
+            const victim=beforeFailure.filter(v=>v.row.source==='auto'&&!v.row.pinned).at(-1);
+            const put=IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put=function(...args){
+                if(this.name==='documents'&&args[0]?.deleted)throw Error('Injected retirement failure');
+                return put.apply(this,args);
+            };
+            try{
+                await rejects(()=>autoPort.record(newExperiment,'auto',null),/Injected retirement failure/);
+            }finally{IDBObjectStore.prototype.put=put;}
+            ok(JSON.stringify(await adapter.listHistory())===JSON.stringify(beforeFailure),'retirement failure leaked replacement');
+            const del=IDBObjectStore.prototype.delete;
+            IDBObjectStore.prototype.delete=function(...args){
+                if(this.name==='payloads')throw Error('Injected GC failure');
+                return del.apply(this,args);
+            };
+            let savedDespiteGC;
+            try{savedDespiteGC=await autoPort.record(newExperiment,'auto',null);}
+            finally{IDBObjectStore.prototype.delete=del;}
+            ok(savedDespiteGC.created&&/Injected GC failure/.test(savedDespiteGC.maintenanceError)&&
+                await adapter.readHistory(savedDespiteGC.entry.id)&&!(await adapter.readHistory(victim.row.id)),
+                'GC failure changed acknowledged save result');
+            await maintenance.collectStep();
+            const remaining=await adapter.listHistory();
+            const autoRows=remaining.filter(v=>v.row.source==='auto'&&!v.row.pinned);
+            ok(autoRows.length===2&&remaining.some(v=>v.row.id===17)&&
+                remaining.some(v=>v.row.id===recovery.entry.id),'capacity touched deliberate owners');
             const names=(await indexedDB.databases()).map(db=>db.name);
             ok(names.length===1&&names[0]===CurvatureModernManagedObjectStore.DATABASE,'legacy database touched');
-            return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:(await adapter.listHistory()).length};
+            return {valid:(await adapter.store.verifyIntegrity()).valid,originals:1,history:remaining.length};
         }""")
-        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 4})
+        self.assertEqual(result, {'valid': True, 'originals': 1, 'history': 6})
 
     def test_managed_object_store_indexed_write_preflight(self):
         self.page.route(self.base_url, lambda route: route.fulfill(

@@ -293,7 +293,10 @@
         check(JSON.stringify(actual)===JSON.stringify(inventory.rows),'document inventory changed; reload and retry');
       }
     }
-    async function writeDocuments(plans,{expectedInventory=null,guard=()=>{},lease=null}={}){
+    function writeDocuments(plans,options){
+      return writeBatch(plans,options);
+    }
+    async function writeBatch(plans,{expectedInventory=null,guard=()=>{},lease=null}={},retire=[]){
       check(typeof guard==='function','invalid write guard');
       check(lease===null||typeof lease.check==='function'&&typeof lease.track==='function','invalid transaction lease');
       lease?.check(true);
@@ -307,12 +310,18 @@
         return {documentId,kind,expectedRevision,meta:clone(metadata),refs:slots(references),
           prepared:resources.map(prepareResource)};
       });
-      check(new Set(batch.map(row=>row.documentId)).size===batch.length,'duplicate document ID');
+      const affected=[...batch.map(row=>row.documentId),...retire.map(row=>row.documentId)];
+      check(new Set(affected).size===affected.length,'duplicate document ID');
       const prepared=batch.flatMap(row=>row.prepared);
       check(new Set(prepared.map(row=>row.id)).size===prepared.length,'duplicate new object ID');
       return run('readwrite',async stores=>{
         const g=await graph(stores);inspect(g,types);
         checkInventories(g,inventories);
+        const retiring=retire.map(({documentId,expectedRevision})=>{
+          const doc=checkedDocument(g,documentId,expectedRevision);
+          check(doc,'document missing');return doc;
+        });
+        if(retiring.length)await verifyPayloads(g,stores,types);
         guard();
         if(!batch.length)return [];
         for(const {documentId,kind,expectedRevision} of batch){
@@ -328,6 +337,7 @@
           }
           for(const ref of refs)setEdge(g,stores,{ownerKind:'document',ownerId:documentId,...ref});
         }
+        for(const doc of retiring)retireRoot(g,stores,doc);
         updateCounts(g,stores,types);
         if(prepared.length){
           const retained=reachable(g);
@@ -620,6 +630,60 @@
         });
       });
     }
+    function retireRoot(g,stores,doc){
+      for(const edge of [...g.refs.values()]){
+        if(edge.ownerKind==='document'&&edge.ownerId===doc.id)dropEdge(g,stores,edge);
+      }
+      return saveDocument(g,stores,{id:doc.id,kind:doc.kind,revision:doc.revision+1,deleted:true});
+    }
+    // Atomically publish replacement roots and retire exactly the requested
+    // number of available candidate owners, in caller-supplied order.
+    // No blocking waits, no partial eviction, no collection in this write.
+    async function writeDocumentsReplacing(plans,{candidates,count,expectedInventory,guard=()=>{},lease=null}){
+      check(writer,'coordinated managed storage required for replacement');
+      check(Array.isArray(plans)&&plans.length>0&&Array.isArray(candidates)&&
+        Number.isSafeInteger(count)&&count>0&&count<=candidates.length,'invalid replacement batch');
+      const wanted=candidates.map(({documentId,expectedRevision})=>{
+        token(documentId,'document ID');check(revision(expectedRevision)>0,'invalid retirement revision');
+        return {documentId,expectedRevision};
+      });
+      check(new Set(wanted.map(v=>v.documentId)).size===wanted.length,'duplicate retirement candidate');
+      const locks=env.navigator?.locks;
+      check(locks&&typeof locks.request==='function','resource coordination unavailable; retry in a supported browser');
+      const busy=Symbol('busy'),held=new Set();
+      function tryLock(scope,id,operation){
+        return locks.request(DATABASE+':'+scope+':'+id,{mode:'exclusive',ifAvailable:true},lock=>{
+          if(!lock)return busy;
+          check(lock.mode==='exclusive','exclusive resource lock required');
+          return operation();
+        });
+      }
+      function targets(ids,index,operation){
+        if(index===ids.length)return operation();
+        const id=ids[index];
+        if(held.has(id))return targets(ids,index+1,operation);
+        return tryLock('resource',id,async()=>{
+          held.add(id);
+          try{return await targets(ids,index+1,operation);}
+          finally{held.delete(id);}
+        });
+      }
+      async function choose(index,selected){
+        if(selected.length===count){
+          const documents=await writeBatch(plans,{expectedInventory,guard,lease},selected);
+          return {documents,retired:selected.map(v=>v.documentId)};
+        }
+        if(wanted.length-index<count-selected.length)return null;
+        const candidate=wanted[index];
+        const result=await tryLock('document',candidate.documentId,async()=>{
+          const before=await getDocument(candidate.documentId);
+          check(before&&before.revision===candidate.expectedRevision,'stale or missing document');
+          return targets(rootTargets(before),0,()=>choose(index+1,[...selected,candidate]));
+        });
+        return result===busy?choose(index+1,selected):result;
+      }
+      return choose(0,[]);
+    }
     // Explicit user-facing owner removal is not an editing detach. Refuse
     // without modifying the entry if any of its retained resources is in use.
     async function removeDocument({documentId,expectedRevision},{expectedInventory=null,guard=()=>{},lease=null}={}){
@@ -637,12 +701,8 @@
         checkInventories(g,inventories);
         await verifyPayloads(g,stores,types);
         guard();
-        for(const edge of [...g.refs.values()]){
-          if(edge.ownerKind==='document'&&edge.ownerId===documentId)dropEdge(g,stores,edge);
-        }
+        const retired=retireRoot(g,stores,doc);
         updateCounts(g,stores,types);
-        const retired=saveDocument(g,stores,{id:documentId,kind:doc.kind,
-          revision:doc.revision+1,deleted:true});
         return {removed:true,revision:retired.revision};
         },lease));
       });
@@ -811,7 +871,7 @@
       return lockNext(0);
     }
     return Object.freeze({coordination:writer?'participating-writer':'uncoordinated',
-      newObjectId,createAndAttach,writeDocument,writeDocuments,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,inspectDocumentUsage,
+      newObjectId,createAndAttach,writeDocument,writeDocuments,writeDocumentsReplacing,setReference,detach,removeDocument,get,getDocument,listDocuments,inspectDocuments,readDocumentGraph,inspectDocumentGraph,inspectUsage,inspectDocumentUsage,
       readDocumentClosureForWrite,verifyIntegrity,recount,withRetained,withDocumentRetained,createRetentionScope,createDocumentRetentionScope,listGarbageCandidates,collectGarbage,collectGarbageBatch});
   }
   return Object.freeze({DATABASE,VERSION,MAX_GC_BATCH,create});

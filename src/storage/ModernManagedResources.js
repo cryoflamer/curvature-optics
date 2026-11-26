@@ -201,9 +201,11 @@
       return history.parsePortable(JSON.stringify({format:history.PORTABLE_FORMAT,version:1,snapshots:items}));
     }
     // The UI save contract: adjacent automatic deduplication, deliberate
-    // saves reusing any matching entry, and conservative capacity refusal.
+    // saves reusing any matching entry, and opt-in guarded capacity replacement.
     // Even an unchanged match is checked inside the final transaction.
-    async function recordHistory(experiment,source,thumbnail,{now=Date.now,maxAutoEntries=history.MAX_AUTO,guard=()=>{},keyframeRow=null}={}){
+    async function recordHistory(experiment,source,thumbnail,{now=Date.now,maxAutoEntries=history.MAX_AUTO,guard=()=>{},keyframeRow=null,automaticMaintenance=false}={}){
+      check(typeof automaticMaintenance==='boolean','explicit automatic maintenance setting required');
+      if(automaticMaintenance)check(store.coordination==='participating-writer','coordinated managed storage required for maintenance');
       check(['manual','auto','recovery'].includes(source),'invalid History source');
       check(Number.isInteger(maxAutoEntries)&&maxAutoEntries>=1&&maxAutoEntries<=10000,'invalid auto-history limit');
       const naming=deps.CurvatureModernSemanticNaming;
@@ -246,7 +248,9 @@
         const [document]=await store.writeDocuments([next.plan],{expectedInventory,guard});
         return {created:false,entry:next.row,managedRevision:document.revision};
       }
-      if(source==='auto'&&existing.filter(v=>v.row.source==='auto'&&!v.row.pinned).length>=maxAutoEntries){
+      const auto=existing.filter(v=>v.row.source==='auto'&&!v.row.pinned);
+      const overflow=source==='auto'?Math.max(0,auto.length+1-maxAutoEntries):0;
+      if(overflow&&!automaticMaintenance){
         await store.writeDocuments([],{expectedInventory,guard});
         return {created:false,entry:null,skipped:'capacity'};
       }
@@ -270,8 +274,26 @@
       }
       const next=await prepareHistory({id,version:history.VERSION,createdAt:now(),source,pinned:source!=='auto',
         name:naming.snapshot(snapshot),description:'',thumbnail:item.thumbnail,experiment:snapshot},{handoff});
-      const [document]=await store.writeDocuments([next.plan],{expectedInventory:inventories,guard});
-      return {created:true,entry:next.row,managedRevision:document.revision};
+      let document,retired=[];
+      if(overflow){
+        const replacement=await store.writeDocumentsReplacing([next.plan],{
+          candidates:auto.slice().reverse().map(v=>({documentId:historyId(v.row.id),expectedRevision:v.managedRevision})),
+          count:overflow,expectedInventory:inventories,guard});
+        if(!replacement){
+          await store.writeDocuments([],{expectedInventory:inventories,guard});
+          return {created:false,entry:null,skipped:'capacity'};
+        }
+        [document]=replacement.documents;retired=replacement.retired;
+      }else [document]=await store.writeDocuments([next.plan],{expectedInventory:inventories,guard});
+      const result={created:true,entry:next.row,managedRevision:document.revision};
+      if(automaticMaintenance&&source==='auto'){
+        result.retired=retired;
+        // The save is already acknowledged. A bounded maintenance failure
+        // must never turn it into a failed write or trigger a replay.
+        try{result.garbage=await createGalleryMaintenancePort().collectStep();}
+        catch(error){result.maintenanceError=String(error.message||error);}
+      }
+      return result;
     }
     // Portable import retains the legacy name/notes deduplication contract.
     // All new and changed owners commit together; no-op matches also take
@@ -350,7 +372,9 @@
     // The existing protected History UI expects rows and exact displayed
     // records, not a separate managed envelope. Keep the revision attached
     // to every returned row and fail closed on unsupported legacy methods.
-    function createHistoryPort({now=Date.now,maxAutoEntries=history.MAX_AUTO}={}){
+    function createHistoryPort({now=Date.now,maxAutoEntries=history.MAX_AUTO,automaticMaintenance=false}={}){
+      check(typeof automaticMaintenance==='boolean','explicit automatic maintenance setting required');
+      if(automaticMaintenance)check(store.coordination==='participating-writer','coordinated managed storage required for maintenance');
       check(typeof now==='function'&&Number.isInteger(maxAutoEntries)&&maxAutoEntries>=1&&
         maxAutoEntries<=10000,'invalid History port options');
       const asRow=value=>value?{...value.row,managedRevision:value.managedRevision}:null;
@@ -380,7 +404,7 @@
         return (await setHistoryPinned(entries,pinned,{guard})).map(asRow);
       }
       async function record(experiment,source,thumbnail,{guard=()=>{}}={}){
-        const {managedRevision,entry,...result}=await recordHistory(experiment,source,thumbnail,{now,maxAutoEntries,guard});
+        const {managedRevision,entry,...result}=await recordHistory(experiment,source,thumbnail,{now,maxAutoEntries,guard,automaticMaintenance});
         return {...result,entry:asRow(entry?{row:entry,managedRevision}:null)};
       }
       async function recordKeyframeHistory(expected,thumbnail,{guard=()=>{}}={}){

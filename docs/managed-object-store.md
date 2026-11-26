@@ -826,3 +826,26 @@ auxiliary-operation lock for selection and domain writes, to prevent a
 later stale selection from being published. This port does not provide
 that mounted integration, detach a linked copy, or activate destructive
 UI paths. Those paths remain disabled pending qualification.
+
+### Automatic History capacity (explicit opt-in)
+
+The managed History port accepts `automaticMaintenance: true` only with
+participating writer coordination. The default protected path still
+refuses a new automatic entry at capacity. The opt-in path counts only
+unpinned automatic owners and attempts oldest IDs first, skipping owners
+whose document or direct resource locks are held. It must acquire enough
+candidates to meet the limit; otherwise the entire new save is skipped.
+Pinned, manual and Recovery owners are never candidates. The core
+`writeDocumentsReplacing` reuses the exact inventory and revision CAS,
+verifies the payload graph before retiring anything, and commits the
+new snapshot and all selected tombstones in one transaction. Shared
+immutable targets may be locked once for several candidate owners.
+Any write/guard/validation failure rolls back both insertion and retirement.
+
+After a newly created automatic entry is acknowledged, the opt-in port
+attempts one bounded GC step, independently of the save transaction. It
+returns the retired root IDs and GC report (or maintenance error), never
+reports a committed save as failed because of GC. Deduplicated, skipped
+and deliberate saves do not trigger this maintenance. Subsequent saves
+may collect newly eligible descendants; no timer or indefinite loop is
+used. This policy is not yet enabled by mounted startup or migration.
