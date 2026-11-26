@@ -873,3 +873,13 @@ controls refuse removal rather than implicitly detach or lose recovery.
 The domain transaction rechecks the revision, dependencies and active locks.
 The old shared/legacy routes are unchanged. This preview does not activate
 migration or permit discarding linked workspaces.
+
+The existing Image Library Delete observation control is also available only
+in managed preview. It requires a clean inspected row (including attribution
+and classification), a clean shared checkpoint and the shared operation
+coordinator. The domain gallery removal receives its exact managed revision
+and guard/lease. An outdated displayed row, unsaved details or active resource
+lock refuses deletion. The existing safety review remains observational, not
+permission to delete: another owner may retain the observation and original
+bytes after the gallery entry is retired. The old Image Library port and
+legacy UI still refuse their unqualified destructive methods.

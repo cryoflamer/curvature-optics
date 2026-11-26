@@ -3711,6 +3711,107 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""",seed))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_managed_preview_observation_removal(self):
+        """The actual Image Library action preserves linked original bytes and rejects a stale row."""
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        seed=self.page.evaluate("""async()=>{
+            const a=CurvatureModernManagedResources.create(window);
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:a});
+            await S.read();await S.initialize(experiment);
+            const canvas=document.createElement('canvas');canvas.width=2;canvas.height=3;
+            const record={id:'managed_remove_photo',version:1,title:'Managed removable observation',
+                author:'Exact original attribution',original:{dataUrl:canvas.toDataURL('image/png'),width:2,height:3}};
+            const photo=await a.saveObservation({id:record.id,revision:1,record});
+            const A=CurvatureModernAnimationProject,L=CurvatureModernAnimationLibrary;
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=A.createV2(contract,[{experiment},{experiment}],{id:'managed_photo_owner',name:'Retained photo owner'});
+            const linked=A.validate({...project,keyframes:project.keyframes.map(f=>({...f,referenceImageIds:[record.id]}))});
+            await a.saveAnimation(L.record(linked,'auto',linked.id,100,100,null));
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+            return {record,photo};
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load',timeout=30000)
+        ready="""()=> {
+            const a=window.CurvatureModernApp;
+            return !!a&&a.getExperimentSessionPreview().status==='clean'&&
+                a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernImageLibraryTab').click()
+        panel=self.page.locator('#ModernReferenceImageLibrary')
+        card=panel.locator('[data-image-id="managed_remove_photo"]')
+        expect(card).to_be_visible(timeout=30000)
+        card.click()
+        remove=panel.get_by_role('button',name='Delete observation',exact=True)
+        expect(remove).to_be_enabled(timeout=30000)
+        panel.get_by_role('button',name='Check deletion safety',exact=True).click()
+        expect(panel.get_by_text('This is a review, not deletion permission.',exact=False)).to_be_visible(timeout=30000)
+        expect(remove).to_be_enabled(timeout=30000)
+        self.page.evaluate("""async()=>{
+            const a=CurvatureModernApp.getManagedResources();
+            await a.setObservationAnnotation('managed_remove_photo',0,{kind:'photograph',tags:['foreign'],collections:[]});
+        }""")
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        remove.click()
+        expect(panel.get_by_text('Observation changed or was removed; refresh Library before deleting',exact=False)).to_be_visible(timeout=30000)
+        expect(card).to_be_visible()
+        panel.get_by_role('button',name='Refresh',exact=True).click()
+        expect(remove).to_be_enabled(timeout=30000)
+        self.page.evaluate("""async id=>{
+            const s=CurvatureModernApp.getManagedResources().store;
+            await new Promise((resolve,reject)=>{
+                window.releaseTestObservation=null;
+                const held=new Promise(done=>{window.releaseTestObservation=done;});
+                window.testObservationLock=s.withRetained(id,()=>{resolve();return held;});
+                window.testObservationLock.catch(reject);
+            });
+        }""",seed['photo']['observationId'])
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        remove.click()
+        expect(panel.get_by_text('close the corresponding editor or tab and retry',exact=False)).to_be_visible(timeout=30000)
+        expect(card).to_be_visible()
+        self.page.evaluate("""async()=>{window.releaseTestObservation();await window.testObservationLock;}""")
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        remove.click()
+        expect(card).to_have_count(0,timeout=30000)
+        self.assertTrue(self.page.evaluate("""async seed=>{
+            const a=CurvatureModernApp.getManagedResources(),named=await a.readAnimation('managed_photo_owner');
+            const record=named.referenceImages[0];
+            return !await a.readObservation(seed.record.id)&&
+                record.original.dataUrl===seed.record.original.dataUrl&&record.author===seed.record.author&&
+                !(await a.store.collectGarbage(seed.photo.observationId)).collected&&
+                (await a.store.verifyIntegrity()).valid;
+        }""",seed))
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertTrue(self.page.evaluate("""async()=> {
+            const a=CurvatureModernApp.getManagedResources();
+            return !await a.readObservation('managed_remove_photo')&&!!await a.readAnimation('managed_photo_owner');
+        }"""))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_managed_preview_mounts_one_storage_authority(self):
         self.page.route(self.base_url,lambda route:route.fulfill(
             status=200,content_type='text/html',body='<html><body></body></html>'))

@@ -25,6 +25,7 @@
   }
   function mount(host,db,{managedResources=null}={}){
     var library=managedResources?legacyLibrary.createPort({managedResources}):legacyLibrary;
+    var managedRemoval=!!managedResources&&typeof env.CurvatureModernApp?.removeManagedObservation==='function';
     var doc=host.ownerDocument,busy=false,loaded=false,selected=null,dirty=false,
       entries=[],demoEntries=[],activeChoice=null,classificationReady=false,backupReady=false;
     function el(tag,text,parent){var node=doc.createElement(tag);if(text!==undefined)node.textContent=text;if(parent)parent.appendChild(node);return node;}
@@ -329,13 +330,36 @@
     });
     var actions=el('div',undefined,editor);actions.className='modern-reference-toolbar';
     var save=el('button','Save details',actions);save.type='submit';
-    var remove=el('button','Delete observation',actions);remove.type='button';remove.disabled=true;
-    remove.title='Disabled: separate databases and other-tab Undo/recovery cannot be revalidated atomically.';
+    var remove=button('Delete observation',actions,function(){
+      if(!managedRemoval||!selected||dirty||busy)return;
+      var expected=selected;
+      if(!env.confirm('Delete observation "'+expected.record.title+
+          '" from Image Library? Other owners retain their exact original and attribution.'))return;
+      run(async function(){
+        await env.CurvatureModernApp.removeManagedObservation(expected);
+        await reload(null);
+        return 'Observation deleted. Other durable owners retain their original photographs.';
+      });
+    });
+    remove.disabled=true;
+    remove.title=managedRemoval?'Remove only the selected gallery observation after exact revision and editor checks':
+      'Disabled: separate databases and other-tab Undo/recovery cannot be revalidated atomically.';
     var deletionCheck=button('Check deletion safety',actions,function(){
       if(!selected)return;
       run(async function(){
         var inspectedId=selected.id,revision=selected.revision;
         var graph=env.CurvatureModernImageUsageGraph;
+        if(managedRemoval){
+          var inspected=selected;
+          if(!graph?.discover)throw Error('Managed usage inspection is unavailable');
+          var report=await graph.discover(env,inspected,{libraryPort:library});
+          if(selected!==inspected)throw Error('Image selection changed during inspection; refresh Library');
+          deletionStatus.textContent=report.count+' known local use'+(report.count===1?'':'s')+'. '+
+            'This is a review, not deletion permission. The removal transaction rechecks exact revision, graph and editor locks.'+
+            (report.complete?'':' Some sources could not be inspected.');
+          void showUses(selected);
+          return 'Deletion was not performed. Review the retained owners below.';
+        }
         if(!graph?.deletionReview)throw Error('Deletion inspection is unavailable');
         var outcome=await graph.deletionReview(env,selected,{libraryPort:library});
         if(!selected||selected.id!==inspectedId||selected.revision!==revision)
@@ -348,7 +372,10 @@
         return 'Deletion was not performed. Review the safety explanation below.';
       });
     });
-    var deletionStatus=el('p','Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.',editor);
+    var deletionHint=managedRemoval?
+      'Delete observation retires only the selected gallery entry. Shared resources remain retained; save or discard unsaved details first.':
+      'Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.';
+    var deletionStatus=el('p',deletionHint,editor);
     deletionStatus.className='modern-image-usage-warning';
     deletionStatus.setAttribute('aria-live','polite');
     function allowDiscard(){return !dirty||env.confirm('Discard unsaved observation metadata changes?');}
@@ -359,7 +386,7 @@
       deletionCheck.disabled=value||!selected;
       returnToCalibration.disabled=value;returnToStoryboard.disabled=value;gallery.inert=value;
       // Disable the fieldsets and editable controls while a transaction runs.
-      editor.inert=value;save.disabled=value;remove.disabled=true;}
+      editor.inert=value;save.disabled=value;remove.disabled=value||!managedRemoval||!selected||dirty;}
     async function run(action,message){if(busy)return;setBusy(true);status.textContent='Working…';
       try{var feedback=await action();status.textContent=message||feedback||'Reference Image Library ready.';}
       catch(error){status.textContent='Reference Image Library: '+(error&&error.message||error);}
@@ -367,7 +394,8 @@
     function fill(row){selected=row;dirty=false;editor.hidden=!row;preview.replaceChildren();
       ++usageEpoch;usageGroups.replaceChildren();
       deletionCheck.disabled=!row;
-      deletionStatus.textContent='Deletion remains disabled. Check deletion safety to inspect known local links; zero known uses is not deletion permission.';
+      deletionStatus.textContent=deletionHint;
+      remove.disabled=busy||!managedRemoval||!row;
       if(!row)return;
       void showUses(row);
       kind.disabled=!classificationReady;tags.disabled=!classificationReady;
@@ -559,7 +587,8 @@
       var blob=imageItem.getAsFile();
       run(function(){return ingestSource(blob,'Clipboard image');});
     });
-    editor.addEventListener('input',function(){dirty=true;});editor.addEventListener('change',function(){dirty=true;});
+    function markDirty(){dirty=true;remove.disabled=true;}
+    editor.addEventListener('input',markDirty);editor.addEventListener('change',markDirty);
     editor.addEventListener('submit',function(event){event.preventDefault();if(!selected)return;
       run(async function(){var metadata={},cameraMetadata={};
         textFields.forEach(function(f){metadata[f[0]]=inputs[f[0]].value;});

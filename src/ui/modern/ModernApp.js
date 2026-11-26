@@ -11828,6 +11828,25 @@
     getWorkspaceMode:currentWorkspaceMode,
     calibrationOrbitPreferenceOwner,
     isSharedImageLibraryPreview:sharedPresentationActive,
+    removeManagedObservation:async function(expected){
+      var ctx=experimentPreview.calibrationContext,c=experimentPreview.controller;
+      function guard(){
+        if(!managedResources||!ctx||!c||!sharedPresentationActive()||!imageLibraryWorkspaceOpen||
+           experimentPreview.calibrationBusy||experimentPreview.animationContext?.busy||
+           !['clean','committed'].includes(experimentPreview.status))
+          throw Error('Finish the pending shared operation before removing an observation');
+        ctx.lease.check(true);
+      }
+      guard();
+      return ctx.coordinate(async function(){
+        guard();await c.assertCleanCheckpoint();guard();
+        var current=await managedResources.readObservation(expected?.id);
+        if(!current||JSON.stringify(current.row)!==JSON.stringify(expected))
+          throw Error('Observation changed or was removed; refresh Library before deleting');
+        return managedResources.createGalleryMaintenancePort().remove({kind:'observation',id:expected.id,
+          expectedRevision:current.managedRevision},{guard,lease:ctx.lease});
+      });
+    },
     openImageLibraryFromCalibration:function(){
       if(!sharedPresentationActive()||!photoCalibrationWorkspaceOpen)return Promise.resolve(false);
       return requestPreviewWorkspace('images');
