@@ -3671,6 +3671,167 @@ class ModernBrowserSmoke(unittest.TestCase):
             self.page.evaluate('async()=>await indexedDB.databases()'))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_managed_calibration_mounted_apply_and_conflict_retention(self):
+        """A mounted conflict fork and Apply retain only the acknowledged evidence."""
+        # A disposable managed preview. No production migration or removal.
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        self.assertTrue(self.page.evaluate('window.CurvatureModernStorageStartupBlocked===true'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+        seed=self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:adapter});
+            await S.read();const row=await S.initialize(experiment);
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+            return {digest:row.digest};
+        }""")
+        self.page.goto(self.base_url+'?document-session=managed-preview&ui-state-registry=preview',
+            wait_until='load',timeout=30000)
+        ready="""()=>{
+            const a=CurvatureModernApp,s=a.getExperimentSessionPreview();
+            return s.status==='failed'||s.status==='clean'&&a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate('CurvatureModernApp.getExperimentSessionPreview().status'),'clean')
+        data=self.soundly_calibration_experiment()
+        project=self.page.evaluate("""async data=>{
+            const {model,physics}=data.scene,rows=data.observations;
+            const freeParameters=data.fit.freeParameters;
+            const points=rows.map(row=>({id:row.landmark.id,status:'visible',
+                observed:row.pixel,predicted:[row.pixel[0]+3,row.pixel[1]+4],weight:row.weight}));
+            data.fit.result={status:'stalled',method:'canvas-direct',atmosphere:physics.atmosphere,
+                pose:{...model,Height:42.8},freeParameters,initialRmsPx:300,
+                evaluations:2,acceptedSteps:1,
+                evaluation:{valid:true,rmsPx:5,weightedRmsPx:5,
+                    cost:points.reduce((s,p)=>s+25*p.weight/2,0),points},
+                materialBinding:CurvatureModernPhotoCalibrationEditor.fitBinding(
+                    rows,freeParameters,model,physics,1176,791)};
+            const a=CurvatureModernApp.getManagedResources();
+            return CurvatureModernCalibrationProjectActions.importAsNew(window,data,
+                {storage:CurvatureModernCalibrationProjectStore.createPort({managedResources:a})});
+        }""",data)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        self.page.locator('[data-calibration-project-open="'+project['id']+'"]').click()
+        workspace=self.page.locator('#ModernPhotoCalibration')
+        expect(workspace.locator('#ModernCalibrationProjectsPanel')).to_be_hidden(timeout=30000)
+        expect(workspace.locator('#ModernCalibrationApplyScene')).to_be_enabled(timeout=30000)
+        self.page.wait_for_function("""id=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return e?.projectId===id&&!e.pending&&!e.unsaved&&!e.selectionPending;
+        }""",arg=project['id'],timeout=30000)
+        # Simulate a competing revision through the independent managed port.
+        # The actual mounted editor must save as a conflict copy.
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        rename=workspace.locator('[data-calibration-project-rename="'+project['id']+'"]')
+        expect(rename).to_be_enabled(timeout=30000)
+        remote=self.page.evaluate("""async id=>{
+            const a=CurvatureModernApp.getManagedResources();
+            const p=await a.readCalibrationProject(id);
+            const port=CurvatureModernCalibrationProjectStore.createPort({managedResources:a});
+            const renamed=await port.rename(indexedDB,id,p.project.revision,'Independent remote revision');
+            const row=await a.readCalibrationProject(id);
+            return {project:renamed,revision:row.managedRevision,original:row.originalId};
+        }""",project['id'])
+        self.page.once('dialog',lambda dialog:dialog.accept('Mounted conflict copy'))
+        rename.click()
+        expect(workspace.locator('#ModernCalibrationProjectsStatus')).to_contain_text(
+            'Rename saved as a conflict copy',timeout=30000)
+        fork=self.page.evaluate("""()=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return {id:e.projectId,revision:e.revision,error:e.error,pending:e.pending,
+                unsaved:e.unsaved,receipt:e.selectionPending};
+        }""")
+        self.assertNotEqual(fork['id'],project['id'])
+        self.assertIsNone(fork['error'],fork)
+        self.assertEqual(fork['pending'],0)
+        self.assertFalse(fork['unsaved'])
+        self.assertIsNone(fork['receipt'])
+        self.assertTrue(self.page.evaluate("""async ({old,fork})=>{
+            const a=CurvatureModernApp.getManagedResources();
+            const current=await a.readCalibrationProject(fork.id);
+            if(current.originalId!==old.original)throw Error('Conflict copy changed original evidence');
+            const deadline=performance.now()+20000;
+            while(performance.now()<deadline){
+                try{
+                    // Explicitly remove only the synthetic former project.
+                    await a.store.removeDocument({documentId:'calibration:'+old.project.id,
+                        expectedRevision:old.revision});
+                    break;
+                }catch(error){
+                    if(!/close the corresponding editor/.test(error.message))throw error;
+                    await new Promise(resolve=>setTimeout(resolve,100));
+                }
+            }
+            if(await a.readCalibrationProject(old.project.id))
+                throw Error('Former Calibration logical lock was not released');
+            try{await a.store.collectGarbage(current.originalId);return false;}
+            catch(error){return /close the corresponding editor/.test(error.message);}
+        }""",{'old':remote,'fork':fork}))
+        workspace.locator('#ModernCalibrationProjectsToggle').click()
+        button=workspace.locator('#ModernCalibrationApplyScene')
+        expect(button).to_be_enabled(timeout=30000)
+        workspace.locator('#ModernCalibrationApplyTarget').select_option('Scene')
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        button.click()
+        expect(workspace.locator('#ModernCalibrationApplyStatus')).to_contain_text(
+            'Applied to Scene',timeout=30000)
+        read="""async id=>{
+            const a=CurvatureModernApp.getManagedResources(),p=await a.readCalibrationProject(id);
+            const checkpoint=await a.readWorkingCheckpoint(),e=checkpoint.snapshots.committed.evidence;
+            if(p.project.resultIds.length!==1)throw Error('Expected one linked result');
+            const result=await a.readCalibrationResult(p.project.resultIds[0]);
+            if(e.result!==result.resultId||p.results[0].target!==result.resultId)
+                throw Error('Apply changed the exact linked Calibration evidence');
+            return {project:p.project,row:checkpoint.row,proof:e,
+                original:result.original.original.dataUrl,valid:(await a.store.verifyIntegrity()).valid};
+        }"""
+        saved=self.page.evaluate(read,fork['id'])
+        self.assertTrue(saved['valid'])
+        self.assertEqual(saved['original'],data['referenceImage']['original']['dataUrl'])
+        self.assertEqual(saved['row']['experiment']['calibrationOrigin']['target'],'Scene')
+        self.assertEqual(saved['row']['envelope']['documents']['calibration'],
+            {'id':fork['id'],'revision':'rev:'+str(saved['project']['revision']),'recovery':None})
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read,fork['id']),saved)
+        # The archive-only transition changes the physical target without
+        # rewriting the exact linked project or original.
+        to_b=self.page.locator('#ModernCalibrationSceneToB')
+        expect(to_b).to_be_enabled(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        to_b.click()
+        expect(self.page.locator('#ModernPresetSwitchStatus')).to_contain_text(
+            'Calibration applied and document session saved',timeout=30000)
+        transferred=self.page.evaluate(read,fork['id'])
+        self.assertEqual(transferred['project'],saved['project'])
+        self.assertEqual(transferred['proof'],saved['proof'])
+        self.assertEqual(transferred['original'],saved['original'])
+        self.assertEqual(transferred['row']['experiment']['calibrationOrigin']['target'],'B')
+        self.assertTrue(transferred['valid'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read,fork['id']),transferred)
+
     def test_managed_storage_cutover_writer_fence(self):
         def prepare(page):
             page.route(self.base_url, lambda route: route.fulfill(
