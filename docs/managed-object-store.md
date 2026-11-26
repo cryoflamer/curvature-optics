@@ -667,8 +667,12 @@ consumer explicitly supplies a complete reachability inventory to
 inventory and unretained evidence refuse release. Exact verified origins
 and standalone origins are checked, and changing reachability during
 validation retains the previous lock set. Durable roots remain independent
-owners. The mounted controller does not yet invoke this pruning primitive:
-its acknowledged editor/recovery boundaries must be qualified separately.
+owners. The mounted managed Scene/Compare calls it after acknowledged
+ordinary saves and History Restore/Reset, only when its current model exactly
+matches the committed checkpoint and no selection, recovery, temporary
+keyframe, navigation or camera operation is pending. Maintenance failure does
+not turn a committed save into a failure. Calibration Apply and the remaining
+workspace transitions require separate qualification.
 Missing evidence during acquisition refuses the read rather than exposing
 an unprotected snapshot. This is not a second checkpoint writer.
 

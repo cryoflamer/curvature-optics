@@ -2846,6 +2846,50 @@ class ModernBrowserSmoke(unittest.TestCase):
         recovery=result.pop('recoveryText')
         standalone_recovery=result.pop('standaloneRecoveryText')
         self.assertEqual(result, {'valid': True, 'history': 1})
+        # Mount the managed route in this disposable source profile. The
+        # physical result still has a History owner but no archive/gallery.
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'managed',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url+'?document-session=managed-preview&ui-state-registry=preview',
+            wait_until='load',timeout=30000)
+        self.page.wait_for_function("""()=>CurvatureModernApp?.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'""",timeout=30000)
+        result_id=self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            return (await adapter.readWorkingCheckpoint()).snapshots.committed.evidence.result;
+        }""")
+        self.assertTrue(result_id)
+        retained_check="""async id=>{
+            try{await CurvatureModernApp.getManagedResources().store.collectGarbage(id);return false;}
+            catch(error){return /close the corresponding editor/.test(error.message);}
+        }"""
+        self.assertTrue(self.page.evaluate(retained_check,result_id))
+        height=self.page.evaluate('CurvatureModernApp.getModel().Height')
+        self.page.locator('#ModernHeight').fill(str(height+1))
+        self.page.locator('#ModernHeight').press('Tab')
+        self.page.wait_for_function("""h=>{
+            const state=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return state.status==='committed'&&state.bound.experiment.scene.camera.Height===h;
+        }""",arg=height+1,timeout=30000)
+        self.assertTrue(self.page.evaluate(retained_check,result_id))
+        reset=self.page.locator('#ModernResetExperiment')
+        expect(reset).to_be_enabled(timeout=30000)
+        reset.click()
+        self.page.wait_for_function("""()=>{
+            const state=CurvatureModernApp.getExperimentSessionPreview().controller;
+            return state.status==='committed'&&!state.bound.experiment.calibrationOrigin;
+        }""",timeout=30000)
+        self.page.wait_for_function("""async id=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            try{return (await adapter.store.collectGarbage(id)).reason==='durable-reference';}
+            catch(error){if(/close the corresponding editor/.test(error.message))return false;throw error;}
+        }""",arg=result_id,timeout=30000)
+        self.assertTrue(self.page.evaluate("""async id=>{
+            const adapter=CurvatureModernApp.getManagedResources();
+            const history=await adapter.listHistory();
+            return (await adapter.store.verifyIntegrity()).valid&&
+                history.some(row=>row.row.pinned&&row.row.experiment.calibrationOrigin)&&!!await adapter.store.get(id);
+        }""",result_id))
         # An independent browser context has no source managed objects.
         destination=self.browser.new_context()
         try:

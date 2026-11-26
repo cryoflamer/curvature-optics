@@ -756,7 +756,7 @@
   var documentSessionPreviewRequested=['shared','preview','managed-preview'].includes(documentSessionRoute);
   var experimentPreview={status:'disabled',controller:null,ui:null,live:false,error:null,recoveryAction:false,
     migration:null,calibrationContext:null,calibrationEditor:null,calibrationNavigation:false,calibrationBusy:false,
-    animationContext:null};
+    animationContext:null,physicalRetention:null};
   var workspaceUiRegistryPreviewRequested=!documentSessionPreviewRequested&&typeof URLSearchParams==='function'&&
     new URLSearchParams(root.location&&root.location.search||'')
       .get('ui-state-registry')==='preview';
@@ -2038,6 +2038,30 @@
       if(experimentPreview.status!=='suspended'&&experimentPreview.status!=='failed')previewFailure(error);
     });
   }
+  async function prunePhysicalRetention(){
+    var c=experimentPreview.controller,retention=experimentPreview.physicalRetention;
+    if(!c||!retention)return;
+    try{
+      await retention.prune(function(){
+        // A temporary keyframe, navigation, pending selection or live
+        // gesture is not a complete inventory of the physical editor.
+        if(c!==experimentPreview.controller||retention!==experimentPreview.physicalRetention||
+           !sharedHistoryPhysicalReady()||historyRestoreBusy||presetSwitchBusy||calibrationApplyBusy||
+           experimentPreview.calibrationNavigation||experimentPreview.animationContext?.busy||
+           experimentPreview.animationContext?.row?.keyframeEdit||keyframeEditDraftAtEntry||
+           cameraTransition||autoCameraActive||cameraDirectMotion||state.demosActive)return null;
+        var view=c.state();
+        if(view.latestInput||view.draftOffer||view.pendingSelection||view.selectionRecovery||
+           view.checkpoint!=='none'||!view.bound)return null;
+        var visible=experimentSnapshot();
+        if(!sameHistoryExperiment(visible,view.bound.experiment))return null;
+        return [view.bound.experiment,visible];
+      });
+    }catch(error){
+      // Optional live-lock maintenance cannot invalidate a committed save.
+      console.warn('Physical live resource retention was not pruned:',error.message||error);
+    }
+  }
   function savePreviewExperiment(){
     var c=experimentPreview.controller;
     if(!c||!['clean','dirty','saving','committed'].includes(experimentPreview.status))return;
@@ -2063,7 +2087,10 @@
       syncPreviewUnloadWarning();
       if(sharedPresentationActive()){
         updateSnapshotSaveAction();syncSharedHistoryPanel();refreshCalibrationApplicability();
-        if(view.status!=='dirty')queueSharedHistoryAuto();
+        if(view.status!=='dirty'){
+          queueSharedHistoryAuto();
+          void prunePhysicalRetention();
+        }
       }
     }).catch(function(error){persistence.dirty=true;
       if(experimentPreview.status!=='suspended')previewFailure(error);
@@ -2076,6 +2103,7 @@
       lease=ui.captureSharedDocumentLifetime(),
       coordinate=api.sharedExperimentCoordinator(root.navigator&&root.navigator.locks);
     var physicalRetention=managedResources?managedResources.createPhysicalEditorRetention():null;
+    experimentPreview.physicalRetention=physicalRetention;
     var checkpoint=sessionAutosave.openSharedCheckpoint(root.indexedDB,
       {lease:lease,codec:experiments,crypto:root.crypto,contract:api,
         ...(managedResources?{managedResources:physicalRetention}:{})});
@@ -7877,6 +7905,7 @@
     }finally{
       historyRestoreBusy=false;experimentPreview.calibrationBusy=false;
       previewControls();syncPreviewUnloadWarning();refreshCalibrationApplicability();
+      if(committed&&result?.experiment)void prunePhysicalRetention();
     }
   }
   function restoreHistorySnapshot(id){
