@@ -166,6 +166,39 @@ the API or the user's actual command output.
 - The historical `built-in-demo`, `dev`, `refactor` and other branches
   are not active development targets. Do not delete them automatically.
 
+## Local-first development and delivery efficiency
+
+- Prioritize completion of agreed functionality and Issue acceptance criteria,
+  not the number of commits, CI runs or intermediate reports. Define a
+  meaningful functional stage before implementation; include its related
+  implementation, integration, tests and necessary documentation together.
+- Work locally first whenever the environment permits. Obtain the actual
+  current source and dependencies; if direct Git access is unavailable, use
+  connected GitHub tools to reconstruct a faithful local working tree.
+  Never substitute guessed source or claim a partial tree is a full checkout.
+- Run applicable syntax, targeted Node/unit/regression, architecture,
+  numerical/physical and diff checks locally before publishing. Fix failures
+  locally rather than using GitHub Actions as an interactive development loop.
+- Use GitHub Actions primarily for affected browser/UI integration checks,
+  checks that cannot be reproduced locally, and the automatic push gate.
+  Disclose unavailable local dependencies or checks and use targeted CI as
+  the fallback. Never claim tests ran locally when they did not.
+- Preserve logically bounded commits and all acceptance gates, but avoid
+  artificially splitting a functional stage into tiny sequential changes.
+  Do not serially wait for CI after every minor commit when related work can
+  safely proceed; verify relevant runs and logs at the functional-stage
+  boundary before reporting success or advancing dependent work.
+- For synchronization and reporting, a stage means a coherent functional
+  deliverable, not every helper, edit or commit. Consolidate Issue/Project
+  updates and reports at that boundary; do not omit required evidence.
+- Continue through agreed, ready stages without unnecessary confirmation or
+  intermediate reporting. Stop for material scope changes, unresolved
+  correctness risks, required user decisions or acceptance gates. Do not
+  expand scope merely to add speculative safeguards or optional refinements.
+- Full suites still require explicit approval or a separately agreed
+  validation plan. Preserve scientific correctness, resource safety,
+  regression coverage and manual acceptance requirements.
+
 ## Testing — targeted by default
 
 **Do not run the entire test suite by default.** Full Node regressions and
