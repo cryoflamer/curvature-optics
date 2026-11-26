@@ -16847,6 +16847,86 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernApp.getManagedResources().store.verifyIntegrity()).valid"""))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_managed_preview_close_selected_calibration(self):
+        """Explicit close preserves the selected project and restores the physical workspace."""
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        self.assertTrue(self.page.evaluate('window.CurvatureModernStorageStartupBlocked===true'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+        self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:adapter});
+            await S.read();await S.initialize(experiment);
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        panel=self.page.locator('#ModernCalibrationProjectsPanel')
+        expect(panel).to_be_visible(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept('Close then remove'))
+        self.page.locator('#ModernCalibrationProjectsNew').click()
+        self.page.wait_for_function("""()=>{
+            const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
+            return !!e?.projectId&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+                document.querySelector('#ModernCalibrationProjectsPanel').hidden;
+        }""",timeout=30000)
+        id=self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
+            .projectPersistenceStatus().projectId""")
+        read="""async id=>{
+            const a=CurvatureModernApp.getManagedResources();
+            return {project:(await a.readCalibrationProject(id))?.project??null,
+                physical:(await a.readWorkingCheckpoint()).row};
+        }"""
+        before=self.page.evaluate(read,id)
+        self.assertEqual(before['physical']['envelope']['documents']['calibration']['id'],id)
+        self.page.locator('#ModernCalibrationProjectsToggle').click()
+        close=panel.locator('[data-calibration-project-close="'+id+'"]')
+        delete=panel.locator('[data-calibration-project-delete="'+id+'"]')
+        expect(delete).to_be_disabled()
+        expect(close).to_be_enabled(timeout=30000)
+        with self.page.expect_navigation(wait_until='load',timeout=30000):
+            close.click()
+        self.page.wait_for_function(ready,timeout=30000)
+        after=self.page.evaluate(read,id)
+        self.assertEqual(after['project'],before['project'])
+        self.assertEqual(after['physical']['experiment'],before['physical']['experiment'])
+        self.assertEqual(after['physical']['envelope']['workspace'],before['physical']['experiment']['display']['mode'])
+        self.assertIsNone(after['physical']['envelope']['documents']['calibration'])
+        self.assertEqual(after['physical']['revision'],before['physical']['revision']+1)
+        self.page.locator('#ModernPhotoCalibrationOpen').click()
+        expect(delete).to_be_enabled(timeout=30000)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        delete.click()
+        expect(delete).to_have_count(0,timeout=30000)
+        self.assertIsNone(self.page.evaluate(read,id)['project'])
+        self.assertTrue(self.page.evaluate("""async()=>
+            (await CurvatureModernApp.getManagedResources().store.verifyIntegrity()).valid"""))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_managed_preview_inactive_linked_working_copy_retirement(self):
         """Explicit linked-copy discard preserves the named project and selected draft."""
         self.page.route(self.base_url,lambda route:route.fulfill(

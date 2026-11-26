@@ -909,3 +909,16 @@ pending journal refuses removal. The saved project remains intact; it can be
 opened again (with a new working reference), or removed separately through the
 existing guarded named project action. This never auto-discards another editor
 or changes the shared selection.
+
+### Explicit selected Calibration closure
+
+Managed preview allows closing the currently selected acknowledged Calibration
+Project as a separate action, not an implicit side effect of deletion. The
+editor validates its durable input and freezes its switch generation, the
+shared coordinator verifies the exact project revision, and the physical
+checkpoint CAS clears only the Calibration selection and restores its existing
+Scene/Compare workspace. The named project and its original/evidence remain
+owned. Only after acknowledgement does the current tab reload and release its
+editor retention. Other tabs are not evicted; the existing guarded removal
+still refuses any active lock, pending receipt or stale revision. A failed
+close does not authorize deletion.

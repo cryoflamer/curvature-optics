@@ -422,8 +422,10 @@
     // Must be called inside the same mounted auxiliary-operation lock as
     // selection and domain saves. Clear the durable pointer before allowing
     // destructive domain CRUD, never the other way around.
-    async function detachDocument(kind,reference){
+    async function detachDocument(kind,reference,verifyCurrent=()=>true){
       guard(true);
+      check(typeof verifyCurrent==='function','auxiliary close guard required');
+      const current=()=>isCurrent()===true&&verifyCurrent()===true;
       check(['calibration','animation'].includes(kind),'auxiliary document kind required');
       const ref=binding(reference);
       check(ref&&ref.recovery===null,'verified document reference required');
@@ -432,6 +434,7 @@
         'resolve pending session work before removal');
       busy=true;selecting=true;
       try{
+        check(current(),'stale auxiliary close generation');
         await verifyNoReceipt();guard(true);
         const verified=await checkpoint.read();guard(true);
         check(same(verified,row),'auxiliary removal CAS conflict; reload required');
@@ -439,8 +442,8 @@
         if(!selected||selected.id!==ref.id)return {detached:false};
         check(same(selected,ref),'selected document revision changed; removal rejected');
         check(typeof checkpoint.detachDocument==='function','auxiliary removal adapter required');
-        row=await checkpoint.detachDocument(kind,ref,row.revision,{isCurrent});
-        guard(true);status='committed';
+        row=await checkpoint.detachDocument(kind,ref,row.revision,{isCurrent:current});
+        guard(true);check(current(),'auxiliary close changed during acknowledgement');status='committed';
         return {detached:true};
       }catch(e){fail(e);throw e;}
       finally{busy=false;selecting=false;}

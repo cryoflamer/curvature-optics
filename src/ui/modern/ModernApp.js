@@ -2250,6 +2250,27 @@
         var s=controller.state();
         return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy&&
           s.row.envelope.documents.calibration?.id!==id;
+      },canDetach:function(id){
+        var s=controller.state();
+        return ['clean','committed'].includes(s.status)&&!!s.row&&!s.busy&&
+          s.row.envelope.workspace==='calibration'&&s.row.envelope.documents.calibration?.id===id;
+      },detach:async function(ref,guard){
+        try{
+          var result=await coordinate(async function(){
+            lease.check(true);
+            await controller.assertCleanCheckpoint();
+            var saved=await managedResources.readCalibrationProject(ref.id);
+            if(!saved||'rev:'+saved.project.revision!==ref.revision||guard()!==true)
+              throw Error('Calibration Project changed; close rejected');
+            return controller.detachDocument('calibration',ref,guard);
+          });
+          experimentPreview.status=controller.state().status;
+          return result;
+        }catch(error){
+          if(controller.state().status==='failed'&&experimentPreview.status!=='suspended')
+            previewFailure(Error('Calibration close was not acknowledged: '+error.message));
+          throw error;
+        }
       }}:{}),
       remove:async function(ref){
         if(managedResources)return coordinate(async function(){

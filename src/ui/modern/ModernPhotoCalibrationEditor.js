@@ -1199,6 +1199,10 @@
       // The opened project is already being edited; reopening it is neither
       // useful nor safe while its live checkpoint may be changing.
       if(!active)action('Open','calibrationProjectOpen',()=>openFromProjects(entry.id));
+      if(active&&sharedSelection?.detach)
+        action('Close project','calibrationProjectClose',closeFromProjects,
+          unsaved||!!state?.pending||!!state?.error||!!state?.selectionPending||
+          !sharedSelection.canDetach(entry.id));
       action('Rename','calibrationProjectRename',renameFromProjects,!!sharedSelection&&
         (active?(unsaved||!!state?.pending||!!state?.error):
           !sharedSelection.canRenameUnselected?.(entry.id)));
@@ -1481,6 +1485,45 @@
         projectsMessage('Created '+created.title+'. Open it to edit independently.');
       }catch(error){projectActionMessage(error,'Duplicate failed');}
       finally{projectListBusy=false;renderProjects();}
+    }
+    // Closing is a separate, non-destructive selection transition. Reload
+    // only after acknowledgement, releasing this tab's live retention.
+    async function closeFromProjects(entry){
+      if(projectListBusy||!sharedSelection?.detach||!sharedSelection.canDetach(entry.id)||
+         projectSession?.project()?.id!==entry.id)return;
+      if(projectSwitchBusy||restoring||fitWorker||applyBusy||pendingPhotoLoads||
+         photoGestures.active||resultGestures.active){
+        projectsMessage('Finish active calibration operations before closing the project.',true);return;
+      }
+      const session=projectSession,request=++projectSwitchEpoch,previousInert=workspace.inert;
+      projectListBusy=true;projectSwitchBusy=true;switchInterference=false;workspace.inert=true;
+      renderProjects();projectsMessage('Checking the acknowledged Calibration Project before closing…');
+      let detached=false;
+      try{
+        const ack=persist(true);if(ack)await ack;
+        await writeQueue;
+        const state=session.state(),revision=state.revision;
+        const guard=()=>{
+          const current=session.state();
+          return projectSwitchBusy&&projectSwitchEpoch===request&&!switchInterference&&
+            session===projectSession&&session.project()?.id===entry.id&&current.revision===revision&&
+            !current.pending&&!current.unsaved&&!current.error&&!current.selectionPending;
+        };
+        if(!guard()||!state.lastAck||!session.matchesAcknowledgedInput(captureDraftState(),captureInlineState()))
+          throw Error('Calibration has unacknowledged work; save or recover before closing');
+        const result=await sharedSelection.detach({id:entry.id,revision:'rev:'+revision,recovery:null},guard);
+        if(!result.detached)throw Error('Selected Calibration changed; close rejected');
+        detached=true;
+        projectsMessage('Project closed. Restoring the acknowledged physical workspace…');
+        env.location.reload();
+      }catch(error){projectActionMessage(error,'Close failed');}
+      finally{
+        if(!detached){
+          projectListBusy=false;projectSwitchBusy=false;
+          if(sharedSelection.usable())workspace.inert=previousInert;
+          renderProjects();
+        }
+      }
     }
     async function deleteFromProjects(entry){
       if(projectListBusy||sharedSelection&&!sharedSelection.remove)return;
