@@ -872,7 +872,7 @@ working copy or pending journal. Existing selected project and linked-copy
 controls refuse removal rather than implicitly detach or lose recovery.
 The domain transaction rechecks the revision, dependencies and active locks.
 The old shared/legacy routes are unchanged. This preview does not activate
-migration or permit discarding linked workspaces.
+migration. Linked workspaces require a separate explicit resolution.
 
 The existing Image Library Delete observation control is also available only
 in managed preview. It requires a clean inspected row (including attribution
@@ -895,4 +895,17 @@ including its tombstones and remaining resource edges. No named project,
 physical checkpoint or shared selection is removed or relinked. Cancellation,
 stale references and unresolved journals retain the original collection.
 Resources owned elsewhere remain retained; unowned descendants become GC
-candidates. Linked and selected drafts remain protected.
+candidates. Linked and selected drafts are excluded from this action.
+
+### Explicit inactive linked Animation working-copy retirement
+
+Managed preview offers a separate Discard working copy action on a linked
+workspace. The user must first open a different acknowledged draft and confirm
+that changes not saved to the named project will be lost. The inspected working
+reference and named revision must still match. The named and physical checkpoint
+inventories are rechecked in the same managed transaction as the collection
+replacement and tombstone. A stale named revision, selected working copy or
+pending journal refuses removal. The saved project remains intact; it can be
+opened again (with a new working reference), or removed separately through the
+existing guarded named project action. This never auto-discards another editor
+or changes the shared selection.

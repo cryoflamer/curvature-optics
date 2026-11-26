@@ -16847,6 +16847,111 @@ class ModernBrowserSmoke(unittest.TestCase):
             (await CurvatureModernApp.getManagedResources().store.verifyIntegrity()).valid"""))
         self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
 
+    def test_managed_preview_inactive_linked_working_copy_retirement(self):
+        """Explicit linked-copy discard preserves the named project and selected draft."""
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        self.assertTrue(self.page.evaluate('window.CurvatureModernStorageStartupBlocked===true'))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+        self.page.evaluate("""async()=>{
+            const adapter=CurvatureModernManagedResources.create(window);
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:adapter});
+            await S.read();await S.initialize(experiment);
+            const A=CurvatureModernAnimationProject,L=CurvatureModernAnimationLibrary;
+            const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
+            const project=A.createV2(contract,[{experiment},{experiment}],{
+                id:'managed_linked_discard',name:'Named Animation'});
+            await adapter.saveAnimation(L.record(project,'auto',project.id,100,100,null));
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load')
+        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
+            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernAnimationTab').click()
+        named=self.page.locator('[data-shared-named-animation-id="managed_linked_discard"]')
+        delete_named=self.page.locator('[data-shared-delete-animation-id="managed_linked_discard"]')
+        discard=self.page.locator('[data-shared-discard-linked-id="project_managed_linked_discard"]')
+        expect(named).to_be_enabled(timeout=30000)
+        named.click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
+        field=self.page.locator('#ModernAnimationStudio').get_by_label('Project name',exact=True)
+        field.fill('Working changes')
+        field.press('Tab')
+        expect(self.page.locator('#ModernAnimationDraftStatus')).to_have_text(
+            'Shared working draft saved in IndexedDB',timeout=30000)
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(discard).to_be_disabled()
+        expect(delete_named).to_be_disabled()
+        self.page.locator('#ModernSharedAnimationNewDraft').click()
+        self.page.wait_for_function("()=>CurvatureModernApp.getAnimationStudioView()==='editor'",timeout=30000)
+        keep=self.page.evaluate('CurvatureModernApp.getAnimationStudioWorkspaceId()')
+        self.page.locator('#ModernAnimationViewLibrary').click()
+        expect(discard).to_be_enabled(timeout=30000)
+        expect(delete_named).to_be_disabled()
+        read="""async()=>{
+            const a=CurvatureModernApp.getManagedResources();
+            return {draft:(await a.readAnimationWorkingCollection()).row,
+                session:(await a.readWorkingCheckpoint()).row,
+                named:(await a.readAnimation('managed_linked_discard'))?.row??null};
+        }"""
+        before=self.page.evaluate(read)
+        self.assertEqual(before['session']['envelope']['documents']['animation']['id'],keep)
+        self.assertEqual(before['named']['project']['name'],'Named Animation')
+        self.assertEqual(next(w['checkpoint']['draft']['name'] for w in before['draft']['collection']['workspaces']
+            if w['id']=='project_managed_linked_discard'),'Working changes')
+        self.page.once('dialog',lambda dialog:dialog.dismiss())
+        discard.click()
+        self.assertEqual(self.page.evaluate(read),before)
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        discard.click()
+        expect(discard).to_have_count(0,timeout=30000)
+        expect(delete_named).to_be_enabled(timeout=30000)
+        after=self.page.evaluate(read)
+        self.assertEqual(after['session'],before['session'])
+        self.assertEqual(after['named'],before['named'])
+        self.assertEqual(after['draft']['revision'],before['draft']['revision']+1)
+        self.assertEqual(after['draft']['collection']['workspaces'],
+            [w for w in before['draft']['collection']['workspaces'] if w['id']==keep])
+        self.assertEqual(after['draft']['revisions'],
+            [w for w in before['draft']['revisions'] if w['id']==keep])
+        self.assertIn('project_managed_linked_discard',
+            [w['id'] for w in after['draft']['collection']['removed']])
+        self.page.once('dialog',lambda dialog:dialog.accept())
+        delete_named.click()
+        expect(delete_named).to_have_count(0,timeout=30000)
+        final=self.page.evaluate(read)
+        self.assertEqual(final['session'],after['session'])
+        self.assertEqual(final['draft'],after['draft'])
+        self.assertIsNone(final['named'])
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertEqual(self.page.evaluate(read),final)
+        self.assertTrue(self.page.evaluate("""async()=>
+            (await CurvatureModernApp.getManagedResources().store.verifyIntegrity()).valid"""))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_shared_animation_mounted_draft_edit_and_reload(self):
         """New draft, real Studio editor, exact shared pointer and global F5."""
         url=self.base_url+'?document-session=shared&ui-state-registry=preview'

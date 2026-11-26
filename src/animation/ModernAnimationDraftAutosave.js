@@ -1155,11 +1155,24 @@
     // current session reference; neither the named store nor the session is
     // changed by this single collection CAS.
     function removeInactiveDrafts(expected,refs,selected,guard){
+      return removeInactiveWorkspaces(expected,refs,selected,guard,null);
+    }
+    // A linked copy is a separate explicitly confirmed operation. The
+    // managed adapter also checks the exact named and physical owner inventories.
+    function removeInactiveLinkedWorkspace(expected,ref,selected,libraryId,libraryRevision,guard){
+      if(!managed||!Number.isSafeInteger(libraryRevision)||libraryRevision<=0)
+        throw Error('Exact managed named Animation revision required');
+      return removeInactiveWorkspaces(expected,[ref],selected,guard,
+        {id:libraryId,revision:libraryRevision,workspace:projectWorkspaceId(libraryId)});
+    }
+    function removeInactiveWorkspaces(expected,refs,selected,guard,linked){
       const keep=validateReference(selected);
       if(!Array.isArray(refs)||!refs.length)throw Error('Exact inactive Animation draft references required');
       const wanted=refs.map(validateReference),ids=new Set(wanted.map(ref=>ref.id));
-      if(ids.size!==wanted.length||ids.has(keep.id)||wanted.some(ref=>!ref.id.startsWith('draft_')))
-        throw Error('Only inactive independent Animation drafts may be deleted');
+      if(ids.size!==wanted.length||ids.has(keep.id)||wanted.some(ref=>
+        linked?ref.id!==linked.workspace:!ref.id.startsWith('draft_')))
+        throw Error(linked?'Only the inspected inactive linked working copy may be discarded':
+          'Only inactive independent Animation drafts may be deleted');
       return commit(expected,row=>{
         const revision=nextRevision(row);
         if(!equal(documentReference(row,keep.id),keep))
@@ -1168,7 +1181,10 @@
           if(!equal(documentReference(row,ref.id),ref))
             throw Error('Inactive Animation draft revision changed');
           const cp=getWorkspace(row.collection,ref.id);
-          if(!cp||cp.libraryId!==null)throw Error('Only independent Animation drafts may be deleted');
+          if(linked){
+            if(!cp||cp.libraryId!==linked.id||cp.libraryRevision!==linked.revision)
+              throw Error('Linked working copy no longer matches the inspected saved revision');
+          }else if(!cp||cp.libraryId!==null)throw Error('Only independent Animation drafts may be deleted');
         }
         const when=Math.max(Date.now(),row.collection.savedAt+1,
           ...row.collection.workspaces.map(item=>item.checkpoint.savedAt+1));
@@ -1373,7 +1389,7 @@
       return {reference:expected,checkpoint:getWorkspace(row.collection,expected.id)};
     }
     return Object.freeze({read,initializeFromLegacy,initializeEmpty,adoptLegacyVariant,createDraft,removeInactiveDrafts,createLinkedWorkspace,stageNamedSave,finishNamedSave,abandonNamedSave,stageKeyframeEdit,updateKeyframeEdit,cancelKeyframeEdit,stageKeyframeHistory,applyKeyframeEdit,applyKeyframeEditWithHistory,saveSelected,retire,prepareReference,
-      ...(managed?{storageKind:'managed',initializeManaged}:{})});
+      ...(managed?{storageKind:'managed',initializeManaged,removeInactiveLinkedWorkspace}:{})});
   }
   function read(indexedDB){return withStore(indexedDB,'readonly',function(store){return store.get(KEY);})
     .then(function(record){return record===null||record===undefined?null:normalize(record);});}

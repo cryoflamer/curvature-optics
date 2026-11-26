@@ -3399,6 +3399,16 @@
         ()=>void runSharedAnimationAction('deleteDrafts',[ref]),
         !cleanupRefs.some(candidate=>candidate.id===item.id),
         {'data-shared-delete-draft-id':item.id,'aria-label':'Delete draft · '+item.checkpoint.draft.name});
+      else if(managedResources){
+        var named=(ctx.named||[]).find(record=>record.id===item.checkpoint.libraryId);
+        var discardBlocked=!canClean||active||selectedDraft.id===item.id||
+          !named||named.updatedAt!==item.checkpoint.libraryRevision;
+        action(line,'Discard working copy',
+          ()=>void runSharedAnimationAction('discardLinked',{ref,record:named}),discardBlocked,
+          {'data-shared-discard-linked-id':item.id,'aria-label':'Discard working copy · '+item.checkpoint.draft.name,
+            'title':discardBlocked?'Open another acknowledged draft and resolve any saved revision conflict first':
+              'Discard this inactive copy only; the named project is retained'});
+      }
       drafts.appendChild(line);
     });
     host.appendChild(drafts);
@@ -3651,6 +3661,9 @@
     if(kind==='deleteDrafts'&&(!Array.isArray(value)||!value.length||!root.confirm||!root.confirm(
       'Permanently delete '+value.length+' selected inactive independent Animation draft'+(value.length===1?'':'s')+
       '? The opened draft, saved projects, History and original photographs will be retained.')))return false;
+    if(kind==='discardLinked'&&(!managedResources||!value?.record||!root.confirm||!root.confirm(
+      'Discard this inactive working copy of "'+value.record.project.name+'"? Changes not saved to the named project '+
+      'will be lost. The saved project, selected draft, History and other owners will be retained.')))return false;
     if(kind==='abandonNamedSave'&&(!root.confirm||!root.confirm(
       'Abandon this pending Save Changes intent? This does not undo any named save that may already have committed. Download the evidence first if needed. The working draft is retained.')))return false;
     ctx.busy=true;ctx.error=false;ctx.message='';previewControls();
@@ -3862,7 +3875,7 @@
               await initializeSharedAnimation(store,ctx,studioDraftAutosave.collection(id,checkpoint));
             }
             ctx.message='Recovery imported as an independent draft. Choose it to open; original documents were retained.';
-          }else if(kind==='deleteDrafts'){
+          }else if(kind==='deleteDrafts'||kind==='discardLinked'){
             var selected=c.state().row.envelope.documents.animation;
             if(!studioWorkspaceReady||studioActiveDemo||!selected||
                studioWorkspaceId!==selected.id||ctx.writer.state().unsaved||ctx.writer.state().error)
@@ -3872,9 +3885,16 @@
               return experimentPreview.status!=='suspended'&&animationWorkspaceOpen&&
                 JSON.stringify(c.state().row.envelope.documents.animation)===JSON.stringify(selected);
             }
-            ctx.row=await store.removeInactiveDrafts(row,value,selected,deletionGuard);
-            ctx.message='Deleted '+value.length+' inactive independent draft'+(value.length===1?'':'s')+
-              '. Opened draft and saved projects retained.';
+            if(kind==='discardLinked'){
+              var named=await verifySharedNamedAnimation(value.record);
+              ctx.row=await store.removeInactiveLinkedWorkspace(row,value.ref,selected,
+                named.id,named.updatedAt,deletionGuard);
+              ctx.message='Inactive working copy discarded. Saved project and opened draft retained.';
+            }else{
+              ctx.row=await store.removeInactiveDrafts(row,value,selected,deletionGuard);
+              ctx.message='Deleted '+value.length+' inactive independent draft'+(value.length===1?'':'s')+
+                '. Opened draft and saved projects retained.';
+            }
           }else if(kind==='new'){
             var id=studioDraftAutosave.makeWorkspaceId(root.crypto);
             var cp=studioDraftAutosave.checkpoint({draft:studioApi.blank(),selectedKey:null,

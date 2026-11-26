@@ -2172,14 +2172,33 @@
         return {cp,changed:prior?.libraryRevision!==cp.libraryRevision,
           photos:new Set(cp.draft.frames.flatMap(frame=>frame.referenceImageIds||[])),origins};
       }):[];
+      const remainingIds=new Set(row.collection.workspaces.map(w=>w.id));
+      const retiredLinks=animationHandoff?[...priorWorkspaces].filter(([id,cp])=>
+        cp.libraryId!==null&&!remainingIds.has(id)):[];
+      let retirementInventory=null;
+      if(retiredLinks.length){
+        check(retiredLinks.length===1,'Discard one exact linked working copy at a time');
+        const physical=await readWorkingCheckpoint();
+        const selected=physical?.row.envelope.documents.animation;
+        check(selected&&physical.row.envelope.workspace==='animation'&&
+          selected.id!==retiredLinks[0][0]&&
+          same(drafts.documentReference(previous.row,selected.id),selected)&&
+          same(drafts.documentReference(row,selected.id),selected),
+          'Keep the exact selected Animation checkpoint before discarding a linked working copy');
+        retirementInventory={kind:'working-checkpoint',documents:[{id:workingId,revision:physical.managedRevision}]};
+      }
       let sources=null,sourceInventory=null;
       async function linkedSources(){
         if(sources)return sources;
         sources=[];
-        if(!linked.length)return sources;
+        if(!linked.length&&!retiredLinks.length)return sources;
         const named=await listVerified('animation',readAnimation,id=>'animation:'+images.validId(id),
           v=>v,(a,b)=>byTime('updatedAt')(a.row,b.row));
         sourceInventory=animationExpected(named.map(v=>v.row));
+        for(const [,cp] of retiredLinks){
+          check(named.some(v=>v.row.row.id===cp.libraryId&&v.row.row.updatedAt===cp.libraryRevision),
+            'Named Animation revision changed or was removed; retain the linked working copy');
+        }
         for(const link of linked){
           const {cp,changed}=link;
           const match=named.find(v=>v.row.row.id===cp.libraryId&&v.row.row.updatedAt===cp.libraryRevision);
@@ -2214,7 +2233,7 @@
       // The collection currently maps each alias to one immutable resource.
       // Opening another exact named revision must never silently substitute
       // an observation version retained by a different workspace.
-      if(linked.some(link=>link.changed))await linkedSources();
+      if(retiredLinks.length||linked.some(link=>link.changed))await linkedSources();
       const importedAliases=new Set(assetPlan?.mapping.values()??[]);
       for(const alias of inventory.photos){
         let target=oldPhotos.get(alias);
@@ -2308,7 +2327,7 @@
         'Named Animation evidence inventory changed; retry recovery import');
       const documents=await store.writeDocuments([...(assetPlan?.plans??[]),workingPlan],{guard,lease,
         expectedInventory:[...(namedInventory?[namedInventory]:[]),...(assetPlan?[assetPlan.expectedInventory]:[]),
-          ...(journalSource?[journalSource.inventory]:[])]});
+          ...(journalSource?[journalSource.inventory]:[]),...(retirementInventory?[retirementInventory]:[])]});
       const document=documents.at(-1);
       return {collectionId:id,managedRevision:document.revision};
     }
