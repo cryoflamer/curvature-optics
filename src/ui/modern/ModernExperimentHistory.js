@@ -259,7 +259,8 @@
     if(Object.hasOwn(options,'managedResources')){
       if(options.protectedRetention!==true||typeof options.managedResources?.createHistoryPort!=='function')
         throw Error('Explicit protected managed History port required');
-      return options.managedResources.createHistoryPort({now:options.now,maxAutoEntries:options.maxAutoEntries});
+      return options.managedResources.createHistoryPort({now:options.now,maxAutoEntries:options.maxAutoEntries,
+        automaticMaintenance:options.automaticMaintenance});
     }
     var factory=options.indexedDB,now=options.now||Date.now;
     // The shared route chooses this immutable capability at startup. UI

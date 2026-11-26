@@ -2644,8 +2644,12 @@
         if(generation!==historyEpoch)return;
         historyBaseline=signature;
         if(result.skipped==='capacity'){
-          historyStatus('Automatic History is full. Existing snapshots were retained; manual Save snapshot remains available.');
-        }else if(result.created)await refreshHistoryList();
+          historyStatus(managedResources?'Automatic History is full and protected by active editors. Close the corresponding editor or tab and retry; manual Save snapshot remains available.':
+            'Automatic History is full. Existing snapshots were retained; manual Save snapshot remains available.');
+        }else if(result.created){
+          await refreshHistoryList();
+          if(result.maintenanceError)historyStatus('Snapshot saved; resource maintenance deferred: '+result.maintenanceError,true);
+        }
       }).catch(function(error){
         if(generation===historyEpoch&&experimentPreview.status!=='suspended')
           historyStatus('Automatic History unavailable: '+error.message,true);
@@ -7998,7 +8002,7 @@
     var panel=newUiEl('ModernHistoryPanel'),toggle=newUiEl('ModernHistoryToggle');
     if(!panel||!toggle||!historyFactory||!historyFingerprint)return;
     experimentHistory=historyFactory.create({indexedDB:root.indexedDB,protectedRetention,
-      ...(managedResources?{managedResources}:{})});
+      ...(managedResources?{managedResources,automaticMaintenance:true}:{})});
     var metadataForm=newUiEl('ModernHistoryMetadataForm');
     var metadataCancel=newUiEl('ModernHistoryMetadataCancel');
     var metadataDialog=newUiEl('ModernHistoryMetadataDialog');

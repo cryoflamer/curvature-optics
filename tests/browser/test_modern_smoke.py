@@ -3518,6 +3518,82 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.open_modern()
         self.assertTrue(self.page.evaluate('!!window.CurvatureModernApp'))
 
+    def test_managed_preview_automatic_history_capacity(self):
+        """The actual acknowledged automatic History path replaces one oldest owner at capacity."""
+        self.page.route(self.base_url,lambda route:route.fulfill(
+            status=200,content_type='text/html',body='<html><body></body></html>'))
+        self.page.goto(self.base_url)
+        self.page.unroute(self.base_url)
+        self.page.evaluate("""()=>localStorage.setItem('curvature-modern-storage-route-v1',JSON.stringify({
+            format:'curvature-modern-storage-route',version:1,state:'preparing',backupSha256:'a'.repeat(64)}))""")
+        self.page.goto(self.base_url,wait_until='load',timeout=30000)
+        expect(self.page.locator('#ModernStorageStartupRefusal')).to_be_visible()
+        seed=self.page.evaluate("""async()=>{
+            const a=CurvatureModernManagedResources.create(window),H=CurvatureModernExperimentHistory;
+            const model={Height:15,FocalLengthField:2000,Pan:0,Nick:0,Roll:0,
+                CameraEast:0,CameraNorth:0,viewcenterHorizon:3,deviceRatio:1.5,
+                showModel:1,rEarth:6371000,showGrid:1,DemoText:'Experiment',Description:'',
+                ObjType:[3,3],NObjects:[85,2],ObjDist:[50,20000],ObjDeltaDist:[297.55,300],
+                ObjSideType:[0,0],ObjSidePos:[35,25],ObjSideVar:[0,0],ObjSizeType:[0,0],
+                ObjSize:[23,64],ObjSizeVar:[0,0]};
+            const experiment=CurvatureModernExperimentState.capture(model,
+                {atmosphere:'standard',occlusionRadius:6371000,preset:'pontchartrain',resetPreset:'pontchartrain'},
+                CurvatureModernCompareState.preset('globe-flat-vacuum'),
+                {mode:'scene',eyeLevel:false,horizon:true,selected:'A'});
+            const lease={sessionId:'shared',check(){},track(){return ()=>{};}};
+            const S=CurvatureModernSessionAutosave.openSharedCheckpoint(indexedDB,{
+                lease,codec:CurvatureModernExperimentState,crypto,contract:CurvatureModernDocumentSession,
+                managedResources:a});
+            await S.read();await S.initialize(experiment);
+            const row={id:1,version:1,createdAt:42,source:'auto',pinned:false,
+                name:'Capacity fixture',description:'',thumbnail:null,experiment};
+            const oldest=await a.saveHistory(row);
+            const root=await a.store.getDocument('history:1');
+            // Populate the real capacity in one transaction using a shared
+            // immutable snapshot. No new limit or test-only application flag.
+            await a.store.writeDocuments(Array.from({length:H.MAX_AUTO},(_,i)=>{
+                const id=i+2,pinned=id===H.MAX_AUTO+1;
+                return {documentId:'history:'+id,kind:'history',expectedRevision:0,
+                    metadata:{...root.metadata,id,source:pinned?'manual':'auto',pinned},
+                    references:root.references};
+            }));
+            const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
+            localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
+            return {limit:H.MAX_AUTO,oldest:oldest.snapshotId,pinned:H.MAX_AUTO+1};
+        }""")
+        url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
+        self.page.goto(url,wait_until='load',timeout=30000)
+        ready="""()=> {
+            const a=window.CurvatureModernApp;
+            return !!a&&a.getExperimentSessionPreview().status==='clean'&&
+                a.getWorkspaceUiRegistryPreview().status==='ready';
+        }"""
+        self.page.wait_for_function(ready,timeout=30000)
+        self.page.locator('#ModernSettingsAtmosphere').click()
+        control=self.page.locator('#ModernAtmosphere')
+        wanted='vacuum' if control.input_value()!='vacuum' else 'standard'
+        control.select_option(wanted)
+        expect(self.page.locator('#ModernPersistenceStatus')).to_have_text('Document session saved',timeout=30000)
+        expect(self.page.locator('#ModernSnapshotSaveStatus')).to_contain_text(
+            'Already in History · automatic',timeout=60000)
+        observed=self.page.evaluate("""async seed=>{
+            const a=CurvatureModernApp.getManagedResources();
+            const entries=await a.listHistory();
+            const bound=(await a.readWorkingCheckpoint()).row.experiment;
+            const pinned=await a.readHistory(seed.pinned);
+            return {auto:entries.filter(v=>v.row.source==='auto'&&!v.row.pinned).length,
+                oldest:!!await a.readHistory(1),pinned:!!pinned?.row.pinned,
+                shared:!!await a.store.get(seed.oldest),latest:entries[0].row.experiment,
+                bound,valid:(await a.store.verifyIntegrity()).valid};
+        }""",seed)
+        self.assertEqual(observed,{'auto':seed['limit'],'oldest':False,'pinned':True,
+            'shared':True,'latest':observed['bound'],'bound':observed['bound'],'valid':True})
+        self.page.reload(wait_until='load')
+        self.page.wait_for_function(ready,timeout=30000)
+        self.assertFalse(self.page.evaluate("""async()=>!!await
+            CurvatureModernApp.getManagedResources().readHistory(1)"""))
+        self.assertFalse([msg for msg in self.console if msg.startswith('PAGE ERROR:')],self.console)
+
     def test_managed_preview_mounts_one_storage_authority(self):
         self.page.route(self.base_url,lambda route:route.fulfill(
             status=200,content_type='text/html',body='<html><body></body></html>'))

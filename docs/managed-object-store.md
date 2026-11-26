@@ -848,4 +848,8 @@ returns the retired root IDs and GC report (or maintenance error), never
 reports a committed save as failed because of GC. Deduplicated, skipped
 and deliberate saves do not trigger this maintenance. Subsequent saves
 may collect newly eligible descendants; no timer or indefinite loop is
-used. This policy is not yet enabled by mounted startup or migration.
+used. The explicit managed-preview startup injects this policy into the
+existing acknowledged automatic History path; normal absent-marker and
+legacy shared routes do not. A failed GC is displayed as maintenance
+failure, not a failed snapshot. This is a disposable-profile rehearsal,
+not authorization to activate production migration.
