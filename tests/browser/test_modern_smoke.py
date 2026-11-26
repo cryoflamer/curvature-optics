@@ -3626,8 +3626,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             const original=await a.saveHistory(row);
             await a.saveHistory({...row,id:2,pinned:true,name:'Pinned History'},{snapshotId:original.snapshotId});
             const spare=P.fresh({id:P.createId(crypto),title:'Removable Calibration',now:100});
-            const keep=P.fresh({id:P.createId(crypto),title:'Retained Calibration',now:101});
-            await a.saveCalibrationProject(spare);await a.saveCalibrationProject(keep);
+            await a.saveCalibrationProject(spare);
             const A=CurvatureModernAnimationProject,L=CurvatureModernAnimationLibrary;
             const contract=CurvatureModernAnimationContract.create(experiment,{mode:'camera'});
             for(const id of ['managed_remove_animation','managed_keep_animation']){
@@ -3636,7 +3635,7 @@ class ModernBrowserSmoke(unittest.TestCase):
             }
             const key=CurvatureModernBackupWriteBarrier.ROUTE_KEY;
             localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
-            return {spare:spare.id,keep:keep.id,snapshot:original.snapshotId};
+            return {spare:spare.id,snapshot:original.snapshotId};
         }""")
         url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
         self.page.goto(url,wait_until='load',timeout=30000)
@@ -3680,12 +3679,15 @@ class ModernBrowserSmoke(unittest.TestCase):
         self.page.once('dialog',lambda dialog:dialog.accept())
         remove.click()
         expect(remove).to_have_count(0,timeout=30000)
-        panel.locator('[data-calibration-project-open="'+seed['keep']+'"]').click()
-        self.page.wait_for_function("""id=>{
+        self.page.once('dialog',lambda dialog:dialog.accept('Retained Calibration'))
+        self.page.locator('#ModernCalibrationProjectsNew').click()
+        self.page.wait_for_function("""()=>{
             const e=CurvatureModernPhotoCalibrationEditor.mount(document).projectPersistenceStatus();
-            return e?.projectId===id&&!e.pending&&!e.unsaved&&!e.selectionPending&&
+            return !!e?.projectId&&!e.pending&&!e.unsaved&&!e.selectionPending&&
                 document.querySelector('#ModernCalibrationProjectsPanel').hidden;
-        }""",arg=seed['keep'],timeout=30000)
+        }""",timeout=30000)
+        seed['keep']=self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
+            .projectPersistenceStatus().projectId""")
         self.page.locator('#ModernCalibrationProjectsToggle').click()
         expect(panel.locator('[data-calibration-project-delete="'+seed['keep']+'"]')).to_be_disabled()
         self.page.locator('#ModernAnimationTab').click()

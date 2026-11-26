@@ -80,7 +80,7 @@ function createHistoryNavigationHarness(){
   let render,renderCount=0,preferencesWrites=0,physicsRestores=0;
   const state={physics:{height:15},draft:{frames:['existing']}};
   const ctx={
-    experimentPreview:{live:false},sharedPresentationActive:()=>false,
+    experimentPreview:{live:false},sharedPresentationActive:()=>false,managedResources:null,
     ...state,Promise,Map,Set,Object,String,Array,Number,RangeError,Error,
     historyFocusFromPickerId:'',historyOpenedFromPicker:false,
     historyWizardReferenceChoosing:false,
@@ -124,6 +124,7 @@ test('Open in History focuses filtered-out pinned snapshot without changing save
   assert.equal(nodes.get('ModernHistoryClose').hidden,true);
   assert.equal(ctx.historySelectedId,'2');
   assert.equal(h.render.selectedId,2);
+  assert.equal(h.render.options.managedSingleRemoval,false);
   assert.deepEqual(Array.from(h.render.items,e=>e.id),[2,1]);
   assert.equal(h.render.options.pinnedCollapsed,false,
     'the focused pinned snapshot is temporarily shown even with Pinned collapsed');
