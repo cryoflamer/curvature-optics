@@ -16903,6 +16903,9 @@ class ModernBrowserSmoke(unittest.TestCase):
         }"""
         before=self.page.evaluate(read,id)
         self.assertEqual(before['physical']['envelope']['documents']['calibration']['id'],id)
+        # Opening an already durable project is not a new autosave.
+        self.assertIsNone(self.page.evaluate("""()=>CurvatureModernPhotoCalibrationEditor.mount(document)
+            .projectPersistenceStatus().lastAck"""))
         self.page.locator('#ModernCalibrationProjectsToggle').click()
         close=panel.locator('[data-calibration-project-close="'+id+'"]')
         delete=panel.locator('[data-calibration-project-delete="'+id+'"]')
