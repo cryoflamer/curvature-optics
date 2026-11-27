@@ -16891,12 +16891,58 @@ class ModernBrowserSmoke(unittest.TestCase):
                     info = os.statvfs(directory)
                     print(f'{label} {directory}: free={info.f_bavail*info.f_frsize} '
                           f'total={info.f_blocks*info.f_frsize}', flush=True)
+        def resource_sample():
+            values = {}
+            for name in ('pids.current', 'pids.max', 'pids.events',
+                         'memory.current', 'memory.max', 'memory.events'):
+                for directory in (Path('/sys/fs/cgroup'),
+                                  Path('/sys/fs/cgroup') / name.split('.')[0]):
+                    try:
+                        values[name] = (directory / name).read_text().strip()
+                        break
+                    except OSError:
+                        pass
+            # Only inspect numeric resource counts, not command lines or environments.
+            maximum = 0
+            tasks = 0
+            processes = 0
+            for process in Path('/proc').iterdir():
+                if not process.name.isdecimal():
+                    continue
+                try:
+                    if process.stat().st_uid != os.getuid():
+                        continue
+                    maximum = max(maximum, len(list((process / 'fd').iterdir())))
+                    tasks += len(list((process / 'task').iterdir()))
+                    processes += 1
+                except OSError:
+                    continue
+            values.update(max_fds=maximum, tasks=tasks, processes=processes)
+            return values
+
         report_space('BEFORE_MANAGED_NAVIGATION')
-        self.page.on('crash', lambda _: report_space('PAGE_CRASH'))
+        print('RESOURCE_BEFORE '+json.dumps(resource_sample()), flush=True)
+        stopped = threading.Event()
+        def monitor_resources():
+            # Bounded sampling; no Playwright calls from this thread.
+            for _ in range(40):
+                if stopped.wait(0.25):
+                    break
+                print('RESOURCE_SAMPLE '+json.dumps(resource_sample()), flush=True)
+        monitor = threading.Thread(target=monitor_resources, daemon=True)
+        monitor.start()
+        self.addCleanup(monitor.join, 1)
+        self.addCleanup(stopped.set)
+        def report_crash(_):
+            report_space('PAGE_CRASH')
+            print('RESOURCE_CRASH '+json.dumps(resource_sample()), flush=True)
+        self.page.on('crash', report_crash)
         try:
             self.page.goto(url,wait_until='load')
         except Exception:
             report_space('NAVIGATION_ERROR')
+            print('RESOURCE_ERROR '+json.dumps(resource_sample()), flush=True)
+            stopped.set()
             for message in self.console[-20:]:
                 print(message[:2000], flush=True)
             raise
@@ -16930,7 +16976,10 @@ class ModernBrowserSmoke(unittest.TestCase):
             for message in self.console[-20:]:
                 print(message[:2000], flush=True)
             report_space('READINESS_ERROR')
+            print('RESOURCE_ERROR '+json.dumps(resource_sample()), flush=True)
             raise
+        finally:
+            stopped.set()
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         panel=self.page.locator('#ModernCalibrationProjectsPanel')
         expect(panel).to_be_visible(timeout=30000)
