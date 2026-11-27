@@ -16885,7 +16885,21 @@ class ModernBrowserSmoke(unittest.TestCase):
             localStorage.setItem(key,JSON.stringify({...CurvatureModernBackupWriteBarrier.readRoute(localStorage),state:'managed'}));
         }""")
         url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
-        self.page.goto(url,wait_until='load')
+        def report_space(label):
+            for directory in ('/tmp', '/dev/shm'):
+                if os.path.isdir(directory):
+                    info = os.statvfs(directory)
+                    print(f'{label} {directory}: free={info.f_bavail*info.f_frsize} '
+                          f'total={info.f_blocks*info.f_frsize}', flush=True)
+        report_space('BEFORE_MANAGED_NAVIGATION')
+        self.page.on('crash', lambda _: report_space('PAGE_CRASH'))
+        try:
+            self.page.goto(url,wait_until='load')
+        except Exception:
+            report_space('NAVIGATION_ERROR')
+            for message in self.console[-20:]:
+                print(message[:2000], flush=True)
+            raise
         # Log changes to the readiness state before cleanup can obscure them.
         observed = set()
         def report_ready(message):
@@ -16915,8 +16929,7 @@ class ModernBrowserSmoke(unittest.TestCase):
         except Exception:
             for message in self.console[-20:]:
                 print(message[:2000], flush=True)
-            info=os.statvfs('/tmp')
-            print(f'TMP_FREE_BYTES={info.f_bavail*info.f_frsize}', flush=True)
+            report_space('READINESS_ERROR')
             raise
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         panel=self.page.locator('#ModernCalibrationProjectsPanel')
