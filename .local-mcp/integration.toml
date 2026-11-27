@@ -35,3 +35,16 @@ limits = { seconds = 240, memory-mib = 2048, cpus = 2, pids = 256 }
 entrypoint = "/opt/mcp-browser/bin/python"
 args = ["-I", "-B", "/opt/curvature/.local-mcp/run-browser.py", "cancel"]
 artifacts = ["report.json", "screenshot.png"]
+
+[modules.job-runner.profiles.chromium]
+resources = ["source"]
+limits = { seconds = 240, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.chromium.settings]
+entrypoint = "/opt/mcp-browser/bin/python"
+args = ["-I", "-B", "-c", "import sys; sys.path.insert(0, '/opt/mcp-bootstrap'); from local_mcp_gateway.job_snapshot import main; raise SystemExit(main(adapter='unittest-browser'))"]
+artifacts = ["report.json"]
+
+[modules.job-runner.profiles.chromium.settings.snapshot]
+adapter = "unittest-browser"
+branches = "all"
+locked_files = { ".local-mcp/browser-requirements.txt" = "9b9ccd1cc6650cef10074976b8fee20087f033f64f18b75e8af1c005f8cf2f02" }
