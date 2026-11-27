@@ -47,7 +47,7 @@ def main():
                     print("MCP acceptance: browser active; awaiting cancellation", flush=True)
                     time.sleep(120)
 
-        result = unittest.TextTestRunner(verbosity=2).run(ReviewedCase(CASE))
+        result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite([ReviewedCase(CASE)]))
         screenshot = observation.pop("screenshot", None)
         # Existing test diagnostics are confined to the disposable tmpfs.
         fallback = smoke.ARTIFACTS / (CASE + ".png")

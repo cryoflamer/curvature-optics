@@ -17,8 +17,8 @@ redirected to disposable tmpfs, never a host mount.
 Use a reviewed immutable official Playwright Python 1.57.0 Noble base digest,
 matching the independent CI's Playwright version. The image's Python minor
 version may differ from CI's 3.13; report it, do not claim identical
-environments. The four Python package versions are pinned; wheel hashes and
-base digest are not yet independently recorded. Verify dependency/security
+environments. The four Python packages are pinned to PyPI wheel SHA-256 hashes for
+Linux x86-64 CPython 3.12/3.13. The base digest is not yet independently recorded. Verify dependency/security
 and exact image provenance before enrollment. Build only from the approved
 `git archive` of the exact revision, not an arbitrary checkout or uploaded
 build context; never pass host credentials to the build. The application

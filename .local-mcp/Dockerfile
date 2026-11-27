@@ -5,8 +5,8 @@ ARG SOURCE_REVISION
 USER root
 COPY .local-mcp/browser-requirements.txt /opt/browser-requirements.txt
 RUN python3 -m venv /opt/mcp-browser \
-    && /opt/mcp-browser/bin/python -m pip install --no-cache-dir --only-binary=:all: \
-       -r /opt/browser-requirements.txt \
+    && /opt/mcp-browser/bin/python -m pip --isolated install --no-cache-dir --only-binary=:all: --require-hashes \
+       --index-url https://pypi.org/simple -r /opt/browser-requirements.txt \
     && /opt/mcp-browser/bin/python -m pip check
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # Build context must be git archive of SOURCE_REVISION, never the working tree.
