@@ -16886,9 +16886,38 @@ class ModernBrowserSmoke(unittest.TestCase):
         }""")
         url=self.base_url+'?document-session=managed-preview&ui-state-registry=preview'
         self.page.goto(url,wait_until='load')
-        ready="""()=>CurvatureModernApp.getExperimentSessionPreview().status==='clean'&&
-            CurvatureModernApp.getWorkspaceUiRegistryPreview().status==='ready'"""
-        self.page.wait_for_function(ready,timeout=30000)
+        # Log changes to the readiness state before cleanup can obscure them.
+        observed = set()
+        def report_ready(message):
+            value = message.text
+            if value.startswith('MANAGED_PREVIEW_STATE ') and value not in observed and len(observed) < 16:
+                observed.add(value)
+                print(value[:2000], flush=True)
+        self.page.on('console', report_ready)
+        ready="""()=>{
+            const app=window.CurvatureModernApp;
+            const session=app?.getExperimentSessionPreview();
+            const registry=app?.getWorkspaceUiRegistryPreview();
+            const value=JSON.stringify({
+                session:session?.status, sessionError:session?.error,
+                registry:registry?.status, registryError:registry?.error,
+                persistence:document.querySelector('#ModernPersistenceStatus')?.textContent,
+                startupBlocked:window.CurvatureModernStorageStartupBlocked===true
+            });
+            if(window.__managedPreviewDiagnostic!==value){
+                window.__managedPreviewDiagnostic=value;
+                console.log('MANAGED_PREVIEW_STATE '+value);
+            }
+            return session?.status==='clean'&&registry?.status==='ready';
+        }"""
+        try:
+            self.page.wait_for_function(ready,timeout=30000)
+        except Exception:
+            for message in self.console[-20:]:
+                print(message[:2000], flush=True)
+            info=os.statvfs('/tmp')
+            print(f'TMP_FREE_BYTES={info.f_bavail*info.f_frsize}', flush=True)
+            raise
         self.page.locator('#ModernPhotoCalibrationOpen').click()
         panel=self.page.locator('#ModernCalibrationProjectsPanel')
         expect(panel).to_be_visible(timeout=30000)
