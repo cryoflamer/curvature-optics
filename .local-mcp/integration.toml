@@ -48,3 +48,29 @@ artifacts = ["report.json"]
 adapter = "unittest-browser"
 branches = "all"
 locked_files = { ".local-mcp/browser-requirements.txt" = "9b9ccd1cc6650cef10074976b8fee20087f033f64f18b75e8af1c005f8cf2f02" }
+
+[modules.job-runner.profiles.node]
+resources = ["source"]
+limits = { seconds = 240, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.node.settings]
+entrypoint = "/usr/bin/python3"
+args = ["-I", "-B", "-c", "import sys; sys.path.insert(0, '/opt/mcp-bootstrap'); from local_mcp_gateway.job_snapshot import main; raise SystemExit(main(adapter='node-test'))"]
+artifacts = ["report.json"]
+
+[modules.job-runner.profiles.node.settings.snapshot]
+adapter = "node-test"
+branches = "all"
+locked_files = { ".local-mcp/node-version.txt" = "b2afc67902c3f2fda89443fd46f58866d10ae3313e6b23257ecf6d4b322cfc90" }
+
+[modules.job-runner.profiles.architecture-legacy]
+resources = ["source"]
+limits = { seconds = 240, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.architecture-legacy.settings]
+entrypoint = "/usr/bin/python3"
+args = ["-I", "-B", "-c", "import sys; sys.path.insert(0, '/opt/mcp-bootstrap'); from local_mcp_gateway.job_snapshot import main; raise SystemExit(main(adapter='node-check'))"]
+artifacts = ["report.json"]
+
+[modules.job-runner.profiles.architecture-legacy.settings.snapshot]
+adapter = "node-check"
+branches = "all"
+locked_files = { ".local-mcp/node-version.txt" = "b2afc67902c3f2fda89443fd46f58866d10ae3313e6b23257ecf6d4b322cfc90", "tools/check-refactor-closure.js" = "7adda78f4d2176d540d8e1afc8f9ff504a8062b03535221aeccaae31c80ddd35" }
