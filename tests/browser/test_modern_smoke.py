@@ -121,6 +121,11 @@ class ModernBrowserSmoke(unittest.TestCase):
         failed = self._failed()
         try:
             if failed:
+                # Preserve the original failure even if browser cleanup hangs.
+                result = self._outcome.result
+                for test, traceback in result.failures + result.errors:
+                    if test is self or getattr(test, 'test_case', None) is self:
+                        print(traceback, flush=True)
                 self._save_diagnostics()
         finally:
             try:
