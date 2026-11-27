@@ -1,0 +1,37 @@
+schema_version = 1
+
+[integration]
+id = "curvature-optics"
+name = "Curvature Optics"
+
+[resources.source]
+kind = "repository"
+
+[modules.job-runner]
+contract = 1
+requires = ["jobs.run", "jobs.read", "jobs.cancel"]
+resources = ["source"]
+
+[modules.job-runner.profiles.browser-smoke]
+resources = ["source"]
+limits = { seconds = 120, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.browser-smoke.settings]
+entrypoint = "/opt/mcp-browser/bin/python"
+args = ["-I", "-B", "/opt/curvature/.local-mcp/run-browser.py", "success"]
+artifacts = ["report.json", "screenshot.png"]
+
+[modules.job-runner.profiles.browser-failure]
+resources = ["source"]
+limits = { seconds = 120, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.browser-failure.settings]
+entrypoint = "/opt/mcp-browser/bin/python"
+args = ["-I", "-B", "/opt/curvature/.local-mcp/run-browser.py", "failure"]
+artifacts = ["report.json", "screenshot.png"]
+
+[modules.job-runner.profiles.browser-cancel]
+resources = ["source"]
+limits = { seconds = 240, memory-mib = 2048, cpus = 2, pids = 256 }
+[modules.job-runner.profiles.browser-cancel.settings]
+entrypoint = "/opt/mcp-browser/bin/python"
+args = ["-I", "-B", "/opt/curvature/.local-mcp/run-browser.py", "cancel"]
+artifacts = ["report.json", "screenshot.png"]
